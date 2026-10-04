@@ -5,12 +5,12 @@ Everything is fetched on demand into native/.cache (git-ignored):
   - Android NDK r27c (27.2.12479018) from Google's repository (checksummed via repository2-3.xml)
   - OpenXR headers at the commits each component was written against (KhronosGroup/OpenXR-SDK)
   - Temurin JDK 21 (javac) and Android build-tools (d8) for the Java stub classes
-Then builds: FrameBridge adapter (arm64 + arm32), VrApi bridge, platform compat, GL shim, oculusos stub dex, the
+Then builds: FrameBridge adapter (arm64 + arm32), VrApi bridge, platform compat, language packs, GL shim, oculusos stub dex, the
 timefix OpenXR layer for Proton games (linux-arm64, glibc; the NDK's clang builds it freestanding), the
 OculusHMDConnected helper for Rift games under Proton (win-x64 PE; the NDK's clang + lld-link, no Windows SDK), and
 rewrites artifacts/SHA256SUMS. Run `frameport parity` afterwards to see which games change.
 
-    python native/build.py [--only adapter,bridge,compat,glshim,dex,xrlayer,oculushmd,xrshim,vkshim,vrsettings] [--ndk PATH]
+    python native/build.py [--only adapter,bridge,compat,langpack,glshim,dex,xrlayer,oculushmd,xrshim,vkshim,vrsettings] [--ndk PATH]
 """
 from __future__ import annotations
 
@@ -223,6 +223,15 @@ def build_compat(tc: Path):
          "-Wl,--version-script=exports.map", "-o", ART / "arm64-v8a/libovrplatformcompat.so"], cwd=src)
 
 
+def build_langpack(tc: Path):
+    """Language packs from the game's files (see langpack/langpack.c): DT_NEEDED-injected into overport's platform loader."""
+    src = HERE / "langpack"
+    run([exe(tc, "aarch64-linux-android29-clang"), "-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror",
+         "-fvisibility=hidden", f"-ffile-prefix-map={src}=native/langpack", "-Wl,--no-undefined",
+         "-Wl,-z,max-page-size=16384", "-Wl,-soname,libfp_langpack.so", "langpack.c", "-ldl",
+         "-o", ART / "arm64-v8a/libfp_langpack.so"], cwd=src)
+
+
 def build_glshim(tc: Path):
     src = HERE / "glshim"
     run([exe(tc, "aarch64-linux-android29-clang"), "-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror",
@@ -291,7 +300,7 @@ def write_sums():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", default="adapter,bridge,compat,glshim,dex,xrlayer,oculushmd,xrshim,vkshim,vrsettings")
+    ap.add_argument("--only", default="adapter,bridge,compat,langpack,glshim,dex,xrlayer,oculushmd,xrshim,vkshim,vrsettings")
     ap.add_argument("--ndk")
     args = ap.parse_args()
     parts = set(args.only.split(","))
@@ -299,10 +308,11 @@ def main():
         (ART / d).mkdir(parents=True, exist_ok=True)
     tc = clang_dir(ndk(args.ndk)) if parts - {"dex"} else None
     steps = {"adapter": lambda: build_adapter(tc), "bridge": lambda: build_bridge(tc), "compat": lambda: build_compat(tc),
+             "langpack": lambda: build_langpack(tc),
              "glshim": lambda: build_glshim(tc), "xrshim": lambda: build_xrshim(tc), "dex": build_dex, "xrlayer": lambda: build_xrlayer(tc),
              "oculushmd": lambda: build_oculushmd(tc), "vkshim": lambda: build_vkshim(tc),
              "vrsettings": lambda: build_vrsettings(tc)}
-    for name in ("adapter", "bridge", "compat", "glshim", "xrshim", "vkshim", "dex", "xrlayer", "oculushmd", "vrsettings"):
+    for name in ("adapter", "bridge", "compat", "langpack", "glshim", "xrshim", "vkshim", "dex", "xrlayer", "oculushmd", "vrsettings"):
         if name in parts:
             log(f"build {name}")
             steps[name]()

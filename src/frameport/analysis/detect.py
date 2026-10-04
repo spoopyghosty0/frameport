@@ -241,7 +241,7 @@ def missing_ovr_symbols(lib_bytes: dict[str, bytes]) -> set[str]:
         return set()
     exported = set(elf.dyn_symbols(loader, True))
     linked = set(elf.needed(loader))
-    for extra in ("libovrplatformcompat.so", "libovrstubs.so"):
+    for extra in ("libovrplatformcompat.so", "libovrstubs.so", "libfp_langpack.so"):
         if extra in lib_bytes and extra in linked:  # only counts when the loader loads it (a lone file doesn't help)
             exported |= elf.dyn_symbols(lib_bytes[extra], True)
     wanted = set()

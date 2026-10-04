@@ -30,6 +30,7 @@ version is `catalog/triage.yaml` (used by `frameport test` / the Job screen); ke
 | `INSTALL_FAILED_NO_MATCHING_ABIS` | 32-bit-only APK; Frame has no AArch32 | None. PC/Rift version via Revive |
 | `UnsatisfiedLinkError` / `cannot locate symbol "ovr_…"` | overport's platform loader lacks Meta platform functions | `frame.ovrstubs` (automatic, generated stubs) |
 | missing `ovrMessageType_ToString` | same, but the game needs a real string | `frame.ovrplatformcompat` (automatic) |
+| The game stays in its built-in language or waits at start although its OBB / files hold language packs (`<tag>.lang`, e.g. `de.lang`) | overport's platform loader answers `ovr_LanguagePack_GetCurrent/SetCurrent` with request id 0, so the game never gets the pack's path | `frame.langpacks` (opt-in, experimental, shown for games whose data has `*.lang`; `native/langpack`, build it with `python native/build.py --only langpack`). Default pack: the one the game applies, else env `FRAMEPORT_LANGPACK=<tag>`, else the only pack; search path override `FRAMEPORT_LANGPACK_DIRS` |
 | `ClassNotFoundException com.oculus.os.AnalyticsEvent` → abort | Quest telemetry lookup in Meta XR Audio (Unreal build) or native code | `frame.metaxr_telemetry` + `frame.oculusos` (automatic) |
 | `JNI DETECTED ERROR`, `GetStringUTFChars … NULL` | CheckJNI is on because overport marks the app debuggable | `frame.nodebug` |
 | Unreal game quits a few seconds after start (`System.exit`) | ForceQuit after a failed Quest platform check | alternate build with `patch_remove_unreal_force_quit` (`use_alt`) |

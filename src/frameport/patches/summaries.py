@@ -42,6 +42,7 @@ SUMMARIES = {
     "frame.meta_permissions": "Declares Meta's permissions some mixed-reality games ask for, so they don't stop.",
     "frame.ovrplatformcompat": "Adds a small piece of Meta's platform library that some games need to start.",
     "frame.ovrstubs": "Provides stand-ins for Meta store functions the game expects, so it doesn't crash at start.",
+    "frame.langpacks": "Lets the game find language files (like de.lang) that are already in its data, instead of waiting for a download that never comes.",
     "frame.unity_no_msaa": "Turns off a smoothing setting that crashes some older Unity games on the Frame.",
     "frame.unity_runtime_msaa_off": "Keeps a smoothing setting off that the game turns on itself and that can freeze "
                                     "the Frame.",

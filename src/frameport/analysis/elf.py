@@ -106,6 +106,29 @@ def replace_rodata_string(data: bytes, old: str, new: str) -> tuple[bytes, int]:
     return bytes(buf), count
 
 
+def hide_exports(data: bytes, names) -> tuple[bytes, list[str]]:
+    """Make the exported functions `names` invisible to symbol lookup without removing them: their .dynsym entries
+    become STB_LOCAL (name, value and section stay, nothing moves, the hash tables are untouched). Both bionic's and
+    glibc's lookups only match GLOBAL/WEAK entries, so a lookup for such a name (a game's import, or dlsym on this
+    library's handle) goes on to the next library in the dependency list; code that reads the library's own .dynsym
+    (native/langpack) still finds the original address. Returns (data, names actually hidden); ELF64 only."""
+    if not is_elf(data) or not is_64bit(data) or data[5] != 1:
+        return data, []
+    sec = _elf(data).get_section_by_name(".dynsym")
+    if not isinstance(sec, SymbolTableSection):
+        return data, []
+    wanted = set(names)
+    entsize, start = sec["sh_entsize"] or 24, sec["sh_offset"]
+    buf, hidden = bytearray(data), []
+    for i, sym in enumerate(sec.iter_symbols()):
+        if (sym.name in wanted and sym["st_shndx"] != "SHN_UNDEF"
+                and sym["st_info"]["bind"] in ("STB_GLOBAL", "STB_WEAK")):
+            at = start + i * entsize + 4  # Elf64_Sym.st_info: binding in the high nibble, type in the low one
+            buf[at] &= 0x0F
+            hidden.append(sym.name)
+    return bytes(buf), sorted(hidden)
+
+
 def add_needed(data: bytes, library: str) -> bytes:
     """Add a DT_NEEDED entry in front of the existing ones (same effect as `patchelf --add-needed`; being first matters
     for symbol interposition, e.g. the GL shim must precede libEGL).
