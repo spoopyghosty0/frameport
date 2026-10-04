@@ -228,7 +228,7 @@ def build_langpack(tc: Path):
     src = HERE / "langpack"
     run([exe(tc, "aarch64-linux-android29-clang"), "-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror",
          "-fvisibility=hidden", f"-ffile-prefix-map={src}=native/langpack", "-Wl,--no-undefined",
-         "-Wl,-z,max-page-size=16384", "-Wl,-soname,libfp_langpack.so", "langpack.c", "-ldl",
+         "-Wl,-z,max-page-size=16384", "-Wl,-soname,libfp_langpack.so", "langpack.c", "-ldl", "-llog",
          "-o", ART / "arm64-v8a/libfp_langpack.so"], cwd=src)
 
 

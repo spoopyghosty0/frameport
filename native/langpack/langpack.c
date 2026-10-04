@@ -35,18 +35,44 @@
 #include <elf.h>
 #include <link.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 
 #define EXPORT __attribute__((visibility("default")))
 
 typedef uint64_t u64;
 typedef uint32_t u32;
+
+// Log line (logcat tag "fp_langpack" on Android, so it lands in the game's launch.log; on other systems stderr, only
+// when $FRAMEPORT_LANGPACK_DEBUG is set).
+static void fplog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void fplog(const char *fmt, ...) {
+    char line[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(line, sizeof line, fmt, ap);
+    va_end(ap);
+#ifdef __ANDROID__
+    __android_log_print(ANDROID_LOG_INFO, "fp_langpack", "%s", line);
+#else
+    if (getenv("FRAMEPORT_LANGPACK_DEBUG")) fprintf(stderr, "fp_langpack: %s\n", line);
+#endif
+}
+
+// how long the dispatcher gets to answer AssetFile_GetList before we answer with our packs alone
+#ifndef FP_LIST_TIMEOUT_MS
+#define FP_LIST_TIMEOUT_MS 1500
+#endif
 
 #ifndef FP_LOADER_BASENAME
 #define FP_LOADER_BASENAME "libovrplatformloader.so"
@@ -234,8 +260,11 @@ static void add_pack(pack_t *out, int *n, const char *tag, const char *path) {
     p->id = hash_tag(tag);
 }
 
+static int g_logged_dirs;
+
 static void scan_dir(const char *dir, int depth, pack_t *out, int *n) {
     DIR *d = opendir(dir);
+    if (!g_logged_dirs && depth == 0) fplog("looking in %s: %s", dir, d ? "found" : "not readable");
     if (!d) return;
     struct dirent *e;
     while (*n < MAXP && (e = readdir(d)) != NULL) {
@@ -271,7 +300,21 @@ static void package_name(char *out, size_t cap) {
     if (colon) *colon = 0;
 }
 
+static int scan_dirs(pack_t *out);
+
 static int scan(pack_t *out) {
+    int n = scan_dirs(out);
+    static int last = -1;
+    if (n != last) {
+        last = n;
+        fplog("%d language pack(s) found", n);
+        for (int i = 0; i < n; i++) fplog("  pack %s -> %s", out[i].tag, out[i].path);
+    }
+    g_logged_dirs = 1;
+    return n;
+}
+
+static int scan_dirs(pack_t *out) {
     int n = 0;
     const char *dirs = getenv("FRAMEPORT_LANGPACK_DIRS");
     if (dirs && *dirs) {
@@ -282,6 +325,7 @@ static int scan(pack_t *out) {
     }
     char pkg[256];
     package_name(pkg, sizeof pkg);
+    if (!g_logged_dirs) fplog("package \"%s\"", pkg);
     if (!pkg[0] || strchr(pkg, '/')) return 0;
     static const char *const FORMATS[] = {"/sdcard/Android/obb/%s", "/sdcard/Android/data/%s/files",
                                           "/storage/emulated/0/Android/obb/%s",
@@ -369,7 +413,8 @@ typedef struct msg {
 static msg_t *g_all, *g_qhead, *g_qtail;
 static u64 g_next_req = 0x4650000000000001ULL;
 #define MAX_PENDING 16
-static u64 g_pending[MAX_PENDING];  // dispatcher requests whose AssetFile_GetList answer we extend
+static u64 g_pending[MAX_PENDING];
+static u64 g_pending_ms[MAX_PENDING];  // when each one was asked  // dispatcher requests whose AssetFile_GetList answer we extend
 
 static msg_t *owner(const void *p) {
     msg_t *found = NULL;
@@ -430,6 +475,12 @@ static void fill_details(details_t *d, lang_t *l, const pack_t *p) {
     d->lang = l;
 }
 
+static u64 now_ms(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (u64)t.tv_sec * 1000u + (u64)t.tv_nsec / 1000000u;
+}
+
 static int take_pending(u64 req) {
     int hit = 0;
     pthread_mutex_lock(&g_lock);
@@ -448,6 +499,7 @@ static void add_pending(u64 req) {
     for (int i = 0; i < MAX_PENDING; i++)
         if (!g_pending[i]) {
             g_pending[i] = req;
+            g_pending_ms[i] = now_ms();
             break;
         }
     pthread_mutex_unlock(&g_lock);
@@ -474,6 +526,30 @@ static void *wrap_list(void *orig) {
     return m;
 }
 
+// A GetList the dispatcher has not answered within FP_LIST_TIMEOUT_MS: answer with our packs alone (request id kept).
+// Returns NULL if nothing is overdue or no pack exists. A late answer from the dispatcher is passed on unchanged.
+static msg_t *expire_pending(void) {
+    u64 req = 0, now = now_ms();
+    pthread_mutex_lock(&g_lock);
+    for (int i = 0; i < MAX_PENDING; i++)
+        if (g_pending[i] && now - g_pending_ms[i] >= FP_LIST_TIMEOUT_MS) {
+            req = g_pending[i];
+            g_pending[i] = 0;
+            break;
+        }
+    pthread_mutex_unlock(&g_lock);
+    if (!req) return NULL;
+    pack_t packs[MAXP];
+    int n = scan(packs);
+    fplog("AssetFile_GetList %llu: no answer after %d ms, answering with %d pack(s)", (unsigned long long)req,
+          FP_LIST_TIMEOUT_MS, n);
+    if (n == 0) return NULL;
+    msg_t *m = new_msg(MSG_ASSETFILE_GETLIST, req);
+    if (!m) return NULL;
+    fill_list(m, packs, n);
+    return m;
+}
+
 /* ---------------------------------------------------------------------------------------------------------------
  * Requests
  * ------------------------------------------------------------------------------------------------------------- */
@@ -481,6 +557,7 @@ static void *wrap_list(void *orig) {
 EXPORT u64 ovr_LanguagePack_GetCurrent(void) {
     pack_t packs[MAXP];
     int n = scan(packs), i = pick_current(packs, n);
+    fplog("LanguagePack_GetCurrent -> %s", i >= 0 ? packs[i].tag : "none applied");
     msg_t *m = new_msg(MSG_LANGUAGEPACK_GETCURRENT, 0);
     if (!m) return 0;
     u64 req = m->req;
@@ -497,6 +574,7 @@ EXPORT u64 ovr_LanguagePack_GetCurrent(void) {
 EXPORT u64 ovr_LanguagePack_SetCurrent(const char *tag) {
     pack_t packs[MAXP];
     int n = scan(packs), i = (tag && *tag) ? find_tag(packs, n, tag) : -1;
+    fplog("LanguagePack_SetCurrent(\"%s\") -> %s", tag ? tag : "(null)", i >= 0 ? packs[i].path : "not available");
     msg_t *m = new_msg(MSG_LANGUAGEPACK_SETCURRENT, 0);
     if (!m) return 0;
     u64 req = m->req;
@@ -516,6 +594,7 @@ EXPORT u64 ovr_LanguagePack_SetCurrent(const char *tag) {
 
 EXPORT u64 ovr_AssetFile_GetList(void) {
     u64 req = o_AssetFile_GetList();
+    fplog("AssetFile_GetList (dispatcher request %llu)", (unsigned long long)req);
     if (req) {
         add_pending(req);
         return req;
@@ -532,6 +611,7 @@ EXPORT u64 ovr_AssetFile_GetList(void) {
 }
 
 EXPORT u64 ovr_AssetFile_StatusById(u64 id) {
+    fplog("AssetFile_StatusById(%llu)%s", (unsigned long long)id, (id >> 48) == 0x4650 ? " (ours)" : "");
     if ((id >> 48) == 0x4650) {
         pack_t packs[MAXP];
         int n = scan(packs);
@@ -570,8 +650,15 @@ EXPORT void *ovr_PopMessage(void) {
     pthread_mutex_unlock(&g_lock);
     if (m) return m;
     void *o = o_PopMessage();
-    if (o && o_Message_GetType(o) == MSG_ASSETFILE_GETLIST && take_pending(o_Message_GetRequestID(o))) return wrap_list(o);
-    return o;
+    if (o && o_Message_GetType(o) == MSG_ASSETFILE_GETLIST) {
+        u64 r = o_Message_GetRequestID(o);
+        if (take_pending(r)) {
+            fplog("AssetFile_GetList %llu answered by the dispatcher", (unsigned long long)r);
+            return wrap_list(o);
+        }
+    }
+    if (o) return o;
+    return expire_pending();
 }
 
 EXPORT void ovr_FreeMessage(void *h) {

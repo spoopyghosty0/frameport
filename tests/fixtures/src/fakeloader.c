@@ -25,7 +25,10 @@ static u64 post(uint32_t type, int err) {
     return m->req;
 }
 
-u64 ovr_AssetFile_GetList(void) { return post(0x4AFC6F74u, 0); }
+u64 ovr_AssetFile_GetList(void) {
+    if (getenv("FAKE_SILENT_LIST")) return next_req++;  // asks, never answers (the case the timeout fallback is for)
+    return post(0x4AFC6F74u, 0);
+}
 u64 ovr_AssetFile_StatusById(u64 id) { return post(0x5D955D38u, id != 7); }
 u64 ovr_LanguagePack_GetCurrent(void) { return 0; }
 u64 ovr_LanguagePack_SetCurrent(const char *tag) { (void)tag; return 0; }

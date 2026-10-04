@@ -9,6 +9,7 @@ import platform
 import re
 import shutil
 import subprocess
+import time
 import zipfile
 from pathlib import Path
 
@@ -51,9 +52,10 @@ def built(tmp_path_factory):
     d = tmp_path_factory.mktemp("langpack-build")
     _compile(FAKE, d / "fakeloader.so")
     _compile(SRC, d / "langpack.so", "-fvisibility=hidden")
+    _compile(SRC, d / "langpack_fast.so", "-fvisibility=hidden", "-DFP_LIST_TIMEOUT_MS=100")
     original = (d / "fakeloader.so").read_bytes()
     patched, hidden = elf.hide_exports(original, patch_mod.EXPORTS)
-    return {"lib": d / "langpack.so", "original": original, "patched": patched, "hidden": hidden}
+    return {"lib": d / "langpack.so", "fast": d / "langpack_fast.so", "original": original, "patched": patched, "hidden": hidden}
 
 
 def _dlclose(lib):
@@ -109,18 +111,27 @@ class Api:
         return m
 
 
-@pytest.fixture
-def api(built, tmp_path, monkeypatch):
+def _api(built, tmp_path, monkeypatch, which):
     monkeypatch.delenv("FRAMEPORT_LANGPACK", raising=False)
     lib = tmp_path / "lib"
     lib.mkdir()
     (lib / "libovrplatformloader.so").write_bytes(built["patched"])  # the name the library looks for
-    shutil.copy(built["lib"], lib / "libfp_langpack.so")
+    shutil.copy(built[which], lib / "libfp_langpack.so")
     loader = C.CDLL(str(lib / "libovrplatformloader.so"))
     lp = C.CDLL(str(lib / "libfp_langpack.so"))
     yield Api(lp, loader)
     _dlclose(lp)
     _dlclose(loader)
+
+
+@pytest.fixture
+def api(built, tmp_path, monkeypatch):
+    yield from _api(built, tmp_path, monkeypatch, "lib")
+
+
+@pytest.fixture
+def api_fast(built, tmp_path, monkeypatch):  # same library with a 100 ms GetList timeout
+    yield from _api(built, tmp_path, monkeypatch, "fast")
 
 
 @pytest.fixture
@@ -263,6 +274,23 @@ def test_asset_list_without_packs_is_the_loaders_message(api, tmp_path, monkeypa
     assert api.f("ovr_AssetDetailsArray_GetSize", C.c_size_t, VOIDP)(arr) == 1
     api.free(m)
     assert api.loader.fake_freed() == 1
+
+
+def test_asset_list_the_loader_never_answers_gets_our_packs_after_the_timeout(api_fast, packs, monkeypatch):
+    monkeypatch.setenv("FAKE_SILENT_LIST", "1")
+    req = api_fast.f("ovr_AssetFile_GetList", C.c_uint64)()
+    assert req == 100
+    assert api_fast.pop() is None  # not overdue yet
+    time.sleep(0.2)
+    m = api_fast.pop()
+    assert m and api_fast.msg_type(m) == GETLIST and api_fast.req_id(m) == req and not api_fast.is_error(m)
+    arr = api_fast.f("ovr_Message_GetAssetDetailsArray", VOIDP, VOIDP)(m)
+    size = api_fast.f("ovr_AssetDetailsArray_GetSize", C.c_size_t, VOIDP)(arr)
+    tags = {api_fast.details(api_fast.f("ovr_AssetDetailsArray_GetElement", VOIDP, VOIDP, C.c_size_t)(arr, i))["tag"]
+            for i in range(size)}
+    assert tags == {b"de", b"en-us", b"fr"}
+    api_fast.free(m)
+    assert api_fast.pop() is None  # answered once
 
 
 def test_find_tags_in_the_data_folder(tmp_path):
