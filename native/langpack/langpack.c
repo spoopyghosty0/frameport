@@ -368,9 +368,11 @@ static int scan_dirs(pack_t *out) {
     package_name(pkg, sizeof pkg);
     if (!g_logged_dirs) fplog("package \"%s\"", pkg);
     if (!pkg[0] || strchr(pkg, '/')) return 0;
-    static const char *const FORMATS[] = {"/sdcard/Android/obb/%s", "/sdcard/Android/data/%s/files",
-                                          "/storage/emulated/0/Android/obb/%s",
-                                          "/storage/emulated/0/Android/data/%s/files"};
+    // Unreal names the files of an Android game by their /storage/emulated/0 path (its own OBB mount does), so that
+    // spelling comes first: a pack found in both gets the path the engine would use itself.
+    static const char *const FORMATS[] = {"/storage/emulated/0/Android/obb/%s",
+                                          "/storage/emulated/0/Android/data/%s/files", "/sdcard/Android/obb/%s",
+                                          "/sdcard/Android/data/%s/files"};
     for (size_t i = 0; i < sizeof FORMATS / sizeof *FORMATS; i++) {
         char dir[PATHLEN];
         snprintf(dir, sizeof dir, FORMATS[i], pkg);
