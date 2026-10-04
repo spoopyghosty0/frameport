@@ -7,6 +7,21 @@ from . import artifact
 
 LOADER = "libovrplatformloader.so"
 LIB = "libfp_langpack.so"
+META_MARK = b"@FPMETA@\0"  # native/langpack: g_meta_slot = marker + META_LEN bytes the Metadata is written into
+META_LEN = 96
+
+
+def with_metadata(lib: bytes, text: str) -> bytes:
+    """The library with `text` (the game's versionName) as the Metadata of the packs it serves.
+
+    Unreal games such as Deadpool VR only treat a pack as installed when its Metadata equals their own version string,
+    which Meta's store sets when the pack is uploaded."""
+    raw = text.encode("utf-8")
+    at = lib.find(META_MARK)
+    if not raw or len(raw) >= META_LEN or at < 0:
+        return lib
+    at += len(META_MARK)
+    return lib[:at] + raw + b"\0" * (META_LEN - len(raw)) + lib[at + META_LEN:]
 
 # Every function native/langpack/langpack.c defines. The loader's own exports of these are hidden (see
 # elf.hide_exports) so lookups reach LIB first; tests/test_langpack.py keeps this list equal to the C source.
@@ -58,8 +73,10 @@ class LanguagePacks(Patch):
             return False
         patched = elf.add_needed(patched, LIB)
         ws.put(ws.lib(LOADER), patched)
-        ws.put(ws.lib(LIB), artifact(ws.abi, LIB))
-        ctx.notes.append(f"language packs served by {LIB} ({len(hidden)} loader functions replaced)")
+        version = (ctx.analysis.version or "").strip()
+        ws.put(ws.lib(LIB), with_metadata(artifact(ws.abi, LIB), version))
+        ctx.notes.append(f"language packs served by {LIB} ({len(hidden)} loader functions replaced, "
+                         f"Metadata \"{version}\")")
         return True
 
     def validate(self, ctx: ApkContext):

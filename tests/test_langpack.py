@@ -253,6 +253,50 @@ def test_asset_list_adds_our_packs_to_the_loaders_list(api, packs):
     assert api.loader.fake_freed() == before + 1
 
 
+def _our_metadata(api):
+    api.f("ovr_AssetFile_GetList", C.c_uint64)()
+    m = api.pop()
+    arr = api.f("ovr_Message_GetAssetDetailsArray", VOIDP, VOIDP)(m)
+    get = api.f("ovr_AssetDetailsArray_GetElement", VOIDP, VOIDP, C.c_size_t)
+    out = {api.f("ovr_AssetDetails_GetMetadata", C.c_char_p, VOIDP)(get(arr, i))
+           for i in range(api.f("ovr_AssetDetailsArray_GetSize", C.c_size_t, VOIDP)(arr))
+           if api.f("ovr_AssetDetails_GetAssetType", C.c_char_p, VOIDP)(get(arr, i)) == b"language_pack"}
+    api.free(m)
+    return out
+
+
+def test_metadata_is_empty_without_the_games_version(api, packs, monkeypatch):
+    monkeypatch.delenv("FRAMEPORT_LANGPACK_META", raising=False)
+    assert _our_metadata(api) == {b""}
+
+
+def test_metadata_from_the_environment(api, packs, monkeypatch):
+    monkeypatch.setenv("FRAMEPORT_LANGPACK_META", "2.0.1.77.Quest")
+    assert _our_metadata(api) == {b"2.0.1.77.Quest"}
+
+
+def test_patch_writes_the_games_version_as_the_metadata(built, tmp_path, monkeypatch):
+    monkeypatch.delenv("FRAMEPORT_LANGPACK_META", raising=False)
+    lib = patch_mod.with_metadata(built["lib"].read_bytes(), "1.0.40.356975.Quest")
+    assert len(lib) == built["lib"].stat().st_size and b"1.0.40.356975.Quest" in lib
+    assert patch_mod.with_metadata(lib, "") == lib and patch_mod.with_metadata(b"no marker", "1") == b"no marker"
+    assert patch_mod.with_metadata(lib, "x" * 200) == lib  # too long for the slot: left as it was
+    d = tmp_path / "meta"
+    d.mkdir()
+    (d / "libovrplatformloader.so").write_bytes(built["patched"])
+    (d / "libfp_langpack.so").write_bytes(lib)
+    root = tmp_path / "obb"
+    root.mkdir()
+    (root / "de.lang").write_bytes(b"1")
+    monkeypatch.setenv("FRAMEPORT_LANGPACK_DIRS", str(root))
+    loader, lp = C.CDLL(str(d / "libovrplatformloader.so")), C.CDLL(str(d / "libfp_langpack.so"))
+    try:
+        assert _our_metadata(Api(lp, loader)) == {b"1.0.40.356975.Quest"}
+    finally:
+        _dlclose(lp)
+        _dlclose(loader)
+
+
 def test_everything_else_reaches_the_loader_unchanged(api, packs):
     # a status request for the loader's own asset: its message comes back as it is
     req = api.f("ovr_AssetFile_StatusById", C.c_uint64, C.c_uint64)(7)

@@ -385,13 +385,33 @@ static int pick_current(const pack_t *p, int n) {
  * range check against the live messages.
  * ------------------------------------------------------------------------------------------------------------- */
 
+// The asset's Metadata. Deadpool VR (Unreal) only accepts a language pack whose Metadata equals its own version string
+// ("1.0.40.356975.Quest", built from five parts with "%s.%s.%s.%s.%s"), which Meta's store sets at upload. The
+// patch writes the game's versionName behind the marker below (frame.langpacks, frameport.patches.frame.langpack);
+// FRAMEPORT_LANGPACK_META overrides it. Without either the Metadata stays empty, as before.
+#define META_LEN 96
+#define META_MARK "@FPMETA@"
+__attribute__((used)) static char g_meta_slot[sizeof META_MARK + META_LEN] = META_MARK;
+
+static void pack_meta(char *out) {
+    const char *env = getenv("FRAMEPORT_LANGPACK_META");
+    const volatile char *slot = g_meta_slot + sizeof META_MARK;
+    out[0] = 0;
+    if (env && *env) snprintf(out, META_LEN, "%s", env);
+    else {
+        int i = 0;
+        for (; i < META_LEN - 1 && slot[i]; i++) out[i] = slot[i];
+        out[i] = 0;
+    }
+}
+
 typedef struct {
     char tag[48], en[64], nat[64];
 } lang_t;
 
 typedef struct {
     u64 id;
-    char type[16], status[16], iap[8], meta[4];
+    char type[16], status[16], iap[8], meta[META_LEN];
     char path[PATHLEN];
     lang_t *lang;
 } details_t;
@@ -474,7 +494,7 @@ static void fill_details(details_t *d, lang_t *l, const pack_t *p) {
     snprintf(d->status, sizeof d->status, "installed");
     snprintf(d->iap, sizeof d->iap, "free");
     snprintf(d->path, sizeof d->path, "%s", p->path);
-    d->meta[0] = 0;
+    pack_meta(d->meta);
     snprintf(l->tag, sizeof l->tag, "%s", p->tag);
     snprintf(l->en, sizeof l->en, "%s", p->tag);
     snprintf(l->nat, sizeof l->nat, "%s", p->tag);
