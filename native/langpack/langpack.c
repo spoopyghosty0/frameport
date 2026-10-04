@@ -24,7 +24,8 @@
 //
 // Where the packs are looked for (first file per tag wins; depth <= 3):
 //   $FRAMEPORT_LANGPACK_DIRS (':'-separated), otherwise
-//   /sdcard/Android/obb/<pkg>, /sdcard/Android/data/<pkg>/files and the same under /storage/emulated/0
+//   /sdcard/Android/obb/<pkg>, /sdcard/Android/data/<pkg>/files, the same under /storage/emulated/0, and
+//   /data/steam_app/obb (where Lepton mounts the host's obb folder)
 // A pack is a regular file named <BCP47 tag>.lang (de.lang -> tag "de").
 //
 // Which pack is "current": the one the game applied with SetCurrent; else $FRAMEPORT_LANGPACK (a tag); else the only
@@ -335,6 +336,10 @@ static int scan_dirs(pack_t *out) {
         snprintf(dir, sizeof dir, FORMATS[i], pkg);
         scan_dir(dir, 0, out, &n);
     }
+    // Lepton mounts the host's <app>/lepton-app/obb here (read-only) and only links /sdcard/Android/obb/<pkg> to it
+    // at boot (liblepton/mounting.sh: podman_mount_entry "$LEPTON_MOUNT_OBB_DIR" "/$APP_MOUNT_TARGET/obb", default
+    // APP_MOUNT_TARGET=data/steam_app), so look there too.
+    scan_dir("/data/steam_app/obb", 0, out, &n);
     return n;
 }
 
