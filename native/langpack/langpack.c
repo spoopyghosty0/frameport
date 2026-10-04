@@ -31,6 +31,7 @@
 // Which pack is "current": the one the game applied with SetCurrent; else $FRAMEPORT_LANGPACK (a tag); else the only
 // pack if there is exactly one.
 #define _GNU_SOURCE
+#include <ctype.h>
 #include <dirent.h>
 #include <dlfcn.h>
 #include <elf.h>
@@ -271,8 +272,38 @@ static void add_pack(pack_t *out, int *n, const char *tag, const char *path) {
 
 static int g_logged_dirs;
 
+// Tags to leave out of the list (comma separated, case-insensitive): env FRAMEPORT_LANGPACK_SKIP, plus the lines
+// of a file "fp_langpack_skip" in any scanned folder. For finding out which pack a game needs reported: e.g. a game
+// whose built-in language works without being a "pack".
+static char g_skip[160];
+
+static void read_skip_file(const char *dir) {
+    char path[PATHLEN], line[160];
+    if (snprintf(path, sizeof path, "%s/fp_langpack_skip", dir) >= (int)sizeof path) return;
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    size_t n = fread(line, 1, sizeof line - 1, f);
+    fclose(f);
+    line[n] = 0;
+    for (char *c = line; *c; c++)
+        if (*c == '\n' || *c == '\r' || *c == ' ') *c = ',';
+    size_t have = strlen(g_skip), room = sizeof g_skip - have;
+    if (room > 3) snprintf(g_skip + have, room, ",%.*s,", (int)room - 3, line);
+}
+
+static int skipped(const char *tag) {
+    char want[64], have[sizeof g_skip + 2];
+    snprintf(want, sizeof want, ",%s,", tag);
+    snprintf(have, sizeof have, ",%s,%s", getenv("FRAMEPORT_LANGPACK_SKIP") ? getenv("FRAMEPORT_LANGPACK_SKIP") : "",
+             g_skip);
+    for (char *c = want; *c; c++) *c = (char)tolower((unsigned char)*c);
+    for (char *c = have; *c; c++) *c = (char)tolower((unsigned char)*c);
+    return strstr(have, want) != NULL;
+}
+
 static void scan_dir(const char *dir, int depth, pack_t *out, int *n) {
     DIR *d = opendir(dir);
+    if (d && depth == 0) read_skip_file(dir);
     if (!g_logged_dirs && depth == 0) fplog("looking in %s: %s", dir, d ? "found" : "not readable");
     if (!d) return;
     struct dirent *e;
@@ -291,7 +322,7 @@ static void scan_dir(const char *dir, int depth, pack_t *out, int *n) {
                 if (len - 5 >= sizeof tag) continue;
                 memcpy(tag, e->d_name, len - 5);
                 tag[len - 5] = 0;
-                if (valid_tag(tag)) add_pack(out, n, tag, path);
+                if (valid_tag(tag) && !skipped(tag)) add_pack(out, n, tag, path);
             }
         }
     }
@@ -325,6 +356,7 @@ static int scan(pack_t *out) {
 
 static int scan_dirs(pack_t *out) {
     int n = 0;
+    g_skip[0] = 0;  // read again from the folders below
     const char *dirs = getenv("FRAMEPORT_LANGPACK_DIRS");
     if (dirs && *dirs) {
         char buf[PATHLEN * 2];

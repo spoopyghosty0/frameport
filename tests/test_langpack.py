@@ -297,6 +297,28 @@ def test_patch_writes_the_games_version_as_the_metadata(built, tmp_path, monkeyp
         _dlclose(loader)
 
 
+def _tags(api):
+    api.f("ovr_AssetFile_GetList", C.c_uint64)()
+    m = api.pop()
+    arr = api.f("ovr_Message_GetAssetDetailsArray", VOIDP, VOIDP)(m)
+    get = api.f("ovr_AssetDetailsArray_GetElement", VOIDP, VOIDP, C.c_size_t)
+    out = {api.details(get(arr, i)).get("tag") for i in range(api.f("ovr_AssetDetailsArray_GetSize", C.c_size_t, VOIDP)(arr))}
+    api.free(m)
+    out.discard(None)
+    return out
+
+
+def test_packs_can_be_left_out_by_environment_or_file(api, packs, monkeypatch):
+    assert _tags(api) == {b"de", b"en-us", b"fr"}
+    monkeypatch.setenv("FRAMEPORT_LANGPACK_SKIP", "EN-US, x")
+    assert _tags(api) == {b"de", b"fr"}
+    monkeypatch.delenv("FRAMEPORT_LANGPACK_SKIP")
+    (packs / "fp_langpack_skip").write_text("de\nfr\n")
+    assert _tags(api) == {b"en-us"}
+    (packs / "fp_langpack_skip").unlink()
+    assert _tags(api) == {b"de", b"en-us", b"fr"}  # nothing remembered between lists
+
+
 def test_everything_else_reaches_the_loader_unchanged(api, packs):
     # a status request for the loader's own asset: its message comes back as it is
     req = api.f("ovr_AssetFile_StatusById", C.c_uint64, C.c_uint64)(7)
