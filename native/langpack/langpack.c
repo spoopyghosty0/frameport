@@ -70,6 +70,14 @@ static void fplog(const char *fmt, ...) {
 #endif
 }
 
+// accessor calls can repeat every frame: only the first FP_TRACE_MAX are logged
+#define FP_TRACE_MAX 400
+static int g_traced;
+#define fptrace(...) \
+    do { \
+        if (__atomic_fetch_add(&g_traced, 1, __ATOMIC_RELAXED) < FP_TRACE_MAX) fplog(__VA_ARGS__); \
+    } while (0)
+
 // how long the dispatcher gets to answer AssetFile_GetList before we answer with our packs alone
 #ifndef FP_LIST_TIMEOUT_MS
 #define FP_LIST_TIMEOUT_MS 1500
@@ -692,7 +700,9 @@ EXPORT void ovr_FreeMessage(void *h) {
 
 EXPORT u32 ovr_Message_GetType(const void *h) {
     msg_t *m = owner(h);
-    return m ? m->type : o_Message_GetType(h);
+    u32 t = m ? m->type : o_Message_GetType(h);
+    if (m) fptrace("Message_GetType(ours) = 0x%08X", t);
+    return t;
 }
 
 EXPORT u64 ovr_Message_GetRequestID(const void *h) {
@@ -726,18 +736,25 @@ EXPORT void *ovr_Message_GetAssetFileDownloadResult(const void *h) {
 EXPORT void *ovr_Message_GetAssetDetailsArray(const void *h) {
     msg_t *m = owner(h);
     if (!m) return o_Message_GetAssetDetailsArray(h);
+    fptrace("Message_GetAssetDetailsArray(ours)");
     return m->type == MSG_ASSETFILE_GETLIST && !m->is_error ? (void *)&m->arr : NULL;
 }
 
 EXPORT size_t ovr_AssetDetailsArray_GetSize(const void *h) {
     msg_t *m = owner(h);
-    return m ? (size_t)m->n + m->orig_n : o_AssetDetailsArray_GetSize(h);
+    size_t n = m ? (size_t)m->n + m->orig_n : o_AssetDetailsArray_GetSize(h);
+    if (m) fptrace("AssetDetailsArray_GetSize = %zu (%d ours + %zu dispatcher)", n, m->n, (size_t)m->orig_n);
+    return n;
 }
 
 EXPORT void *ovr_AssetDetailsArray_GetElement(const void *h, size_t i) {
     msg_t *m = owner(h);
     if (!m) return o_AssetDetailsArray_GetElement(h, i);
-    if (i < (size_t)m->n) return &m->dets[i];
+    if (i < (size_t)m->n) {
+        fptrace("AssetDetailsArray_GetElement(%zu) = our pack %s", i, m->dets[i].lang ? m->dets[i].lang->tag : "?");
+        return &m->dets[i];
+    }
+    fptrace("AssetDetailsArray_GetElement(%zu) = dispatcher entry", i);
     return m->orig_arr ? o_AssetDetailsArray_GetElement(m->orig_arr, i - (size_t)m->n) : NULL;
 }
 
@@ -748,35 +765,55 @@ EXPORT void *ovr_AssetDetailsArray_GetElement(const void *h, size_t i) {
 #define IS_OURS(h) (owner(h) != NULL)
 
 EXPORT u64 ovr_AssetDetails_GetAssetId(const void *h) {
-    return IS_OURS(h) ? ((const details_t *)h)->id : o_AssetDetails_GetAssetId(h);
+    if (!IS_OURS(h)) return o_AssetDetails_GetAssetId(h);
+    fptrace("AssetDetails_GetAssetId(ours) = %llu", (unsigned long long)((const details_t *)h)->id);
+    return ((const details_t *)h)->id;
 }
 EXPORT const char *ovr_AssetDetails_GetAssetType(const void *h) {
-    return IS_OURS(h) ? ((const details_t *)h)->type : o_AssetDetails_GetAssetType(h);
+    if (!IS_OURS(h)) return o_AssetDetails_GetAssetType(h);
+    fptrace("AssetDetails_GetAssetType(ours) = \"%s\"", ((const details_t *)h)->type);
+    return ((const details_t *)h)->type;
 }
 EXPORT const char *ovr_AssetDetails_GetDownloadStatus(const void *h) {
-    return IS_OURS(h) ? ((const details_t *)h)->status : o_AssetDetails_GetDownloadStatus(h);
+    if (!IS_OURS(h)) return o_AssetDetails_GetDownloadStatus(h);
+    fptrace("AssetDetails_GetDownloadStatus(ours) = \"%s\"", ((const details_t *)h)->status);
+    return ((const details_t *)h)->status;
 }
 EXPORT const char *ovr_AssetDetails_GetFilepath(const void *h) {
-    return IS_OURS(h) ? ((const details_t *)h)->path : o_AssetDetails_GetFilepath(h);
+    if (!IS_OURS(h)) return o_AssetDetails_GetFilepath(h);
+    fptrace("AssetDetails_GetFilepath(ours) = \"%s\"", ((const details_t *)h)->path);
+    return ((const details_t *)h)->path;
 }
 EXPORT const char *ovr_AssetDetails_GetIapStatus(const void *h) {
-    return IS_OURS(h) ? ((const details_t *)h)->iap : o_AssetDetails_GetIapStatus(h);
+    if (!IS_OURS(h)) return o_AssetDetails_GetIapStatus(h);
+    fptrace("AssetDetails_GetIapStatus(ours) = \"%s\"", ((const details_t *)h)->iap);
+    return ((const details_t *)h)->iap;
 }
 EXPORT void *ovr_AssetDetails_GetLanguage(const void *h) {
-    return IS_OURS(h) ? (void *)((const details_t *)h)->lang : o_AssetDetails_GetLanguage(h);
+    if (!IS_OURS(h)) return o_AssetDetails_GetLanguage(h);
+    fptrace("AssetDetails_GetLanguage(ours)");
+    return (void *)((const details_t *)h)->lang;
 }
 EXPORT const char *ovr_AssetDetails_GetMetadata(const void *h) {
-    return IS_OURS(h) ? ((const details_t *)h)->meta : o_AssetDetails_GetMetadata(h);
+    if (!IS_OURS(h)) return o_AssetDetails_GetMetadata(h);
+    fptrace("AssetDetails_GetMetadata(ours) = \"%s\"", ((const details_t *)h)->meta);
+    return ((const details_t *)h)->meta;
 }
 
 EXPORT const char *ovr_LanguagePackInfo_GetTag(const void *h) {
-    return IS_OURS(h) ? ((const lang_t *)h)->tag : o_LanguagePackInfo_GetTag(h);
+    if (!IS_OURS(h)) return o_LanguagePackInfo_GetTag(h);
+    fptrace("LanguagePackInfo_GetTag(ours) = \"%s\"", ((const lang_t *)h)->tag);
+    return ((const lang_t *)h)->tag;
 }
 EXPORT const char *ovr_LanguagePackInfo_GetEnglishName(const void *h) {
-    return IS_OURS(h) ? ((const lang_t *)h)->en : o_LanguagePackInfo_GetEnglishName(h);
+    if (!IS_OURS(h)) return o_LanguagePackInfo_GetEnglishName(h);
+    fptrace("LanguagePackInfo_GetEnglishName(ours) = \"%s\"", ((const lang_t *)h)->en);
+    return ((const lang_t *)h)->en;
 }
 EXPORT const char *ovr_LanguagePackInfo_GetNativeName(const void *h) {
-    return IS_OURS(h) ? ((const lang_t *)h)->nat : o_LanguagePackInfo_GetNativeName(h);
+    if (!IS_OURS(h)) return o_LanguagePackInfo_GetNativeName(h);
+    fptrace("LanguagePackInfo_GetNativeName(ours) = \"%s\"", ((const lang_t *)h)->nat);
+    return ((const lang_t *)h)->nat;
 }
 
 EXPORT u64 ovr_AssetFileDownloadResult_GetAssetId(const void *h) {
