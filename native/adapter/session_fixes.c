@@ -110,11 +110,12 @@ static int input_syncs, input_sync_ok, input_bool_reads, input_bool_true, input_
 static XRAPI_ATTR XrResult XRAPI_CALL hook_xrSyncActions(XrSession session, const XrActionsSyncInfo *info) {
     PFN_xrSyncActions fn = (PFN_xrSyncActions)lookup(active_instance, "xrSyncActions");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
-    if (!sync_guard) {  // installed for layer_debug only: count
+    if (!sync_guard) {  // installed for layer_debug / input_diag only: count, report failures
         XrResult r = fn(session, info);
         __atomic_add_fetch(&input_syncs, 1, __ATOMIC_RELAXED);
         if (r == XR_SUCCESS) __atomic_add_fetch(&input_sync_ok, 1, __ATOMIC_RELAXED);
         input_last_sync_result = r;
+        if (input_diag && XR_FAILED(r)) diag_call_failed("xrSyncActions", r, NULL);
         return r;
     }
     pthread_mutex_lock(&sync_lock);
@@ -123,6 +124,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL hook_xrSyncActions(XrSession session, cons
     pthread_mutex_unlock(&sync_lock);
     static int logged;
     if (wait > 0 && logged++ < 5) LOG("sync_guard: input paused for %.0f ms after focus returned", wait / 1e6);
+    if (input_diag && XR_FAILED(r)) diag_call_failed("xrSyncActions", r, NULL);
     return r;
 }
 
@@ -324,6 +326,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL hook_xrSuggestInteractionProfileBindings(X
                 note_pose_binding(suggested->suggestedBindings[i].action, path);
         }
     XrResult r = fn(instance, suggested);
+    input_diag_suggested(instance, suggested, r, to_string);  // the runtime's answer to the game's own suggestion
     if (!profile_remap || !suggested || !to_string) return r;
     char profile[XR_MAX_PATH_LENGTH] = {0};
     uint32_t size = 0;

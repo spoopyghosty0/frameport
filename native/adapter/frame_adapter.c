@@ -26,6 +26,9 @@
 //    render_model.c);
 //  * per-game session fixes (session_fixes.c, all off by default): layer_debug diagnostics, stable_local,
 //    focus_hold, aim pose correction (aim_pitch/aim_yaw/aim_forward), refresh_rate;
+//  * optionally logs controller-input diagnostics: suggested interaction profiles and the runtime's answers, each
+//    hand's current profile, functions the runtime lacks, failing input/haptics/perf calls (input_diag,
+//    input_diag.c, off by default);
 //  * optionally shows 360° (equirect/equirect2) layers as cube-face quads drawn by a worker thread with a shared
 //    GLES context (equirect_emul, layer_emul_gl.c; GLES sessions only, off by default).
 //
@@ -125,6 +128,7 @@ static int controller_models;  // serve Frame controller models via XR_FB_render
 static int sync_guard;       // xrSyncActions one at a time with xrPollEvent, paused briefly after focus returns
 static int profile_remap = 1; // Meta's newer controller profiles (rejected by the Frame) -> oculus/touch_controller
 static int layer_debug;      // diagnostics: layers, swapchains, session states, spaces, aim/grip, refresh rates
+static int input_diag;       // diagnostics: controller profiles, bindings, missing functions, failing input calls
 static int stable_local;     // keep every LOCAL space the app creates on the session-start origin
 static int focus_hold = 1;   // hide brief focus dips once the session has been focused for a while
 static float focus_hold_ms = 5000;  // longest focus dip focus_hold hides
@@ -170,6 +174,7 @@ static void read_settings(const char *path) {
         if (sscanf(line, "scene_depth=%f", &value) == 1 && value > 0.5f && value < 20.0f) scene_depth = value;
         if (sscanf(line, "controller_models=%f", &value) == 1) controller_models = value != 0;
         if (sscanf(line, "layer_debug=%f", &value) == 1) layer_debug = value != 0;
+        if (sscanf(line, "input_diag=%f", &value) == 1) input_diag = value != 0;
         if (sscanf(line, "surface_emul=%f", &value) == 1) surface_emul = value != 0;
         if (sscanf(line, "eye_debug=%f", &value) == 1) eye_debug = value != 0;
         if (sscanf(line, "release_wait=%f", &value) == 1) release_wait = (int)value;
@@ -232,6 +237,7 @@ static void initialize(void) {
         snprintf(path, sizeof(path), "/sdcard/Android/data/%s/files/framebridge.log", process);
         log_file = fopen(path, "a");
     }
+    if (input_diag) LOG("per-game: input_diag=1 (controller-input diagnostics)");
     if (hide_space_warp) LOG("per-game: hide_space_warp=1 (XR_FB_space_warp hidden, space warp info removed)");
     if (strip_color_bias) LOG("per-game: strip_color_bias=%d (layer color scale/bias removed)", strip_color_bias);
     if (frame_balance) LOG("per-game: frame_balance=1 (an open frame is ended before the next one begins)");
@@ -797,6 +803,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpace(XrSpace space) {
     return fn ? fn(space) : XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
+#include "input_diag.c"
 #include "session_fixes.c"
 #include "layer_emul_gl.c"
 #include "snapshot_gl.c"
@@ -1471,6 +1478,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetCurrentInteractionProfile(XrSession session,
         (PFN_xrGetCurrentInteractionProfile)lookup(active_instance, "xrGetCurrentInteractionProfile");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
     XrResult result = fn(session, user, state);
+    if (input_diag && XR_SUCCEEDED(result) && state) input_diag_current_profile(user, state->interactionProfile);
     if (layer_debug && active_instance) {  // which device each hand has, as the runtime reports it
         PFN_xrPathToString str = (PFN_xrPathToString)lookup(active_instance, "xrPathToString");
         char who[XR_MAX_PATH_LENGTH] = "?", what[XR_MAX_PATH_LENGTH] = "(none)";
@@ -1623,15 +1631,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance instance, const 
         HOOK(xrWaitSwapchainImage)
         HOOK(xrReleaseSwapchainImage)
     }
-    if (sync_guard || layer_debug) HOOK_AS(xrSyncActions, hook_xrSyncActions)
+    if (sync_guard || layer_debug || input_diag) HOOK_AS(xrSyncActions, hook_xrSyncActions)
     if (layer_debug) HOOK_AS(xrGetActionStateBoolean, hook_xrGetActionStateBoolean)
-    if (layer_debug || aim_correction_on() || profile_remap)
+    if (layer_debug || aim_correction_on() || profile_remap || input_diag)
         HOOK_AS(xrSuggestInteractionProfileBindings, hook_xrSuggestInteractionProfileBindings)
     if (layer_debug || aim_correction_on()) {
         HOOK_AS(xrCreateActionSpace, hook_xrCreateActionSpace)
     }
 #undef HOOK_AS
 #undef HOOK
+    if (input_diag) {  // logs only: wraps a few input/haptics/perf calls, notes lookups the runtime can't answer
+        PFN_xrVoidFunction diag = input_diag_hook(name);
+        XrResult result = next_gipa(instance, name, function);
+        input_diag_lookup(instance, name, result, *function);
+        if (diag && XR_SUCCEEDED(result) && *function) *function = diag;
+        return result;
+    }
     return next_gipa(instance, name, function);
 }
 

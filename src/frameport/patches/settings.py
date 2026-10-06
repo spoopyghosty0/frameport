@@ -100,6 +100,11 @@ SETTINGS = [
      "For one eye looking wrong (e.g. a jittering right eye): logs each eye's submitted pose against a fresh one, the "
      "eye-to-eye relation and when each eye's image was released, also into framebridge.log in the game's storage "
      "(some games stop Android's log early). No effect on the game."),
+    ("input_diag", "int", 0, "Controller input diagnostics (log)",
+     "For buttons that do nothing or the wrong thing: logs each controller profile the game suggests bindings for and "
+     "whether the runtime accepts it (with every path of a rejected one), which profile the runtime reports for each "
+     "hand (a game without Steam Frame bindings gets SteamVR's Touch remap), OpenXR functions the game looks up that "
+     "the runtime lacks, and failing input, vibration and performance calls. Each line once. No effect on the game."),
     ("release_wait", "int", 0, "Wait for the game's GPU before showing an image",
      "Before a swapchain image is handed to the Frame, wait until the game's GPU work on it has finished, for games "
      "that hand over images early (an eye flickers or jitters). Costs some frame time. 2 = only after the first 60 s "
@@ -264,7 +269,7 @@ UI: dict[str, dict] = {
     **{key: dict(group="troubleshooting", level="advanced", control=("switch",)) for key in (
         "foveation_fix", "hide_space_warp", "swapchain_fix", "layer_fix", "gl_hide_multiview", "mutable_fix",
         "flip_quads", "swap_eyes", "vk_validation", "rect_clamp", "gl_hide_msrtt", "strip_color_bias", "snapshot",
-        "strip_depth", "respace_kick", "layer_debug", "eye_debug", "release_wait")},
+        "strip_depth", "respace_kick", "layer_debug", "eye_debug", "input_diag", "release_wait")},
 }
 
 

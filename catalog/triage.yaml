@@ -91,6 +91,12 @@ signatures:
       harmless (Meta's OVRPlugin suggests plain Touch too); a game that suggests only these gets them again as Touch
       (profile_remap, on by default; log "controller profile ... -> oculus/touch_controller").
     suggest: []
+  - id: input-call-failed
+    pattern: 'input_diag: unsupported: (xrStringToPath|xrCreateAction|xrAttachSessionActionSets|xrSyncActions) ->'
+    severity: warning
+    diagnosis: The runtime refused one of the game's controller-input calls (logged by input_diag; the line names the
+      call, the result and the argument), so controls set up through it don't work.
+    suggest: []
   - id: gl-shader-failed
     pattern: 'GLShim\s*: SHADER COMPILE FAILED|#extension directive is not allowed in the middle|could not implicitly convert operands'
     severity: error

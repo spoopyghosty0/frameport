@@ -77,6 +77,17 @@ def test_rejected_controller_profile_is_information_only():
     assert triage(log, "RUNNING", "com.example.game").verdict == "pass"
 
 
+def test_failed_input_call_logged_by_input_diag():
+    log = LOG_OK + ("09-28 17:39:02.400  1147  1174 I FrameBridge: input_diag: unsupported: xrCreateAction -> "
+                    "XR_ERROR_NAME_INVALID (trigger pull)\n")
+    r = triage(log, "RUNNING", "com.example.game")
+    f = {x.id: x for x in r.findings}
+    assert f["input-call-failed"].severity == "warning" and r.verdict == "pass"
+    accepted = LOG_OK + ("09-28 17:39:02.400  1147  1174 I FrameBridge: input_diag: bindings: "
+                         "/interaction_profiles/oculus/touch_controller accepted (30 paths)\n")
+    assert "input-call-failed" not in {x.id for x in triage(accepted, "RUNNING", "com.example.game").findings}
+
+
 def test_swapchain_rect_invalid_is_recognised():
     """GitHub #39: SteamVR rejected PowerWash Simulator's frames (rect a few px past the swapchain)."""
     from frameport.validate import triage

@@ -156,6 +156,16 @@ def test_per_game_session_settings_are_off_unless_selected():
         assert patch.detect(_analysis()) is None
 
 
+def test_input_diag_is_an_off_by_default_diagnostic():
+    from frameport.patches.settings import UI
+
+    patch = base.get("adapter.input_diag")
+    assert patch.default == 0 and patch.applies(_analysis()) and patch.detect(_analysis()) is None
+    assert "input_diag" not in adapter_settings({})  # existing builds are unchanged
+    assert adapter_settings({"adapter.input_diag": {"value": 1}})["input_diag"] == 1
+    assert UI["input_diag"]["group"] == "troubleshooting" and UI["input_diag"]["level"] == "advanced"
+
+
 def test_detect_direct_vrapi_suggests_bridge_and_shim():
     a = _analysis(xr="VrApi", direct_vrapi=True, uses_glad_gl=True, graphics="GLES or unknown", package="x.y.unknown")
     from frameport.recommend import engine
