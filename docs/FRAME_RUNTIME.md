@@ -154,3 +154,26 @@
   one everywhere (FramePort's "Type on Frame", agent `_keyboard`).
 - Unity text fields close without a system keyboard; see `frame.unity_text_input` in PLAYBOOK.md.
 
+
+## Monitoring sources (probed 2026-10-07, SteamOS 0.4.3, kernel 6.18; used by the Monitor tab, agent `_monitor`)
+
+All readable by the steamos user without root; the agent reads them directly (no programs started per sample).
+
+| Metric | Source | Notes |
+|---|---|---|
+| CPU | `/proc/stat` deltas; `cpufreq/policy{0,2,5,7}` | 8 cores in 4 clusters: 0-1 / 2-4 / 5-6 / 7 (max 2.27 / 3.15 / 2.96 / 3.05 GHz) |
+| GPU busy | Sum of `drm-engine-gpu` (ns) deltas in `/proc/<pid>/fdinfo/<fd>` over every render-node fd (msm DRM) | Gives GPU % per process too. A process can hold several render fds: add them all. Lepton games see the node as `/dev/kgsl-3d0` (bind mount of `/dev/dri/renderD128`). `drm-total-memory` reads 0 |
+| GPU clock | `/sys/class/devfreq/3d00000.gpu/{cur,max}_freq` | 231–903 MHz in 12 steps |
+| Memory / pressure | `/proc/meminfo`; `/proc/pressure/{cpu,memory,io}` (`some avg10`) | 16 GB RAM, 8 GB swap |
+| Temperatures | `/sys/class/thermal/thermal_zone*/{type,temp}` | 48 zones: `cpu*`/`cpuss*`, `gpuss-*`, `ddr`, `nsph*` (NPU), `pm8550*`/`pm8010*` (power ICs), `modem*`, `camera*`, `video`, `max1720x_bat*` |
+| Fan | hwmon `slg4ax46073v` `fan1_input` | ~8200 rpm idle |
+| Power | hwmon `max34417_*` `power{1-4}_{label,input}` (µW) | `vph` = whole system (~3.6 W idle), `gfx` = GPU, `apc0/1/2` = CPU clusters, `nsp1/2` = NPU; each read is an I2C transfer (~0.7 ms wall), so only these are read |
+| Battery | `power_supply/max1720x_bat_7-36` | `current_now` (µA, negative = draining) × `voltage_now` (µV) = watts; `time_to_empty_now`/`time_to_full_now` (s), `cycle_count`, `health`, `temp` (0.1 °C) |
+| Game fps | `<base>/launch.log` lines `FrameBridge: pacing: N fps …` (every ~5 s) | Quest games only; SteamVR writes PC VR frame stats only as an end-of-session summary in `vrcompositor.txt` |
+| Game container | conmon `-n lepton-steamlaunch-<appid>`; its child's `/proc/<pid>/cgroup` → `cpu.stat`, `memory.current` | The container's ~90 Android processes show as uid 1000 on the host and can be signalled (4XVR, 2026-10-07); Android names them after the package's last 15 characters (`lus4xvrplayerov`), the full name is in `cmdline` |
+
+Cost: a naive sample (fds of ~520 processes scanned) took 43 ms CPU. With kernel threads skipped after their first
+sighting, command lines checked once per process, render fds cached (rescanned every 60 s, every 4 s for busy young
+game processes without one), temperatures every 2 s, the CPU-cluster power rails every 5 s and the battery gauge every
+2-10 s, the stream measured ~10-13 ms CPU per 1 s tick on the device (idle clocks; idle or with 4XVR running) = about
+1 % of one core, ~0.15 % of the whole CPU. The I2C sensors (power monitors, battery gauge) are the slowest reads.

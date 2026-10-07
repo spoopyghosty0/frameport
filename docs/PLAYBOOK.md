@@ -115,6 +115,10 @@ version is `catalog/triage.yaml` (used by `frameport test` / the Job screen); ke
 - A user's problem report: `frameport diag inspect <FramePort-diag-*.zip>` re-triages its launch log with the current
   signatures; the zip has the recipe, analysis, ELF/PE imports, Frame logs and versions (docs/DIAGNOSTICS.md).
 - Read `<base>/launch.log` (logcat mirror). Filter the game's pid: `Start proc <pid>:<package>`.
+- **Monitor tab** (GUI, while a game runs): fps from FrameBridge's pacing lines next to GPU busy %, the hottest
+  sensor, memory pressure and per-process CPU/GPU/memory. A memory runaway (Lucky's Tale, Vader Immortal) shows as
+  rising memory + "waiting" before the OOM kill; a GPU-bound game as GPU near 100 % with fps under target; heat as the
+  temperature tile turning amber/red. Sources and costs: FRAME_RUNTIME.md "Monitoring sources".
 - The adapter logs as `FrameBridge` (settings, xrCreateInstance result, swapchain retries, pacing fps).
 - For GLES/GLAD engines, wrap `eglGetProcAddress` to see shader compile errors (build the shim with `-DGLSHIM_TRACE`
   for per-FBO draw counts and draw-call errors; the bridge has `-DOVP_GL_DIAG` for eye-image readback).

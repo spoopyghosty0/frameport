@@ -34,6 +34,7 @@ NAV = [("library", tr("Library"), ft.Icons.GRID_VIEW_ROUNDED),
        ("screenshots", tr("Screenshots"), ft.Icons.PHOTO_LIBRARY_OUTLINED),
        ("live", tr("Live view"), ft.Icons.CAST_ROUNDED),
        ("keyboard", tr("Type on Frame"), ft.Icons.KEYBOARD_ROUNDED),
+       ("monitor", tr("Monitor"), ft.Icons.MONITOR_HEART_OUTLINED),
        ("settings", tr("Settings"), ft.Icons.TUNE_ROUNDED)]
 POLL_SECONDS = 30
 _link_state = {"owner": None, "thread": None}  # install links go to the newest window session (one watcher/process)
@@ -89,6 +90,7 @@ class FramePortApp:
         self.screenshots_view = None  # likewise (views/screenshots.ScreenshotsView): keeps the game filter
         self.live_view = None  # likewise (views/live.LiveView): owns the running stream, which outlives the tab
         self.keyboard_view = None  # likewise (views/keyboard.KeyboardView): its keyboard exists only while it's shown
+        self.monitor_view = None  # likewise (views/monitor.MonitorView): its stream runs only while it's shown
         self._typing_on_frame = False
         self.exe_queue: list[str] = []  # games whose executable the user should confirm (after a scan)
         self._failures: list[Job] = []  # failed installs/tests, shown together when the queue is done
@@ -97,7 +99,7 @@ class FramePortApp:
         self._handled_jobs: set[int] = set()  # finished jobs this session has reacted to (pop-ups, refreshes)
         page.on_close = lambda e: (self.jobs.unsubscribe(self._on_job),  # session gone: stop drawing into it
                                    self.stop_live(),  # and stop a live view (it would keep the Frame encoding)
-                                   self.stop_keyboard(),
+                                   self.stop_keyboard(), self.stop_monitor(),
                                    _link_state.update(owner=None) if _link_state["owner"] is self else None)
         from .updater import Updater
 
@@ -342,6 +344,8 @@ class FramePortApp:
             self.game_scroll = 0.0
         if self.route[0] == "keyboard" and route != "keyboard":
             self.stop_keyboard()  # leaving the tab removes the virtual keyboard from the Frame
+        if self.route[0] == "monitor" and route != "monitor":
+            self.stop_monitor()  # leaving the tab ends the Frame's monitor stream
         self.route = (route, *args)
         self.render()
 
@@ -386,6 +390,12 @@ class FramePortApp:
                 if self.keyboard_view is None:
                     self.keyboard_view = KeyboardView(self)
                 view = self.keyboard_view.mount()
+            elif kind == "monitor":
+                from .views.monitor import MonitorView
+
+                if self.monitor_view is None:
+                    self.monitor_view = MonitorView(self)
+                view = self.monitor_view.mount()
             elif kind == "settings":
                 view = SettingsView(self).build()
             else:
@@ -423,6 +433,11 @@ class FramePortApp:
             if self.frame_state != "connected":
                 self.stop_keyboard()
             self.render()
+        elif self.route[0] == "monitor" and (self.monitor_view is None or self.monitor_view.root is None
+                                             or self.monitor_view.stopped or self.frame_state != "connected"):
+            if self.frame_state != "connected":
+                self.stop_monitor()
+            self.render()
         else:
             self._refresh_sidebar()
 
@@ -433,6 +448,10 @@ class FramePortApp:
     def stop_keyboard(self) -> None:
         if self.keyboard_view is not None:
             self.keyboard_view.stop()
+
+    def stop_monitor(self) -> None:
+        if self.monitor_view is not None:
+            self.monitor_view.stop()
 
     def open_game(self, package: str, advanced: bool = False, show_all: bool = False) -> None:
         self.go("game", package, advanced, show_all)
@@ -1950,6 +1969,7 @@ class FramePortApp:
     def disconnect(self):
         self.stop_live()
         self.stop_keyboard()
+        self.stop_monitor()
         if self.target:
             try:
                 self.target.close()

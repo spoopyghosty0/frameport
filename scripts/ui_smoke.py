@@ -182,11 +182,96 @@ class FakeKeyboardSession:
         self.closed = True
 
 
+class FakeMonitorSession:
+    """--fake-frame: the Monitor tab's stream as synthetic samples, one per second: a Quest game near 72 fps, warming
+    temperatures, ~40 processes (nothing reaches a Frame)."""
+
+    PROCS = [("com.example.game", "game:com.example.game", 38.0, 22.0, 1_900_000_000),
+             ("RenderThread", "game:com.example.game", 12.0, 0.0, 0), ("surfaceflinger", "game:com.example.game",
+                                                                          3.1, 4.0, 90_000_000),
+             ("vrcompositor", "steamvr", 6.2, 18.5, 80_000_000), ("vrserver", "steamvr", 4.3, 0.0, 86_000_000),
+             ("XRServiceLoopTh", "steamvr", 5.1, 0.0, 410_000_000), ("steam", "steam", 3.5, 0.2, 290_000_000),
+             ("steamwebhelper", "steam", 2.4, 0.4, 560_000_000), ("gamescope-wl", "desktop", 1.1, 1.2, 50_000_000),
+             ("Xwayland", "desktop", 0.2, 0.1, 68_000_000)] + \
+            [("steamwebhelper", "steam", 0.1, 0.0, 60_000_000 + i * 1_000_000) for i in range(30)]
+
+    def __init__(self, frame, on_sample, on_end=None):
+        import math
+
+        self.math, self.closed, self.on_sample = math, False, on_sample
+        self.static = {"agent": 62, "cores": 8, "gpu_max_mhz": 903, "mem_total": 16 * 1024 ** 3, "fan": True,
+                       "clusters": [{"cpus": [0, 1], "max_mhz": 2265}, {"cpus": [2, 3, 4], "max_mhz": 3148},
+                                    {"cpus": [5, 6], "max_mhz": 2956}, {"cpus": [7], "max_mhz": 3052}],
+                       "temp_groups": ["CPU", "GPU", "Memory", "Battery", "NPU", "Power ICs", "Modem", "Camera"]}
+        self.t = 0
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _sample(self) -> dict:
+        m, t = self.math, self.t
+        wave = lambda a, p, o=0: a * (1 + m.sin(t / p + o)) / 2  # noqa: E731
+        game = library.games()[0] if library.games() else {"package": "com.example.game", "title": "Example Game"}
+        procs = [{"pid": 4100 + i, "ppid": 1, "name": n, "group": g, "game": game["package"] if g.startswith("game")
+                  else None, "cpu": round(c * (0.8 + wave(0.4, 3, i)), 1), "gpu": gp, "rss": r, "age": 1800 + i,
+                  "uid": 1000, "critical": n in ("vrcompositor", "vrserver", "steam", "gamescope-wl", "Xwayland",
+                                                 "XRServiceLoopTh", "steamwebhelper"), "locked": False}
+                 for i, (n, g, c, gp, r) in enumerate(self.PROCS)]
+        return {
+            "t": time.time(), "dt": 1.0, "self_ms": 4.2,
+            "cpu": {"total": round(38 + wave(20, 4), 1), "cores": [round(20 + wave(70, 3 + i, i), 1) for i in range(8)],
+                    "mhz": [1785, 2803, 2611, 3052]},
+            "gpu": {"busy": round(55 + wave(30, 5), 1), "mhz": 680},
+            "mem": {"total": 16 * 1024 ** 3, "avail": int((7.2 - wave(0.6, 6)) * 1024 ** 3),
+                    "swap_total": 8 * 1024 ** 3, "swap_free": 8 * 1024 ** 3},
+            "psi": {"cpu": 2.0, "memory": 0.0, "io": 0.3},
+            "temps": {"CPU": round(61 + t * 0.15, 1), "GPU": round(58 + t * 0.12, 1), "Memory": 49.5, "Battery": 33.2,
+                      "NPU": 44.0, "Power ICs": 46.0, "Modem": 41.0, "Camera": 43.5},
+            "zones": {"CPU": {"cpu7-top": round(61 + t * 0.15, 1), "cpu0": 55.0}, "GPU": {"gpuss-0": 58.0}},
+            "fan": 9400 + int(wave(600, 7)),
+            "power": {"system": round(9.5 + wave(2.5, 4), 2), "cpu": 2.6, "gpu": round(3.1 + wave(1.2, 5), 2),
+                      "npu": 0.1},
+            "battery": {"percent": 78, "status": "Discharging", "plugged": False, "draining": True, "watts": -10.4,
+                        "empty_s": 5400},
+            "net": {"wlan0": [int(wave(250_000, 3)), 18_000], "wlanap": [0, 0], "usb0": [0, 0]},
+            "games": [{"package": game["package"], "title": game.get("title") or game["package"], "kind": "quest",
+                       "appid": 1, "elapsed": 1800 + t, "cpu": 41.0, "gpu": 26.5, "mem": 2_300_000_000,
+                       "processes": 3, "fps": round(71.5 + wave(0.8, 2) - (14 if t % 23 == 7 else 0), 1),
+                       "frame_ms": 0.1}],
+            "procs": procs, "filter": "game"}
+
+    def _run(self) -> None:
+        for self.t in range(100000):
+            if self.closed:
+                return
+            self.on_sample(self._sample())
+            time.sleep(1)
+
+    def set_interval(self, s): pass  # noqa: E704
+    def set_filter(self, w): pass  # noqa: E704
+    def pause(self, p): pass  # noqa: E704
+
+    def kill(self, pid, sig="TERM", force=False):
+        return {"ended": True, "pid": pid}
+
+    def end_game(self, package):
+        return {"ended": True, "via": "steam"}
+
+    def close(self):
+        self.closed = True
+
+
 def open_type_tab(app: FramePortApp) -> None:
     """The Type on Frame tab, with one key 'pressed' so the screenshot shows it working."""
     app.type_on_frame()
     time.sleep(1.5)
     app.keyboard_view.press("Enter")
+
+
+def open_monitor_details(app: FramePortApp) -> None:
+    """The Monitor with its details row open."""
+    app.go("monitor")
+    time.sleep(2)
+    if not app.monitor_view.details.visible:
+        app.monitor_view.toggle_details()
 
 
 LINUX_APPIMAGE = "linux.venera"  # --linux's packages
@@ -281,6 +366,7 @@ def main() -> int:
     ap.add_argument("--docs", action="store_true", help="only the screens used in the docs (Library, --game, Frame)")
     ap.add_argument("--gestures", action="store_true", help="with --fake-frame: real mouse drags (drag-select) and "
                     "right-clicks (menus) in Files, Screenshots and the Library; prints what got selected")
+    ap.add_argument("--only", default=None, help="comma-separated step names to keep (e.g. monitor,monitor-details)")
     ap.add_argument("--linux", action="store_true", help="add two pretend arm64 Linux apps and render their pages")
     ap.add_argument("--links", action="store_true", help="install links: the Add games menu, the paste dialog, the "
                     "confirmation for a pretend FrameDrop manifest, Settings → Install links and (with --game) the "
@@ -300,6 +386,7 @@ def main() -> int:
     steps = [("library", lambda a: a.navigate(0)), ("frame", lambda a: a.navigate(1)),
              ("files", lambda a: a.go("files")), ("screenshots", lambda a: a.go("screenshots")),
              ("live", lambda a: a.go("live")), ("keyboard", lambda a: a.go("keyboard")),
+             ("monitor", lambda a: a.go("monitor")), ("monitor-details", open_monitor_details),
              ("tools", lambda a: a.go("settings"))]
     if game:
         steps.insert(1, ("game", lambda a: a.open_game(game)))
@@ -322,6 +409,7 @@ def main() -> int:
         steps.append(("screenshots", lambda a: a.go("screenshots")))
         steps.append(("screenshot-viewer", lambda a: a.screenshots_view.viewer(0)))
         steps.append(("type-on-frame", lambda a: (a.page.pop_dialog(), open_type_tab(a))))
+        steps.append(("monitor", lambda a: a.go("monitor")))
         steps.append(("power-confirm", lambda a: (a.page.pop_dialog(), a.frame_power("restart"))))
     mouse: dict[str, callable] = {}  # step name -> mouse actions (Playwright page) after its screenshot
     if args.gestures:
@@ -462,12 +550,16 @@ def main() -> int:
             steps.append(("game-connected", lambda a: a.open_game(game)))
         if not args.no_test:
             steps.append(("launch-test-job", job))
+    if args.only:  # in the order given (e.g. frame-connected,monitor)
+        by_name = dict(steps)
+        steps = [(n, by_name[n]) for n in args.only.split(",") if n in by_name]
     ready, done = threading.Event(), []
 
     if args.fake_frame:  # never reach a real Frame (start-up auto-connect, discovery, the 30 s poll)
-        from frameport.frame import keyboard
+        from frameport.frame import keyboard, monitor
 
         keyboard.KeyboardSession = FakeKeyboardSession
+        monitor.MonitorSession = FakeMonitorSession
         FramePortApp.connect = lambda self, *a, **k: None
         FramePortApp.refresh_frame = lambda self, *a, **k: None
 

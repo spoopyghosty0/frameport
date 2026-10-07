@@ -454,3 +454,109 @@ def is_media_player(g: dict) -> bool:
     patches = ((g.get("recipe") or {}).get("patches") or {})
     exts = ((g.get("analysis") or {}).get("extra") or {}).get("xr_layer_exts") or []
     return "adapter.equirect_emul" in patches or any(e.startswith("XR_KHR_composition_layer_equirect") for e in exts)
+
+
+# ------------------------------------------------------------------------------------------ charts
+def spark_points(values: list, width: float, height: float, lo: float = 0.0, hi: float | None = None,
+                 slots: int | None = None, pad: float = 2.0) -> list[list[tuple[float, float]]]:
+    """Runs of (x, y) points for a sparkline: the newest value at the right edge, one slot per value (`slots` fixes
+    the spacing so a young series grows from the right), None = a gap. y grows downwards (canvas coordinates)."""
+    n = slots or len(values)
+    if n < 2 or width <= 0 or height <= 0:
+        return []
+    real = [v for v in values if v is not None]
+    if hi is None:
+        hi = max(real, default=lo + 1.0)
+    span = (hi - lo) or 1.0
+    step = width / (n - 1)
+    x0 = width - step * (len(values) - 1)
+    runs, run = [], []
+    for i, v in enumerate(values):
+        if v is None:
+            if run:
+                runs.append(run)
+            run = []
+            continue
+        frac = min(1.0, max(0.0, (v - lo) / span))
+        run.append((x0 + i * step, pad + (height - 2 * pad) * (1.0 - frac)))
+    if run:
+        runs.append(run)
+    return runs
+
+
+class Sparkline:
+    """A small line chart with a soft area fill (Flet canvas, built into Flet: no charts extension). Created once;
+    set() replaces only the paths' elements, so a tick sends a small patch. Fills its width (on_resize)."""
+
+    def __init__(self, color: str = T.ACCENT, height: int = 36, slots: int = 120, lo: float = 0.0,
+                 hi: float | None = None, min_slots: int = 30):
+        import flet.canvas as cv
+
+        self.cv, self.slots, self.min_slots, self.lo, self.hi = cv, slots, min_slots, lo, hi
+        self.width, self.height = 0.0, T.px(height)
+        self.values: list = []
+        self.target: float | None = None
+        self.area = cv.Path([], paint=ft.Paint(color=T.soft(color, 0.16), style=ft.PaintingStyle.FILL))
+        self.line = cv.Path([], paint=ft.Paint(color=color, stroke_width=T.px(1.6), style=ft.PaintingStyle.STROKE,
+                                               stroke_join=ft.StrokeJoin.ROUND, stroke_cap=ft.StrokeCap.ROUND))
+        self.guide = cv.Path([], paint=ft.Paint(color=T.soft(T.TEXT_3, 0.6), stroke_width=1,
+                                                style=ft.PaintingStyle.STROKE, stroke_dash_pattern=[3, 3]))
+        self.control = cv.Canvas([self.area, self.guide, self.line], height=self.height, expand=True,
+                                 on_resize=self._resized)
+
+    def _resized(self, e) -> None:
+        self.width, self.height = e.width, e.height or self.height
+        self._draw()
+        update(self.control)
+
+    def set_color(self, color: str) -> None:
+        self.line.paint.color = color
+        self.area.paint.color = T.soft(color, 0.16)
+
+    def set(self, values: list, hi: float | None = None, target: float | None = None) -> None:
+        """New values (oldest first); hi overrides the top of the scale; target draws a dashed guide (e.g. 72 fps)."""
+        self.values, self.target = list(values)[-self.slots:], target
+        if hi is not None:
+            self.hi = hi
+        self._draw()
+
+    def _draw(self) -> None:
+        cv, w, h = self.cv, self.width, self.height
+        hi = self.hi
+        if hi is None:
+            hi = max([v for v in self.values if v is not None] + [self.target or 0, self.lo + 1.0]) * 1.1
+        # the time window starts at min_slots points and widens to `slots` as data comes in (a new chart isn't a
+        # sliver at the right edge for its first minute)
+        runs = spark_points(self.values, w, h, self.lo, hi, max(self.min_slots, min(self.slots, len(self.values))))
+        line, area = [], []
+        for run in runs:
+            line.append(cv.Path.MoveTo(*run[0]))
+            line += [cv.Path.LineTo(x, y) for x, y in run[1:]]
+            area += [cv.Path.MoveTo(run[0][0], h), *[cv.Path.LineTo(x, y) for x, y in run],
+                     cv.Path.LineTo(run[-1][0], h), cv.Path.Close()]
+        self.line.elements, self.area.elements = line, area
+        guide = []
+        if self.target is not None and w > 0:
+            y = spark_points([self.target, self.target], w, h, self.lo, hi)[0][0][1]
+            guide = [cv.Path.MoveTo(0, y), cv.Path.LineTo(w, y)]
+        self.guide.elements = guide
+
+
+class MeterBar:
+    """A thin horizontal bar of coloured segments (per-core load, power split); widths are fractions of the bar."""
+
+    def __init__(self, colors: list[str], height: int = 6):
+        self.segments = [ft.Container(bgcolor=c, expand=0, height=T.px(height)) for c in colors]
+        self.rest = ft.Container(expand=1000, height=T.px(height))
+        self.control = ft.Container(ft.Row([*self.segments, self.rest], spacing=0), bgcolor=T.SURFACE_3,
+                                    border_radius=T.px(height), height=T.px(height),
+                                    clip_behavior=ft.ClipBehavior.HARD_EDGE)
+
+    def set(self, fractions: list[float]) -> None:
+        """Fractions (0..1) per segment; the rest of the bar stays empty. Expand weights are integers (per mille)."""
+        total = 0
+        for seg, f in zip(self.segments, fractions, strict=False):
+            seg.expand = max(0, int(round(min(1.0, max(0.0, f)) * 1000)))
+            seg.visible = seg.expand > 0
+            total += seg.expand
+        self.rest.expand = max(1, 1000 - total)
