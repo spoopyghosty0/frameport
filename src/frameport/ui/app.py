@@ -319,7 +319,8 @@ class FramePortApp:
                 box.bgcolor, box.gradient = None, C.portal_gradient(opacity=0.22) if on else None
             else:
                 box.bgcolor = T.ACCENT_SOFT if on else None
-            ic.color = T.ACCENT if on else T.TEXT_2
+            # dual themes: the fade marks the tab; an orange icon on it clashed (owner) -> white like the label
+            ic.color = (T.TEXT if T.DUAL else T.ACCENT) if on else T.TEXT_2
             tx.color = T.TEXT if on else T.TEXT_2
             tx.weight = ft.FontWeight.W_600 if on else ft.FontWeight.W_500
             badge.visible = key == "frame" and self.frame_state == "connected"
