@@ -17,6 +17,7 @@ from ...artwork import thumbs
 from ...errors import explain
 from ...i18n import tr, tr_n
 from .. import components as C
+from .. import glyphs as G
 from .. import theme as T
 from .files_dialog import human
 
@@ -110,7 +111,7 @@ class ScreenshotsView:
             self._loaded = False  # load again once connected
             return ft.Column([
                 app.top_bar(heading, sub),
-                C.empty_state(ft.Icons.PHOTO_LIBRARY_OUTLINED, tr("Connect your Frame first"),
+                C.empty_state(G.SHOT, tr("Connect your Frame first"),
                               tr("Screenshots on the Frame can be shown once FramePort is connected to it."),
                               C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
         if self.root is None:

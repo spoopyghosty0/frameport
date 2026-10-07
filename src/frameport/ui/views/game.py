@@ -15,6 +15,7 @@ from ...i18n import tr, tr_n
 from ...patches import base
 from ...recommend import catalog, engine
 from .. import components as C
+from .. import glyphs as G
 from .. import theme as T
 from ..help import HELP
 
@@ -178,15 +179,15 @@ class GameView:
                      else tr("Runs directly — no Revive needed") if self.rift else
                      tr("Runs natively on SteamOS, started from the Frame's Steam library") if self.linux else "")
         cards.append(self.target_card(
-            ft.Icons.VIEW_IN_AR_ROUNDED, tr("Steam Frame"), frame_line, frame_color, frame_sub,
-            [C.icon_btn(ft.Icons.SCIENCE_OUTLINED, C.tip(tr("Launch test on the Frame. ") + HELP["launch_test"]),
+            G.FRAME, tr("Steam Frame"), frame_line, frame_color, frame_sub,
+            [C.icon_btn(G.TEST, C.tip(tr("Launch test on the Frame. ") + HELP["launch_test"]),
                         lambda e: app.test_game(pkg, "frame"), not frame_ok),
              C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, C.tip(tr("Uninstall from the Frame. ") + HELP["uninstall"]),
                         lambda e: app.uninstall(pkg, "frame"), not frame_ok)] if frame_ok else []))
         if self.rift:
             dep = app.pc_installs().get(pkg)
             cards.append(self.target_card(
-                ft.Icons.COMPUTER_ROUNDED, tr("This PC (Steam + Revive)"),
+                G.PC, tr("This PC (Steam + Revive)"),
                 (tr("In your Steam library · launch settings changed — update it") if C.pc_outdated(g, dep) else
                  tr("In your Steam library")) if dep else tr("Not installed"),
                 (T.WARN if C.pc_outdated(g, dep) else T.PC) if dep else T.TEXT_3,
@@ -194,7 +195,7 @@ class GameView:
                  .format(value=dep.get('revive_version') or '', value2=dep.get('backend') or 'openxr')
                  if dep.get("revive_win") else tr("The repack's own Revive · runs the game directly")
                  if dep.get("launch") == "repack" else tr("Runs the game directly")) if dep else "",
-                [C.icon_btn(ft.Icons.SCIENCE_OUTLINED, tr("Launch test on this PC"),
+                [C.icon_btn(G.TEST, tr("Launch test on this PC"),
                             lambda e: app.test_game(pkg, "pc")),
                  C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Remove from this PC's Steam library"),
                             lambda e: app.uninstall(pkg, "pc"))] if dep else []))
@@ -202,7 +203,7 @@ class GameView:
 
     def target_card(self, icon, name, line, color, sub, buttons) -> ft.Control:
         return C.card(ft.Row([
-            ft.Container(ft.Icon(icon, color=color, size=T.px(22)), width=T.px(44), height=T.px(44),
+            ft.Container(C.as_icon(icon, T.px(22), color), width=T.px(44), height=T.px(44),
                          border_radius=T.px(10), bgcolor=T.soft(color, 0.14), alignment=ft.Alignment.CENTER),
             ft.Column([C.body(name, T.TEXT, weight=ft.FontWeight.W_600), C.body(line, color, size=T.T_META)]
                       + ([C.meta(sub)] if sub else []), spacing=T.px(2), expand=True),
@@ -283,7 +284,7 @@ class GameView:
             other_rift = r.get("kind") == "rift"
             links.append(C.ghost(tr("Also in your library: {value} version")
                                  .format(value='Rift' if other_rift else 'Quest'),
-                                 ft.Icons.COMPUTER_ROUNDED if other_rift else ft.Icons.VIEW_IN_AR_ROUNDED,
+                                 G.PC if other_rift else G.FRAME,
                                  lambda e, p=r["package"]: self.app.open_game(p), color=T.ACCENT))
         if links:
             out.append(ft.Row(links, spacing=T.S2, wrap=True))
@@ -449,7 +450,7 @@ class GameView:
         visible = [p for p in on if not p.default_on or p.category in ("pcvr",)]
         if entry and recipe.source.startswith("catalog"):
             lead = f"Known-good recipe for this game, tested {entry.verified.get('date', '')}".strip(", ")
-            icon, color = ft.Icons.VERIFIED_ROUNDED, T.OK
+            icon, color = G.RECIPE, T.OK
         elif recipe.source == "user":
             lead, icon, color = tr("Your custom recipe"), ft.Icons.TUNE_ROUNDED, T.ACCENT
         else:
@@ -493,7 +494,7 @@ class GameView:
         return C.section(
             tr("What FramePort will do"),
             C.card(ft.Column([
-                ft.Row([ft.Icon(icon, color=color, size=T.px(18)), C.body(lead, T.TEXT, weight=ft.FontWeight.W_500,
+                ft.Row([C.as_icon(icon, T.px(18), color), C.body(lead, T.TEXT, weight=ft.FontWeight.W_500,
                                                                      expand=True)], spacing=T.S2),
                 ft.Row(chips, spacing=T.S2, run_spacing=T.S2, wrap=True) if chips else
                 (ft.Container() if as_is else C.meta(tr("Nothing to patch: it runs as is."))),

@@ -9,6 +9,7 @@ import flet as ft
 from ...core import library
 from ...i18n import tr
 from .. import components as C
+from .. import glyphs as G
 from .. import theme as T
 from ..battery import label as battery_label
 from ..help import HELP
@@ -27,7 +28,7 @@ class FrameView:
         t = app.target
         free = (info.get("free_bytes") or 0) / 2**30
         return C.card(ft.Row([
-            ft.Container(ft.Icon(ft.Icons.VIEW_IN_AR_ROUNDED, size=T.px(34), color=T.ACCENT), width=T.px(72),
+            ft.Container(C.as_icon(G.FRAME, T.px(34), T.ACCENT), width=T.px(72),
                          height=T.px(72), border_radius=T.px(18), bgcolor=T.ACCENT_SOFT, alignment=ft.Alignment.CENTER),
             ft.Column([
                 ft.Row([C.title(info.get("hostname") or t.label, 22), C.pill(tr("Connected"), T.OK, ft.Icons.CIRCLE)],
@@ -42,7 +43,7 @@ class FrameView:
             ], spacing=T.px(4), expand=True),
             ft.Column([
                 C.secondary(tr("Refresh"), ft.Icons.REFRESH_ROUNDED, lambda e: app.refresh_frame()),
-                C.secondary(tr("Type on Frame"), ft.Icons.KEYBOARD_ROUNDED, lambda e: app.type_on_frame(),
+                C.secondary(tr("Type on Frame"), G.KEYS, lambda e: app.type_on_frame(),
                             tooltip=tr("Use this computer's keyboard on the Frame")),
                 C.ghost(tr("Switch Frame…"), ft.Icons.SWAP_HORIZ_ROUNDED, lambda e: app.disconnect()),
             ], spacing=T.S2, horizontal_alignment=ft.CrossAxisAlignment.END),
@@ -67,7 +68,7 @@ class FrameView:
                 (tr("{display_name} can be installed (about 1 GiB; Steam restarts once)")
                  .format(display_name=sug['display_name']) if sug else
                  tr("Not offered by Steam on this Frame yet")),
-                C.secondary(tr("Test"), ft.Icons.SCIENCE_OUTLINED, lambda e: app.test_proton()) if ready else
+                C.secondary(tr("Test"), G.TEST, lambda e: app.test_proton()) if ready else
                 C.primary(tr("Install"), ft.Icons.DOWNLOAD_ROUNDED, lambda e: app.install_proton(), disabled=not sug),
                 help="proton"))
             xr = (pr.get("openxr") or {}).get("name")
@@ -135,7 +136,7 @@ class FrameView:
                            lambda e, p=pkg, t=title: show_files_dialog(app, p, t)),
                 C.icon_btn(ft.Icons.PLAY_ARROW_ROUNDED, tr("Play: starts the game through the Frame's Steam (put the "
                            "headset on)"), lambda e, p=pkg: app.play(p, "frame"), color=T.ACCENT),
-                C.icon_btn(ft.Icons.SCIENCE_OUTLINED, C.tip(tr("Launch test. ") + HELP["launch_test"]),
+                C.icon_btn(G.TEST, C.tip(tr("Launch test. ") + HELP["launch_test"]),
                            lambda e, p=pkg: app.test_game(p, "frame")),
                 C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, C.tip(tr("Uninstall. ") + HELP["uninstall"]),
                            lambda e, p=pkg: app.uninstall(p, "frame")),
@@ -165,8 +166,7 @@ class FrameView:
                 label = {"devkit": "SteamOS · Developer Mode", "frameport": "Set up for FramePort",
                          "saved": "Remembered", "scan": "SSH found by network scan"}.get(f.source, f.source)
                 items.append(ft.Container(ft.Row([
-                    ft.Icon(ft.Icons.VIEW_IN_AR_ROUNDED if f.source != "scan" else ft.Icons.DEVICES_OTHER_ROUNDED,
-                            color=T.ACCENT),
+                    C.as_icon(G.FRAME if f.source != "scan" else ft.Icons.DEVICES_OTHER_ROUNDED, T.px(24), T.ACCENT),
                     ft.Column([C.body(f.name if f.source != "scan" else f.host, T.TEXT, weight=ft.FontWeight.W_500),
                                C.meta(f"{f.host} · {label}")], spacing=T.px(2), expand=True),
                     C.primary(tr("Connect"), on_click=lambda e, f=f: app.connect(parse_target(f"{f.user}@{f.host}"),

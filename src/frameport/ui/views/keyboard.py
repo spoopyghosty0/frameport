@@ -14,6 +14,7 @@ import flet as ft
 from ...errors import explain
 from ...i18n import tr
 from .. import components as C
+from .. import glyphs as G
 from .. import theme as T
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ class KeyboardView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(heading, sub),
-                C.empty_state(ft.Icons.KEYBOARD_ROUNDED, tr("Connect your Frame first"),
+                C.empty_state(G.KEYS, tr("Connect your Frame first"),
                               tr("Typing on the Frame works once FramePort is connected to it."),
                               C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
         if self.root is None:

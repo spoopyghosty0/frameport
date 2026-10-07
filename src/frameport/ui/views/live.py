@@ -15,6 +15,7 @@ import flet as ft
 from ...errors import explain
 from ...i18n import tr, tr_n
 from .. import components as C
+from .. import glyphs as G
 from .. import theme as T
 from .files_dialog import human
 
@@ -73,7 +74,7 @@ class LiveView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(heading, sub),
-                C.empty_state(ft.Icons.CAST_ROUNDED, tr("Connect your Frame first"),
+                C.empty_state(G.LIVE, tr("Connect your Frame first"),
                               tr("The live view can start once FramePort is connected to the Frame."),
                               C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
         if self.root is None:

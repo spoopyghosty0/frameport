@@ -282,6 +282,8 @@ def main() -> int:
     ap.add_argument("--gestures", action="store_true", help="with --fake-frame: real mouse drags (drag-select) and "
                     "right-clicks (menus) in Files, Screenshots and the Library; prints what got selected")
     ap.add_argument("--linux", action="store_true", help="add two pretend arm64 Linux apps and render their pages")
+    ap.add_argument("--themes", action="store_true", help="Settings' theme picker, then switch every theme while "
+                    "running (Library and --game in each)")
     args = ap.parse_args()
     if args.linux:
         add_fake_linux_apps()
@@ -377,6 +379,31 @@ def main() -> int:
                  ("linux-change-program", lambda a: a.choose_exe(LINUX_FOLDER)),
                  ("frame", lambda a: (a.page.pop_dialog(), a.navigate(1))),
                  ("linux-menu", lambda a: (a.navigate(0), time.sleep(3), a.library_view.open_menu(LINUX_APPIMAGE)))]
+    if args.themes:
+        from frameport.ui import theme as T
+
+        def switch(name):
+            def run(a):
+                library.set_setting("ui.theme", name)  # what the picker does
+                a.restyle(name)
+            return run
+
+        def appearance(a):
+            """Settings' Appearance section on its own (it is near the end of the page)."""
+            from frameport.ui import components as C
+            from frameport.ui.views.settings import SettingsView
+
+            a.go("settings")
+            a.body.content = ft.Column([a.top_bar("Settings", "Appearance"),
+                                        C.section("Appearance", C.card(SettingsView(a).appearance()))])
+            a.page.update()
+        steps = [("appearance", appearance)]
+        for name in [n for n in T.THEMES if n != T.THEME] + [T.THEME]:
+            steps.append((f"{name}-switched", switch(name)))
+            steps.append((f"{name}-appearance", appearance))
+            steps.append((f"{name}-library", lambda a: a.navigate(0)))
+            if game:
+                steps.append((f"{name}-game", lambda a: a.open_game(game)))
     if args.usb_setup:
         def continue_usb(a):
             dialog = [d for d in a.page._dialogs.controls if d.open and type(d).__name__ == "AlertDialog"][-1]
