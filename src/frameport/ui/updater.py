@@ -15,6 +15,7 @@ from ..core import applog, library
 from ..errors import explain
 from ..i18n import tr
 from . import components as C
+from . import glyphs as G
 from . import theme as T
 
 if TYPE_CHECKING:
@@ -29,12 +30,17 @@ class Updater:
         self.found: updates.Update | None = None
         self.restart = None          # callable: what to do once the job queue is idle (install + quit)
         self.preparing = False
-        self._version = C.meta("", color=T.ON_ACCENT)
+        self.build_card()
+
+    def build_card(self) -> None:
+        """The sidebar's "Update available" card (again after a theme change; keeps what it shows)."""
+        old = getattr(self, "card", None)
+        self._version = C.meta(getattr(self, "_version", None) and self._version.value or "", color=T.ON_ACCENT)
         self.card = ft.Container(
             ft.Row([ft.Icon(ft.Icons.SYSTEM_UPDATE_ROUNDED, size=T.px(18), color=T.ON_ACCENT),
                     ft.Column([C.body(tr("Update available"), T.ON_ACCENT, weight=ft.FontWeight.W_600), self._version],
                               spacing=0, expand=True)], spacing=T.S2),
-            padding=T.S3, border_radius=T.RADIUS_SM, bgcolor=T.ACCENT, ink=True, visible=False,
+            padding=T.S3, border_radius=T.RADIUS_SM, bgcolor=T.ACCENT, ink=True, visible=bool(old and old.visible),
             tooltip=tr("A new FramePort version is ready to install"), on_click=lambda e: self.show_dialog())
 
     # ---------------------------------------------------------------- checking
@@ -164,7 +170,7 @@ class Updater:
                 width=T.px(560), height=T.px(min(440, 190 + 26 * len(notes.splitlines())))),
             actions=[C.ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog()),
                      C.ghost(tr("Build page"), ft.Icons.OPEN_IN_NEW_ROUNDED, lambda e: page.launch_url(up.page)),
-                     C.primary(tr("Install dev build"), ft.Icons.SCIENCE_OUTLINED, go)]))
+                     C.primary(tr("Install dev build"), G.TEST, go)]))
 
     # ---------------------------------------------------------------- installing
     def install(self) -> None:

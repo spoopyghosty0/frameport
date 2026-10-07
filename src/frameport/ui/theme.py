@@ -1,32 +1,64 @@
-"""Design tokens for the FramePort GUI (dark only): one accent, a neutral surface ramp, semantic state colours, an
-8-pt spacing scale and a small type scale. Every view takes its colours and sizes from here."""
+"""Design tokens for the FramePort GUI (dark only, the owner's choice): colour themes (one accent, a neutral surface
+ramp, semantic state colours), an 8-pt spacing scale and a small type scale. Every view takes its colours and sizes
+from here, reading them as `T.NAME` when it builds (never as a default argument or a module-level constant: those keep
+the colours of the theme that was active at import; module-level maps re-fill themselves through on_change())."""
 from __future__ import annotations
+
+from collections.abc import Callable
 
 import flet as ft
 
-# surfaces (darkest → lightest)
-BG = "#0E0F13"          # window background
-SIDEBAR = "#121319"
-SURFACE = "#171920"     # cards
-SURFACE_2 = "#1E2029"   # raised / hover
-SURFACE_3 = "#262935"   # inputs, chips
-BORDER = "#2C2F3B"
-BORDER_STRONG = "#3A3E4D"
+# Colour themes. "portal" follows the logo: the orange portal is the accent (actions, selection), the blue portal is
+# the PC side (PC VR, "on this PC"). Status colours are picked per theme so a warning never reads as the accent.
+#   surfaces: BG window, SIDEBAR, SURFACE cards, SURFACE_2 raised/hover, SURFACE_3 inputs/chips, BORDER(_STRONG)
+#   text: TEXT, TEXT_2 secondary, TEXT_3 meta/disabled
+#   ACCENT (+ ACCENT_SOFT tint, ON_ACCENT text on it), states OK/WARN/ERROR/INFO, PC = PC VR / "on this PC"
+THEMES: dict[str, dict] = {
+    "portal": {
+        "BG": "#0D0E12", "SIDEBAR": "#111217", "SURFACE": "#16181E", "SURFACE_2": "#1D1F27", "SURFACE_3": "#252832",
+        "BORDER": "#2A2D37", "BORDER_STRONG": "#393D49",
+        "TEXT": "#EDEEF2", "TEXT_2": "#A7ABB7", "TEXT_3": "#717583",
+        "ACCENT": "#FF8A1F", "ACCENT_SOFT": "#3A2512", "ON_ACCENT": "#160C03",
+        "OK": "#3DD68C", "WARN": "#F2C94C", "ERROR": "#FF6166", "INFO": "#3AA8FF", "PC": "#3AA8FF",
+    },
+    "classic": {  # FramePort's colours before 0.10 (violet accent)
+        "BG": "#0E0F13", "SIDEBAR": "#121319", "SURFACE": "#171920", "SURFACE_2": "#1E2029", "SURFACE_3": "#262935",
+        "BORDER": "#2C2F3B", "BORDER_STRONG": "#3A3E4D",
+        "TEXT": "#ECEDF3", "TEXT_2": "#A9ADBD", "TEXT_3": "#737889",
+        "ACCENT": "#8B7CFF", "ACCENT_SOFT": "#2A2550", "ON_ACCENT": "#0E0F13",
+        "OK": "#4ADE80", "WARN": "#FBBF24", "ERROR": "#F87171", "INFO": "#60A5FA", "PC": "#38BDF8",
+    },
+}
+DEFAULT_THEME = "portal"
+THEME = DEFAULT_THEME
+_listeners: list[Callable[[], None]] = []
 
-# text
-TEXT = "#ECEDF3"
-TEXT_2 = "#A9ADBD"      # secondary
-TEXT_3 = "#737889"      # meta / disabled
+# the active theme's tokens as module globals (set_theme() replaces them); declared for linters and readers
+BG = SIDEBAR = SURFACE = SURFACE_2 = SURFACE_3 = BORDER = BORDER_STRONG = ""
+TEXT = TEXT_2 = TEXT_3 = ACCENT = ACCENT_SOFT = ON_ACCENT = OK = WARN = ERROR = INFO = PC = ""
 
-# accent + states
-ACCENT = "#8B7CFF"
-ACCENT_SOFT = "#2A2550"
-ON_ACCENT = "#0E0F13"
-OK = "#4ADE80"
-WARN = "#FBBF24"
-ERROR = "#F87171"
-INFO = "#60A5FA"
-PC = "#38BDF8"          # PC VR / "on this PC"
+
+def theme_from_setting(value) -> str:
+    """Library setting ui.theme → a known theme name (unknown/missing → the default)."""
+    return value if value in THEMES else DEFAULT_THEME
+
+
+def on_change(callback: Callable[[], None]) -> None:
+    """Call `callback` after every set_theme() (and once now): for module-level maps that hold colours."""
+    _listeners.append(callback)
+    callback()
+
+
+def set_theme(name: str) -> None:
+    """Switch the colour tokens. Views built afterwards use the new colours (app.restyle() rebuilds the open ones)."""
+    global THEME
+    THEME = theme_from_setting(name)
+    globals().update(THEMES[THEME])
+    for callback in list(_listeners):
+        callback()
+
+
+set_theme(DEFAULT_THEME)
 
 # spacing / shape / type (at 100 %; set_scale() multiplies them)
 _BASE = {"S1": 4, "S2": 8, "S3": 12, "S4": 16, "S5": 24, "S6": 32, "RADIUS": 12, "RADIUS_SM": 8,

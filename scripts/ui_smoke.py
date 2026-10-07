@@ -382,6 +382,8 @@ def main() -> int:
     ap.add_argument("--links", action="store_true", help="install links: the Add games menu, the paste dialog, the "
                     "confirmation for a pretend FrameDrop manifest, Settings → Install links and (with --game) the "
                     "VR / flat window choice")
+    ap.add_argument("--themes", action="store_true", help="Settings' theme picker, then switch every theme while "
+                    "running (Library and --game in each)")
     args = ap.parse_args()
     if args.linux:
         add_fake_linux_apps()
@@ -517,6 +519,31 @@ def main() -> int:
             page.screenshot(path=str(args.out / "library-add-menu.png"))
             page.mouse.click(120, 520)  # outside the menu (Flutter's popup ignores Escape)
         mouse["library"] = add_menu_open  # tall pages: run with e.g. --viewport 1280x3200
+    if args.themes:
+        from frameport.ui import theme as T
+
+        def switch(name):
+            def run(a):
+                library.set_setting("ui.theme", name)  # what the picker does
+                a.restyle(name)
+            return run
+
+        def appearance(a):
+            """Settings' Appearance section on its own (it is near the end of the page)."""
+            from frameport.ui import components as C
+            from frameport.ui.views.settings import SettingsView
+
+            a.go("settings")
+            a.body.content = ft.Column([a.top_bar("Settings", "Appearance"),
+                                        C.section("Appearance", C.card(SettingsView(a).appearance()))])
+            a.page.update()
+        steps = [("appearance", appearance)]
+        for name in [n for n in T.THEMES if n != T.THEME] + [T.THEME]:
+            steps.append((f"{name}-switched", switch(name)))
+            steps.append((f"{name}-appearance", appearance))
+            steps.append((f"{name}-library", lambda a: a.navigate(0)))
+            if game:
+                steps.append((f"{name}-game", lambda a: a.open_game(game)))
     if args.usb_setup:
         def continue_usb(a):
             dialog = [d for d in a.page._dialogs.controls if d.open and type(d).__name__ == "AlertDialog"][-1]

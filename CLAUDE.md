@@ -10,7 +10,15 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
 ## Layout
 - `src/frameport/` — Python package. `pipeline.py` is the API the CLI (`cli.py`) and GUI (`ui/`, Flet 1.0) share.
   - `ui/` — `app.py` shell (sidebar with Frame connection + activity cards, routing, actions, 30 s connection poll),
-    `theme.py` (dark design tokens; change colours/spacing only there), `components.py` (pill, card, callout,
+    `theme.py` (design tokens; change colours/spacing only there. Dark-only colour themes (owner: no light mode):
+    `portal` (default: orange accent = the logo's orange portal, PC = its blue) and `classic` (the old violet);
+    Settings → Appearance theme cards switch live via `app.restyle()` (rebuilds the shell, drops cached views; setting
+    `ui.theme`). Read tokens as `T.NAME` when building — never as a default argument or module-level constant (they
+    keep the import-time theme; module maps refill through `T.on_change`, `tests/test_theme.py` checks defaults)),
+    `glyphs.py` + `icons/` (the logo `logo.svg`/`logo-solid.svg` = a monitor that comes out of a tilted portal as the
+    Frame, and 24 px line glyphs `fp:frame|port|patch|container|test|pc|sync|live|shot|keys|recipe|link`, copied into
+    the assets dir and shown as tinted `ft.Image`s: pass `G.FRAME` … wherever an icon goes, `C.as_icon` / the button
+    helpers handle both kinds; `src/assets/icon.png` = the bundles' app icon), `components.py` (pill, card, callout,
     status_row, art_fill, confirm, `update()` = safe update: in Flet 1.0 reading `.page` of an unmounted control
     raises), `jobs.py` (background FIFO job queue, one at a time, cancel via Reporter; no Flet), `views/`
     (library: search/filters/tags/sort as pure tested helpers; game: hero + one-click install, patches under

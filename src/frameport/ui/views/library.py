@@ -13,6 +13,7 @@ from ...artwork import thumbs
 from ...core import library
 from ...i18n import tr, tr_n
 from .. import components as C
+from .. import glyphs as G
 from .. import theme as T
 from ..help import HELP
 
@@ -372,11 +373,11 @@ class LibraryView:
             ft.Container(expand=True),
             C.ghost(tr("Select all shown"), on_click=lambda e: self.select_visible()),
             C.ghost(tr("Clear"), on_click=lambda e: (self.selected.clear(), self.set_select_mode(True))),
-            *([C.secondary(tr("Install {len} on this PC").format(len=len(rift)), ft.Icons.COMPUTER_ROUNDED,
+            *([C.secondary(tr("Install {len} on this PC").format(len=len(rift)), G.PC,
                            lambda e: app.install_many(sorted(rift), "pc"), disabled=not winhost.available())]
               if rift else []),
             C.primary(tr("Install {n} on Frame").format(n=n) if n else tr("Install on Frame"),
-                      ft.Icons.VIEW_IN_AR_ROUNDED,
+                      G.FRAME,
                       lambda e: app.install_many(sorted(self.selected), "frame"),
                       disabled=not n or app.frame_state != "connected",
                       tooltip=None if app.frame_state == "connected" else tr("Connect your Frame first")),
@@ -456,7 +457,7 @@ class LibraryView:
             self.hint.content = C.callout(ft.Row([
                 C.body(tr("Connect your Steam Frame to install games and see what's on it."), T.TEXT, expand=True),
                 C.ghost(tr("Connect"), ft.Icons.ARROW_FORWARD_ROUNDED, lambda e: app.go("frame"), color=T.ACCENT)]),
-                "info", ft.Icons.VIEW_IN_AR_ROUNDED)
+                "info", G.FRAME)
             self.hint.visible = True
         else:
             self.hint.visible = False

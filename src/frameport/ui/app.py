@@ -23,17 +23,18 @@ from ..frame.connection import NOT_IN_LIBRARY, AgentFailed
 from ..i18n import fmt_size, tr, tr_n
 from ..recommend import catalog
 from . import components as C
+from . import glyphs as G
 from . import jobs as jobs_module
 from . import theme as T
 from .components import install_state  # noqa: F401  (re-exported: tests and older callers import it from here)
 from .jobs import Job
 
 NAV = [("library", tr("Library"), ft.Icons.GRID_VIEW_ROUNDED),
-       ("frame", tr("Steam Frame"), ft.Icons.VIEW_IN_AR_ROUNDED),
+       ("frame", tr("Steam Frame"), G.FRAME),
        ("files", tr("Files"), ft.Icons.FOLDER_OPEN_ROUNDED),
-       ("screenshots", tr("Screenshots"), ft.Icons.PHOTO_LIBRARY_OUTLINED),
-       ("live", tr("Live view"), ft.Icons.CAST_ROUNDED),
-       ("keyboard", tr("Type on Frame"), ft.Icons.KEYBOARD_ROUNDED),
+       ("screenshots", tr("Screenshots"), G.SHOT),
+       ("live", tr("Live view"), G.LIVE),
+       ("keyboard", tr("Type on Frame"), G.KEYS),
        ("monitor", tr("Monitor"), ft.Icons.MONITOR_HEART_OUTLINED),
        ("settings", tr("Settings"), ft.Icons.TUNE_ROUNDED)]
 POLL_SECONDS = 30
@@ -81,7 +82,6 @@ def window_geometry(saved: dict | None, scale: float) -> dict:
 
 class FramePortApp:
     def __init__(self, page: ft.Page):
-        from .views.activity import ActivityPanel
         from .views.library import load_filters
 
         self.page = page
@@ -115,6 +115,8 @@ class FramePortApp:
         self.updater = Updater(self)  # new FramePort releases (sidebar card, Library bar, one-click update)
 
         page.title = tr("FramePort")
+        T.set_theme(T.theme_from_setting(library.setting("ui.theme")))
+        G.install(Path(assets_dir()))  # the logo + FramePort's icons, served like artwork
         T.apply(page)
         page.padding = 0
         page.window.min_width, page.window.min_height = 1000, 680
@@ -131,29 +133,7 @@ class FramePortApp:
                 page.run_task(ft.BrowserContextMenu().disable)
             except Exception:  # noqa: BLE001
                 pass
-        self.body = ft.Container(expand=True, padding=ft.Padding(T.S6, T.S5, T.S5, 0))
-        self.nav_col = ft.Column(spacing=T.px(2))
-        self.conn_card = ft.Container()
-        self.power_row = ft.Container(visible=False)  # the Frame's power button (sleep / restart / shut down)
-        self.activity_card = ft.Container()
-        self.activity = ActivityPanel(self)
-        sidebar = ft.Container(ft.Column([
-            ft.Container(ft.Row([
-                ft.Container(ft.Icon(ft.Icons.VIEW_IN_AR_ROUNDED, size=T.px(18), color=T.ON_ACCENT),
-                             width=T.px(32), height=T.px(32), border_radius=T.px(9), bgcolor=T.ACCENT,
-                             alignment=ft.Alignment.CENTER),
-                ft.Text(tr("FramePort"), size=T.px(17), weight=ft.FontWeight.W_800, color=T.TEXT)], spacing=T.S3),
-                padding=ft.Padding(T.S2, T.S2, 0, T.S5)),
-            self.nav_col,
-            ft.Container(expand=True),
-            self.updater.card,
-            self.activity_card,
-            self.conn_card,
-            self.power_row,  # under the Frame card (owner's choice)
-        ], spacing=T.S2), width=T.px(236), bgcolor=T.SIDEBAR, padding=T.S4,
-            border=ft.Border(right=ft.BorderSide(1, T.BORDER)))
-        page.add(ft.Row([sidebar, self.body, self.activity.root], expand=True, spacing=0,
-                        vertical_alignment=ft.CrossAxisAlignment.STRETCH))
+        self._build_shell()
         from .views.welcome import needed
 
         self.go("welcome" if needed() else "library")
@@ -174,6 +154,53 @@ class FramePortApp:
             self.run_bg(urlhandler.apply_setting)  # framedrop:// + frameport:// → FramePort (Settings → General)
 
     # ================================================================== shell
+    def _build_shell(self) -> None:
+        """The window: sidebar (logo, navigation, update/activity/Frame cards), the view area and the activity panel.
+        Built again by restyle() with the new theme's colours."""
+        from .views.activity import ActivityPanel
+
+        self.body = ft.Container(expand=True, padding=ft.Padding(T.S6, T.S5, T.S5, 0))
+        self.nav_col = ft.Column(spacing=T.px(2))
+        self.conn_card = ft.Container()
+        self.power_row = ft.Container(visible=False)  # the Frame's power button (sleep / restart / shut down)
+        self.activity_card = ft.Container()
+        self.activity = ActivityPanel(self)
+        sidebar = ft.Container(ft.Column([
+            ft.Container(ft.Row([
+                C.logo(T.px(34)),
+                ft.Text(tr("FramePort"), size=T.px(17), weight=ft.FontWeight.W_800, color=T.TEXT)], spacing=T.S3),
+                padding=ft.Padding(T.S1, T.S2, 0, T.S5)),
+            self.nav_col,
+            ft.Container(expand=True),
+            self.updater.card,
+            self.activity_card,
+            self.conn_card,
+            self.power_row,  # under the Frame card (owner's choice)
+        ], spacing=T.S2), width=T.px(236), bgcolor=T.SIDEBAR, padding=T.S4,
+            border=ft.Border(right=ft.BorderSide(1, T.BORDER)))
+        self.page.controls = [ft.Row([sidebar, self.body, self.activity.root], expand=True, spacing=0,
+                                     vertical_alignment=ft.CrossAxisAlignment.STRETCH)]
+
+    def restyle(self, theme: str) -> None:
+        """Switch the colour theme while running (Settings → Appearance): new tokens, the window rebuilt, the views
+        FramePort keeps between visits recreated (the files/screenshots views start at their first location again;
+        a running live view keeps its stream and only redraws)."""
+        T.set_theme(theme)
+        T.apply(self.page)
+        open_activity = self.activity.open
+        self.updater.build_card()
+        self._build_shell()
+        if hasattr(self, "_nav"):
+            del self._nav  # _refresh_sidebar builds the sidebar's controls again
+        self.library_view = self.files_view = self.screenshots_view = None
+        if self.keyboard_view is not None and self.keyboard_view.stopped:
+            self.keyboard_view = None
+        for view in (self.live_view, self.keyboard_view):
+            if view is not None:
+                view.root = None  # rebuilt on its next visit
+        self.activity.set_open(open_activity)
+        self.render()
+
     def _on_window_event(self, e) -> None:
         """Remember the window's size and position (once a resize/move ends; not while maximized or full screen) and
         whether it is maximized."""
@@ -213,7 +240,7 @@ class FramePortApp:
         reports progress (several times a second) swallowed clicks — the pressed control was gone on release."""
         nav = {}
         for key, label, icon in NAV:
-            ic = ft.Icon(icon, size=T.px(20), color=T.TEXT_2)
+            ic = C.as_icon(icon, T.px(20), T.TEXT_2)
             tx = ft.Text(label, size=T.px(14), weight=ft.FontWeight.W_500, color=T.TEXT_2, expand=True)
             badge = C.dot(T.OK, 7)
             badge.visible = False
@@ -252,7 +279,7 @@ class FramePortApp:
                                              vertical_alignment=ft.CrossAxisAlignment.CENTER), visible=False)
         self._conn_extra = ft.Container(C.meta(""), visible=False, tooltip=C.tip(C.HELP["frame_summary"]))
         self.conn_card.content = ft.Container(ft.Row([
-            ft.Stack([ft.Icon(ft.Icons.VIEW_IN_AR_ROUNDED, size=T.px(22), color=T.TEXT_2),
+            ft.Stack([C.as_icon(G.FRAME, T.px(22), T.TEXT_2),
                       ft.Container(self._conn_dot, right=0, bottom=0)], width=T.px(24), height=T.px(24)),
             ft.Column([ft.Row([ft.Container(self._conn_name, expand=True), self._conn_bat],
                               spacing=T.px(6), vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -632,7 +659,7 @@ class FramePortApp:
                            "outdated": tr("Update anyway")}.get(st, tr("Install anyway"))
             return [(frame_label, ft.Icons.WARNING_AMBER_ROUNDED, lambda e: self.install_blocked(pkg), False,
                      tr("Marked \"Can't run\": ") + ((g.get("recipe") or {}).get("notes") or tr("a known blocker")))]
-        frame_opt = (frame_label, ft.Icons.VIEW_IN_AR_ROUNDED, lambda e: self.install(pkg, "frame"), False, None) \
+        frame_opt = (frame_label, G.FRAME, lambda e: self.install(pkg, "frame"), False, None) \
             if connected else (tr("Connect your Frame"), ft.Icons.LINK_ROUNDED, lambda e: self.go("frame"), False,
                                tr("Set up the connection to your Steam Frame first"))
         if g.get("kind") != "rift":
@@ -644,7 +671,7 @@ class FramePortApp:
         pc_label = (tr("Update on this PC") if stale else tr("Reinstall on this PC") if on_pc
                     else tr("Install on this PC"))
         pc_opt = (pc_label,
-                  ft.Icons.COMPUTER_ROUNDED, lambda e: self.install(pkg, "pc"), not winhost.available(),
+                  G.PC, lambda e: self.install(pkg, "pc"), not winhost.available(),
                   tr("The launch settings changed since it was installed: update the Steam shortcut") if stale else
                   None if winhost.available() else tr("Needs Windows (or WSL on Windows)"))
         return [frame_opt, pc_opt] if connected or not winhost.available() else [pc_opt, frame_opt]
@@ -746,7 +773,7 @@ class FramePortApp:
         opts = [o for o in self.install_options(g) if o[2] and not o[3]]
         if not opts or opts[0][1] == ft.Icons.LINK_ROUNDED:  # "Connect your Frame" isn't a quick action
             return None, None
-        if opts[0][1] == ft.Icons.COMPUTER_ROUNDED:  # installing on this PC comes first
+        if opts[0][1] == G.PC:  # installing on this PC comes first
             dep = self.pc_installs().get(pkg)
             kind = "update" if dep and C.pc_outdated(g, dep) else "reinstall" if dep else "install"
         else:
@@ -781,10 +808,10 @@ class FramePortApp:
                     C.install_state(g, self.frame_info) in ("installed", "outdated")
                 on_pc = rift and pkg in self.pc_installs()
                 if on_frame:
-                    out.append((tr("Launch test on Frame"), ft.Icons.SCIENCE_OUTLINED,
+                    out.append((tr("Launch test on Frame"), G.TEST,
                                 lambda e: self.test_game(pkg, "frame")))
                 if on_pc:
-                    out.append((tr("Launch test on this PC"), ft.Icons.SCIENCE_OUTLINED,
+                    out.append((tr("Launch test on this PC"), G.TEST,
                                 lambda e: self.test_game(pkg, "pc")))
                 if self.has_game_settings(g):
                     out.append((tr("Game settings…"), ft.Icons.TUNE_ROUNDED, lambda e: self.settings_dialog(pkg)))
@@ -792,7 +819,7 @@ class FramePortApp:
                     out.append((tr("Add videos and files…"), ft.Icons.VIDEO_LIBRARY_OUTLINED,
                                 lambda e: self.go("files", pkg)))
                 if on_frame:
-                    out.append((tr("Type on Frame"), ft.Icons.KEYBOARD_ROUNDED, lambda e: self.type_on_frame()))
+                    out.append((tr("Type on Frame"), G.KEYS, lambda e: self.type_on_frame()))
                 if not rift and not linux:
                     out.append((tr("Analyze again"), ft.Icons.MANAGE_SEARCH_ROUNDED, lambda e: self.reanalyze(pkg)))
                 if on_frame:
@@ -811,7 +838,7 @@ class FramePortApp:
         if linux and self.linux_programs(g):
             out.append((tr("Change program…"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.choose_exe(pkg)))
         if self.frame_state == "connected":
-            out.append((tr("Screenshots"), ft.Icons.PHOTO_LIBRARY_OUTLINED, lambda e: self.go("screenshots", pkg)))
+            out.append((tr("Screenshots"), G.SHOT, lambda e: self.go("screenshots", pkg)))
         out.append((tr("Find artwork…"), ft.Icons.IMAGE_SEARCH_ROUNDED, lambda e: self.find_artwork(pkg)))
         out.append((tr("Use your own artwork…"), ft.Icons.UPLOAD_FILE_ROUNDED, lambda e: self.custom_artwork(pkg)))
         if not job and self.frame_state == "connected" and \
@@ -820,12 +847,12 @@ class FramePortApp:
                         lambda e: self.update_steam_art(pkg)))
         out.append((tr("Refresh store details"), ft.Icons.SYNC_ROUNDED, lambda e: self.refresh_details(pkg)))
         if not job and not linux:
-            out.append((tr("Rebuild only (no install)") if not rift else tr("Check game files"), ft.Icons.BUILD_ROUNDED,
+            out.append((tr("Rebuild only (no install)") if not rift else tr("Check game files"), G.PORT,
                         lambda e: self.build_game(pkg)))
         if not linux:
             out += [(tr("Reset to suggested recipe"), ft.Icons.RESTART_ALT_ROUNDED,
                      lambda e: (pipeline.reset_recipe(pkg), self.toast(tr("Recipe reset")), self.refresh_view())),
-                    (tr("Save as known-good recipe"), ft.Icons.VERIFIED_ROUNDED, lambda e: self.save_known_good(pkg)),
+                    (tr("Save as known-good recipe"), G.RECIPE, lambda e: self.save_known_good(pkg)),
                     (tr("Share working config…"), ft.Icons.SHARE_ROUNDED, lambda e: self.share_config_dialog(pkg))]
         out += [(tr("Collect logs"), ft.Icons.FOLDER_ZIP_OUTLINED, lambda e: self.collect_logs(pkg)),
                 (tr("Report a problem…"), ft.Icons.BUG_REPORT_OUTLINED, lambda e: self.report_problem_dialog(pkg)),

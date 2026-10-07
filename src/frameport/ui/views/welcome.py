@@ -63,9 +63,7 @@ class WelcomeView:
         g_state = "done" if library.games() else "todo"
         return ft.Column([
             ft.Container(height=T.S5),
-            ft.Row([ft.Container(ft.Icon(ft.Icons.VIEW_IN_AR_ROUNDED, size=T.px(30), color=T.ON_ACCENT),
-                                 width=T.px(56), height=T.px(56), border_radius=T.px(16), bgcolor=T.ACCENT,
-                                 alignment=ft.Alignment.CENTER),
+            ft.Row([C.logo(T.px(60)),
                     ft.Column([C.title(tr("Welcome to FramePort")),
                                C.body(tr("Play your Quest, Android and PC VR games on the Steam Frame. Three steps "
                                       "and you're set."))], spacing=T.px(2))], spacing=T.S4),

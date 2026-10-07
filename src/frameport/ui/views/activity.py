@@ -15,13 +15,22 @@ from ..jobs import Job
 if TYPE_CHECKING:
     from ..app import FramePortApp
 
-CHECK_ICON = {True: (ft.Icons.CHECK_CIRCLE_ROUNDED, T.OK), False: (ft.Icons.CANCEL_ROUNDED, T.ERROR),
-              None: (ft.Icons.WARNING_AMBER_ROUNDED, T.WARN)}
-STATE_STYLE = {"queued": (ft.Icons.SCHEDULE_ROUNDED, T.TEXT_3, tr("Waiting")),
-               "running": (ft.Icons.SYNC_ROUNDED, T.ACCENT, tr("Working")),
-               "done": (ft.Icons.CHECK_CIRCLE_ROUNDED, T.OK, tr("Done")),
-               "failed": (ft.Icons.ERROR_ROUNDED, T.ERROR, tr("Failed")),
-               "cancelled": (ft.Icons.DO_NOT_DISTURB_ON_OUTLINED, T.TEXT_3, tr("Cancelled"))}
+CHECK_ICON: dict = {}
+STATE_STYLE: dict[str, tuple] = {}
+
+
+def _fill_styles() -> None:
+    """(Re)fill the maps with the active theme's colours, in place."""
+    CHECK_ICON.update({True: (ft.Icons.CHECK_CIRCLE_ROUNDED, T.OK), False: (ft.Icons.CANCEL_ROUNDED, T.ERROR),
+                       None: (ft.Icons.WARNING_AMBER_ROUNDED, T.WARN)})
+    STATE_STYLE.update({"queued": (ft.Icons.SCHEDULE_ROUNDED, T.TEXT_3, tr("Waiting")),
+                        "running": (ft.Icons.SYNC_ROUNDED, T.ACCENT, tr("Working")),
+                        "done": (ft.Icons.CHECK_CIRCLE_ROUNDED, T.OK, tr("Done")),
+                        "failed": (ft.Icons.ERROR_ROUNDED, T.ERROR, tr("Failed")),
+                        "cancelled": (ft.Icons.DO_NOT_DISTURB_ON_OUTLINED, T.TEXT_3, tr("Cancelled"))})
+
+
+T.on_change(_fill_styles)
 
 
 def _dur(job: Job) -> str:

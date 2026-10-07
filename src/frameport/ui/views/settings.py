@@ -11,6 +11,7 @@ from ...errors import explain
 from ...i18n import fmt_size, tr, tr_n
 from ...recommend import catalog
 from .. import components as C
+from .. import glyphs as G
 from .. import theme as T
 
 if TYPE_CHECKING:
@@ -134,7 +135,7 @@ class SettingsView:
                             "next starts)"), value=bool(library.setting("update.auto_install", False)),
                       on_change=auto_install),
             ft.Row([C.meta(tr("Asked to test a fix? Dev builds come before the next release."), expand=True),
-                    C.ghost(tr("Install the latest dev build…"), ft.Icons.SCIENCE_OUTLINED,
+                    C.ghost(tr("Install the latest dev build…"), G.TEST,
                             lambda e: app.updater.install_dev())],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
         ], spacing=T.S3)
@@ -225,6 +226,43 @@ class SettingsView:
         app.run_bg(lambda: show(urlhandler.status()))
         return ft.Column(controls, spacing=T.S4)
 
+    def theme_picker(self) -> ft.Control:
+        """One card per colour theme (a swatch of its window, accent and PC colours); a click switches at once."""
+        from ...core import library
+
+        names = {"portal": (tr("Portal"), tr("Orange accent, blue for the PC side: the logo's colours")),
+                 "classic": (tr("Classic"), tr("FramePort's original violet"))}
+
+        def pick(name: str):
+            if name == T.THEME:
+                return
+            library.set_setting("ui.theme", name)
+            self.app.restyle(name)
+
+        def card(name: str) -> ft.Control:
+            tokens, (label, text) = T.THEMES[name], names.get(name, (name, ""))
+            on = name == T.THEME
+            swatch = ft.Container(ft.Row([
+                ft.Container(width=T.px(18), height=T.px(18), border_radius=T.px(9), bgcolor=tokens["ACCENT"]),
+                ft.Container(width=T.px(18), height=T.px(18), border_radius=T.px(9), bgcolor=tokens["PC"]),
+                ft.Container(ft.Container(height=T.px(6), border_radius=T.px(3), bgcolor=tokens["SURFACE_3"]),
+                             expand=True)], spacing=T.px(6), vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                bgcolor=tokens["BG"], border=ft.Border.all(1, tokens["BORDER"]), border_radius=T.RADIUS_SM,
+                padding=ft.Padding(T.S3, T.S3, T.S3, T.S3))
+            return ft.Container(ft.Column([
+                swatch,
+                ft.Row([C.body(label, T.TEXT, weight=ft.FontWeight.W_600, expand=True),
+                        C.as_icon(ft.Icons.CHECK_CIRCLE_ROUNDED, T.px(18), T.ACCENT) if on else ft.Container()]),
+                C.meta(text),
+            ], spacing=T.S2), width=T.px(240), padding=T.S3, border_radius=T.RADIUS,
+                bgcolor=T.SURFACE_2 if on else None, ink=True, on_click=lambda e, n=name: pick(n),
+                border=ft.Border.all(2, T.ACCENT if on else T.BORDER))  # same width: the content doesn't shift
+
+        return ft.Column([C.body(tr("Theme"), T.TEXT, weight=ft.FontWeight.W_500),
+                          ft.Row([card(n) for n in T.THEMES], spacing=T.S3, run_spacing=T.S3, wrap=True,
+                                 vertical_alignment=ft.CrossAxisAlignment.START)],
+                         spacing=T.S2)
+
     def appearance(self) -> ft.Control:
         from ...core import library
 
@@ -244,7 +282,7 @@ class SettingsView:
 
         dd = ft.Dropdown(label=tr("Text and layout size"), value=str(current) if current != "auto" else "auto",
                          options=options, width=T.px(260), on_select=changed)
-        controls = [dd, note]
+        controls = [self.theme_picker(), ft.Container(height=T.S2), dd, note]
         languages = i18n.available()
         if len(languages) > 1:  # only once a translation exists
             def language_changed(e):
