@@ -34,7 +34,12 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     `install/live_player.py` (MSE; starts muted as browsers require, "Sound on" button; 0.3 s cushion, catches up at
     1.1x, seeks only when >2 s behind: seeking to the very edge starved it) opened
     in the user's default browser: Flet can't show video outside `flet build` bundles; the stream outlives the tab and
-    stops on disconnect/window close); settings; welcome; activity panel). Files, Screenshots and the Library share right-click menus
+    stops on disconnect/window close); monitor (`views/monitor.py` + `frame/monitor.py` + agent v60 `_monitor`: one
+    JSON sample per tick over an SSH exec channel while the tab is shown (stopped in go/disconnect/on_close, the
+    agent ends at EOF); sources and costs in docs/FRAME_RUNTIME.md "Monitoring sources"; game card (fps from
+    FrameBridge pacing; End game = Steam's Exit game, then cmd_stop), tiles with `C.Sparkline` (Flet canvas, no charts
+    extension), details, a pooled process table (Game / Steam & SteamVR / All; right-click: end / force kill / end
+    game; MON_CRITICAL needs force, MON_NEVER is refused)); settings; welcome; activity panel). Files, Screenshots and the Library share right-click menus
     (one `ft.ContextMenu` per view, filled on right-click; on one of several selected items they act on the whole
     selection, `C.menu_targets`) and click-and-drag multi-select (`C.DragSelect`: pan start/end on the area + item
     hover events, which Flutter also sends with the button held; Flet can't report item positions, so no rubber band).

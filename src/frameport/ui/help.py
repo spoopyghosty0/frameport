@@ -139,4 +139,14 @@ HELP: dict[str, str] = _Translated({
     "diag_bundle": "A zip with FramePort's logs, the game's recipe and analysis, launch-test logs and the Frame's "
                    "runtime details — enough to debug without the game files. IP addresses, host and user names, "
                    "home folders and Steam ids are replaced by placeholders. Attach it to a GitHub issue.",
+    "monitor_gpu": "How much of the time the Frame's graphics chip was busy, added up from every program that draws "
+                   "(the game, SteamVR's compositor, Steam). Near 100 % the game can't keep its frame rate.",
+    "monitor_pressure": "Memory in use by everything on the Frame. \"Waiting\" is the share of time programs had to "
+                        "wait for memory in the last 10 s: when it climbs, the Frame is running out and may freeze or "
+                        "close a game.",
+    "monitor_power": "What the whole Frame draws right now (its main power rail), with the share of the CPU and the "
+                     "graphics chip. Higher power means more heat and a shorter battery.",
+    "monitor_filter": "Game: the running FramePort game's processes (its Android container or Proton) plus the busiest "
+                      "others. Steam & SteamVR: Steam, SteamVR and the desktop. All: every program of your user on "
+                      "the Frame. A lock marks programs whose end would close Steam, SteamVR or the desktop.",
 })

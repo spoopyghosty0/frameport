@@ -113,6 +113,19 @@ reality), showing only what matters for that game. Changes are kept with the gam
   **Make Unity text fields work** for them. The first time, it downloads Cpp2IL (a tool that finds the right spot in the
   game's code, ~17 MB). Games added before this version: open the game's menu → **Analyze again**, then reinstall.
 
+## Watching the Frame (Monitor)
+
+- **Monitor** (its own tab in the sidebar) shows live what the Frame is doing while the tab is open: the running game
+  with its frame rate (Quest games), CPU, graphics chip, memory, the hottest temperature with the fan speed, power
+  draw and battery time left, each with a 2-minute chart. **Show details** adds every CPU core, all temperature
+  sensors, where the power goes and the network.
+- **Processes**: **Game** (default) lists the running game's processes, **Steam & SteamVR** and **All** show more.
+  Right-click a process (or use **⋯**) to end it, force-kill it or end its whole game; **End game** on the game card
+  closes the game the way Steam's Exit game does. A lock marks programs whose end would close Steam, SteamVR or the
+  desktop: FramePort asks again before ending those.
+- The numbers come every second (or every 2/5 s) and cost the Frame well under 1 % of one CPU core; nothing keeps
+  running on the Frame after you leave the tab.
+
 ## Updating
 
 **Game configs** (the tested recipes in the catalog) update by themselves: FramePort checks GitHub every 6 hours for
