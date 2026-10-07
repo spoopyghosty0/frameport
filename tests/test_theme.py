@@ -129,6 +129,16 @@ def test_glyphs_install_and_tint(tmp_path):
     assert glyphs.is_glyph(glyphs.TEST) and not glyphs.is_glyph(ft.Icons.TUNE_ROUNDED)
 
 
+def test_wordmark_portal_follows_the_theme(tmp_path):
+    a = glyphs.portal_mark(tmp_path, "#ff8a1f", "#3AA8FF", "#0D0E12")
+    svg = a.read_text(encoding="utf-8")
+    assert "#FF8A1F" in svg and "#3AA8FF" in svg and "#0D0E12" in svg
+    assert glyphs.portal_mark(tmp_path, "#FF8A1F", "#3AA8FF", "#0D0E12") == a  # cached per colour set
+    assert glyphs.portal_mark(tmp_path, "#FF5A36", "#5CE1E6", "#0D0E12") != a  # an installed theme gets its own
+    T.set_theme("original")
+    assert isinstance(C.wordmark(17), ft.Text)  # single-accent themes keep the plain wordmark
+
+
 def test_as_icon_turns_glyphs_into_tinted_images():
     img = C.as_icon(glyphs.FRAME, 20, T.ACCENT)
     assert isinstance(img, ft.Image) and img.color == T.ACCENT and img.src.endswith("frame.svg")

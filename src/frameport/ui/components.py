@@ -287,13 +287,19 @@ def _btn_icon(name, color: str, disabled: bool = False, size: float = 18):
     return as_icon(name, size, T.TEXT_3 if disabled else color) if glyphs.is_glyph(name) else name
 
 
-def wordmark(size: float) -> ft.Text:
-    """"FramePort": in dual themes "Frame" in the Frame's orange and "Port" in the PC's blue, like the logo."""
+def wordmark(size: float) -> ft.Control:
+    """"FramePort": in dual themes "Frame" in the Frame's orange, a portal, then "Port" in the PC's blue."""
     if not T.DUAL:
         return ft.Text("FramePort", size=size, weight=ft.FontWeight.W_800, color=T.TEXT)
-    return ft.Text(spans=[ft.TextSpan("Frame", ft.TextStyle(color=T.ACCENT)),
-                          ft.TextSpan("Port", ft.TextStyle(color=T.SECONDARY))],
-                   size=size, weight=ft.FontWeight.W_800)
+    from ..artwork.thumbs import asset_url
+    from ..core.paths import user_data_dir
+
+    mark = glyphs.portal_mark(user_data_dir(), T.ACCENT, T.SECONDARY, T.BG)
+    word = lambda text, color: ft.Text(text, size=size, weight=ft.FontWeight.W_800, color=color)  # noqa: E731
+    return ft.Row([word("Frame", T.ACCENT),
+                   ft.Image(src=asset_url(mark), width=size * 0.8, height=size * 1.4, fit=ft.BoxFit.CONTAIN),
+                   word("Port", T.SECONDARY)],
+                  spacing=size * 0.08, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
 
 def portal_gradient(vertical: bool = False, opacity: float = 1.0) -> ft.LinearGradient:
@@ -466,7 +472,7 @@ def menu_items(actions: list[tuple | None]) -> list[ft.PopupMenuItem]:
                 out.append(ft.PopupMenuItem())
             continue
         label, icon, handler = a
-        out.append(ft.PopupMenuItem(content=ft.Text(label), icon=_btn_icon(icon, T.TEXT_2, size=24),
+        out.append(ft.PopupMenuItem(content=ft.Text(label), icon=_btn_icon(icon, T.TEXT, size=24),
                                     on_click=handler))
     while out and out[-1].content is None:
         out.pop()
