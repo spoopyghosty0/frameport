@@ -1,0 +1,13 @@
+{
+  "name": "Ember & Ice",
+  "base": "portal",
+  "dual": true,
+  "colors": {
+    "ACCENT": "#FF5A36",
+    "ACCENT_SOFT": "#3A1710",
+    "SECONDARY": "#5CE1E6",
+    "SECONDARY_SOFT": "#0E3033",
+    "PC": "#5CE1E6",
+    "INFO": "#5CE1E6"
+  }
+}

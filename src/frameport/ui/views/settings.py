@@ -1,6 +1,7 @@
 """Settings: the portable toolchain (incl. Revive), this PC for PC VR games, data folder, about."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import flet as ft
@@ -227,41 +228,91 @@ class SettingsView:
         return ft.Column(controls, spacing=T.S4)
 
     def theme_picker(self) -> ft.Control:
-        """One card per colour theme (a swatch of its window, accent and PC colours); a click switches at once."""
+        """One card per colour theme (built-in and installed theme files: a swatch of its window and its two portal
+        colours); a click switches at once. Theme files are installed from here (docs/THEMES.md)."""
         from ...core import library
+        from ..app import themes_dir
 
-        names = {"portal": (tr("Portal"), tr("Orange accent, blue for the PC side: the logo's colours")),
-                 "classic": (tr("Classic"), tr("FramePort's original violet"))}
+        app = self.app
+        about = {"portal": tr("Orange for actions, blue for the PC side: the logo's two portals"),
+                 "portal_oled": tr("Portal on true black, for OLED screens"),
+                 "original": tr("FramePort's original violet")}
 
-        def pick(name: str):
-            if name == T.THEME:
+        def pick(tid: str):
+            if tid == T.THEME:
                 return
-            library.set_setting("ui.theme", name)
-            self.app.restyle(name)
+            library.set_setting("ui.theme", tid)
+            app.restyle(tid)
 
-        def card(name: str) -> ft.Control:
-            tokens, (label, text) = T.THEMES[name], names.get(name, (name, ""))
-            on = name == T.THEME
-            swatch = ft.Container(ft.Row([
-                ft.Container(width=T.px(18), height=T.px(18), border_radius=T.px(9), bgcolor=tokens["ACCENT"]),
-                ft.Container(width=T.px(18), height=T.px(18), border_radius=T.px(9), bgcolor=tokens["PC"]),
-                ft.Container(ft.Container(height=T.px(6), border_radius=T.px(3), bgcolor=tokens["SURFACE_3"]),
-                             expand=True)], spacing=T.px(6), vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                bgcolor=tokens["BG"], border=ft.Border.all(1, tokens["BORDER"]), border_radius=T.RADIUS_SM,
-                padding=ft.Padding(T.S3, T.S3, T.S3, T.S3))
+        def remove(tid: str):
+            name = T.THEMES[tid]["name"]
+            try:
+                T.remove_theme(tid)
+            except (T.ThemeError, OSError) as exc:
+                app.toast(tr("Couldn't remove the theme: {error}").format(error=exc), error=True)
+                return
+            if tid == T.THEME:
+                library.set_setting("ui.theme", T.DEFAULT_THEME)
+                app.restyle(T.DEFAULT_THEME)
+            else:
+                app.render()
+            app.toast(tr("Removed the theme \"{name}\"").format(name=name))
+
+        async def install(e):
+            files = await ft.FilePicker().pick_files(dialog_title=tr("Theme file to install"),
+                                                     allowed_extensions=["json"])
+            path = next((f.path for f in files or [] if f.path), None)
+            if not path:
+                return
+            try:
+                tid = T.install_theme(Path(path), themes_dir())
+            except (T.ThemeError, OSError) as exc:
+                app.toast(tr("That theme file can't be used: {error}").format(error=exc), error=True)
+                return
+            library.set_setting("ui.theme", tid)
+            app.restyle(tid)
+            app.toast(tr("Installed the theme \"{name}\"").format(name=T.THEMES[tid]["name"]))
+
+        def card(tid: str) -> ft.Control:
+            theme, on = T.THEMES[tid], tid == T.THEME
+            c = theme["colors"]
+            dot = lambda color: ft.Container(width=T.px(18), height=T.px(18), border_radius=T.px(9),  # noqa: E731
+                                             bgcolor=color)
+            bar = ft.Container(height=T.px(6), border_radius=T.px(3), expand=True,
+                               gradient=ft.LinearGradient(colors=[c["SECONDARY"], c["ACCENT"]]) if theme["dual"]
+                               else None, bgcolor=None if theme["dual"] else c["SURFACE_3"])
+            swatch = ft.Container(ft.Row([dot(c["ACCENT"]), dot(c["SECONDARY"]), bar], spacing=T.px(6),
+                                         vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                                  bgcolor=c["BG"], border=ft.Border.all(1, c["BORDER"]), border_radius=T.RADIUS_SM,
+                                  padding=ft.Padding(T.S3, T.S3, T.S3, T.S3))
+            # small marks (an IconButton would make this card's name row taller than the others')
+            marks = [C.as_icon(ft.Icons.CHECK_CIRCLE_ROUNDED, T.px(18), T.ACCENT)] if on else []
+            if tid.startswith(T.USER_PREFIX):
+                marks.append(ft.Container(C.as_icon(ft.Icons.DELETE_OUTLINE_ROUNDED, T.px(18), T.TEXT_2),
+                                          tooltip=tr("Remove this theme"), border_radius=T.px(4), ink=True,
+                                          on_click=lambda e, t=tid: remove(t)))
+            corner = ft.Row(marks, spacing=T.S2, tight=True)
             return ft.Container(ft.Column([
                 swatch,
-                ft.Row([C.body(label, T.TEXT, weight=ft.FontWeight.W_600, expand=True),
-                        C.as_icon(ft.Icons.CHECK_CIRCLE_ROUNDED, T.px(18), T.ACCENT) if on else ft.Container()]),
-                C.meta(text),
+                ft.Row([C.body(theme["name"], T.TEXT, weight=ft.FontWeight.W_600, expand=True), corner],
+                       vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                C.meta(about.get(tid) or tr("Installed theme file · {file}").format(file=Path(theme["path"]).name)),
             ], spacing=T.S2), width=T.px(240), padding=T.S3, border_radius=T.RADIUS,
-                bgcolor=T.SURFACE_2 if on else None, ink=True, on_click=lambda e, n=name: pick(n),
+                bgcolor=T.SURFACE_2 if on else None, ink=True, on_click=lambda e, t=tid: pick(t),
                 border=ft.Border.all(2, T.ACCENT if on else T.BORDER))  # same width: the content doesn't shift
 
-        return ft.Column([C.body(tr("Theme"), T.TEXT, weight=ft.FontWeight.W_500),
-                          ft.Row([card(n) for n in T.THEMES], spacing=T.S3, run_spacing=T.S3, wrap=True,
-                                 vertical_alignment=ft.CrossAxisAlignment.START)],
-                         spacing=T.S2)
+        return ft.Column([
+            # no expand= in here: an expanding child in a wrap=True Row is an invalid layout (Flet's grey box)
+            ft.Row([C.body(tr("Theme"), T.TEXT, weight=ft.FontWeight.W_500), ft.Container(width=T.S4),
+                    C.ghost(tr("Copy this theme as a file"), ft.Icons.CONTENT_COPY_ROUNDED,
+                            lambda e: (app.copy(T.theme_json(T.THEME)),
+                                       app.toast(tr("Copied: save it as a .json file, change the colours and "
+                                                    "install it")))),
+                    C.secondary(tr("Install theme file…"), ft.Icons.FILE_OPEN_OUTLINED, install)],
+                   spacing=T.S2, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Row([card(t) for t in T.THEMES], spacing=T.S3, run_spacing=T.S3, wrap=True,
+                   vertical_alignment=ft.CrossAxisAlignment.START),
+        ], spacing=T.S2)
 
     def appearance(self) -> ft.Control:
         from ...core import library

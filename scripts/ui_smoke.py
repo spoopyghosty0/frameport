@@ -521,6 +521,9 @@ def main() -> int:
         mouse["library"] = add_menu_open  # tall pages: run with e.g. --viewport 1280x3200
     if args.themes:
         from frameport.ui import theme as T
+        from frameport.ui.app import themes_dir
+
+        T.load_user_themes(themes_dir())  # installed theme files are switched through too
 
         def switch(name):
             def run(a):

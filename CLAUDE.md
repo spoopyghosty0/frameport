@@ -11,9 +11,13 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
 - `src/frameport/` — Python package. `pipeline.py` is the API the CLI (`cli.py`) and GUI (`ui/`, Flet 1.0) share.
   - `ui/` — `app.py` shell (sidebar with Frame connection + activity cards, routing, actions, 30 s connection poll),
     `theme.py` (design tokens; change colours/spacing only there. Dark-only colour themes (owner: no light mode):
-    `portal` (default: orange accent = the logo's orange portal, PC = its blue) and `classic` (the old violet);
-    Settings → Appearance theme cards switch live via `app.restyle()` (rebuilds the shell, drops cached views; setting
-    `ui.theme`). Read tokens as `T.NAME` when building — never as a default argument or module-level constant (they
+    built-ins `portal` (default), `portal_oled` (true black) and `original` (the old violet; alias `classic`). Portal =
+    the logo's dichotomy: orange ACCENT = main action + selection, blue SECONDARY = secondary (outlined) buttons,
+    progress, switch tracks, PC; `dual` themes add the blue→orange sidebar edge, two-colour wordmark (`C.wordmark`) and
+    selected-tab fade (`C.portal_gradient`). Installable theme files `<data>/themes/*.json` (docs/THEMES.md: name,
+    base, dual, any subset of `T.TOKENS`; refused if light/unreadable, `T.ThemeError`), Settings → Appearance: cards
+    switch live via `app.restyle()` (rebuilds the shell, drops cached views; setting `ui.theme`), "Install theme
+    file…", "Copy this theme as a file", bin icon removes. Read tokens as `T.NAME` when building — never as a default argument or module-level constant (they
     keep the import-time theme; module maps refill through `T.on_change`, `tests/test_theme.py` checks defaults)),
     `glyphs.py` + `icons/` (the logo `logo.svg`/`logo-solid.svg` = a monitor that comes out of a tilted portal as the
     Frame, and 24 px line glyphs `fp:frame|port|patch|container|test|pc|sync|live|shot|keys|recipe|link`, copied into
