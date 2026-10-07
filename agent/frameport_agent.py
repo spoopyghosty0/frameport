@@ -36,7 +36,7 @@ import time
 import zlib
 from types import SimpleNamespace
 
-AGENT_VERSION = 61
+AGENT_VERSION = 62
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -3824,12 +3824,742 @@ def not_started(text, waited, grace=30):
     return i >= 0 and "Boot complete!" not in text[i:] and waited >= grace
 
 
+# ------------------------------------------------------------------------------------------ monitor
+# The GUI's Monitor tab: `_monitor` streams one JSON sample per tick (CPU/GPU/memory/temperatures/power/battery, the
+# running FramePort games with fps, processes) and takes control lines (interval, process filter, end a process or a
+# game) until stdin closes. Sources (dev Frame, SteamOS 0.4.3, kernel 6.18, 2026-10-07): GPU busy = summed DRM fdinfo
+# `drm-engine-gpu` ns of every render-node fd (msm), GPU clock from devfreq 3d00000.gpu, 48 thermal zones grouped by
+# type, max34417 power monitors (µW; vph = the whole system), the max1720x battery gauge, FrameBridge's `pacing:` lines
+# for fps. Cheap by design: a naive sample (fd scan of ~520 processes) cost 43 ms CPU, so kernel threads are skipped
+# after their first sighting and render fds are cached per process.
+PROC = "/proc"
+SYS = "/sys"
+MON_INTERVALS = (1, 2, 5)
+MON_FILTERS = ("game", "steam", "all")
+MON_PROC_LIMIT = 150
+MON_CONTEXT = 3  # "game" filter: the busiest other processes, shown for context
+# processes never signalled: the session, SSH and system plumbing (killing them logs the user out or drops FramePort)
+MON_NEVER = ("systemd", "sshd", "sshd-session", "sshd-auth", "dbus-daemon", "dbus-broker", "dbus-broker-lau",
+             "(sd-pam)", "login", "agetty")
+# processes that end the headset session, Steam or the desktop when killed: the GUI asks again ("force")
+MON_CRITICAL = ("steam", "steamwebhelper", "reaper", "vrserver", "vrcompositor", "vrmonitor", "vrwebhelper",
+                "vrdashboard", "vrstartup", "XRServiceLoopTh", "XRService", "gamescope", "gamescope-wl", "Xwayland",
+                "plasmashell", "kwin_wayland", "kwin_x11", "pipewire", "pipewire-pulse", "wireplumber", "V4L2Cam",
+                "steamos-session", "gamescope-sessi")
+# processes whose command line can name a game (only these are read: cmdlines of ~500 processes cost too much)
+MON_ROOT_COMMS = ("conmon", "launch.sh", "reaper", "bash", "sh")
+MON_ROOT_PREFIXES = ("python", "proton", "pv-", "wine", "steam-runtime")
+MON_GROUPS = (  # (group, comm prefixes), first match wins; games are found by their process tree
+    ("steamvr", ("vr", "XRService", "V4L2Cam", "eyetracking", "proxmicmute", "systemlayer")),
+    ("steam", ("steam", "reaper", "fossilize")),
+    ("desktop", ("gamescope", "Xwayland", "plasmashell", "kwin", "xdg-desktop", "pipewire", "wireplumber",
+                 "kded", "ksmserver")),
+)
+TEMP_GROUPS = (  # (group, zone type prefixes): the hottest zone of each group is shown
+    ("CPU", ("cpu",)), ("GPU", ("gpuss",)), ("Memory", ("ddr",)), ("Battery", ("max1720x",)), ("NPU", ("nsp",)),
+    ("Power ICs", ("pm8",)), ("Modem", ("modem",)), ("Camera", ("camera", "video")), ("Storage", ("ufs",)),
+)
+RAIL_GROUPS = {"vph": "system", "gfx": "gpu", "apc0": "cpu", "apc1": "cpu", "apc2": "cpu", "nsp1": "npu",
+               "nsp2": "npu"}
+PACING_RE = re.compile(rb"FrameBridge: pacing: ([0-9.]+) fps(?:, displayTime vs predicted: avg ([0-9.]+) ms)?")
+CLK_TCK = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
+
+
+def _rd(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except (OSError, ValueError):
+        return ""
+
+
+def _num(text, default=None):
+    try:
+        return int(text.strip())
+    except (ValueError, AttributeError):
+        return default
+
+
+def read_cpu_times():
+    """[total, core0, core1, …] as (busy, all) jiffies from /proc/stat."""
+    out = []
+    for line in _rd(f"{PROC}/stat").splitlines():
+        if not line.startswith("cpu"):
+            break
+        f = [int(x) for x in line.split()[1:9]]
+        idle = f[3] + f[4]  # idle + iowait
+        out.append((sum(f) - idle, sum(f)))
+    return out
+
+
+def cpu_percent(prev, cur):
+    """Busy % per entry of read_cpu_times() between two readings (0 when nothing elapsed)."""
+    res = []
+    for (b0, a0), (b1, a1) in zip(prev, cur, strict=False):
+        res.append(round(100.0 * (b1 - b0) / (a1 - a0), 1) if a1 > a0 else 0.0)
+    return res
+
+
+def read_clusters():
+    """[{"cpus": [0, 1], "max_mhz": 2265, "policy": path}] per cpufreq policy."""
+    out = []
+    policies = glob.glob(f"{SYS}/devices/system/cpu/cpufreq/policy*")
+    for p in sorted(policies, key=lambda s: _num(s.rsplit("policy", 1)[1], 0)):
+        cpus = [int(x) for x in _rd(f"{p}/related_cpus").split() if x.isdigit()]
+        out.append({"cpus": cpus, "max_mhz": (_num(_rd(f"{p}/cpuinfo_max_freq"), 0)) // 1000, "policy": p})
+    return out
+
+
+def find_gpu_devfreq():
+    for d in sorted(glob.glob(f"{SYS}/class/devfreq/*")):
+        if "gpu" in os.path.basename(d) or "gpu" in _rd(f"{d}/name"):
+            return d
+    return None
+
+
+def read_meminfo():
+    m = {}
+    for line in _rd(f"{PROC}/meminfo").splitlines():
+        k, _, v = line.partition(":")
+        if k in ("MemTotal", "MemAvailable", "SwapTotal", "SwapFree"):
+            m[k] = _num(v.split()[0], 0) * 1024
+    return {"total": m.get("MemTotal", 0), "avail": m.get("MemAvailable", 0), "swap_total": m.get("SwapTotal", 0),
+            "swap_free": m.get("SwapFree", 0)}
+
+
+def read_psi():
+    """"some" avg10 of /proc/pressure/{cpu,memory,io}: % of time something waited on it in the last 10 s."""
+    out = {}
+    for k in ("cpu", "memory", "io"):
+        m = re.search(r"^some avg10=([0-9.]+)", _rd(f"{PROC}/pressure/{k}"), re.M)
+        if m:
+            out[k] = float(m.group(1))
+    return out
+
+
+def temp_zones():
+    """[(group, zone name, temp path)] for every thermal zone in a known group."""
+    out = []
+    for z in sorted(glob.glob(f"{SYS}/class/thermal/thermal_zone*"), key=lambda s: _num(s.rsplit("zone", 1)[1], 0)):
+        name = _rd(f"{z}/type").strip()
+        group = next((g for g, prefixes in TEMP_GROUPS if name.startswith(prefixes)), None)
+        if group:
+            out.append((group, name.replace("-thermal", ""), f"{z}/temp"))
+    return out
+
+
+def read_temps(zones):
+    """({group: hottest °C}, {group: {zone: °C}})"""
+    groups, detail = {}, {}
+    for group, name, path in zones:
+        v = _num(_rd(path))
+        if v is None or v <= -40000:
+            continue
+        c = round(v / 1000.0, 1)
+        detail.setdefault(group, {})[name] = c
+        groups[group] = max(groups.get(group, c), c)
+    return groups, detail
+
+
+def power_rails():
+    """[(label, power*_input path)] of the max34417 power monitors (µW) that RAIL_GROUPS names."""
+    out = []
+    for h in sorted(glob.glob(f"{SYS}/class/hwmon/hwmon*")):
+        for lab in sorted(glob.glob(f"{h}/power*_label")):
+            label = _rd(lab).strip()
+            if label in RAIL_GROUPS:  # only the rails the Monitor shows: each read is an I2C transfer
+                out.append((label, lab[:-len("_label")] + "_input"))
+    return out
+
+
+def read_power(rails):
+    """{"system", "cpu", "gpu", "npu": W, "rails": {label: W}}"""
+    out = {"rails": {}}
+    for label, path in rails:
+        uw = _num(_rd(path))
+        if uw is None:
+            continue
+        w = uw / 1e6
+        out["rails"][label] = round(w, 3)
+        group = RAIL_GROUPS.get(label)
+        if group:
+            out[group] = round(out.get(group, 0.0) + w, 3)
+    return out
+
+
+def find_fan():
+    for f in sorted(glob.glob(f"{SYS}/class/hwmon/hwmon*/fan1_input")):
+        return f
+    return None
+
+
+class BatteryReader:
+    """battery_state() fields + watts (negative = draining), seconds to empty/full, health, cycles, °C. The gauge sits
+    on I2C (~0.7 ms of kernel time per file on the Frame), so the paths are found once and the slow-changing fields
+    are read every 10 s."""
+    FAST = (("percent", "capacity"), ("current", "current_now"), ("voltage", "voltage_now"))
+    SLOW = (("empty_s", "time_to_empty_now"), ("full_s", "time_to_full_now"), ("cycles", "cycle_count"),
+            ("full_uah", "charge_full"), ("design_uah", "charge_full_design"), ("temp", "temp"))
+
+    def __init__(self):
+        self.dir, self.chargers, self.slow, self.slow_at = None, [], {}, -1e9
+        try:
+            names = sorted(os.listdir(POWER_SUPPLY))
+        except OSError:
+            names = []
+        for name in names:
+            d = os.path.join(POWER_SUPPLY, name)
+            kind = _rd(f"{d}/type").strip()
+            if kind == "Battery" and self.dir is None and _rd(f"{d}/capacity").strip().isdigit():
+                self.dir = d
+            elif kind in CHARGER_TYPES:
+                self.chargers.append(f"{d}/online")
+
+    def read(self, now):
+        if not self.dir:
+            return None
+        v = {k: _num(_rd(f"{self.dir}/{f}")) for k, f in self.FAST}
+        status = _rd(f"{self.dir}/status").strip()
+        plugged = any(_rd(c).strip() == "1" for c in self.chargers)
+        b = {"percent": v["percent"], "status": status, "plugged": plugged or status in ("Charging", "Full"),
+             "draining": status == "Discharging"}
+        if v["current"] is not None and v["voltage"] is not None:
+            b["watts"] = round(v["current"] * v["voltage"] / 1e12, 2)
+        if now - self.slow_at >= 10:
+            self.slow = {k: _num(_rd(f"{self.dir}/{f}")) for k, f in self.SLOW}
+            if self.slow.get("temp") is not None:
+                self.slow["temp"] = self.slow["temp"] / 10.0
+            self.slow["health"] = _rd(f"{self.dir}/health").strip() or None
+            self.slow_at = now
+        b.update({k: x for k, x in self.slow.items() if x is not None})
+        return b
+
+
+def read_net():
+    """{iface: (rx bytes, tx bytes)} for the Frame's links."""
+    out = {}
+    for line in _rd(f"{PROC}/net/dev").splitlines()[2:]:
+        name, _, rest = line.partition(":")
+        name = name.strip()
+        if name.startswith(("wlan", "usb", "eth", "enp")):
+            f = rest.split()
+            out[name] = (int(f[0]), int(f[8]))
+    return out
+
+
+def proc_stat(pid):
+    """(comm, ppid, utime+stime jiffies, start jiffies, rss pages) from /proc/<pid>/stat, or None."""
+    s = _rd(f"{PROC}/{pid}/stat")
+    r = s.rfind(")")
+    if r < 0:
+        return None
+    comm = s[s.find("(") + 1:r]
+    f = s[r + 2:].split()
+    try:
+        return comm, int(f[1]), int(f[11]) + int(f[12]), int(f[19]), int(f[21])
+    except (IndexError, ValueError):
+        return None
+
+
+def drm_fds(pid):
+    """File descriptors of a process that are GPU render nodes (/dev/dri/renderD*; Lepton games see /dev/kgsl-3d0)."""
+    out = []
+    try:
+        fds = os.listdir(f"{PROC}/{pid}/fd")
+    except OSError:
+        return out
+    for fd in fds:
+        try:
+            t = os.readlink(f"{PROC}/{pid}/fd/{fd}")
+        except OSError:
+            continue
+        if t.startswith(("/dev/dri/render", "/dev/kgsl")):
+            out.append(fd)
+    return out
+
+
+def drm_engine_ns(pid, fds):
+    """Summed `drm-engine-gpu` ns over the process's render fds (several fds = several DRM clients); None if gone."""
+    total, seen = 0, False
+    for fd in fds:
+        text = _rd(f"{PROC}/{pid}/fdinfo/{fd}")
+        i = text.find("drm-engine-gpu:")
+        if i < 0:
+            continue
+        seen = True
+        total += _num(text[i + 15:].split(None, 1)[0], 0)
+    return total if seen else None
+
+
+def cgroup_dir(pid):
+    """The cgroup v2 directory of a process that has memory/cpu stats (walks up from a leaf without them)."""
+    for line in _rd(f"{PROC}/{pid}/cgroup").splitlines():
+        if line.startswith("0::"):
+            d = f"{SYS}/fs/cgroup" + line[3:].strip()
+            while len(d) > len(f"{SYS}/fs/cgroup") and not os.path.exists(f"{d}/memory.current"):
+                d = os.path.dirname(d)
+            return d if os.path.exists(f"{d}/memory.current") else None
+    return None
+
+
+def cgroup_usage(d):
+    """(cpu usage µs, memory bytes) of a cgroup directory."""
+    m = re.search(r"^usage_usec (\d+)", _rd(f"{d}/cpu.stat"), re.M)
+    return (int(m.group(1)) if m else None), _num(_rd(f"{d}/memory.current"))
+
+
+def monitor_group(comm):
+    for group, prefixes in MON_GROUPS:
+        if comm.startswith(prefixes):
+            return group
+    return "other"
+
+
+class Monitor:
+    """Sampling state: previous counters for deltas, caches (kernel threads, render fds, zones, rails, games)."""
+
+    def __init__(self, clock=time.monotonic, uid=None):
+        self.clock = clock
+        self.uid = os.getuid() if uid is None else uid
+        self.ncpu = max(1, len(read_cpu_times()) - 1)
+        self.clusters = read_clusters()
+        self.gpu = find_gpu_devfreq()
+        self.zones = temp_zones()
+        self.rails = power_rails()
+        self.fan = find_fan()
+        self.battery = BatteryReader()
+        self.page = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
+        self.btime = next((int(x.split()[1]) for x in _rd(f"{PROC}/stat").splitlines() if x.startswith("btime ")), 0)
+        self.filter = "game"
+        self.kthreads = set()
+        self.drm = {}       # pid -> (fds, time of the fd scan)
+        self.gpu_ns = {}    # pid -> last drm-engine ns
+        self.gpu_pct = {}   # pid -> GPU % in the last tick
+        self.proc_prev = {}  # pid -> (cpu jiffies, time)
+        self.cpu_prev = None
+        self.net_prev = None
+        self.cg_prev = {}   # cgroup dir -> (usage µs, time)
+        self.logs = {}      # launch.log path -> [offset, fps, avg ms, time of the line]
+        self.deps = []
+        self.deps_at = -1e9
+        self.tick = 0
+        self.last = None    # time of the previous sample
+        self.disk_at = -1e9
+        self.zone_detail_at = -1e9
+        self.procs = []     # last scan (all, unfiltered), for kill checks
+        self.games = []
+        self.roots = {}
+        self.root_cache = {}  # (pid, start, comm) -> (package, kind) | None
+
+    def static(self):
+        gpu_max = _num(_rd(f"{self.gpu}/max_freq"), 0) // 1000000 if self.gpu else None
+        return {"agent": AGENT_VERSION, "cores": self.ncpu, "gpu_max_mhz": gpu_max,
+                "clusters": [{"cpus": c["cpus"], "max_mhz": c["max_mhz"]} for c in self.clusters],
+                "mem_total": read_meminfo()["total"], "rails": [r[0] for r in self.rails],
+                "temp_groups": sorted({z[0] for z in self.zones}, key=[g for g, _ in TEMP_GROUPS].index),
+                "fan": bool(self.fan), "intervals": list(MON_INTERVALS), "filters": list(MON_FILTERS)}
+
+    # -------------------------------------------------------------------- games
+    def deployments(self, now):
+        if now - self.deps_at > 30:
+            self.deps = cmd_list_installed({})["games"]
+            self.deps_at = now
+        return self.deps
+
+    def fps(self, base, now):
+        """Latest FrameBridge pacing of a game's launch.log (read incrementally): (fps, avg ms) or (None, None)."""
+        path = os.path.join(base, "launch.log")
+        st = self.logs.setdefault(path, [None, None, None, 0.0])
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            return None, None
+        if st[0] is None or size < st[0]:  # first look or a new launch truncated it: only the last 64 KiB
+            st[0] = max(0, size - 65536)
+        if size > st[0]:
+            with open(path, "rb") as f:
+                f.seek(st[0])
+                data = f.read(min(size - st[0], 1 << 20))
+            st[0] += len(data)
+            for m in PACING_RE.finditer(data):
+                st[1] = float(m.group(1))
+                st[2] = float(m.group(2)) if m.group(2) else None
+                st[3] = now
+        if st[1] is None or now - st[3] > 15:  # pacing comes every ~5 s; older = loading or gone
+            return None, None
+        return st[1], st[2]
+
+    # ---------------------------------------------------------------- processes
+    def scan(self, now, wall):
+        """Every process worth showing: uid 1000 + everything inside a game container. Groups by process tree."""
+        raw = {}
+        try:
+            names = os.listdir(PROC)
+        except OSError:
+            names = []
+        for name in names:
+            if not name.isdigit():
+                continue
+            pid = int(name)
+            if pid in self.kthreads:
+                continue
+            st = proc_stat(pid)
+            if st is None:
+                continue
+            if st[1] == 2 or pid == 2:  # kernel threads: never shown, skipped from now on
+                self.kthreads.add(pid)
+                continue
+            try:
+                uid = os.stat(f"{PROC}/{pid}").st_uid
+            except OSError:
+                continue
+            raw[pid] = (st, uid)
+        self.kthreads &= {int(n) for n in names if n.isdigit()}
+        deps = self.deployments(now)
+        by_appid = {str(d.get("appid")): d for d in deps}
+        roots = {}  # pid -> (package, "container" | "launcher"): a game container's conmon, its launch.sh/reaper,
+        # Proton processes started in its folder (their whole process trees are the game)
+        bases = [(d["base"].rstrip("/") + "/", d["package"]) for d in deps if d.get("kind") in ("pcvr", "linux")]
+        anchors = [(os.path.join(ANCHORS, d["package"], "launch.sh"), d["package"]) for d in deps]
+        for pid, ((comm, _ppid, _cpu, start, _rss), uid) in raw.items():
+            if uid != self.uid or not (comm in MON_ROOT_COMMS or comm.startswith(MON_ROOT_PREFIXES)):
+                continue
+            key = (pid, start, comm)
+            if key not in self.root_cache:
+                cmd = _rd(f"{PROC}/{pid}/cmdline").replace("\0", " ")
+                root = None
+                if comm == "conmon":
+                    m = re.search(r"lepton-steamlaunch-(\d+)", cmd)
+                    if m and m.group(1) in by_appid:
+                        root = (by_appid[m.group(1)]["package"], "container")
+                else:
+                    pkg = next((k for path, k in anchors if path in cmd), None) or \
+                        next((k for base, k in bases if base in cmd), None)
+                    root = (pkg, "launcher") if pkg else None
+                self.root_cache[key] = root
+            if self.root_cache[key]:
+                roots[pid] = self.root_cache[key]
+        children = {}
+        for pid, ((_comm, ppid, *_), _uid) in raw.items():
+            children.setdefault(ppid, []).append(pid)
+        game_of = {}
+        for root, (pkg, _kind) in roots.items():
+            stack = [root]
+            while stack:
+                p = stack.pop()
+                if p in game_of:
+                    continue
+                game_of[p] = pkg
+                stack.extend(children.get(p, ()))
+        out = []
+        for pid, ((comm, ppid, cpu, start, rss), uid) in raw.items():
+            pkg = game_of.get(pid)
+            if uid != self.uid and not pkg:
+                continue
+            prev = self.proc_prev.get(pid)
+            cpu_pct = 0.0
+            if prev and now > prev[1]:
+                cpu_pct = 100.0 * (cpu - prev[0]) / CLK_TCK / (now - prev[1]) / self.ncpu
+            self.proc_prev[pid] = (cpu, now)
+            out.append({"pid": pid, "ppid": ppid, "name": comm, "group": f"game:{pkg}" if pkg else monitor_group(comm),
+                        "game": pkg, "cpu": round(max(cpu_pct, 0.0), 1), "rss": rss * self.page,
+                        "age": max(0, int(wall - (self.btime + start / CLK_TCK))) if self.btime else None,
+                        "uid": uid, "critical": comm in MON_CRITICAL, "locked": comm in MON_NEVER})
+            # render fds: new processes now; a game process without any every 4 s for its first 2 min (Android games
+            # open the GPU a while after starting), others every 60 s (listing ~300 fds of a steamwebhelper costs)
+            fds = self.drm.get(pid)
+            young_game = pkg and (p_age := out[-1]["age"]) is not None and p_age < 120
+            if fds is None or now - fds[1] > (4 if young_game and not fds[0] else 60):
+                self.drm[pid] = (drm_fds(pid), now)
+        alive = set(raw)
+        for d in (self.proc_prev, self.drm, self.gpu_ns, self.gpu_pct):
+            for pid in [p for p in d if p not in alive]:
+                del d[pid]
+        for key in [k for k in self.root_cache if k[0] not in alive]:
+            del self.root_cache[key]
+        self.procs = out
+        self.roots = roots
+        return out
+
+    def gpu_sample(self, now, dt):
+        """GPU % per process (from the cached render fds) and the summed busy %."""
+        total = 0.0
+        for pid, (fds, _t) in list(self.drm.items()):
+            if not fds:
+                continue
+            ns = drm_engine_ns(pid, fds)
+            if ns is None:
+                continue
+            prev = self.gpu_ns.get(pid)
+            self.gpu_ns[pid] = ns
+            if prev is not None and dt > 0 and ns >= prev:
+                pct = min(100.0, (ns - prev) / 1e7 / dt)
+                self.gpu_pct[pid] = pct
+                total += pct
+        return min(100.0, total)
+
+    def games_sample(self, now):
+        """Running FramePort games: title, kind, start time, CPU/memory of the container's cgroup, GPU %, fps."""
+        deps = {d["package"]: d for d in self.deployments(now)}
+        out = []
+        for pkg in sorted({v[0] for v in self.roots.values()}):
+            d = deps.get(pkg) or {}
+            pids = [p["pid"] for p in self.procs if p["game"] == pkg]
+            cpu = sum(p["cpu"] for p in self.procs if p["game"] == pkg)
+            rss = sum(p["rss"] for p in self.procs if p["game"] == pkg)
+            mem = None
+            conmon = [pid for pid, (k, kind) in self.roots.items() if k == pkg and kind == "container"]
+            kids = [p["pid"] for p in self.procs if p["ppid"] in conmon]
+            cg = cgroup_dir(kids[0]) if kids else None
+            if cg and cg != cgroup_dir(conmon[0]):  # the container's own cgroup (conmon's is the user's)
+                usage, mem = cgroup_usage(cg)
+                prev = self.cg_prev.get(cg)
+                self.cg_prev[cg] = (usage, now)
+                if usage is not None and prev and prev[0] is not None and now > prev[1]:
+                    cpu = 100.0 * (usage - prev[0]) / 1e6 / (now - prev[1]) / self.ncpu
+            ages = [p["age"] for p in self.procs if p["game"] == pkg and p["age"] is not None]
+            fps, ms = self.fps(d["base"], now) if d.get("base") else (None, None)
+            out.append({"package": pkg, "title": d.get("title") or pkg, "kind": d.get("kind", "quest"),
+                        "appid": d.get("appid"), "elapsed": max(ages) if ages else None,
+                        "cpu": round(max(cpu, 0.0), 1), "mem": mem if mem is not None else rss,
+                        "gpu": round(sum(self.gpu_pct.get(p, 0.0) for p in pids), 1),
+                        "fps": fps, "frame_ms": ms, "processes": len(pids)})
+        self.games = out
+        return out
+
+    def filtered(self):
+        procs = self.procs
+        for p in procs:
+            p["gpu"] = round(self.gpu_pct.get(p["pid"], 0.0), 1)
+        if self.filter == "game":
+            shown = [p for p in procs if p["game"]]
+            others = sorted((p for p in procs if not p["game"]), key=lambda p: (-p["cpu"], -p["rss"]))
+            shown += [dict(p, context=True) for p in others[:MON_CONTEXT]]
+        elif self.filter == "steam":
+            shown = [p for p in procs if p["group"] in ("steam", "steamvr", "desktop")]
+        else:
+            shown = list(procs)
+        shown.sort(key=lambda p: (-p["cpu"], -p["gpu"], -p["rss"]))
+        return shown[:MON_PROC_LIMIT]
+
+    # ------------------------------------------------------------------- sample
+    def sample(self, wall=None):
+        t0 = time.process_time()
+        now = self.clock()
+        wall = time.time() if wall is None else wall
+        dt = now - self.last if self.last is not None else 0.0
+        self.last = now
+        out = {"t": round(wall, 3), "dt": round(dt, 3)}
+        cur = read_cpu_times()
+        if self.cpu_prev:
+            pct = cpu_percent(self.cpu_prev, cur)
+            out["cpu"] = {"total": pct[0] if pct else 0.0, "cores": pct[1:]}
+        else:
+            out["cpu"] = {"total": 0.0, "cores": [0.0] * self.ncpu}
+        self.cpu_prev = cur
+        out["cpu"]["mhz"] = [_num(_rd(f"{c['policy']}/scaling_cur_freq"), 0) // 1000 for c in self.clusters]
+        out["mem"] = read_meminfo()
+        out["psi"] = read_psi()
+        temps, detail = read_temps(self.zones)
+        out["temps"] = temps
+        if now - self.zone_detail_at >= 5:
+            out["zones"] = detail
+            self.zone_detail_at = now
+        if self.fan:
+            out["fan"] = _num(_rd(self.fan))
+        out["power"] = read_power(self.rails)
+        out["battery"] = self.battery.read(now)
+        net = read_net()
+        if self.net_prev and dt > 0:
+            prev = self.net_prev
+            out["net"] = {k: [max(0, int((v[0] - prev[k][0]) / dt)), max(0, int((v[1] - prev[k][1]) / dt))]
+                          for k, v in net.items() if k in prev}
+        self.net_prev = net
+        if now - self.disk_at >= 30:
+            try:
+                st = os.statvfs(HOME)
+                out["disk"] = {"free": st.f_bavail * st.f_frsize, "total": st.f_blocks * st.f_frsize}
+            except OSError:
+                pass
+            self.disk_at = now
+        scan = self.tick % 2 == 0 or not self.procs
+        if scan:
+            self.scan(now, wall)
+        busy = self.gpu_sample(now, dt)
+        out["gpu"] = {"busy": round(busy, 1) if dt > 0 else None,
+                      "mhz": _num(_rd(f"{self.gpu}/cur_freq"), 0) // 1000000 if self.gpu else None}
+        out["games"] = self.games_sample(now)
+        if scan:
+            out["procs"] = self.filtered()
+            out["filter"] = self.filter
+        self.tick += 1
+        out["self_ms"] = round((time.process_time() - t0) * 1000, 2)
+        return out
+
+    # ------------------------------------------------------------------ actions
+    def ancestors(self):
+        pids, p = set(), os.getpid()
+        while p > 1:
+            pids.add(p)
+            st = proc_stat(p)
+            if not st:
+                break
+            p = st[1]
+        return pids
+
+    def kill(self, pid, sig="TERM", force=False, wait=3.0):
+        """Signal one process the Monitor shows. TERM waits up to `wait` s and reports whether it ended."""
+        import signal
+
+        pid = int(pid)
+        st = proc_stat(pid)
+        if st is None:
+            return {"ended": True, "pid": pid, "note": "already gone"}
+        comm = st[0]
+        if pid <= 2 or pid in self.ancestors() or comm in MON_NEVER:
+            raise AgentError(f"{comm} ({pid}) is part of the system or of FramePort's connection; it can't be ended")
+        try:
+            uid = os.stat(f"{PROC}/{pid}").st_uid
+        except OSError:
+            return {"ended": True, "pid": pid, "note": "already gone"}
+        in_game = any(p["pid"] == pid and p["game"] for p in self.procs)
+        if uid != self.uid and not in_game:
+            raise AgentError(f"{comm} ({pid}) belongs to another user")
+        if comm in MON_CRITICAL and not force:
+            raise AgentError(f"CRITICAL: {comm}")
+        signum = signal.SIGKILL if sig == "KILL" else signal.SIGTERM
+        try:
+            os.kill(pid, signum)
+        except ProcessLookupError:
+            return {"ended": True, "pid": pid}
+        except PermissionError as exc:
+            raise AgentError(f"not allowed to end {comm} ({pid}): {exc}") from exc
+        end = time.monotonic() + wait
+        while time.monotonic() < end:
+            st = proc_stat(pid)
+            if st is None or _rd(f"{PROC}/{pid}/status").find("State:\tZ") >= 0:
+                return {"ended": True, "pid": pid, "name": comm}
+            time.sleep(0.1)
+        return {"ended": False, "pid": pid, "name": comm}
+
+
+def monitor_end_game(pkg, wait=6.0):
+    """Steam's Exit game for a FramePort game (so Steam's session ends cleanly), then cmd_stop if it still runs."""
+    pkg = check_pkg(pkg)
+    dep = deployment(pkg)
+    if not dep:
+        raise AgentError(f"{pkg} is not installed")
+
+    def running():
+        if dep.get("kind") in ("pcvr", "linux"):
+            return bool(pcvr_pids(dep["base"]))
+        return container_running(dep["appid"])
+    via = None
+    devkit = devkit_gameid(pkg)
+    appid = (devkit_appid(devkit) if devkit else None) or dep.get("appid")
+    try:
+        steam_js(f"SteamClient.Apps.TerminateApp('{steam_gameid(appid)}', false)")
+        via = "steam"
+        end = time.monotonic() + wait
+        while time.monotonic() < end and running():
+            time.sleep(0.5)
+    except Exception:  # noqa: BLE001  (Steam's UI unreachable: stop it directly)
+        pass
+    if running():
+        cmd_stop({"package": pkg})
+        via = "stop"
+        end = time.monotonic() + wait
+        while time.monotonic() < end and running():
+            time.sleep(0.5)
+    return {"ended": not running(), "via": via, "package": pkg}
+
+
+def monitor_session(stdin, stdout, monitor=None, sleep=time.sleep, max_ticks=None):
+    """Long-lived: prints {"ready": 1, "static": {...}}, then one sample per tick. Control lines on stdin:
+    {"interval": 1|2|5}, {"procs": "game"|"steam"|"all"}, {"pause": bool}, {"id": n, "kill": pid, "sig": "TERM"|
+    "KILL", "force": bool}, {"id": n, "end_game": package} (each with an id gets {"reply": n, "ok": …}). Ends at EOF
+    or when the SSH session (parent) is gone."""
+    import threading
+
+    mon = monitor or Monitor()
+    lock = threading.Lock()
+    state = {"interval": 1.0, "stop": False, "pause": False}
+    wake = threading.Event()
+
+    def emit(obj):
+        with lock:
+            stdout.write(json.dumps(obj, separators=(",", ":")) + "\n")
+            stdout.flush()
+
+    def act(msg):
+        try:
+            if "kill" in msg:
+                res = mon.kill(msg["kill"], msg.get("sig", "TERM"), bool(msg.get("force")))
+            else:
+                res = monitor_end_game(msg["end_game"])
+            emit({"reply": msg.get("id"), "ok": True, "result": res})
+        except AgentError as exc:
+            emit({"reply": msg.get("id"), "ok": False, "error": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            emit({"reply": msg.get("id"), "ok": False, "error": f"{type(exc).__name__}: {exc}"})
+        wake.set()  # a fresh sample shows the result
+
+    def reader():
+        try:
+            for line in stdin:
+                try:
+                    msg = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(msg, dict):
+                    continue
+                if msg.get("interval") in MON_INTERVALS:
+                    state["interval"] = float(msg["interval"])
+                if msg.get("procs") in MON_FILTERS:
+                    mon.filter = msg["procs"]
+                    mon.tick = 0  # rescan now
+                if "pause" in msg:
+                    state["pause"] = bool(msg["pause"])
+                if "kill" in msg or "end_game" in msg:
+                    threading.Thread(target=act, args=(msg,), daemon=True).start()
+                    continue
+                wake.set()
+        except (OSError, ValueError):
+            pass
+        state["stop"] = True
+        wake.set()
+
+    emit({"ready": 1, "static": mon.static()})
+    threading.Thread(target=reader, daemon=True).start()
+    ticks = 0
+    parent = os.getppid()
+    try:
+        while not state["stop"]:
+            if not state["pause"]:
+                emit(mon.sample())
+            ticks += 1
+            if max_ticks is not None and ticks >= max_ticks:
+                break
+            wake.clear()
+            if sleep is time.sleep:
+                wake.wait(state["interval"])
+            else:
+                sleep(state["interval"])
+            if os.getppid() != parent:  # SSH session gone without closing stdin
+                break
+    except (OSError, ValueError, BrokenPipeError):
+        pass
+    return 0
+
+
 COMMANDS = {n[4:]: f for n, f in globals().items() if n.startswith("cmd_")}
 
 
 def main():
     if len(sys.argv) >= 2 and sys.argv[1] == "_keyboard":
         return keyboard_session(sys.stdin, sys.stdout)
+    if len(sys.argv) >= 2 and sys.argv[1] == "_monitor":
+        return monitor_session(sys.stdin, sys.stdout)
     if len(sys.argv) >= 3 and sys.argv[1] == "_shortcuts_worker":
         shortcuts_worker(sys.argv[2])
         return 0
