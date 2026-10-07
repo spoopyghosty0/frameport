@@ -104,8 +104,9 @@ def frame_tree(root, home):
     proc(root, 300, "conmon", 1, cmdline=["/usr/bin/conmon", "-n", f"lepton-steamlaunch-{APPID}"],
          cgroup="/user.slice/app.slice")
     proc(root, 301, "init", 300, cgroup="/user.slice/libpod-abc.scope/container")
-    proc(root, 302, "com.example.gam", 301, cpu=50, fds={3: ("/dev/kgsl-3d0", 5000)},
-         cgroup="/user.slice/libpod-abc.scope/container")
+    # Android names its processes after the package's last 15 characters (the kernel's comm limit)
+    proc(root, 302, "lus4xvrplayerov", 301, cpu=50, fds={3: ("/dev/kgsl-3d0", 5000)},
+         cgroup="/user.slice/libpod-abc.scope/container", cmdline=["cn.vr4p.oculus4xvrplayerov"])
     proc(root, 400, "bash", 1, cmdline=["bash", "-c", "sleep 9"])
     return base
 
@@ -176,6 +177,7 @@ def test_processes_games_and_filters(fa):
     assert 3 not in names and 2 not in names  # kernel threads
     assert {names[pid]["game"] for pid in (200, 300, 301, 302)} == {GAME}
     assert names[100]["group"] == "steam" and names[101]["group"] == "steamvr" and names[400]["group"] == "other"
+    assert names[302]["name"] == "cn.vr4p.oculus4xvrplayerov"  # the full name, not the truncated comm
     assert names[101]["critical"] and names[1]["locked"]
     # default filter: the game's processes + the busiest others as context
     shown = s["procs"]
@@ -265,6 +267,8 @@ def test_end_game_steam_then_stop(fa, monkeypatch):
     monkeypatch.setattr(fa, "steam_js", lambda expr, timeout=5: state.update(running=False))
     state["running"] = True
     assert fa.monitor_end_game(GAME, wait=0.2)["via"] == "steam"
+    state["running"] = False  # already gone: nothing is sent to Steam
+    assert fa.monitor_end_game(GAME, wait=0.2) == {"ended": True, "via": None, "package": GAME, "note": "not running"}
     with pytest.raises(fa.AgentError, match="bad package"):
         fa.monitor_end_game("x y")
 
@@ -325,3 +329,17 @@ def test_monitor_cli_ends_at_eof(tmp_path):
     assert p.wait(timeout=10) == 0
     assert ready["ready"] == 1 and ready["static"]["cores"] >= 1
     assert "cpu" in sample and "mem" in sample and "procs" in sample
+
+
+def test_power_cluster_rails_every_5_s(fa):
+    """System + GPU rails every tick; the CPU cluster rails (I2C reads) every 5 s."""
+    m, clock = monitor(fa)
+    assert m.sample(wall=2000.0)["power"]["cpu"] == 0.75
+    h = fa.ROOT / "sys/class/hwmon/hwmon51"
+    w(h / "power1_input", "1500000\n")  # apc0
+    w(h / "power4_input", "9000000\n")  # vph
+    clock["t"] += 1.0
+    s = m.sample(wall=2001.0)
+    assert s["power"]["system"] == 9.0 and s["power"]["cpu"] == 0.75
+    clock["t"] += 4.0
+    assert m.sample(wall=2005.0)["power"]["cpu"] == 1.75

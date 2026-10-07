@@ -3972,19 +3972,31 @@ def power_rails():
     return out
 
 
-def read_power(rails):
-    """{"system", "cpu", "gpu", "npu": W, "rails": {label: W}}"""
-    out = {"rails": {}}
-    for label, path in rails:
-        uw = _num(_rd(path))
-        if uw is None:
-            continue
-        w = uw / 1e6
-        out["rails"][label] = round(w, 3)
-        group = RAIL_GROUPS.get(label)
-        if group:
-            out[group] = round(out.get(group, 0.0) + w, 3)
-    return out
+FAST_RAILS = ("vph", "gfx")  # read every tick; the others (CPU clusters, NPU) every 5 s
+
+
+class PowerReader:
+    """{"system", "cpu", "gpu", "npu": W, "rails": {label: W}} from the power monitors. Every read is an I2C transfer
+    (~0.5 ms of kernel time each, more under load), so only the system and GPU rails are read every tick."""
+
+    def __init__(self, rails):
+        self.rails, self.watts, self.slow_at = rails, {}, -1e9
+
+    def read(self, now):
+        slow = now - self.slow_at >= 5
+        if slow:
+            self.slow_at = now
+        for label, path in self.rails:
+            if slow or label in FAST_RAILS:
+                uw = _num(_rd(path))
+                if uw is not None:
+                    self.watts[label] = uw / 1e6
+        out = {"rails": {k: round(w, 3) for k, w in self.watts.items()}}
+        for label, w in self.watts.items():
+            group = RAIL_GROUPS.get(label)
+            if group:
+                out[group] = round(out.get(group, 0.0) + w, 3)
+        return out
 
 
 def find_fan():
@@ -3995,14 +4007,15 @@ def find_fan():
 
 class BatteryReader:
     """battery_state() fields + watts (negative = draining), seconds to empty/full, health, cycles, °C. The gauge sits
-    on I2C (~0.7 ms of kernel time per file on the Frame), so the paths are found once and the slow-changing fields
-    are read every 10 s."""
-    FAST = (("percent", "capacity"), ("current", "current_now"), ("voltage", "voltage_now"))
+    on I2C (~0.7 ms of kernel time per file on the Frame), so the paths are found once, current and voltage are read
+    every 2 s and everything else every 10 s."""
+    FAST = (("current", "current_now"), ("voltage", "voltage_now"))
     SLOW = (("empty_s", "time_to_empty_now"), ("full_s", "time_to_full_now"), ("cycles", "cycle_count"),
             ("full_uah", "charge_full"), ("design_uah", "charge_full_design"), ("temp", "temp"))
 
     def __init__(self):
         self.dir, self.chargers, self.slow, self.slow_at = None, [], {}, -1e9
+        self.fast, self.fast_at = {}, -1e9
         try:
             names = sorted(os.listdir(POWER_SUPPLY))
         except OSError:
@@ -4018,20 +4031,26 @@ class BatteryReader:
     def read(self, now):
         if not self.dir:
             return None
-        v = {k: _num(_rd(f"{self.dir}/{f}")) for k, f in self.FAST}
-        status = _rd(f"{self.dir}/status").strip()
-        plugged = any(_rd(c).strip() == "1" for c in self.chargers)
-        b = {"percent": v["percent"], "status": status, "plugged": plugged or status in ("Charging", "Full"),
-             "draining": status == "Discharging"}
-        if v["current"] is not None and v["voltage"] is not None:
-            b["watts"] = round(v["current"] * v["voltage"] / 1e12, 2)
+        if now - self.fast_at >= 2:
+            self.fast = {k: _num(_rd(f"{self.dir}/{f}")) for k, f in self.FAST}
+            self.fast_at = now
         if now - self.slow_at >= 10:
             self.slow = {k: _num(_rd(f"{self.dir}/{f}")) for k, f in self.SLOW}
             if self.slow.get("temp") is not None:
                 self.slow["temp"] = self.slow["temp"] / 10.0
             self.slow["health"] = _rd(f"{self.dir}/health").strip() or None
+            self.slow["percent"] = _num(_rd(f"{self.dir}/capacity"))
+            self.slow["status"] = _rd(f"{self.dir}/status").strip()
+            self.slow["_charger"] = any(_rd(c).strip() == "1" for c in self.chargers)
             self.slow_at = now
-        b.update({k: x for k, x in self.slow.items() if x is not None})
+        status = self.slow.get("status") or ""
+        b = {"percent": self.slow.get("percent"), "status": status,
+             "plugged": bool(self.slow.get("_charger")) or status in ("Charging", "Full"),
+             "draining": status == "Discharging"}
+        cur, volt = self.fast.get("current"), self.fast.get("voltage")
+        if cur is not None and volt is not None:
+            b["watts"] = round(cur * volt / 1e12, 2)
+        b.update({k: x for k, x in self.slow.items() if x is not None and k not in b and not k.startswith("_")})
         return b
 
 
@@ -4128,6 +4147,7 @@ class Monitor:
         self.rails = power_rails()
         self.fan = find_fan()
         self.battery = BatteryReader()
+        self.power = PowerReader(self.rails)
         self.page = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
         self.btime = next((int(x.split()[1]) for x in _rd(f"{PROC}/stat").splitlines() if x.startswith("btime ")), 0)
         self.filter = "game"
@@ -4146,10 +4166,12 @@ class Monitor:
         self.last = None    # time of the previous sample
         self.disk_at = -1e9
         self.zone_detail_at = -1e9
+        self.temps, self.zone_detail, self.temps_at = None, {}, -1e9
         self.procs = []     # last scan (all, unfiltered), for kill checks
         self.games = []
         self.roots = {}
         self.root_cache = {}  # (pid, start, comm) -> (package, kind) | None
+        self.names = {}       # (pid, start, comm) -> full name of a process whose comm was truncated
 
     def static(self):
         gpu_max = _num(_rd(f"{self.gpu}/max_freq"), 0) // 1000000 if self.gpu else None
@@ -4261,22 +4283,31 @@ class Monitor:
             if prev and now > prev[1]:
                 cpu_pct = 100.0 * (cpu - prev[0]) / CLK_TCK / (now - prev[1]) / self.ncpu
             self.proc_prev[pid] = (cpu, now)
-            out.append({"pid": pid, "ppid": ppid, "name": comm, "group": f"game:{pkg}" if pkg else monitor_group(comm),
+            name = comm
+            if len(comm) == 15:  # truncated by the kernel (Android shows "lus4xvrplayerov"): the command line's name
+                key = (pid, start, comm)
+                if key not in self.names:
+                    arg0 = _rd(f"{PROC}/{pid}/cmdline").split("\0", 1)[0]
+                    self.names[key] = os.path.basename(arg0) if comm in arg0 else comm
+                name = self.names[key] or comm
+            out.append({"pid": pid, "ppid": ppid, "name": name, "group": f"game:{pkg}" if pkg else monitor_group(comm),
                         "game": pkg, "cpu": round(max(cpu_pct, 0.0), 1), "rss": rss * self.page,
                         "age": max(0, int(wall - (self.btime + start / CLK_TCK))) if self.btime else None,
                         "uid": uid, "critical": comm in MON_CRITICAL, "locked": comm in MON_NEVER})
-            # render fds: new processes now; a game process without any every 4 s for its first 2 min (Android games
-            # open the GPU a while after starting), others every 60 s (listing ~300 fds of a steamwebhelper costs)
+            # render fds: new processes now; a busy game process without any every 4 s for its first 2 min (Android
+            # games open the GPU a while after starting; a game container has ~90 mostly idle processes), others
+            # every 60 s (listing ~300 fds of a steamwebhelper costs)
             fds = self.drm.get(pid)
-            young_game = pkg and (p_age := out[-1]["age"]) is not None and p_age < 120
+            young_game = pkg and (p_age := out[-1]["age"]) is not None and p_age < 120 and out[-1]["cpu"] >= 1.0
             if fds is None or now - fds[1] > (4 if young_game and not fds[0] else 60):
                 self.drm[pid] = (drm_fds(pid), now)
         alive = set(raw)
         for d in (self.proc_prev, self.drm, self.gpu_ns, self.gpu_pct):
             for pid in [p for p in d if p not in alive]:
                 del d[pid]
-        for key in [k for k in self.root_cache if k[0] not in alive]:
-            del self.root_cache[key]
+        for cache in (self.root_cache, self.names):
+            for key in [k for k in cache if k[0] not in alive]:
+                del cache[key]
         self.procs = out
         self.roots = roots
         return out
@@ -4360,14 +4391,17 @@ class Monitor:
         out["cpu"]["mhz"] = [_num(_rd(f"{c['policy']}/scaling_cur_freq"), 0) // 1000 for c in self.clusters]
         out["mem"] = read_meminfo()
         out["psi"] = read_psi()
-        temps, detail = read_temps(self.zones)
+        if now - self.temps_at >= 2 or self.temps is None:  # 48 sensor files (~3 ms at idle clocks); heat is slow
+            self.temps, self.zone_detail = read_temps(self.zones)
+            self.temps_at = now
+        temps, detail = self.temps, self.zone_detail
         out["temps"] = temps
         if now - self.zone_detail_at >= 5:
             out["zones"] = detail
             self.zone_detail_at = now
         if self.fan:
             out["fan"] = _num(_rd(self.fan))
-        out["power"] = read_power(self.rails)
+        out["power"] = self.power.read(now)
         out["battery"] = self.battery.read(now)
         net = read_net()
         if self.net_prev and dt > 0:
@@ -4454,6 +4488,8 @@ def monitor_end_game(pkg, wait=6.0):
         if dep.get("kind") in ("pcvr", "linux"):
             return bool(pcvr_pids(dep["base"]))
         return container_running(dep["appid"])
+    if not running():
+        return {"ended": True, "via": None, "package": pkg, "note": "not running"}
     via = None
     devkit = devkit_gameid(pkg)
     appid = (devkit_appid(devkit) if devkit else None) or dep.get("appid")
