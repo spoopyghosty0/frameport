@@ -45,6 +45,26 @@ def install(assets: Path) -> Path:
     return target
 
 
+PORTAL_REV = 2
+
+
+def portal_mark(assets: Path, near: str, far: str, hole: str) -> Path:
+    """The small tilted portal between "Frame" and "Port" in the wordmark, in a theme's colours: the rim runs from
+    `near` (the side facing "Frame") to `far` (facing "Port"), around a dark hole. Written once per colour set."""
+    near, far, hole = (c.upper() for c in (near, far, hole))
+    dest = assets / FOLDER / f"portal{PORTAL_REV}-{near[1:]}-{far[1:]}-{hole[1:]}.svg"  # REV: the drawing changed
+    if not dest.is_file():
+        rim = (f'<linearGradient id="r" gradientUnits="userSpaceOnUse" x1="2" y1="0" x2="14" y2="0">'
+               f'<stop offset=".3" stop-color="{near}"/><stop offset=".7" stop-color="{far}"/></linearGradient>')
+        ring = '<ellipse cx="8" cy="14" rx="4.4" ry="10.6" transform="rotate(14 8 14)"'
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="28" viewBox="0 0 16 28">'
+                        f'<defs>{rim}</defs>'
+                        f'{ring} fill="none" stroke="url(#r)" stroke-opacity=".35" stroke-width="5"/>'
+                        f'{ring} fill="{hole}" stroke="url(#r)" stroke-width="2.6"/></svg>\n', encoding="utf-8")
+    return dest
+
+
 def path(name: str, assets: Path) -> Path:
     """The installed file for a glyph ("fp:frame") or a logo file name ("logo")."""
     return assets / FOLDER / f"{name.removeprefix(PREFIX)}.svg"

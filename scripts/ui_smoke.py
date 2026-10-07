@@ -485,9 +485,18 @@ def main() -> int:
         threading.Thread(target=driver, args=(app, steps, ready, done), daemon=True).start()
 
     def shooter():
+        # wait until the app's web server listens (a fixed 6 s was too short with another smoke run on the machine)
+        import socket
+
         from playwright.sync_api import sync_playwright
 
-        time.sleep(6)
+        for _ in range(90):
+            try:
+                socket.create_connection(("127.0.0.1", PORT), timeout=1).close()
+                break
+            except OSError:
+                time.sleep(1)
+        time.sleep(2)
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"])
