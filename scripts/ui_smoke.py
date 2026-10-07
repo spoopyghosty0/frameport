@@ -607,6 +607,10 @@ def main() -> int:
     if args.only:  # in the order given (e.g. frame-connected,monitor)
         by_name = dict(steps)
         steps = [(n, by_name[n]) for n in args.only.split(",") if n in by_name]
+    # a first screen while the web fonts load: shot before that, text measured with a fallback font wrapped or
+    # overlapped ("Q / uest", a check mark over its pill's text); its picture is 00-warmup.png. Settings, not the
+    # Library: opening the Library twice restarts its card loading and the next shot caught it empty
+    steps.insert(0, ("warmup", lambda a: a.go("settings")))
     ready, done = threading.Event(), []
 
     if args.fake_frame:  # never reach a real Frame (start-up auto-connect, discovery, the 30 s poll)
