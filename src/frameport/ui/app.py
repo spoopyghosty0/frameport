@@ -88,6 +88,8 @@ class FramePortApp:
         self.updater = Updater(self)  # new FramePort releases (sidebar card, Library bar, one-click update)
 
         page.title = tr("FramePort")
+        for problem in T.load_user_themes(themes_dir()):  # installed theme files (Settings → Appearance)
+            applog.log.warning("theme file skipped: %s", problem)
         T.set_theme(T.theme_from_setting(library.setting("ui.theme")))
         G.install(Path(assets_dir()))  # the logo + FramePort's icons, served like artwork
         T.apply(page)
@@ -131,7 +133,7 @@ class FramePortApp:
         sidebar = ft.Container(ft.Column([
             ft.Container(ft.Row([
                 C.logo(T.px(34)),
-                ft.Text(tr("FramePort"), size=T.px(17), weight=ft.FontWeight.W_800, color=T.TEXT)], spacing=T.S3),
+                C.wordmark(T.px(17))], spacing=T.S3),
                 padding=ft.Padding(T.S1, T.S2, 0, T.S5)),
             self.nav_col,
             ft.Container(expand=True),
@@ -140,8 +142,10 @@ class FramePortApp:
             self.conn_card,
             self.power_row,  # under the Frame card (owner's choice)
         ], spacing=T.S2), width=T.px(236), bgcolor=T.SIDEBAR, padding=T.S4,
-            border=ft.Border(right=ft.BorderSide(1, T.BORDER)))
-        self.page.controls = [ft.Row([sidebar, self.body, self.activity.root], expand=True, spacing=0,
+            border=None if T.DUAL else ft.Border(right=ft.BorderSide(1, T.BORDER)))
+        # dual themes: the sidebar's edge is the portal, blue at the top into orange at the bottom
+        edge = [ft.Container(width=2, gradient=C.portal_gradient(vertical=True, opacity=0.7))] if T.DUAL else []
+        self.page.controls = [ft.Row([sidebar, *edge, self.body, self.activity.root], expand=True, spacing=0,
                                      vertical_alignment=ft.CrossAxisAlignment.STRETCH)]
 
     def restyle(self, theme: str) -> None:
@@ -272,7 +276,10 @@ class FramePortApp:
             self._build_sidebar_controls()
         for key, (box, ic, tx, badge) in self._nav.items():
             on = self.route[0] == key or (key == "library" and self.route[0] == "game")
-            box.bgcolor = T.ACCENT_SOFT if on else None
+            if T.DUAL:  # the selected tab fades from the blue portal into the orange one
+                box.bgcolor, box.gradient = None, C.portal_gradient(opacity=0.22) if on else None
+            else:
+                box.bgcolor = T.ACCENT_SOFT if on else None
             ic.color = T.ACCENT if on else T.TEXT_2
             tx.color = T.TEXT if on else T.TEXT_2
             tx.weight = ft.FontWeight.W_600 if on else ft.FontWeight.W_500
@@ -2066,6 +2073,13 @@ class FramePortApp:
         if test or test is None and not build:
             return self.test_game(package, to)
         return self.build_game(package)
+
+
+def themes_dir() -> Path:
+    """Where installed theme files live (<data>/themes, docs/THEMES.md)."""
+    from ..core.paths import user_data_dir
+
+    return user_data_dir() / "themes"
 
 
 def assets_dir() -> str:

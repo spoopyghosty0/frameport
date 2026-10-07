@@ -381,6 +381,9 @@ def main() -> int:
                  ("linux-menu", lambda a: (a.navigate(0), time.sleep(3), a.library_view.open_menu(LINUX_APPIMAGE)))]
     if args.themes:
         from frameport.ui import theme as T
+        from frameport.ui.app import themes_dir
+
+        T.load_user_themes(themes_dir())  # installed theme files are switched through too
 
         def switch(name):
             def run(a):

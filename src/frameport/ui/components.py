@@ -173,6 +173,8 @@ def switch(label: str = "", wrap: bool = True, **kw) -> ft.Control:
     Switch's own label is cut off when it's longer than the window); clicking it toggles the switch too.
     wrap=False keeps the built-in label, for a short label in a Row next to other controls."""
     kw.setdefault("active_color", T.ACCENT)
+    if T.DUAL:  # orange thumb on a blue track
+        kw.setdefault("active_track_color", T.soft(T.SECONDARY, 0.5))
     if not wrap or not label:
         return ft.Switch(label=label or None, label_text_style=ft.TextStyle(color=T.TEXT, size=T.px(14)), **kw)
     sw = ft.Switch(**kw)
@@ -285,6 +287,23 @@ def _btn_icon(name, color: str, disabled: bool = False, size: float = 18):
     return as_icon(name, size, T.TEXT_3 if disabled else color) if glyphs.is_glyph(name) else name
 
 
+def wordmark(size: float) -> ft.Text:
+    """"FramePort": in dual themes "Frame" in the Frame's orange and "Port" in the PC's blue, like the logo."""
+    if not T.DUAL:
+        return ft.Text("FramePort", size=size, weight=ft.FontWeight.W_800, color=T.TEXT)
+    return ft.Text(spans=[ft.TextSpan("Frame", ft.TextStyle(color=T.ACCENT)),
+                          ft.TextSpan("Port", ft.TextStyle(color=T.SECONDARY))],
+                   size=size, weight=ft.FontWeight.W_800)
+
+
+def portal_gradient(vertical: bool = False, opacity: float = 1.0) -> ft.LinearGradient:
+    """Blue (the PC's portal) into orange (the Frame's), as in the logo."""
+    begin, end = (ft.Alignment.TOP_CENTER, ft.Alignment.BOTTOM_CENTER) if vertical else \
+        (ft.Alignment.CENTER_LEFT, ft.Alignment.CENTER_RIGHT)
+    return ft.LinearGradient(begin=begin, end=end,
+                             colors=[T.soft(T.SECONDARY, opacity), T.soft(T.ACCENT, opacity)])
+
+
 # ------------------------------------------------------------------------------------------ buttons
 def _shape(radius=None):
     radius = T.RADIUS_SM if radius is None else radius
@@ -308,11 +327,16 @@ def primary(label: str, icon: str | None = None, on_click: Callable | None = Non
 
 def secondary(label: str, icon: str | None = None, on_click: Callable | None = None, disabled: bool = False,
               tooltip: str | None = None) -> ft.OutlinedButton:
-    return ft.OutlinedButton(label, icon=_btn_icon(icon, T.TEXT, disabled), on_click=on_click, disabled=disabled,
+    # dual themes: secondary actions are the blue portal next to the orange primary one
+    edge, mark = (T.soft(T.SECONDARY, 0.55), T.SECONDARY) if T.DUAL else (T.BORDER_STRONG, T.TEXT)
+    return ft.OutlinedButton(label, icon=_btn_icon(icon, mark, disabled), on_click=on_click, disabled=disabled,
                              tooltip=tooltip,
-                             style=ft.ButtonStyle(shape=_shape(), side=ft.BorderSide(1, T.BORDER_STRONG),
+                             style=ft.ButtonStyle(shape=_shape(), side=ft.BorderSide(1, edge),
                                                   color={ft.ControlState.DEFAULT: T.TEXT,
                                                          ft.ControlState.DISABLED: T.TEXT_3},
+                                                  icon_color={ft.ControlState.DEFAULT: mark,
+                                                              ft.ControlState.DISABLED: T.TEXT_3},
+                                                  overlay_color=T.soft(T.SECONDARY, 0.08) if T.DUAL else None,
                                                   padding=ft.Padding(T.px(14), T.px(12), T.px(14), T.px(12))))
 
 
@@ -402,7 +426,8 @@ def art_fill(src: str | None, radius: int | None = None, placeholder_icon: str =
     return ft.Container(ft.Container(icon, padding=ft.Padding(0, 0, T.px(60), 0) if hero else 0), border_radius=radius,
                         alignment=ft.Alignment.CENTER_RIGHT if hero else ft.Alignment.CENTER,
                         gradient=ft.LinearGradient(begin=ft.Alignment.TOP_LEFT, end=ft.Alignment.BOTTOM_RIGHT,
-                                                   colors=[T.ACCENT_SOFT, T.SURFACE, T.BG]), **kw)
+                                                   colors=[T.SECONDARY_SOFT, T.SURFACE, T.ACCENT_SOFT] if T.DUAL
+                                                   else [T.ACCENT_SOFT, T.SURFACE, T.BG]), **kw)
 
 
 def bottom_fade(height: int | None = None, strength: float = 0.85) -> ft.Container:
@@ -427,8 +452,9 @@ def confirm(page: ft.Page, heading: str, text: str, ok_label: str, on_ok: Callab
 
 
 def progress_bar(value: float | None = None, color: str | None = None) -> ft.ProgressBar:
-    return ft.ProgressBar(value=value, color=color or T.ACCENT, bgcolor=T.SURFACE_3, border_radius=T.px(4),
-                          bar_height=6)
+    """Progress: blue in dual themes (something on its way through the portal), else the accent."""
+    return ft.ProgressBar(value=value, color=color or (T.SECONDARY if T.DUAL else T.ACCENT), bgcolor=T.SURFACE_3,
+                          border_radius=T.px(4), bar_height=6)
 
 
 def menu_items(actions: list[tuple | None]) -> list[ft.PopupMenuItem]:
