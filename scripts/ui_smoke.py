@@ -464,6 +464,10 @@ def main() -> int:
             steps.append(("game-connected", lambda a: a.open_game(game)))
         if not args.no_test:
             steps.append(("launch-test-job", job))
+    # a first screen while the web fonts load: shot before that, text measured with a fallback font wrapped or
+    # overlapped ("Q / uest", a check mark over its pill's text); its picture is 00-warmup.png. Settings, not the
+    # Library: opening the Library twice restarts its card loading and the next shot caught it empty
+    steps.insert(0, ("warmup", lambda a: a.go("settings")))
     ready, done = threading.Event(), []
 
     if args.fake_frame:  # never reach a real Frame (start-up auto-connect, discovery, the 30 s poll)
