@@ -70,7 +70,11 @@ class FakeFS:
         owners = [(g["package"], g.get("title") or g["package"], arts) for g, arts, _real in games[:3]]
         spare = games[3][1] if len(games) > 3 else []  # SteamVR's own shots (taken outside a FramePort game)
         owners.append((None, "SteamVR", spare))
+        # the same days layout at any time of day (6 shots on the first day, 4 on the one before; --gestures drags
+        # across the first row): shortly after midnight the shots start the evening before
         now, shots = time.time(), []
+        if time.localtime(now).tm_hour < 5:
+            now -= (time.localtime(now).tm_hour + 1) * 3600
         for i in range(10):
             t = now - i * 2400 - (86400 if i >= 6 else 0)
             name = time.strftime("%Y%m%d%H%M%S", time.localtime(t)) + "_1.jpg"
@@ -345,18 +349,25 @@ def add_fake_linux_apps() -> None:
     pipeline.add_linux_app(app)
 
 
-STEP_SECONDS = 4  # per screen (the screenshot is taken ~3 s in)
+PAINT_SECONDS = 3  # after a step, before its screenshot: Flutter paints (and a view's content loads)
+STEP_TIMEOUT = 240  # the longest a step may wait for its screenshot (a crashed browser mustn't hang the run)
 
 
-def driver(app: FramePortApp, steps: list[tuple[str, callable]], ready: threading.Event, done_step: list):
+def driver(app: FramePortApp, steps: list[tuple[str, callable]], ready: threading.Event, shot_done: threading.Event,
+           done_step: list):
+    """Runs one step, hands it to the shooter ("ready") and waits until its screenshot and mouse actions are done
+    ("shot_done") before the next one: so a screenshot always shows its own step, however long the shooter takes."""
     for name, action in steps:
         try:
             action(app)
         except Exception:  # noqa: BLE001
             ERRORS.append(f"{name}: {traceback.format_exc()}")
         done_step.append(name)
+        shot_done.clear()
         ready.set()
-        time.sleep(STEP_SECONDS)
+        if not shot_done.wait(STEP_TIMEOUT):
+            ERRORS.append(f"{name}: no screenshot within {STEP_TIMEOUT} s, stopping")
+            return
 
 
 def find_button(root, text: str):
@@ -406,7 +417,8 @@ def main() -> int:
                     "(a Frame cabled to this PC) and screenshot what follows")
     ap.add_argument("--docs", action="store_true", help="only the screens used in the docs (Library, --game, Frame)")
     ap.add_argument("--gestures", action="store_true", help="with --fake-frame: real mouse drags (drag-select) and "
-                    "right-clicks (menus) in Files, Screenshots and the Library; prints what got selected")
+                    "right-clicks (menus) in Files, Screenshots and the Library; prints what got selected "
+                    "(positions for --viewport 1440x900)")
     ap.add_argument("--only", default=None, help="comma-separated step names to keep (e.g. monitor,monitor-details)")
     ap.add_argument("--linux", action="store_true", help="add two pretend arm64 Linux apps and render their pages")
     ap.add_argument("--links", action="store_true", help="install links: the Add games menu, the paste dialog, the "
@@ -417,9 +429,6 @@ def main() -> int:
     args = ap.parse_args()
     if args.linux:
         add_fake_linux_apps()
-    global STEP_SECONDS
-    if args.hover:
-        STEP_SECONDS = 7
     from frameport.ui import theme
 
     theme.set_scale(args.scale)
@@ -459,7 +468,12 @@ def main() -> int:
         steps.append(("type-on-frame", lambda a: (a.page.pop_dialog(), open_type_tab(a))))
         steps.append(("monitor", lambda a: a.go("monitor")))
         steps.append(("power-confirm", lambda a: (a.page.pop_dialog(), a.frame_power("restart"))))
-    mouse: dict[str, callable] = {}  # step name -> mouse actions (Playwright page) after its screenshot
+    # step name -> mouse actions (Playwright page) after its screenshot, then a "-mouse" screenshot unless the
+    # actions return True (they saved their own picture, e.g. an opened menu)
+    mouse: dict[str, callable] = {}
+    hover: dict[str, tuple[float, float]] = {}  # step name -> where the mouse rests for its screenshot
+    if args.hover:
+        hover["library"] = tuple(float(v) for v in args.hover.split(","))
     if not args.docs and args.viewport == "1440x900":  # menus that open from buttons (positions at this size)
         def open_and_shoot(x, y, name):
             def run(page):
@@ -467,19 +481,20 @@ def main() -> int:
                 time.sleep(2)
                 page.screenshot(path=str(args.out / f"{name}.png"))
                 page.mouse.click(1420, 880)  # outside the menu (Flutter's popup ignores Escape)
+                return True
             return run
         mouse["library"] = open_and_shoot(1354, 54, "library-add-menu")
         # type to search: click an empty part of the header, then type (the "-mouse" shot shows "arc" + the matches)
-        # (the actions wait first: the previous step's mouse actions outlast STEP_SECONDS)
-        steps.insert(1, ("library-typed", lambda a: (time.sleep(6), a.library_view.clear_search())))
+        steps.insert(1, ("library-typed", lambda a: a.library_view.clear_search()))
         mouse["library-typed"] = lambda page: (page.mouse.click(480, 60), time.sleep(0.5),
                                                page.keyboard.type("arc", delay=120))
-        steps.insert(2, ("library-cleared", lambda a: (time.sleep(6), a.library_view.clear_search())))
+        steps.insert(2, ("library-cleared", lambda a: a.library_view.clear_search()))
+        if args.fake_frame:  # the "On your Frame" shelf's first card, hovered: its Play button shows
+            steps.insert(3, ("library-shelf-hover", lambda a: None))
+            hover["library-shelf-hover"] = (403, 268)
         if game:
             mouse["game"] = open_and_shoot(491, 306, "game-more-menu")  # the hero's "…"
-    if args.gestures:
-        STEP_SECONDS = 14  # the mouse actions run after each step's screenshot, before the next step
-
+    if args.gestures:  # the mouse actions run after each step's screenshot, before the next step
         def drag(*points):
             def run(page):
                 page.mouse.move(*points[0])
@@ -516,11 +531,12 @@ def main() -> int:
                  "files-dragged": right_click(900, 320),                      # a selected one: "… 3 items"
                  "files-menu": lambda page: (escape(page), time.sleep(0.5), right_click(900, 600)(page)),
                  "files-space-menu": escape,
-                 "screenshots": drag((680, 280), (950, 280), (950, 430)),     # 3 shots
-                 "screenshots-dragged": right_click(950, 430),
+                 "screenshots": drag((400, 300), (680, 300), (950, 300)),     # 3 shots (the first row)
+                 "screenshots-dragged": right_click(950, 300),
                  "screenshots-menu": escape,
-                 "library": drag((360, 300), (560, 300), (760, 300)),        # 3 cards, select mode on
-                 "library-dragged": drag((560, 300), (760, 300))}             # from a selected card: deselects 2
+                 # the grid's first row (below the "On your Frame" shelf)
+                 "library": drag((360, 560), (560, 560), (760, 560)),        # 3 cards, select mode on
+                 "library-dragged": drag((560, 560), (760, 560))}             # from a selected card: deselects 2
     if args.linux:
         def linux_filter(a, value):
             a.navigate(0)
@@ -556,10 +572,7 @@ def main() -> int:
         ImageDraw.Draw(im).ellipse((72, 72, 184, 184), fill=(255, 214, 102, 255))
         im.save(icon)
 
-        def add_menu(a):
-            a.navigate(0)
-            time.sleep(2)
-        steps = [("library", add_menu),
+        steps = [("library", lambda a: a.navigate(0)),
                  ("links-paste", lambda a: a.pick_link()),
                  ("links-confirm", lambda a: (a.page.pop_dialog(), link_dialog._confirm(a, fake, sizes, False, icon))),
                  ("links-settings", lambda a: (a.page.pop_dialog(), a.go("settings")))]
@@ -570,7 +583,9 @@ def main() -> int:
             time.sleep(2)
             page.screenshot(path=str(args.out / "library-add-menu.png"))
             page.mouse.click(120, 520)  # outside the menu (Flutter's popup ignores Escape)
-        mouse["library"] = add_menu_open  # tall pages: run with e.g. --viewport 1280x3200
+            return True
+        # tall pages: run with e.g. --viewport 1280x3200 (at 1440x900 the tour's own Add games click is kept)
+        mouse.setdefault("library", add_menu_open)
     if args.themes:
         from frameport.ui import theme as T
         from frameport.ui.app import themes_dir
@@ -657,7 +672,7 @@ def main() -> int:
     # overlapped ("Q / uest", a check mark over its pill's text); its picture is 00-warmup.png. Settings, not the
     # Library: opening the Library twice restarts its card loading and the next shot caught it empty
     steps.insert(0, ("warmup", lambda a: a.go("settings")))
-    ready, done = threading.Event(), []
+    ready, shot_done, done = threading.Event(), threading.Event(), []
 
     if args.fake_frame:  # never reach a real Frame (start-up auto-connect, discovery, the 30 s poll)
         from frameport.frame import keyboard, monitor
@@ -678,7 +693,7 @@ def main() -> int:
         except Exception:  # noqa: BLE001
             ERRORS.append("startup: " + traceback.format_exc())
             return
-        threading.Thread(target=driver, args=(app, steps, ready, done), daemon=True).start()
+        threading.Thread(target=driver, args=(app, steps, ready, shot_done, done), daemon=True).start()
 
     def shooter():
         # wait until the app's web server listens (a fixed 6 s was too short with another smoke run on the machine)
@@ -698,24 +713,30 @@ def main() -> int:
                 browser = p.chromium.launch(args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"])
                 page = browser.new_page(viewport={"width": vw, "height": vh})
                 page.goto(f"http://127.0.0.1:{PORT}", wait_until="networkidle", timeout=120_000)
-                shot = 0
-                deadline = time.time() + 240 + 8 * len(steps)
-                while len(done) < len(steps) and time.time() < deadline:
-                    if ready.wait(1):
-                        ready.clear()
-                        name = done[-1]
-                        time.sleep(3)  # let Flutter paint
-                        if args.hover and name == "library":
-                            hx, hy = (float(v) for v in args.hover.split(","))
-                            page.mouse.move(hx, hy)
+                shot = handled = 0
+                while handled < len(steps):  # one hand-off per step (see driver)
+                    if not ready.wait(STEP_TIMEOUT):
+                        ERRORS.append(f"browser: no step after {done[-1] if done else 'start'} "
+                                      f"within {STEP_TIMEOUT} s")
+                        break
+                    ready.clear()
+                    name = done[-1]
+                    try:
+                        time.sleep(PAINT_SECONDS)
+                        if name in hover:
+                            page.mouse.move(*hover[name])
                             time.sleep(1.5)
                         page.screenshot(path=str(args.out / f"{shot:02d}-{name}.png"))
                         shot += 1
-                        if name in mouse:
-                            mouse[name](page)
-                            time.sleep(2)
+                        if name in hover:
+                            page.mouse.move(130, 520)  # the sidebar's empty part: nothing left hovered
+                        if name in mouse and mouse[name](page) is not True:
+                            time.sleep(PAINT_SECONDS)  # e.g. typed search: the matching cards fade in
                             page.screenshot(path=str(args.out / f"{shot:02d}-{name}-mouse.png"))
                             shot += 1
+                    finally:
+                        handled += 1
+                        shot_done.set()
                 browser.close()
         except Exception:  # noqa: BLE001
             ERRORS.append("browser: " + traceback.format_exc())
