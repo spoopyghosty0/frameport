@@ -286,20 +286,22 @@ class SettingsView:
                                   bgcolor=c["BG"], border=ft.Border.all(1, c["BORDER"]), border_radius=T.RADIUS_SM,
                                   padding=ft.Padding(T.S3, T.S3, T.S3, T.S3))
             # small marks (an IconButton would make this card's name row taller than the others')
-            marks = [C.as_icon(ft.Icons.CHECK_CIRCLE_ROUNDED, T.px(18), T.ACCENT)] if on else []
+            marks = [C.as_icon(ft.Icons.CHECK_CIRCLE_ROUNDED, T.px(18), T.TEXT if T.DUAL else T.ACCENT)] if on else []
             if tid.startswith(T.USER_PREFIX):
                 marks.append(ft.Container(C.as_icon(ft.Icons.DELETE_OUTLINE_ROUNDED, T.px(18), T.TEXT_2),
-                                          tooltip=tr("Remove this theme"), border_radius=T.px(4), ink=True,
+                                          tooltip=tr("Remove this theme"), border_radius=T.RADIUS_XS, ink=True,
                                           on_click=lambda e, t=tid: remove(t)))
             corner = ft.Row(marks, spacing=T.S2, tight=True)
-            return ft.Container(ft.Column([
+            box = ft.Container(ft.Column([
                 swatch,
                 ft.Row([C.body(theme["name"], T.TEXT, weight=ft.FontWeight.W_600, expand=True), corner],
                        vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 C.meta(about.get(tid) or tr("Installed theme file · {file}").format(file=Path(theme["path"]).name)),
             ], spacing=T.S2), width=T.px(240), padding=T.S3, border_radius=T.RADIUS,
-                bgcolor=T.SURFACE_2 if on else None, ink=True, on_click=lambda e, t=tid: pick(t),
+                ink=True, on_click=lambda e, t=tid: pick(t),
                 border=ft.Border.all(2, T.ACCENT if on else T.BORDER))  # same width: the content doesn't shift
+            C.selected_style(box, on)
+            return box
 
         return ft.Column([
             # no expand= in here: an expanding child in a wrap=True Row is an invalid layout (Flet's grey box)
@@ -308,7 +310,7 @@ class SettingsView:
                             lambda e: (app.copy(T.theme_json(T.THEME)),
                                        app.toast(tr("Copied: save it as a .json file, change the colors and "
                                                     "install it")))),
-                    C.secondary(tr("Install theme file…"), ft.Icons.FILE_OPEN_OUTLINED, install)],
+                    C.secondary(tr("Install theme file…"), ft.Icons.FILE_OPEN_ROUNDED, install)],
                    spacing=T.S2, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Row([card(t) for t in T.THEMES], spacing=T.S3, run_spacing=T.S3, wrap=True,
                    vertical_alignment=ft.CrossAxisAlignment.START),
@@ -331,7 +333,7 @@ class SettingsView:
                           else tr("Now {scale:.0%}.").format(scale=T.SCALE))
             C.update(note)
 
-        dd = ft.Dropdown(label=tr("Text and layout size"), value=str(current) if current != "auto" else "auto",
+        dd = C.dropdown(label=tr("Text and layout size"), value=str(current) if current != "auto" else "auto",
                          options=options, width=T.px(260), on_select=changed)
         controls = [self.theme_picker(), ft.Container(height=T.S2), dd, note]
         languages = i18n.available()
@@ -339,7 +341,7 @@ class SettingsView:
             def language_changed(e):
                 library.set_setting("ui.language", e.control.value)
                 C.update(lang_note)
-            lang = ft.Dropdown(label=tr("Language"), value=i18n.language(), width=T.px(260), on_select=language_changed,
+            lang = C.dropdown(label=tr("Language"), value=i18n.language(), width=T.px(260), on_select=language_changed,
                                options=[ft.dropdown.Option(code, i18n.language_name(code)) for code in languages])
             lang_note = C.meta(tr("Changes apply the next time FramePort starts."))
             controls += [lang, lang_note]
@@ -363,12 +365,10 @@ class SettingsView:
 
     def build(self) -> ft.Control:
         app = self.app
-        self.tools.controls = [ft.Row([ft.ProgressRing(width=T.px(16), height=T.px(16), stroke_width=T.px(2),
-                                                       color=T.ACCENT),
+        self.tools.controls = [ft.Row([C.spinner(),
                                        C.meta(tr("Checking tools…"))], spacing=T.S2)]
         app.run_bg(self.fill_tools)
-        self.pc.controls = [ft.Row([ft.ProgressRing(width=T.px(16), height=T.px(16), stroke_width=T.px(2),
-                                                    color=T.ACCENT),
+        self.pc.controls = [ft.Row([C.spinner(),
                                     C.meta(tr("Checking this PC…"))], spacing=T.S2)]
         app.run_bg(self.fill_pc)
         from ... import __version__ as ver
@@ -395,18 +395,16 @@ class SettingsView:
             C.section(tr("Problems and feedback"), C.card(ft.Column([
                 C.body(tr("Something not working? Collect a diagnostics zip (logs, settings, device info; personal "
                        "data removed) and attach it to a GitHub issue. For one game, use its menu instead.")),
-                ft.Row([C.secondary(tr("Report a problem…"), ft.Icons.BUG_REPORT_OUTLINED,
+                ft.Row([C.secondary(tr("Report a problem…"), ft.Icons.BUG_REPORT_ROUNDED,
                                     lambda e: app.report_problem_dialog()),
-                        C.ghost(tr("Collect app logs"), ft.Icons.FOLDER_ZIP_OUTLINED, lambda e: app.collect_logs())],
+                        C.ghost(tr("Collect app logs"), ft.Icons.FOLDER_ZIP_ROUNDED, lambda e: app.collect_logs())],
                        spacing=T.S3, run_spacing=T.S2, wrap=True),
             ], spacing=T.S3)), help="diag_bundle"),
             C.section(tr("Remove FramePort"), C.card(ft.Column([
                 C.body(tr("Removes everything FramePort created: its data and tools on this PC, the Steam entries it "
                        "added, and (optionally) its games and files on the Frame. Your game dumps aren't touched.")),
-                ft.OutlinedButton(tr("Uninstall FramePort…"), icon=ft.Icons.DELETE_FOREVER_ROUNDED,
-                                  on_click=lambda e: app.uninstall_app(),
-                                  style=ft.ButtonStyle(color=T.ERROR, side=ft.BorderSide(1, T.soft(T.ERROR, 0.6)),
-                                                       shape=ft.RoundedRectangleBorder(radius=T.RADIUS_SM))),
+                C.danger(tr("Uninstall FramePort…"), ft.Icons.DELETE_FOREVER_ROUNDED, lambda e: app.uninstall_app(),
+                         outline=True),
             ], spacing=T.S3, horizontal_alignment=ft.CrossAxisAlignment.START))),
             C.section(tr("Installing"), C.card(self.installing(), padding=T.S4), help="launch_test"),
             C.section(tr("Install links"), C.card(self.links_card(), padding=T.S4), help="install_links"),
@@ -414,8 +412,8 @@ class SettingsView:
             C.section(tr("About"), C.card(ft.Column([
                 C.kv(tr("Version"), ver),
                 C.kv(tr("Frame agent"), self.agent_text(), "frame_agent"),
-                C.kv(tr("Source"), ft.TextButton(REPO_URL.removeprefix("https://"), icon=ft.Icons.OPEN_IN_NEW_ROUNDED,
-                                             url=REPO_URL)),
+                C.kv(tr("Source"), C.ghost(REPO_URL.removeprefix("https://"), ft.Icons.OPEN_IN_NEW_ROUNDED,
+                                           color=T.ACCENT, url=REPO_URL)),
                 C.meta(tr("Uses OVRPort, Revive (LibreVR), Valve's Lepton and Proton. "
                           "Not affiliated with Valve or Meta.")),
             ], spacing=T.S2))),

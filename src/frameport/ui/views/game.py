@@ -95,9 +95,9 @@ class GameView:
         actions = self.actions()
         return ft.Container(
             ft.Stack([
-                C.art_fill(art, radius=T.px(16), hero=True, left=0, right=0, top=0, bottom=0,
+                C.art_fill(art, radius=T.RADIUS, hero=True, left=0, right=0, top=0, bottom=0,
                            placeholder_icon=C.platform_icon(g)),
-                ft.Container(left=0, right=0, top=0, bottom=0, border_radius=T.px(16), gradient=ft.LinearGradient(
+                ft.Container(left=0, right=0, top=0, bottom=0, border_radius=T.RADIUS, gradient=ft.LinearGradient(
                     begin=ft.Alignment.CENTER_LEFT, end=ft.Alignment.CENTER_RIGHT,
                     colors=[T.soft(T.BG, 0.97), T.soft(T.BG, 0.80), T.soft(T.BG, 0.25)], stops=[0.0, 0.45, 1.0])),
                 ft.Container(ft.Row([
@@ -113,7 +113,7 @@ class GameView:
                     ], spacing=T.S2, expand=True),
                 ]), padding=ft.Padding(T.S4, T.S3, T.S5, T.S5), left=0, right=0, top=0, bottom=0),
             ]),
-            height=T.px(330), border_radius=T.px(16), border=ft.Border.all(1, T.BORDER))
+            height=T.px(330), border_radius=T.RADIUS, border=ft.Border.all(1, T.BORDER))
 
     def actions(self) -> ft.Control:
         app, g, pkg = self.app, self.g, self.package
@@ -122,12 +122,11 @@ class GameView:
             pct = (f" {job.fraction:.0%}" if job.fraction is not None else "") + \
                 (f" · {job.speed.split(' · ')[0]}" if job.speed else "")
             return ft.Row([
-                ft.FilledButton(content=ft.Row([ft.ProgressRing(width=T.px(16), height=T.px(16), stroke_width=T.px(2),
-                                                                color=T.ON_ACCENT),
+                ft.FilledButton(content=ft.Row([C.spinner(color=T.ON_ACCENT),
                                                 ft.Text(f"{job.stage or tr('Queued')}{pct}", color=T.ON_ACCENT,
                                                         weight=ft.FontWeight.W_600)], spacing=T.px(10), tight=True),
                                 on_click=lambda e: app.show_activity(True),
-                                style=ft.ButtonStyle(bgcolor=T.ACCENT, shape=ft.RoundedRectangleBorder(radius=T.px(8)),
+                                style=ft.ButtonStyle(bgcolor=T.ACCENT, shape=C.button_shape(),
                                                      padding=ft.Padding(T.px(22), T.px(18), T.px(22), T.px(18)))),
                 C.ghost(tr("Cancel"), ft.Icons.CLOSE_ROUNDED, lambda e: app.jobs.cancel(job)),
             ], spacing=T.S2)
@@ -137,7 +136,7 @@ class GameView:
                            C.secondary(label, icon, handler, disabled, tip))
         if C.is_media_player(g) and g.get("kind") != "rift" and app.frame_state == "connected" and \
                 C.install_state(g, app.frame_info) in ("installed", "outdated"):
-            buttons.append(C.secondary(tr("Add videos"), ft.Icons.VIDEO_LIBRARY_OUTLINED,
+            buttons.append(C.secondary(tr("Add videos"), ft.Icons.VIDEO_LIBRARY_ROUNDED,
                                        lambda e: app.go("files", pkg), False,
                                        tr("Opens this player's storage on the Frame (Files tab): upload videos "
                                           "into the folder it lists")))
@@ -244,15 +243,15 @@ class GameView:
                 C.body(tr("Tried it in the headset? Tell us how it runs: with your recipe it can join FramePort's "
                           "built-in list, so it works out of the box for everyone."), T.TEXT),
                 ft.Row([
-                    C.secondary(tr("It works: share…"), ft.Icons.THUMB_UP_OUTLINED,
+                    C.secondary(tr("It works: share…"), ft.Icons.THUMB_UP_ROUNDED,
                                 lambda e: self.app.share_config_dialog(pkg, "works")),
-                    C.secondary(tr("It has issues: share…"), ft.Icons.BUILD_CIRCLE_OUTLINED,
+                    C.secondary(tr("It has issues: share…"), ft.Icons.BUILD_CIRCLE_ROUNDED,
                                 lambda e: self.app.share_config_dialog(pkg, "issues")),
-                    C.ghost(tr("It doesn't run: report…"), ft.Icons.BUG_REPORT_OUTLINED,
+                    C.ghost(tr("It doesn't run: report…"), ft.Icons.BUG_REPORT_ROUNDED,
                             lambda e: self.app.report_problem_dialog(pkg)),
                     C.ghost(tr("Not now"), on_click=dismiss),
                 ], spacing=T.S2, run_spacing=T.S2, wrap=True),
-            ], spacing=T.S2), "info", ft.Icons.VOLUNTEER_ACTIVISM_OUTLINED))
+            ], spacing=T.S2), "info", ft.Icons.VOLUNTEER_ACTIVISM_ROUNDED))
         if g.get("catalog_update") and recipe.source == "user":
             def take_update(e):
                 from ... import pipeline
@@ -263,13 +262,13 @@ class GameView:
             out.append(C.callout(ft.Row([
                 C.body(tr("A newer known-good recipe for this game is available (you changed this game's settings, "
                           "so it wasn't applied by itself)."), T.TEXT, expand=True),
-                C.secondary(tr("Use the new recipe"), ft.Icons.AUTO_FIX_HIGH_OUTLINED, take_update)],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER), "info", ft.Icons.NEW_RELEASES_OUTLINED))
+                C.secondary(tr("Use the new recipe"), ft.Icons.AUTO_FIX_HIGH_ROUNDED, take_update)],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER), "info", ft.Icons.NEW_RELEASES_ROUNDED))
         if g.get("steam_art_stale") and installed:
             out.append(C.callout(ft.Row([
                 C.body(tr("The Frame's Steam library still shows the old artwork."), T.TEXT, expand=True),
-                C.secondary(tr("Update Steam art on Frame"), ft.Icons.IMAGE_OUTLINED,
-                            lambda e: self.app.update_steam_art(pkg))]), "info", ft.Icons.IMAGE_OUTLINED))
+                C.secondary(tr("Update Steam art on Frame"), ft.Icons.IMAGE_ROUNDED,
+                            lambda e: self.app.update_steam_art(pkg))]), "info", ft.Icons.IMAGE_ROUNDED))
         if recipe.status == "unsupported":
             out.append(C.callout(recipe.notes or tr("This game can't run on the Steam Frame."), "error"))
         elif recipe.notes and not (self.rift and extra.get("platform_sdk")):
@@ -302,7 +301,7 @@ class GameView:
             if "details" in self.g:
                 return None
             return C.section(tr("About this game"), C.card(ft.Row([
-                ft.ProgressRing(width=T.px(16), height=T.px(16), stroke_width=T.px(2), color=T.ACCENT),
+                C.spinner(),
                 C.meta(tr("Looking up the store description and screenshots…"))], spacing=T.S2)))
         parts: list[ft.Control] = []
         if shots:
@@ -333,15 +332,14 @@ class GameView:
                 def more(e):
                     state["open"] = not state["open"]
                     body.value = text if state["open"] else short
-                    e.control.text = tr("Show less") if state["open"] else tr("Show more")
+                    e.control.content = tr("Show less") if state["open"] else tr("Show more")
                     body.update()
                     e.control.update()
-                parts.append(ft.TextButton(tr("Show more"), on_click=more, style=ft.ButtonStyle(color=T.ACCENT)))
+                parts.append(C.ghost(tr("Show more"), on_click=more, color=T.ACCENT))
         links = det.store_links(d)
         if links:
-            parts.append(ft.Row([ft.TextButton(label, icon=ft.Icons.OPEN_IN_NEW_ROUNDED, url=url,
-                                               style=ft.ButtonStyle(color=T.ACCENT)) for label, url in links],
-                                spacing=T.S2, wrap=True))
+            parts.append(ft.Row([C.ghost(label, ft.Icons.OPEN_IN_NEW_ROUNDED, color=T.ACCENT, url=url)
+                                 for label, url in links], spacing=T.S2, wrap=True))
         src = ", ".join({"oculusdb": "Meta store (OculusDB)", "steam": "Steam store"}.get(s, s)
                         for s in d.get("sources") or [])
         return C.section(tr("About this game"), C.card(ft.Column(parts, spacing=T.S4)),
@@ -360,13 +358,12 @@ class GameView:
             counter.value = f"{state['i'] + 1} / {len(shots)}"
             img.update()
             counter.update()
-        page.show_dialog(ft.AlertDialog(
-            content=ft.Container(ft.Column([img, ft.Row([
+        page.show_dialog(C.viewer(
+            ft.Container(ft.Column([img, ft.Row([
                 C.icon_btn(ft.Icons.CHEVRON_LEFT_ROUNDED, tr("Previous"), lambda e: show(-1)), counter,
                 C.icon_btn(ft.Icons.CHEVRON_RIGHT_ROUNDED, tr("Next"), lambda e: show(1)),
                 ft.Container(expand=True), C.ghost(tr("Close"), on_click=lambda e: page.pop_dialog())])],
-                spacing=T.S2, tight=True), width=T.px(1100)),
-            bgcolor=T.BG, shape=ft.RoundedRectangleBorder(radius=T.RADIUS), content_padding=T.S3))
+                spacing=T.S2, tight=True), width=T.px(1100))))
 
     def tags(self) -> ft.Control:
         from .library import all_tags, auto_tags, normalize_tag, user_tags
@@ -391,10 +388,8 @@ class GameView:
             else:
                 e.control.update()
 
-        field = ft.TextField(hint_text=tr("Add a tag"), dense=True, width=T.px(150), text_size=T.T_META,
-                             border_radius=T.px(20), bgcolor=T.SURFACE_3, border_color=ft.Colors.TRANSPARENT,
-                             focused_border_color=T.ACCENT,
-                             content_padding=ft.Padding(T.px(12), T.px(6), T.px(12), T.px(6)), on_submit=add)
+        field = C.field(hint_text=tr("Add a tag"), width=T.px(150), text_size=T.T_META, border_radius=T.px(20),
+                        content_padding=ft.Padding(T.px(12), T.px(6), T.px(12), T.px(6)), on_submit=add)
 
         def fill():
             mine = user_tags(self.g)
@@ -403,7 +398,7 @@ class GameView:
                                          spacing=T.px(4), tight=True),
                                   bgcolor=T.ACCENT_SOFT, border_radius=T.px(20),
                                   padding=ft.Padding(T.px(10), T.px(5), T.px(8), T.px(5)),
-                                  on_click=lambda e, t=t: remove(t), tooltip=tr("Remove tag"))
+                                  on_click=lambda e, t=t: remove(t), tooltip=tr("Remove tag"), ink=True)
                      for t in mine]
             chips += [ft.Container(C.meta(t), border=ft.Border.all(1, T.BORDER), border_radius=T.px(20),
                                    padding=ft.Padding(T.px(10), T.px(5), T.px(10), T.px(5)),
@@ -413,7 +408,8 @@ class GameView:
             suggestions = [t for t in all_tags(self.games) if t in used and t not in mine][:6]
             chips.append(field)
             chips += [ft.Container(C.meta("+ " + t, T.ACCENT), padding=ft.Padding(T.px(6), T.px(5), T.px(6), T.px(5)),
-                                   on_click=lambda e, t=t: save(user_tags(self.g) + [t]), tooltip=tr("Add this tag"))
+                                   on_click=lambda e, t=t: save(user_tags(self.g) + [t]), tooltip=tr("Add this tag"),
+                                   border_radius=T.px(20), ink=True)
                       for t in suggestions]
             row.controls = chips
         fill()
@@ -460,7 +456,7 @@ class GameView:
                 ft.Icons.AUTO_AWESOME_ROUNDED, T.ACCENT
         chips = [ft.Container(C.body(tr(p.title), T.TEXT, size=T.T_META),
                               tooltip=C.tip(tr(recipe.reasons.get(p.id) or p.description)),
-                              bgcolor=T.SURFACE_3, border_radius=T.px(6),
+                              bgcolor=T.SURFACE_3, border_radius=T.RADIUS_XS,
                               padding=ft.Padding(T.px(10), T.px(5), T.px(10), T.px(5)))
                  for p in visible]
         base_count = len(on) - len(visible)
@@ -607,10 +603,9 @@ class GameView:
                     rows.append(ft.Container(ft.Row([
                         ft.Column([C.body(tr(p.title), T.TEXT, weight=ft.FontWeight.W_500), *sub],
                                   spacing=T.px(3), expand=True),
-                        ft.Dropdown(value=current, width=T.px(280), dense=True, border_color=T.BORDER,
-                                    text_size=T.T_BODY,
-                                    options=[ft.DropdownOption(key=k, text=tr(label)) for k, label in choices],
-                                    on_select=choose(p.id, p.params[0].key)),
+                        C.dropdown(value=current, width=T.px(280),
+                                   options=[ft.DropdownOption(key=k, text=tr(label)) for k, label in choices],
+                                   on_select=choose(p.id, p.params[0].key)),
                     ], spacing=T.S3), padding=ft.Padding(T.S4, T.px(10), T.S4, T.px(10)), border=ft.Border(
                         top=ft.BorderSide(1, T.BORDER))))
                     continue
@@ -618,15 +613,13 @@ class GameView:
                     pass
                 elif cat == "adapter":
                     val = recipe.params(p.id).get("value", p.params[0].default)
-                    extra = ft.TextField(value=str(val), width=T.px(90), dense=True, text_size=T.T_BODY,
-                                         border_color=T.BORDER, on_blur=set_value(p.id, p.params[0].kind))
+                    extra = C.field(value=str(val), width=T.px(90), on_blur=set_value(p.id, p.params[0].kind))
                 elif p.params:
                     q = p.params[0]
                     multi = q.kind == "text"
-                    extra = ft.TextField(value=str(recipe.params(p.id).get(q.key, q.default) or ""), hint_text=q.help,
-                                         width=T.px(260), dense=True, multiline=multi, min_lines=1,
-                                         max_lines=4 if multi else 1, text_size=T.T_BODY, border_color=T.BORDER,
-                                         on_blur=set_param(p.id, q.key))
+                    extra = C.field(value=str(recipe.params(p.id).get(q.key, q.default) or ""), hint_text=q.help,
+                                    width=T.px(260), multiline=multi, min_lines=1, max_lines=4 if multi else 1,
+                                    on_blur=set_param(p.id, q.key))
                 rows.append(ft.Container(ft.Row([
                     ft.Column([ft.Row([C.body(tr(p.title), T.TEXT, weight=ft.FontWeight.W_500)]
                                       + ([C.pill(tr("experimental"), T.WARN, tooltip=C.tip(HELP["experimental"]))]

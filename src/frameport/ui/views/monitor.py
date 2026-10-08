@@ -162,14 +162,13 @@ class MonitorView:
 
     # ---------------------------------------------------------------- building
     def _build(self) -> None:
-        self.live_dot = C.dot(T.TEXT_3, T.px(8))
+        self.live_dot = C.dot(T.TEXT_3, 8)
         self.live_text = C.meta(tr("Connecting…"))
         self.live = ft.Container(ft.Row([self.live_dot, self.live_text], spacing=T.S2, tight=True),
                                  bgcolor=T.SURFACE_3, border_radius=T.px(20),
                                  padding=ft.Padding(T.px(10), T.px(5), T.px(12), T.px(5)))
         self.overhead = C.meta("")
-        self.interval = ft.Dropdown(value=f"{M.DEFAULT_INTERVAL:g}", dense=True, width=T.px(150),
-                                    border_color=T.BORDER, text_size=T.T_BODY,
+        self.interval = C.dropdown(value=f"{M.DEFAULT_INTERVAL:g}", width=T.px(150),
                                     options=[ft.DropdownOption(f"{s:g}", tr("Every {n}").format(n=M.fmt_interval(s)))
                                              for s in M.INTERVALS],
                                     on_select=self._set_interval, tooltip=tr("How often the Frame sends new numbers"))
@@ -187,7 +186,7 @@ class MonitorView:
         self.game_fps_sub = C.meta(tr("frames per second"))
         self.game_spark = C.Sparkline(T.OK, height=48)
         self.game_stats = C.body("", T.TEXT_2)
-        self.end_btn = C.secondary(tr("End game"), ft.Icons.STOP_CIRCLE_OUTLINED, lambda e: self.ask_end_game())
+        self.end_btn = C.secondary(tr("End game"), ft.Icons.STOP_CIRCLE_ROUNDED, lambda e: self.ask_end_game())
         self.page_btn = C.ghost(tr("Game page"), ft.Icons.OPEN_IN_NEW_ROUNDED,
                                 lambda e: self.game_pkg and self.app.open_game(self.game_pkg))
         self.game_card = C.card(ft.Row([
@@ -237,13 +236,10 @@ class MonitorView:
         self.details_btn = C.ghost(tr("Show details"), ft.Icons.EXPAND_MORE_ROUNDED, lambda e: self.toggle_details())
 
         # processes
-        self.filter = ft.SegmentedButton(
-            segments=[ft.Segment("game", label=tr("Game")), ft.Segment("steam", label=tr("Steam & SteamVR")),
-                      ft.Segment("all", label=tr("All"))],
-            selected=["game"], show_selected_icon=False, on_change=self._set_filter)
-        self.search = ft.TextField(hint_text=tr("Search name, PID or game"), dense=True, width=T.px(240),
-                                   border_color=T.BORDER, prefix_icon=ft.Icons.SEARCH_ROUNDED,
-                                   on_change=lambda e: self._bind_rows(update=True))
+        self.filter = C.segmented([("game", tr("Game")), ("steam", tr("Steam & SteamVR")), ("all", tr("All"))],
+                                  "game", self._set_filter)  # .data = the selected filter
+        self.search = C.search(hint_text=tr("Search name, PID or game"), width=T.px(240),
+                               on_change=lambda e: self._bind_rows(update=True))
         self.sort_btns: dict[str, ft.TextButton] = {}
         left, right = ft.Alignment.CENTER_LEFT, ft.Alignment.CENTER_RIGHT
         header_cells = [ft.Container(self._sort_btn("name", tr("Name")), expand=True, alignment=left),
@@ -279,7 +275,7 @@ class MonitorView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(heading, sub),
-                C.empty_state(ft.Icons.MONITOR_HEART_OUTLINED, tr("Connect your Frame first"),
+                C.empty_state(ft.Icons.MONITOR_HEART_ROUNDED, tr("Connect your Frame first"),
                               tr("The monitor shows your Frame's games, load, temperatures and battery live once "
                                  "FramePort is connected to it."),
                               C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
@@ -327,8 +323,8 @@ class MonitorView:
             self._build_static()
         if self.interval.value != f"{M.DEFAULT_INTERVAL:g}":
             session.set_interval(float(self.interval.value))
-        if self.filter.selected != ["game"]:
-            session.set_filter(self.filter.selected[0])
+        if self.filter.data != "game":
+            session.set_filter(self.filter.data)
         if self.paused:
             session.pause(True)
         self._set_live(tr("Live"), T.OK)
@@ -377,8 +373,7 @@ class MonitorView:
         self.details_btn.icon = ft.Icons.EXPAND_LESS_ROUNDED if self.details.visible else ft.Icons.EXPAND_MORE_ROUNDED
         C.update(self.details, self.details_btn)
 
-    def _set_filter(self, e) -> None:
-        which = (self.filter.selected or ["game"])[0]
+    def _set_filter(self, which: str) -> None:
         if self.session:
             self.session.set_filter(which)
 
@@ -433,7 +428,7 @@ class MonitorView:
         for color, name in zip(POWER_COLORS, ("CPU", "GPU", "NPU", tr("Other")), strict=True):
             t = C.meta(f"{name} –")
             self.legend_texts.append(t)
-            legend.append(ft.Row([C.dot(color, T.px(8)), t], spacing=T.px(6), tight=True))
+            legend.append(ft.Row([C.dot(color, 8), t], spacing=T.px(6), tight=True))
         self.power_legend.controls = legend
         self.net.controls, self.net_texts = [], {}
         # through the event loop like the ticks: sent directly from this (connect) thread, the patch adding these
@@ -520,7 +515,7 @@ class MonitorView:
         game = games[0] if games else None
         was = self.game_card.visible
         self.game_card.visible = game is not None
-        self.no_game.visible = game is None and (self.filter.selected or ["game"])[0] == "game"
+        self.no_game.visible = game is None and self.filter.data == "game"
         if game is None:
             if self.game_pkg is not None:
                 self.game_pkg = None
@@ -640,10 +635,10 @@ class MonitorView:
             if not p.get("locked"):
                 actions += [None, (tr("End all {n}…").format(n=n), ft.Icons.CLOSE_ROUNDED,
                                    lambda e: self.ask_kill(p, "TERM")),
-                            (tr("Force quit all {n}…").format(n=n), ft.Icons.DANGEROUS_OUTLINED,
+                            (tr("Force quit all {n}…").format(n=n), ft.Icons.DANGEROUS_ROUNDED,
                              lambda e: self.ask_kill(p, "KILL"))]
             if p.get("game"):
-                actions += [None, (tr("End game…"), ft.Icons.STOP_CIRCLE_OUTLINED,
+                actions += [None, (tr("End game…"), ft.Icons.STOP_CIRCLE_ROUNDED,
                                    lambda e: self.ask_end_game(p["game"]))]
             actions += [None, (tr("Copy name"), ft.Icons.CONTENT_COPY_ROUNDED, lambda e: self.app.copy(name))]
             self.menu.items = C.menu_items(actions)
@@ -652,9 +647,9 @@ class MonitorView:
             return
         if not p.get("locked"):
             actions += [(tr("End…"), ft.Icons.CLOSE_ROUNDED, lambda e: self.ask_kill(p, "TERM")),
-                        (tr("Force quit…"), ft.Icons.DANGEROUS_OUTLINED, lambda e: self.ask_kill(p, "KILL"))]
+                        (tr("Force quit…"), ft.Icons.DANGEROUS_ROUNDED, lambda e: self.ask_kill(p, "KILL"))]
         if p.get("game"):
-            actions += [None, (tr("End game…"), ft.Icons.STOP_CIRCLE_OUTLINED,
+            actions += [None, (tr("End game…"), ft.Icons.STOP_CIRCLE_ROUNDED,
                                lambda e: self.ask_end_game(p["game"]))]
         actions += [None, (tr("Copy PID {pid}").format(pid=pid), ft.Icons.CONTENT_COPY_ROUNDED,
                            lambda e: self.app.copy(str(pid))),

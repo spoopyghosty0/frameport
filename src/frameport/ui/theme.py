@@ -206,12 +206,18 @@ def theme_json(theme_id: str) -> str:
 set_theme(DEFAULT_THEME)
 
 # spacing / shape / type (at 100 %; set_scale() multiplies them)
-_BASE = {"S1": 4, "S2": 8, "S3": 12, "S4": 16, "S5": 24, "S6": 32, "RADIUS": 12, "RADIUS_SM": 8,
-         "T_TITLE": 28, "T_H2": 16, "T_BODY": 13, "T_META": 12, "T_SMALL": 11}
+# RADIUS cards/dialogs, RADIUS_SM buttons/inputs/thumbnails, RADIUS_XS small chips/tooltips; ICON_S/M/L icon sizes;
+# DIALOG_S/M/L dialog content widths; T_DISPLAY big headings (empty states, setup)
+_BASE = {"S1": 4, "S2": 8, "S3": 12, "S4": 16, "S5": 24, "S6": 32, "RADIUS": 12, "RADIUS_SM": 8, "RADIUS_XS": 6,
+         "ICON_S": 16, "ICON_M": 20, "ICON_L": 24, "DIALOG_S": 440, "DIALOG_M": 600, "DIALOG_L": 880,
+         "T_DISPLAY": 22, "T_TITLE": 28, "T_H2": 16, "T_BODY": 13, "T_META": 12, "T_SMALL": 11}
 S1, S2, S3, S4, S5, S6 = 4, 8, 12, 16, 24, 32
 RADIUS = 12
 RADIUS_SM = 8
-T_TITLE, T_H2, T_BODY, T_META, T_SMALL = 28, 16, 13, 12, 11
+RADIUS_XS = 6
+ICON_S, ICON_M, ICON_L = 16, 20, 24
+DIALOG_S, DIALOG_M, DIALOG_L = 440, 600, 880
+T_DISPLAY, T_TITLE, T_H2, T_BODY, T_META, T_SMALL = 22, 28, 16, 13, 12, 11
 SCALE = 1.0
 
 
@@ -285,7 +291,7 @@ def apply(page: ft.Page) -> None:
                      text_theme=text_theme,
                      divider_theme=ft.DividerTheme(color=BORDER, thickness=1, space=1),
                      tooltip_theme=ft.TooltipTheme(
-                         decoration=ft.BoxDecoration(bgcolor=SURFACE_3, border_radius=6,
+                         decoration=ft.BoxDecoration(bgcolor=SURFACE_3, border_radius=RADIUS_XS,
                                                      border=ft.Border.all(1, BORDER)),
                          text_style=ft.TextStyle(color=TEXT, size=px(12)), wait_duration=400),
                      expansion_tile_theme=ft.ExpansionTileTheme(

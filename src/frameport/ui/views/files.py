@@ -23,8 +23,8 @@ from .files_dialog import human
 if TYPE_CHECKING:
     from ..app import FramePortApp
 
-SHARED_ICONS = {"videos": ft.Icons.MOVIE_OUTLINED, "downloads": ft.Icons.DOWNLOAD_OUTLINED,
-                "documents": ft.Icons.DESCRIPTION_OUTLINED}
+SHARED_ICONS = {"videos": ft.Icons.MOVIE_ROUNDED, "downloads": ft.Icons.DOWNLOAD_ROUNDED,
+                "documents": ft.Icons.DESCRIPTION_ROUNDED}
 VIDEO_EXT = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".ts"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
 
@@ -50,12 +50,12 @@ def file_icon(name: str, is_dir: bool) -> str:
         return ft.Icons.FOLDER_ROUNDED
     ext = Path(name).suffix.lower()
     if ext in VIDEO_EXT:
-        return ft.Icons.MOVIE_OUTLINED
+        return ft.Icons.MOVIE_ROUNDED
     if ext in IMAGE_EXT:
-        return ft.Icons.IMAGE_OUTLINED
+        return ft.Icons.IMAGE_ROUNDED
     if ext in (".zip", ".7z", ".rar", ".tar", ".gz"):
-        return ft.Icons.FOLDER_ZIP_OUTLINED
-    return ft.Icons.INSERT_DRIVE_FILE_OUTLINED
+        return ft.Icons.FOLDER_ZIP_ROUNDED
+    return ft.Icons.INSERT_DRIVE_FILE_ROUNDED
 
 
 def crumbs(root: str, path: str, root_label: str) -> list[tuple[str, str]]:
@@ -86,7 +86,7 @@ class FilesView:
         self.toolbar = ft.Row([
             C.primary(tr("Upload files…"), ft.Icons.UPLOAD_FILE_ROUNDED, self.upload_files),
             C.secondary(tr("Upload folder…"), ft.Icons.DRIVE_FOLDER_UPLOAD_ROUNDED, self.upload_folder),
-            C.ghost(tr("New folder…"), ft.Icons.CREATE_NEW_FOLDER_OUTLINED, lambda e: self.new_folder()),
+            C.ghost(tr("New folder…"), ft.Icons.CREATE_NEW_FOLDER_ROUNDED, lambda e: self.new_folder()),
             C.icon_btn(ft.Icons.REFRESH_ROUNDED, tr("Refresh"), lambda e: self.load()),
         ], spacing=T.S2, wrap=True, run_spacing=T.S2)
         self.hidden_switch = C.switch(tr("Show hidden files"), wrap=False, value=False, on_change=self._toggle_hidden)
@@ -124,7 +124,7 @@ class FilesView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(tr("Files"), tr("Videos, documents, mods and saves on your Steam Frame")),
-                C.empty_state(ft.Icons.FOLDER_OFF_OUTLINED, tr("Connect your Frame first"),
+                C.empty_state(ft.Icons.FOLDER_OFF_ROUNDED, tr("Connect your Frame first"),
                               tr("Files on the Frame can be browsed once FramePort is connected to it."),
                               C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
         if self.root is None:
@@ -175,26 +175,28 @@ class FilesView:
 
     def _location_row(self, loc: dict, icon: str, sub: str = "") -> ft.Control:
         selected = self.loc is not None and self.loc["id"] == loc["id"]
-        return ft.Container(
-            ft.Row([ft.Icon(icon, size=T.px(18), color=T.ACCENT if selected else T.TEXT_2),
-                    ft.Column([C.body(loc["label"], T.TEXT if selected else T.TEXT_2, weight=ft.FontWeight.W_500),
-                               *([C.meta(sub)] if sub else [])], spacing=0, expand=True)], spacing=T.S2),
+        ic = ft.Icon(icon, size=T.px(18))
+        label = C.body(loc["label"], weight=ft.FontWeight.W_500)
+        box = ft.Container(
+            ft.Row([ic, ft.Column([label, *([C.meta(sub)] if sub else [])], spacing=0, expand=True)], spacing=T.S2),
             padding=ft.Padding(T.S2, T.px(6), T.S2, T.px(6)), border_radius=T.RADIUS_SM, ink=True,
-            bgcolor=T.ACCENT_SOFT if selected else None, on_click=lambda e, loc_=loc: self.open_location(loc_))
+            on_click=lambda e, loc_=loc: self.open_location(loc_))
+        C.selected_style(box, selected, ic, label)  # like the sidebar: the portal fade with a white icon
+        return box
 
     def _render_locations(self) -> None:
-        rows = [self._location_row(loc_, SHARED_ICONS.get(loc_["id"], ft.Icons.FOLDER_OUTLINED), loc_["android"])
+        rows = [self._location_row(loc_, SHARED_ICONS.get(loc_["id"], ft.Icons.FOLDER_ROUNDED), loc_["android"])
                 for loc_ in self.shared]
         games = self._installed_games()
         if games:
             rows.append(ft.Container(C.meta(tr("Game storage").upper()), padding=ft.Padding(T.S2, T.S3, 0, T.px(2))))
             for pkg, title in games:
                 loc = self.game_locs.get(pkg) or {"id": f"app:{pkg}", "label": title, "package": pkg}
-                rows.append(self._location_row(loc, ft.Icons.SPORTS_ESPORTS_OUTLINED))
+                rows.append(self._location_row(loc, ft.Icons.SPORTS_ESPORTS_ROUNDED))
         rows.append(ft.Container(C.meta(tr("Advanced").upper()), padding=ft.Padding(T.S2, T.S3, 0, T.px(2))))
         home = {"id": "home", "label": tr("Home folder"), "path": self.app.target.frame.home, "android": "",
                 "shared": False}
-        rows.append(self._location_row(home, ft.Icons.HOME_OUTLINED, tr("everything in ~ (not seen by games)")))
+        rows.append(self._location_row(home, ft.Icons.HOME_ROUNDED, tr("everything in ~ (not seen by games)")))
         self.locations.controls = rows
         C.update(self.locations)
 
@@ -279,9 +281,8 @@ class FilesView:
         for i, (label, p) in enumerate(crumbs(loc["path"], self.path, loc["label"])):
             if i:
                 self.crumb_row.controls.append(ft.Icon(ft.Icons.CHEVRON_RIGHT_ROUNDED, size=T.px(16), color=T.TEXT_3))
-            self.crumb_row.controls.append(ft.TextButton(label, on_click=lambda e, p=p: self.cd(p),
-                                                         style=ft.ButtonStyle(color=T.TEXT if p == self.path
-                                                                              else T.TEXT_2)))
+            self.crumb_row.controls.append(C.ghost(label, on_click=lambda e, p=p: self.cd(p),
+                                                   color=T.TEXT if p == self.path else T.TEXT_2))
         android = loc.get("android")
         rel = posixpath.relpath(self.path, loc["path"]) if self.path != loc["path"] else ""
         self.where.value = (tr("Games see this folder as {value}")
@@ -342,7 +343,7 @@ class FilesView:
         if e is None:
             return [(tr("Upload files…"), ft.Icons.UPLOAD_FILE_ROUNDED, self.upload_files),
                     (tr("Upload folder…"), ft.Icons.DRIVE_FOLDER_UPLOAD_ROUNDED, self.upload_folder),
-                    (tr("New folder…"), ft.Icons.CREATE_NEW_FOLDER_OUTLINED, lambda ev: self.new_folder()),
+                    (tr("New folder…"), ft.Icons.CREATE_NEW_FOLDER_ROUNDED, lambda ev: self.new_folder()),
                     None,
                     *([(tr("Select all"), ft.Icons.SELECT_ALL_ROUNDED, lambda ev: self._select_all())]
                       if any(self._selectable(x) for x in self.entries) else []),
@@ -370,7 +371,7 @@ class FilesView:
         elif self._selectable(e):
             on = e.path in self.selected
             out.append((tr("Deselect") if on else tr("Select"),
-                        ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED if on else ft.Icons.CHECK_BOX_OUTLINED,
+                        ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED if on else ft.Icons.CHECK_BOX_ROUNDED,
                         lambda ev: self._toggle(e.path, not on)))
         if deletable:
             out += [None, (tr("Delete {n} items…").format(n=len(deletable)) if len(deletable) > 1 else tr("Delete…"),
@@ -531,14 +532,12 @@ class FilesView:
 
     def _ask_name(self, heading: str, label: str, value: str, ok: str, on_ok) -> None:
         page = self.app.page
-        field = ft.TextField(label=label, value=value, autofocus=True, width=T.px(380))
+        field = C.field(label=label, value=value, autofocus=True, width=T.DIALOG_S)
 
         def go(e=None):
             page.pop_dialog()
             if (field.value or "").strip():
                 on_ok(field.value.strip())
         field.on_submit = go
-        page.show_dialog(ft.AlertDialog(title=ft.Text(heading, color=T.TEXT, weight=ft.FontWeight.W_600),
-                                        bgcolor=T.SURFACE_2, content=field,
-                                        actions=[C.ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog()),
-                                                 C.primary(ok, on_click=go)]))
+        page.show_dialog(C.dialog(heading, field, [C.ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog()),
+                                                   C.primary(ok, on_click=go)], size="s"))

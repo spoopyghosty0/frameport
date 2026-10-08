@@ -187,12 +187,8 @@ class LibraryView:
                                 run_spacing=T.S4, padding=ft.Padding(0, T.S2, T.S2, T.S5))
         self.count = C.meta("")
         self.subtitle = C.body("", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-        self.search = ft.TextField(
-            value=self.f["q"], hint_text=tr("Search games and tags"), prefix_icon=ft.Icons.SEARCH_ROUNDED, dense=True,
-            width=T.px(260), border_radius=T.RADIUS_SM, bgcolor=T.SURFACE_3, border_color=ft.Colors.TRANSPARENT,
-            focused_border_color=T.ACCENT, content_padding=ft.Padding(T.px(12), T.px(8), T.px(12), T.px(8)),
-            text_size=T.T_BODY,
-            on_change=self._on_search)
+        self.search = C.search(value=self.f["q"], hint_text=tr("Search games and tags"), width=T.px(260),
+                               on_change=self._on_search)
         # an X that clears the search at once (shown only while there is text)
         # a small clickable icon, not an IconButton: its 40 px minimum size made the field taller and pushed the
         # text off-centre
@@ -213,29 +209,15 @@ class LibraryView:
                                                               on_pan_start=self.drag.start, on_pan_end=self.drag.end),
                                    secondary_trigger=None, tertiary_trigger=None, expand=True)
         self.body = ft.Container(self.menu, expand=True)
-        add = ft.PopupMenuButton(
-            content=ft.Container(ft.Row([ft.Icon(ft.Icons.ADD_ROUNDED, color=T.ON_ACCENT, size=T.px(18)),
-                                         ft.Text(tr("Add games"), color=T.ON_ACCENT, weight=ft.FontWeight.W_600,
-                                                 size=T.px(13))],
-                                        spacing=T.px(6), tight=True),
-                                 bgcolor=T.ACCENT, border_radius=T.RADIUS_SM,
-                                 padding=ft.Padding(T.px(14), T.px(9), T.px(16), T.px(9))),
-            items=[ft.PopupMenuItem(content=ft.Text(tr("Scan a folder…")), icon=ft.Icons.FOLDER_OPEN_ROUNDED,
-                                    on_click=app.pick_folder),
-                   ft.PopupMenuItem(content=ft.Text(tr("Add one game folder…")),
-                                    icon=ft.Icons.CREATE_NEW_FOLDER_ROUNDED, on_click=app.pick_game_folder),
-                   ft.PopupMenuItem(content=ft.Text(tr("Add an APK file…")), icon=ft.Icons.ANDROID_ROUNDED,
-                                    on_click=app.pick_apk),
-                   ft.PopupMenuItem(content=ft.Text(tr("Add a Windows program (.exe)…")),
-                                    icon=ft.Icons.DESKTOP_WINDOWS_ROUNDED, on_click=app.pick_windows_exe),
-                   ft.PopupMenuItem(content=ft.Text(tr("Install from a link…")), icon=ft.Icons.LINK_ROUNDED,
-                                    on_click=app.pick_link),
-                   ft.PopupMenuItem(),  # divider: native Linux apps (GitHub #31)
-                   ft.PopupMenuItem(content=ft.Text(tr("Add a Linux app…")), icon=ft.Icons.TERMINAL_ROUNDED,
-                                    on_click=app.pick_linux_app),
-                   ft.PopupMenuItem(content=ft.Text(tr("Add a Linux app folder…")), icon=ft.Icons.FOLDER_ROUNDED,
-                                    on_click=app.pick_linux_folder)],
-            bgcolor=T.SURFACE_2, tooltip="")
+        add = C.primary_menu(tr("Add games"), ft.Icons.ADD_ROUNDED, C.menu_items([
+            (tr("Scan a folder…"), ft.Icons.FOLDER_OPEN_ROUNDED, app.pick_folder),
+            (tr("Add one game folder…"), ft.Icons.CREATE_NEW_FOLDER_ROUNDED, app.pick_game_folder),
+            (tr("Add an APK file…"), ft.Icons.ANDROID_ROUNDED, app.pick_apk),
+            (tr("Add a Windows program (.exe)…"), ft.Icons.DESKTOP_WINDOWS_ROUNDED, app.pick_windows_exe),
+            (tr("Install from a link…"), ft.Icons.LINK_ROUNDED, app.pick_link),
+            None,  # native Linux apps (GitHub #31)
+            (tr("Add a Linux app…"), ft.Icons.TERMINAL_ROUNDED, app.pick_linux_app),
+            (tr("Add a Linux app folder…"), ft.Icons.FOLDER_ROUNDED, app.pick_linux_folder)]))
         self.rescan_btn = C.secondary(tr("Rescan folders"), ft.Icons.REFRESH_ROUNDED, app.rescan,
                                       tooltip=C.tip(HELP["rescan"]))
         self.update_all_btn = C.secondary(tr("Update all"), ft.Icons.SYSTEM_UPDATE_ALT_ROUNDED,
@@ -503,16 +485,7 @@ class LibraryView:
         C.update(self.subtitle, self.hint, self.filters)
 
     def _seg(self, key: str, options: list[tuple[str, str]]) -> ft.Control:
-        items = []
-        for value, label in options:
-            on = self.f.get(key) == value
-            items.append(ft.Container(
-                ft.Text(label, size=T.T_META, weight=ft.FontWeight.W_600, color=T.TEXT if on else T.TEXT_2),
-                padding=ft.Padding(T.px(12), T.px(6), T.px(12), T.px(6)), border_radius=T.px(20),
-                bgcolor=T.SURFACE_3 if on else None,
-                on_click=lambda e, v=value: self._set(key, v), ink=True))
-        return ft.Container(ft.Row(items, spacing=T.px(2), tight=True), padding=T.px(3), border_radius=T.px(22),
-                            border=ft.Border.all(1, T.BORDER))
+        return C.segmented(options, self.f.get(key), lambda v: self._set(key, v))
 
     def _menu_chip(self, key: str, label: str, options: list[tuple[str, str]]) -> ft.Control:
         current = dict(options).get(self.f.get(key), options[0][1])
@@ -537,10 +510,10 @@ class LibraryView:
         items = [ft.PopupMenuItem(content=ft.Text(t), checked=t in chosen, on_click=lambda e, t=t: self._toggle_tag(t))
                  for t in all_tags(games)]
         if chosen:
-            items.append(ft.PopupMenuItem(content=ft.Text(tr("Clear tags")), icon=ft.Icons.CLEAR_ROUNDED,
+            items.append(ft.PopupMenuItem(content=ft.Text(tr("Clear tags")), icon=ft.Icons.CLOSE_ROUNDED,
                                           on_click=lambda e: self._set("tags", [])))
         return ft.PopupMenuButton(
-            content=ft.Container(ft.Row([ft.Icon(ft.Icons.SELL_OUTLINED, size=T.px(14), color=T.TEXT_2),
+            content=ft.Container(ft.Row([ft.Icon(ft.Icons.SELL_ROUNDED, size=T.px(14), color=T.TEXT_2),
                                          C.meta(tr("Tags:")),
                                          C.body(label if len(label) < 28
                                                 else tr("{len} selected").format(len=len(chosen)), T.TEXT,
@@ -584,7 +557,7 @@ class LibraryView:
                           tooltip=C.tip(HELP[help_key]))
         check = ft.Container(ft.Checkbox(value=pkg in self.selected, active_color=T.ACCENT, check_color=T.ON_ACCENT,
                                          on_change=lambda e: self.toggle_selected(pkg)),
-                             bgcolor=T.soft("#000000", 0.6), border_radius=T.px(8), left=T.px(6), top=T.px(40),
+                             bgcolor=T.soft("#000000", 0.6), border_radius=T.RADIUS_SM, left=T.px(6), top=T.px(40),
                              visible=self.select_mode)
         self.checks[pkg] = check
         quick_label, quick_kind = app.quick_action(g)

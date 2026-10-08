@@ -73,7 +73,7 @@ class LiveView:
         self.dot = C.dot(T.TEXT_3, 10)
         self.state = C.body(tr("Not streaming"), T.TEXT, weight=ft.FontWeight.W_500)
         self.detail = C.meta("")
-        self.quality_dd = ft.Dropdown(label=tr("Quality"), value=self.quality, width=T.px(260), dense=True,
+        self.quality_dd = C.dropdown(label=tr("Quality"), value=self.quality, width=T.px(260),
                                       options=[ft.DropdownOption(key=k, text=t) for k, t in QUALITIES],
                                       on_select=self._set_quality)
         self.start_btn = C.primary(tr("Start live view"), ft.Icons.PLAY_ARROW_ROUNDED, self._start, big=True)

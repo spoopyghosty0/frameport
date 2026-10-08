@@ -27,7 +27,7 @@ def _fill_styles() -> None:
                         "running": (ft.Icons.SYNC_ROUNDED, T.ACCENT, tr("Working")),
                         "done": (ft.Icons.CHECK_CIRCLE_ROUNDED, T.OK, tr("Done")),
                         "failed": (ft.Icons.ERROR_ROUNDED, T.ERROR, tr("Failed")),
-                        "cancelled": (ft.Icons.DO_NOT_DISTURB_ON_OUTLINED, T.TEXT_3, tr("Canceled"))})
+                        "cancelled": (ft.Icons.DO_NOT_DISTURB_ON_ROUNDED, T.TEXT_3, tr("Canceled"))})
 
 
 T.on_change(_fill_styles)
@@ -174,7 +174,7 @@ class ActivityPanel:
                       (job.error or word) + (f" · {_dur(job)}" if job.finished else ""),
                       T.ERROR if job.state == "failed" else T.TEXT_2, max_lines=2)
         head = ft.Row([
-            ft.ProgressRing(width=T.px(18), height=T.px(18), stroke_width=T.px(2), color=T.ACCENT) if running
+            C.spinner() if running
             else ft.Icon(icon, color=color, size=T.px(20)),
             ft.Column([C.body(job.title, T.TEXT, weight=ft.FontWeight.W_600, max_lines=2,
                               overflow=ft.TextOverflow.ELLIPSIS), meta],
@@ -225,7 +225,8 @@ class ActivityPanel:
                                           height=T.px(240)))
         return ft.Container(ft.Column(parts, spacing=T.S2), bgcolor=T.SURFACE, border_radius=T.RADIUS,
                             border=ft.Border.all(1, T.ACCENT if running else T.BORDER), padding=T.S3,
-                            on_click=None if running else lambda e: self._toggle(self.expanded, job.id))
+                            on_click=None if running else lambda e: self._toggle(self.expanded, job.id),
+                            ink=not running)
 
     def _log_view(self, job: Job) -> tuple[ft.Text, ft.Column]:
         """The job's log view, the same one for the job's whole life: rebuilding it on every new stage or check reset

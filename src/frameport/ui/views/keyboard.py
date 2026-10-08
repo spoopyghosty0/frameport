@@ -40,8 +40,8 @@ class KeyboardView:
                                 on_click=lambda e: self.focus_keys())
         self.listener = ft.KeyboardListener(self.pad, autofocus=True, on_key_down=self._forward("down"),
                                             on_key_up=self._forward("up"), on_key_repeat=self._forward("repeat"))
-        self.paste = ft.TextField(hint_text=tr("Or paste text to type it in one go"), expand=True, dense=True,
-                                  border_color=T.BORDER, on_submit=self._send_text)
+        self.paste = C.field(hint_text=tr("Or paste text to type it in one go"), expand=True,
+                             on_submit=self._send_text)
         self.reconnect = C.secondary(tr("Reconnect"), ft.Icons.REFRESH_ROUNDED, lambda e: self.start())
 
     # ---------------------------------------------------------------- building

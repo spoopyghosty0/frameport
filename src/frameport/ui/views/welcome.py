@@ -32,8 +32,7 @@ class WelcomeView:
     def step(self, n: int, head: str, text: str, state: str, *content: ft.Control) -> ft.Control:
         icon = {"done": (ft.Icons.CHECK_ROUNDED, T.OK), "busy": (None, T.ACCENT),
                 "todo": (None, T.TEXT_3), "error": (ft.Icons.PRIORITY_HIGH_ROUNDED, T.ERROR)}[state]
-        marker = ft.ProgressRing(width=T.px(20), height=T.px(20), stroke_width=T.px(2),
-                                 color=T.ACCENT) if state == "busy" else \
+        marker = C.spinner("m") if state == "busy" else \
             ft.Icon(icon[0], size=T.px(18), color=icon[1]) if icon[0] else ft.Text(str(n), weight=ft.FontWeight.W_700,
                                                                             color=T.TEXT_2)
         return C.card(ft.Row([

@@ -25,8 +25,8 @@ def kind_label(kind: str | None) -> str:
 
 def show_paste_dialog(app: FramePortApp) -> None:
     """Add games → "Install from link…": paste a FrameDrop/FramePort button link, a manifest or a file URL."""
-    field = ft.TextField(label=tr("Link"), hint_text="https://framedropvr.com/install?manifest=…", autofocus=True,
-                         width=T.px(560), border_color=T.BORDER)
+    field = C.field(label=tr("Link"), hint_text="https://framedropvr.com/install?manifest=…", autofocus=True,
+                    expand=True)
 
     def go(e=None):
         text = (field.value or "").strip()
@@ -35,14 +35,14 @@ def show_paste_dialog(app: FramePortApp) -> None:
         app.page.pop_dialog()
         open_link(app, text, pasted=True)
     field.on_submit = go
-    app.page.show_dialog(ft.AlertDialog(
-        title=ft.Text(tr("Install from a link")), bgcolor=T.SURFACE_2,
-        content=ft.Column([
+    app.page.show_dialog(C.dialog(
+        tr("Install from a link"),
+        ft.Column([
             C.body(tr("Paste the address of an \"Install with FrameDrop\" button (right-click it → Copy link), a "
                       "FramePort or FrameDrop manifest (.json) or a direct link to an APK, a Linux build (.zip) or a "
                       "Windows program (.exe).")),
             ft.Row([field, C.help_icon("install_links")]),
-        ], tight=True, spacing=T.S3, width=T.px(600)),
+        ], tight=True, spacing=T.S3),
         actions=[C.ghost(tr("Cancel"), on_click=lambda e: app.page.pop_dialog()),
                  C.primary(tr("Continue"), ft.Icons.ARROW_FORWARD_ROUNDED, on_click=go)]))
 

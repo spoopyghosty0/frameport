@@ -96,14 +96,11 @@ def human(n: int) -> str:
 
 def show_files_dialog(app: FramePortApp, package: str, title: str) -> None:
     status = C.meta(tr("Reading the file list from the Frame…"))
-    ring = ft.ProgressRing(width=T.px(16), height=T.px(16), stroke_width=T.px(2), color=T.ACCENT)
+    ring = C.spinner()
     body = ft.Column([ft.Row([ring, status],
                              spacing=T.S2)], spacing=T.S3, expand=True)
-    dialog = ft.AlertDialog(
-        title=ft.Text(tr("Files on the Frame — {title}").format(title=title), weight=ft.FontWeight.W_600),
-        content=ft.Container(body, width=T.px(760), height=T.px(560)),
-        bgcolor=T.SURFACE_2, shape=ft.RoundedRectangleBorder(radius=T.RADIUS),
-        actions=[C.ghost(tr("Close"), on_click=lambda e: app.page.pop_dialog())])
+    dialog = C.dialog(tr("Files on the Frame — {title}").format(title=title), body,
+                      [C.ghost(tr("Close"), on_click=lambda e: app.page.pop_dialog())], size="l", height=T.px(560))
     app.page.show_dialog(dialog)
 
     def load():
@@ -113,20 +110,16 @@ def show_files_dialog(app: FramePortApp, package: str, title: str) -> None:
         trees = [(r, build_tree(r["name"], r["files"])) for r in result["roots"]]
         expanded: set[str] = set()
         rows = ft.ListView(spacing=0, expand=True)
-        search = ft.TextField(hint_text=tr("Filter files (for example .pak, Binaries)"), dense=True, expand=True,
-                              border_radius=T.RADIUS_SM, bgcolor=T.SURFACE_3, border_color=ft.Colors.TRANSPARENT,
-                              focused_border_color=T.ACCENT,
-                              content_padding=ft.Padding(T.px(12), T.px(8), T.px(12), T.px(8)),
-                              text_size=T.T_BODY, prefix_icon=ft.Icons.SEARCH_ROUNDED)
+        search = C.search(hint_text=tr("Filter files (for example .pak, Binaries)"), expand=True)
 
         def row(depth: int, node: Node | int, root_key: str) -> ft.Control:
-            pad = ft.Padding(8 + depth * 18, T.px(3), T.px(8), T.px(3))
+            pad = ft.Padding(T.px(8 + depth * 18), T.px(3), T.px(8), T.px(3))
             if isinstance(node, int):
                 return ft.Container(C.meta(tr("… {node} more (use the filter to find them)").format(node=node)),
                                     padding=pad)
             key = f"{root_key}\0{node.path}"
             icon = (ft.Icons.FOLDER_OPEN_ROUNDED if key in expanded else ft.Icons.FOLDER_ROUNDED) if node.is_dir \
-                else ft.Icons.INSERT_DRIVE_FILE_OUTLINED
+                else ft.Icons.INSERT_DRIVE_FILE_ROUNDED
             chevron = ft.Icon(ft.Icons.EXPAND_MORE_ROUNDED if key in expanded else ft.Icons.CHEVRON_RIGHT_ROUNDED,
                               size=T.px(16), color=T.TEXT_3) if node.is_dir else ft.Container(width=T.px(16))
             info = (tr("{human} · {files} files").format(human=human(node.size), files=node.files) if node.is_dir
@@ -138,7 +131,7 @@ def show_files_dialog(app: FramePortApp, package: str, title: str) -> None:
                 ft.Container(C.meta(note, T.TEXT_3, no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
                              tooltip=note or None, expand=True),
                 C.meta(info),
-            ], spacing=T.px(6)), padding=pad, border_radius=T.px(6), ink=node.is_dir,
+            ], spacing=T.px(6)), padding=pad, border_radius=T.RADIUS_XS, ink=node.is_dir,
                 on_click=(lambda e, k=key: toggle(k)) if node.is_dir else None)
 
         def render():
@@ -156,7 +149,7 @@ def show_files_dialog(app: FramePortApp, package: str, title: str) -> None:
                 if text:
                     found = matches(r["files"], text)
                     controls += [ft.Container(ft.Row([
-                        ft.Icon(ft.Icons.INSERT_DRIVE_FILE_OUTLINED, size=T.px(16), color=T.TEXT_3),
+                        ft.Icon(ft.Icons.INSERT_DRIVE_FILE_ROUNDED, size=T.px(16), color=T.TEXT_3),
                         C.body(rel, T.TEXT, expand=True, selectable=True), C.meta(human(size))], spacing=T.px(6)),
                         padding=ft.Padding(T.px(8), T.px(3), T.px(8), T.px(3))) for rel, size in found]
                     if not found:

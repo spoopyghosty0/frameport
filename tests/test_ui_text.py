@@ -9,7 +9,7 @@ UI = Path(__file__).resolve().parents[1] / "src" / "frameport" / "ui"
 TEXT_ARGS = {"Text": (0,), "body": (0,), "meta": (0,), "title": (0,), "h2": (0,), "primary": (0,),
              "secondary": (0,), "ghost": (0,), "danger": (0,), "pill": (0,), "callout": (0,), "section": (0,),
              "kv": (0,), "switch": (0,), "empty_state": (1, 2), "status_row": (1, 2), "icon_btn": (1,),
-             "confirm": (1, 2, 3), "toast": (0,), "tip": (0,), "submit": (0,)}
+             "confirm": (1, 2, 3), "toast": (0,), "tip": (0,), "submit": (0,), "dialog": (0,), "primary_menu": (0,)}
 TEXT_KWARGS = {"tooltip", "hint_text", "label", "dialog_title", "action", "subtitle", "text"}
 # literals that aren't words to translate: the product name and the wordmark's halves
 ALLOWED = {"FramePort", "Frame", "Port"}

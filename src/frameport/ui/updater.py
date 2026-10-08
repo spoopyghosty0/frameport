@@ -113,11 +113,9 @@ class Updater:
         def go(e):
             page.pop_dialog()
             self.install()
-        page.show_dialog(ft.AlertDialog(
-            title=ft.Text(tr("FramePort {version} is available").format(version=up.version), color=T.TEXT,
-                          weight=ft.FontWeight.W_600),
-            bgcolor=T.SURFACE_2,
-            content=ft.Container(ft.Column([
+        page.show_dialog(C.dialog(
+            tr("FramePort {version} is available").format(version=up.version),
+            ft.Column([
                 C.body(tr("You have {version}. {how}").format(version=__version__, how=how), T.TEXT_2),
                 ft.Container(ft.Markdown(notes, selectable=True, extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
                                          md_style_sheet=_notes_style(),
@@ -125,7 +123,7 @@ class Updater:
                              padding=T.S3, border_radius=T.RADIUS_SM, bgcolor=T.SURFACE,
                              border=ft.Border.all(1, T.BORDER)),
             ], spacing=T.S3, scroll=ft.ScrollMode.AUTO, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-                width=T.px(560), height=T.px(min(420, 130 + 26 * len(notes.splitlines())))),
+            height=T.px(min(420, 130 + 26 * len(notes.splitlines()))),
             actions=[C.ghost(tr("Skip this version"), on_click=skip),
                      C.ghost(tr("Release page"), ft.Icons.OPEN_IN_NEW_ROUNDED, lambda e: page.launch_url(up.page)),
                      C.primary(tr("Update now"), ft.Icons.SYSTEM_UPDATE_ROUNDED, go)]))
@@ -153,11 +151,9 @@ class Updater:
             page.pop_dialog()
             self.found = up
             self.install()
-        page.show_dialog(ft.AlertDialog(
-            title=ft.Text(tr("Install dev build {version}?").format(version=up.version), color=T.TEXT,
-                          weight=ft.FontWeight.W_600),
-            bgcolor=T.SURFACE_2,
-            content=ft.Container(ft.Column([
+        page.show_dialog(C.dialog(
+            tr("Install dev build {version}?").format(version=up.version),
+            ft.Column([
                 C.callout(C.body(tr("Dev builds let you test fixes before they're released. They're less tested "
                                     "than releases and may have bugs. You get the next release as a normal update "
                                     "(you have {version}).").format(version=__version__), T.TEXT), "warn"),
@@ -167,7 +163,7 @@ class Updater:
                              padding=T.S3, border_radius=T.RADIUS_SM, bgcolor=T.SURFACE,
                              border=ft.Border.all(1, T.BORDER)),
             ], spacing=T.S3, scroll=ft.ScrollMode.AUTO, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-                width=T.px(560), height=T.px(min(440, 190 + 26 * len(notes.splitlines())))),
+            height=T.px(min(440, 190 + 26 * len(notes.splitlines()))),
             actions=[C.ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog()),
                      C.ghost(tr("Build page"), ft.Icons.OPEN_IN_NEW_ROUNDED, lambda e: page.launch_url(up.page)),
                      C.primary(tr("Install dev build"), G.TEST, go)]))

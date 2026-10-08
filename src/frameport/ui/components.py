@@ -186,7 +186,8 @@ def switch(label: str = "", wrap: bool = True, **kw) -> ft.Control:
         update(sw)
         if sw.on_change:
             sw.on_change(SimpleNamespace(control=sw))
-    return ft.Row([sw, ft.Container(ft.Text(label, color=T.TEXT, size=T.px(14)), expand=True, on_click=click_label)],
+    return ft.Row([sw, ft.Container(ft.Text(label, color=T.TEXT, size=T.px(14)), expand=True, on_click=click_label,
+                                    ink=True, border_radius=T.RADIUS_XS)],
                   spacing=T.S2, vertical_alignment=ft.CrossAxisAlignment.CENTER, data="switch")
 
 
@@ -224,6 +225,8 @@ def install_badge(state: str, solid: bool = True) -> ft.Container:
 
 
 def dot(color: str, size: int = 8) -> ft.Container:
+    """A status dot; `size` in pixels at 100 % (scaled here)."""
+    size = T.px(size)
     return ft.Container(width=size, height=size, border_radius=size, bgcolor=color)
 
 
@@ -311,6 +314,11 @@ def portal_gradient(vertical: bool = False, opacity: float = 1.0) -> ft.LinearGr
 
 
 # ------------------------------------------------------------------------------------------ buttons
+def button_shape(radius=None) -> ft.RoundedRectangleBorder:
+    """The buttons' shape (RADIUS_SM unless given)."""
+    return _shape(radius)
+
+
 def _shape(radius=None):
     radius = T.RADIUS_SM if radius is None else radius
     return ft.RoundedRectangleBorder(radius=radius)
@@ -347,9 +355,10 @@ def secondary(label: str, icon: str | None = None, on_click: Callable | None = N
 
 
 def ghost(label: str, icon: str | None = None, on_click: Callable | None = None, disabled: bool = False,
-          tooltip: str | None = None, color: str | None = None) -> ft.TextButton:
+          tooltip: str | None = None, color: str | None = None, url: str | None = None) -> ft.TextButton:
+    """A quiet action (Close, Cancel, links); `color` e.g. T.ACCENT for a link, `url` opens in the browser."""
     return ft.TextButton(label, icon=_btn_icon(icon, color or T.TEXT_2, disabled), on_click=on_click,
-                         disabled=disabled, tooltip=tooltip,
+                         disabled=disabled, tooltip=tooltip, url=url,
                          style=ft.ButtonStyle(shape=_shape(), color={ft.ControlState.DEFAULT: color or T.TEXT_2,
                                                                      ft.ControlState.DISABLED: T.TEXT_3}))
 
@@ -359,6 +368,145 @@ def icon_btn(icon: str, tooltip: str, on_click: Callable | None = None, disabled
     return ft.IconButton(_btn_icon(icon, color or T.TEXT_2, disabled), tooltip=tooltip, on_click=on_click,
                          disabled=disabled, icon_color=color or T.TEXT_2,
                          icon_size=T.px(20), style=ft.ButtonStyle(shape=_shape()))
+
+
+def danger(label: str, icon: str | None = None, on_click: Callable | None = None, disabled: bool = False,
+           tooltip: str | None = None, outline: bool = False) -> ft.FilledButton | ft.OutlinedButton:
+    """A destructive action (uninstall, delete): C.primary's shape and size on the error colour. outline = C.secondary's
+    look in the error colour, for an entry that asks first (the filled one is the dialog's final button)."""
+    if outline:
+        btn = secondary(label, icon, on_click, disabled, tooltip)
+        btn.style.side = ft.BorderSide(1, T.soft(T.ERROR, 0.6))
+        btn.style.color = {ft.ControlState.DEFAULT: T.ERROR, ft.ControlState.DISABLED: T.TEXT_3}
+        btn.style.icon_color = {ft.ControlState.DEFAULT: T.ERROR, ft.ControlState.DISABLED: T.TEXT_3}
+        btn.style.overlay_color = T.soft(T.ERROR, 0.08)
+        if glyphs.is_glyph(icon):
+            btn.icon = _btn_icon(icon, T.ERROR, disabled)
+        return btn
+    btn = primary(label, icon, on_click, disabled, tooltip)
+    btn.style.bgcolor = {ft.ControlState.DEFAULT: T.ERROR, ft.ControlState.DISABLED: T.SURFACE_3}
+    return btn
+
+
+_danger = danger  # for functions with a `danger` argument
+
+
+def primary_menu(label: str, icon: str | None, items: list[ft.PopupMenuItem], tooltip: str | None = None
+                 ) -> ft.PopupMenuButton:
+    """A menu that opens from a button looking exactly like C.primary (e.g. Library → Add games). The button is
+    drawn disabled (in the enabled colours) so it doesn't take the click: the menu button around it does."""
+    btn = primary(label, icon, disabled=True)
+    btn.style.bgcolor = T.ACCENT
+    btn.style.color = T.ON_ACCENT
+    btn.style.icon_color = T.ON_ACCENT
+    btn.style.mouse_cursor = ft.MouseCursor.CLICK
+    return ft.PopupMenuButton(content=btn, items=items, bgcolor=T.SURFACE_2, tooltip=tooltip or "",
+                              shape=_shape(T.RADIUS_SM))
+
+
+# ------------------------------------------------------------------------------------------ inputs
+def _input_style(kw: dict) -> dict:
+    """The one input look: filled SURFACE_3, no border until focused (then the accent), small radius."""
+    kw.setdefault("dense", True)
+    kw.setdefault("border_radius", T.RADIUS_SM)
+    kw.setdefault("border_color", ft.Colors.TRANSPARENT)
+    kw.setdefault("focused_border_color", T.ACCENT)
+    kw.setdefault("text_size", T.T_BODY)
+    kw.setdefault("content_padding", ft.Padding(T.px(12), T.px(10), T.px(12), T.px(10)))
+    return kw
+
+
+def field(**kw) -> ft.TextField:
+    """A text field in the app's input style (all ft.TextField arguments work)."""
+    kw = _input_style(kw)
+    kw.setdefault("bgcolor", T.SURFACE_3)  # (filled=True would add Material's extra height)
+    kw.setdefault("cursor_color", T.ACCENT)
+    if kw.get("label") is not None:
+        kw.setdefault("label_style", ft.TextStyle(color=T.TEXT_2, size=T.T_BODY))
+    return ft.TextField(**kw)
+
+
+def search(**kw) -> ft.TextField:
+    """A search field: C.field with a magnifier."""
+    kw.setdefault("prefix_icon", ft.Icons.SEARCH_ROUNDED)
+    kw.setdefault("content_padding", ft.Padding(T.px(12), T.px(8), T.px(12), T.px(8)))
+    return field(**kw)
+
+
+def dropdown(**kw) -> ft.Dropdown:
+    """A dropdown in the app's input style (all ft.Dropdown arguments work)."""
+    kw.setdefault("content_padding", ft.Padding(T.px(12), T.px(6), T.px(8), T.px(6)))
+    kw = _input_style(kw)
+    kw.setdefault("filled", True)
+    kw.setdefault("fill_color", T.SURFACE_3)
+    if kw.get("label") is not None:
+        kw.setdefault("label_style", ft.TextStyle(color=T.TEXT_2, size=T.T_BODY))
+    return ft.Dropdown(**kw)
+
+
+# ------------------------------------------------------------------------------------------ selection
+def selected_style(box: ft.Container, on: bool, icon: ft.Control | None = None, text: ft.Control | None = None,
+                   idle_bg: str | None = None) -> None:
+    """The app-wide "this one is selected" look, set on an existing container (call again when it changes): dual
+    themes = the portal fade with a white icon and label (an orange icon on the fade clashed: owner), else the accent
+    tint with an accent icon. `idle_bg` = the background when not selected."""
+    if T.DUAL:
+        box.bgcolor, box.gradient = (None, portal_gradient(opacity=0.22)) if on else (idle_bg, None)
+    else:
+        box.bgcolor, box.gradient = (T.ACCENT_SOFT if on else idle_bg), None
+    if icon is not None:
+        icon.color = (T.TEXT if T.DUAL else T.ACCENT) if on else T.TEXT_2
+    if text is not None:
+        text.color = T.TEXT if on else T.TEXT_2
+
+
+def segmented(options: list[tuple[str, str]], value: str | None, on_change: Callable[[str], None]) -> ft.Container:
+    """A pill track of choices (one selected): the selected one is the portal fade in dual themes, else SURFACE_3.
+    Clicking restyles in place, then calls on_change(value)."""
+    items: dict[str, ft.Container] = {}
+
+    def paint(current):
+        for v, box in items.items():
+            on = v == current
+            box.content.color = T.TEXT if on else T.TEXT_2
+            if T.DUAL:
+                box.bgcolor, box.gradient = None, portal_gradient(opacity=0.22) if on else None
+            else:
+                box.bgcolor, box.gradient = T.SURFACE_3 if on else None, None
+
+    def click(v):
+        def handler(e):
+            if track.data == v:
+                return
+            track.data = v
+            paint(v)
+            update(track)
+            on_change(v)
+        return handler
+
+    for v, label in options:
+        items[v] = ft.Container(ft.Text(label, size=T.T_META, weight=ft.FontWeight.W_600),
+                                padding=ft.Padding(T.px(12), T.px(6), T.px(12), T.px(6)), border_radius=T.px(20),
+                                on_click=click(v), ink=True)
+    track = ft.Container(ft.Row(list(items.values()), spacing=T.px(2), tight=True), padding=T.px(3),
+                         border_radius=T.px(22), border=ft.Border.all(1, T.BORDER), data=value)
+    paint(value)
+    return track
+
+
+def hoverable(box: ft.Container) -> ft.Container:
+    """A clickable container: ink (the hover highlight and the click ripple, drawn over its background or the
+    selected fade) like the buttons around it."""
+    box.ink = True
+    return box
+
+
+def spinner(size: str = "s", color: str | None = None) -> ft.ProgressRing:
+    """Something is running: "s" (16, next to text) or "m" (24); blue in dual themes (progress), else the accent.
+    `color` only for a spinner on a coloured fill (e.g. ON_ACCENT inside a primary button)."""
+    px = T.ICON_S if size == "s" else T.ICON_L
+    return ft.ProgressRing(width=px, height=px, stroke_width=T.px(2),
+                           color=color or (T.SECONDARY if T.DUAL else T.ACCENT))
 
 
 # ------------------------------------------------------------------------------------------ containers
@@ -393,7 +541,7 @@ def empty_state(icon: str, heading: str, text: str, *actions: ft.Control) -> ft.
         ft.Container(as_icon(icon, T.px(40), T.ACCENT), width=T.px(84), height=T.px(84),
                      border_radius=T.px(42), bgcolor=T.ACCENT_SOFT, alignment=ft.Alignment.CENTER),
         ft.Container(height=T.S2),
-        title(heading, 22),
+        title(heading, T.T_DISPLAY),
         ft.Container(body(text, text_align=ft.TextAlign.CENTER), width=T.px(460)),
         ft.Container(height=T.S2),
         ft.Row(list(actions), alignment=ft.MainAxisAlignment.CENTER, spacing=T.S3),
@@ -442,25 +590,50 @@ def bottom_fade(height: int | None = None, strength: float = 0.85) -> ft.Contain
                                                    colors=[ft.Colors.TRANSPARENT, T.soft("#000000", strength)]))
 
 
+DIALOG_TITLE_SIZE = 20  # px at 100 %
+
+
+def dialog(title: str | ft.Control | None, content: ft.Control | None, actions: list[ft.Control] | None = None,
+           size: str = "m", modal: bool = False, on_dismiss: Callable | None = None,
+           title_actions: list[ft.Control] | None = None, width: float | None = None, height: float | None = None,
+           **kw) -> ft.AlertDialog:
+    """The one dialog look: SURFACE_2, RADIUS corners, a semibold title, content `size` wide ("s"/"m"/"l" =
+    DIALOG_S/M/L, or `width`; `height` fixes it), actions at the end (Cancel/Close first, then the action).
+    title_actions go at the title's right (e.g. a counter or a close button)."""
+    if isinstance(title, str):
+        title = ft.Text(title, size=T.px(DIALOG_TITLE_SIZE), weight=ft.FontWeight.W_600, color=T.TEXT)
+    if title is not None and title_actions:
+        title = ft.Row([ft.Container(title, expand=True), *title_actions],
+                       vertical_alignment=ft.CrossAxisAlignment.CENTER)
+    width = width or {"s": T.DIALOG_S, "m": T.DIALOG_M, "l": T.DIALOG_L}[size]
+    box = ft.Container(content, width=width, height=height) if content is not None else None
+    return ft.AlertDialog(title=title, content=box,
+                          actions=actions or [], modal=modal, on_dismiss=on_dismiss, bgcolor=T.SURFACE_2,
+                          shape=_shape(T.RADIUS), actions_alignment=ft.MainAxisAlignment.END, **kw)
+
+
+def viewer(content: ft.Control, on_dismiss: Callable | None = None, **kw) -> ft.AlertDialog:
+    """A full-size image/screenshot viewer: no title, a dark backdrop around the picture."""
+    return ft.AlertDialog(content=content, bgcolor=T.BG, content_padding=T.S3, shape=_shape(T.RADIUS),
+                          on_dismiss=on_dismiss, **kw)
+
+
 def confirm(page: ft.Page, heading: str, text: str, ok_label: str, on_ok: Callable[[], None],
             danger: bool = False, extra: ft.Control | None = None) -> None:
     """A yes/no dialog; `extra` (e.g. an option checkbox) goes below the text and is read by on_ok."""
     def go(e):
         page.pop_dialog()
         on_ok()
-    content = body(text) if extra is None else ft.Column([body(text), extra], spacing=T.px(12), tight=True)
-    page.show_dialog(ft.AlertDialog(
-        title=ft.Text(heading, weight=ft.FontWeight.W_600), content=ft.Container(content, width=T.px(420)),
-        bgcolor=T.SURFACE_2, shape=ft.RoundedRectangleBorder(radius=T.RADIUS),
-        actions=[ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog()),
-                 ft.FilledButton(ok_label, on_click=go, style=ft.ButtonStyle(
-                     shape=_shape(), bgcolor=T.ERROR if danger else T.ACCENT, color=T.ON_ACCENT))]))
+    content = body(text) if extra is None else ft.Column([body(text), extra], spacing=T.S3, tight=True)
+    page.show_dialog(dialog(heading, content, [ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog()),
+                                               (_danger if danger else primary)(ok_label, on_click=go)],
+                            size="s"))
 
 
 def progress_bar(value: float | None = None, color: str | None = None) -> ft.ProgressBar:
     """Progress: blue in dual themes (something on its way through the portal), else the accent."""
     return ft.ProgressBar(value=value, color=color or (T.SECONDARY if T.DUAL else T.ACCENT), bgcolor=T.SURFACE_3,
-                          border_radius=T.px(4), bar_height=6)
+                          border_radius=T.px(4), bar_height=T.px(6))
 
 
 def menu_items(actions: list[tuple | None]) -> list[ft.PopupMenuItem]:

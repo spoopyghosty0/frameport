@@ -42,6 +42,18 @@ def show_exe_dialog(app: FramePortApp, package: str, remaining: int = 0,
         cands = extra.get("exe_candidates") or [{"path": g.get("exe"), "score": 0, "reasons": [], "size": 0}]
     current = g.get("exe") or cands[0]["path"]
     group = ft.RadioGroup(value=current, content=ft.Column(spacing=T.S2))
+    rows: dict[str, ft.Container] = {}
+
+    def paint(e=None):
+        for path, row in rows.items():
+            C.selected_style(row, path == group.value, idle_bg=T.SURFACE)
+        if e is not None:
+            C.update(group)
+
+    def choose(path):
+        group.value = path
+        paint(True)
+    group.on_change = paint
     for i, c in enumerate(cands):
         tags = [C.pill(r, T.OK if r in ("Unreal game build", "Unity game (next to its data)", "name matches the game",
                                         "named in the Oculus manifest") else
@@ -50,7 +62,7 @@ def show_exe_dialog(app: FramePortApp, package: str, remaining: int = 0,
         if i == 0:
             tags.insert(0, C.pill(tr("Best guess"), T.ACCENT, ft.Icons.AUTO_AWESOME_ROUNDED))
         folder, _, name = c["path"].rpartition("/")
-        group.content.controls.append(ft.Container(ft.Row([
+        rows[c["path"]] = row = C.hoverable(ft.Container(ft.Row([
             ft.Radio(value=c["path"], active_color=T.ACCENT),
             ft.Column([
                 ft.Row([C.body(name, T.TEXT, weight=ft.FontWeight.W_600), C.meta(_size(c.get("size") or 0))],
@@ -59,8 +71,9 @@ def show_exe_dialog(app: FramePortApp, package: str, remaining: int = 0,
                 ft.Row(tags, spacing=T.px(6), wrap=True) if tags else ft.Container(),
             ], spacing=T.px(4), expand=True),
         ], vertical_alignment=ft.CrossAxisAlignment.START), padding=ft.Padding(T.S2, T.S2, T.S3, T.S2),
-            border_radius=T.RADIUS_SM, bgcolor=T.SURFACE if c["path"] != current else T.ACCENT_SOFT,
-            on_click=lambda e, p=c["path"]: (setattr(group, "value", p), group.update())))
+            border_radius=T.RADIUS_SM, bgcolor=T.SURFACE, on_click=lambda e, p=c["path"]: choose(p)))
+        group.content.controls.append(row)
+    paint()
 
     def use(e):
         choice = group.value
@@ -88,12 +101,10 @@ def show_exe_dialog(app: FramePortApp, package: str, remaining: int = 0,
                "as crash reporters or updaters are the wrong choice).") if linux else
             tr("FramePort found more than one program that could start this game. Pick the one you'd double-click to "
                "play it. Oculus builds usually work better with Revive than Steam builds."))
-    app.page.show_dialog(ft.AlertDialog(
-        title=ft.Row([ft.Text(title, weight=ft.FontWeight.W_600, expand=True)]
-                     + ([C.meta(tr("{remaining} more after this").format(remaining=remaining))] if remaining else [])),
-        content=ft.Container(ft.Column([C.body(lead), group], spacing=T.S4, scroll=ft.ScrollMode.AUTO, tight=True),
-                             width=T.px(620), height=min(120 + 96 * len(cands), 520)),
-        bgcolor=T.SURFACE_2, shape=ft.RoundedRectangleBorder(radius=T.RADIUS),
+    app.page.show_dialog(C.dialog(
+        title, ft.Column([C.body(lead), group], spacing=T.S4, scroll=ft.ScrollMode.AUTO, tight=True),
+        title_actions=[C.meta(tr("{remaining} more after this").format(remaining=remaining))] if remaining else None,
+        height=T.px(min(120 + 96 * len(cands), 520)),
         modal=True, on_dismiss=pick(lambda e: on_done() if on_done else None),  # closed (Esc) = decide later
         actions=[C.ghost(tr("Decide later"), on_click=pick(later)),
                  C.primary(tr("Use this program"), on_click=pick(use))]))

@@ -29,10 +29,10 @@ class FrameView:
         free = (info.get("free_bytes") or 0) / 2**30
         return C.card(ft.Row([
             ft.Container(C.as_icon(G.FRAME, T.px(34), T.ACCENT), width=T.px(72),
-                         height=T.px(72), border_radius=T.px(18), bgcolor=T.ACCENT_SOFT, alignment=ft.Alignment.CENTER),
+                         height=T.px(72), border_radius=T.RADIUS, bgcolor=T.ACCENT_SOFT, alignment=ft.Alignment.CENTER),
             ft.Column([
-                ft.Row([C.title(info.get("hostname") or t.label, 22), C.pill(tr("Connected"), T.OK, ft.Icons.CIRCLE)],
-                       spacing=T.S3),
+                ft.Row([C.title(info.get("hostname") or t.label, T.T_DISPLAY),
+                        C.pill(tr("Connected"), T.OK, ft.Icons.CIRCLE)], spacing=T.S3),
                 C.body(tr("{user}@{host} · {get} {get2} (build {get3})")
                        .format(user=t.target.user, host=t.target.host, get=info.get('os'),
                                get2=info.get('os_version'), get3=info.get('build_id'))),
@@ -79,13 +79,10 @@ class FrameView:
                 border_radius=T.RADIUS_SM))
         if not rows:
             rows = [C.body(tr("No other Frames remembered yet."))]
-        page.show_dialog(ft.AlertDialog(
-            title=ft.Text(tr("Switch Frame"), weight=ft.FontWeight.W_600),
-            content=ft.Container(ft.Column(rows, spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
-                                 width=T.px(440)),
-            bgcolor=T.SURFACE_2, shape=ft.RoundedRectangleBorder(radius=T.RADIUS),
-            actions=[C.ghost(tr("Find another Frame…"), ft.Icons.SEARCH_ROUNDED, find),
-                     C.ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog())]))
+        page.show_dialog(C.dialog(
+            tr("Switch Frame"), ft.Column(rows, spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
+            [C.ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog()),
+             C.secondary(tr("Find another Frame…"), ft.Icons.SEARCH_ROUNDED, find)], size="s"))
 
     def readiness(self, info: dict) -> ft.Control:
         app = self.app
@@ -164,7 +161,7 @@ class FrameView:
                     else tr(" · {value:.0f} MiB").format(value=size / 2**20))
             title = display_title(games[pkg], tw) if in_lib else (d.get("title") or pkg)
             rows.append(ft.Container(ft.Row([
-                C.art_fill(art, radius=T.px(8), width=T.px(44), height=T.px(44)),
+                C.art_fill(art, radius=T.RADIUS_SM, width=T.px(44), height=T.px(44)),
                 ft.Column([C.body(title, T.TEXT, weight=ft.FontWeight.W_500), C.meta(sub)],
                           spacing=T.px(2), expand=True),
                 # same slots on every row: games without settings (PC VR, 2D apps) get an invisible spacer
@@ -191,7 +188,7 @@ class FrameView:
 
         app = self.app
         found = ft.Column(spacing=T.S2)
-        searching = ft.Row([ft.ProgressRing(width=T.px(16), height=T.px(16), stroke_width=T.px(2), color=T.ACCENT),
+        searching = ft.Row([C.spinner(),
                             C.meta(tr("Looking for Frames on your network…"))], spacing=T.S2)
 
         def discover():
@@ -267,9 +264,9 @@ class FrameView:
                 tr("Connect the Frame's USB-C port to this PC with a USB cable (a data cable, not a charge-only "
                    "one)."),
             ]
-            dlg = ft.AlertDialog(
-                title=ft.Text(tr("Turn on Developer Mode first"), weight=ft.FontWeight.W_600),
-                content=ft.Container(ft.Column([
+            dlg = C.dialog(
+                tr("Turn on Developer Mode first"),
+                ft.Column([
                     C.body(tr("The Frame only offers its USB connection in Developer Mode:"), T.TEXT),
                     *[ft.Row([ft.Container(ft.Text(str(i), weight=ft.FontWeight.W_700, color=T.ACCENT),
                                            width=T.px(24), height=T.px(24), border_radius=T.px(12),
@@ -278,8 +275,7 @@ class FrameView:
                              vertical_alignment=ft.CrossAxisAlignment.START)
                       for i, text in enumerate(steps, 1)],
                     C.meta(tr("FramePort then finds the Frame on the cable by itself.")),
-                ], spacing=T.S3, tight=True), width=T.px(480)),
-                bgcolor=T.SURFACE_2, shape=ft.RoundedRectangleBorder(radius=T.RADIUS),
+                ], spacing=T.S3, tight=True), size="s",
                 actions=[C.ghost(tr("Cancel"), on_click=lambda ev: close()),
                          C.primary(tr("Done: look for the cable"), ft.Icons.USB_ROUNDED, go)])
             app.page.show_dialog(dlg)
@@ -291,7 +287,7 @@ class FrameView:
             from ...frame import usb
             from ...frame.connection import FrameTarget, server_key
 
-            status = ft.Row([ft.ProgressRing(width=T.px(14), height=T.px(14), stroke_width=T.px(2), color=T.ACCENT),
+            status = ft.Row([C.spinner(),
                              C.meta(tr("Waiting for the cable…"))], spacing=T.S2)
             pair_box.controls = [
                 C.body(tr("Looking for the Frame on a USB cable (Developer Mode on, USB-C port connected to this "
@@ -342,7 +338,7 @@ class FrameView:
                                      C.icon_btn(ft.Icons.CONTENT_COPY_ROUNDED, tr("Copy"), lambda e: app.copy(line))]),
                              padding=ft.Padding(T.S3, T.S2, T.S2, T.S2), bgcolor=T.BG, border_radius=T.RADIUS_SM,
                              border=ft.Border.all(1, T.BORDER)),
-                ft.Row([ft.ProgressRing(width=T.px(14), height=T.px(14), stroke_width=T.px(2), color=T.ACCENT),
+                ft.Row([C.spinner(),
                         C.meta(tr("Waiting for your Frame… (code {code})").format(code=app.pairing.code))],
                        spacing=T.S2),
                 ft.Row([C.meta(tr("You only do this once: FramePort connects by itself when the setup has finished."),
@@ -364,12 +360,9 @@ class FrameView:
         if app.pairing and app.pairing.running:
             show_command(update=False)
 
-        style = dict(dense=True, border_radius=T.RADIUS_SM, bgcolor=T.SURFACE_3, border_color=ft.Colors.TRANSPARENT,
-                     focused_border_color=T.ACCENT, content_padding=ft.Padding(T.px(12), T.px(10), T.px(12), T.px(10)),
-                     text_size=T.T_BODY)
-        addr = ft.TextField(hint_text=tr("steamos@frame.local or an IP address"), width=T.px(320), **style)
-        pw = ft.TextField(hint_text=tr("Password (first time only)"), password=True, can_reveal_password=True,
-                          width=T.px(240), tooltip=C.tip(HELP["password"]), **style)
+        addr = C.field(hint_text=tr("steamos@frame.local or an IP address"), width=T.px(320))
+        pw = C.field(hint_text=tr("Password (first time only)"), password=True, can_reveal_password=True,
+                     width=T.px(240), tooltip=C.tip(HELP["password"]))
         saved = saved_targets()
         offline = None
         if getattr(app, "_not_paired", False):  # it answered, but doesn't know FramePort yet
@@ -385,8 +378,7 @@ class FrameView:
                                                     lambda e: app.connect(saved[0]))]), "warn")
         elif app.frame_state == "connecting":
             connecting = tr("Connecting to {value}…").format(value=saved[0].label if saved else tr("your Frame"))
-            offline = C.callout(ft.Row([ft.ProgressRing(width=T.px(16), height=T.px(16), stroke_width=T.px(2),
-                                                        color=T.ACCENT),
+            offline = C.callout(ft.Row([C.spinner(),
                                         C.body(connecting, T.TEXT)],
                                        spacing=T.S3), "info")
         import time as _time

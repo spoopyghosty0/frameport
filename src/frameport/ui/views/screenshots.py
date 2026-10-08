@@ -73,7 +73,7 @@ class ScreenshotsView:
         self._gen = 0
         self._loaded = False
         self._lock = threading.Lock()
-        self.dropdown = ft.Dropdown(label=tr("Game"), value=ALL, width=T.px(300), dense=True,
+        self.dropdown = C.dropdown(label=tr("Game"), value=ALL, width=T.px(300),
                                     options=[ft.DropdownOption(key=ALL, text=tr("All games"))],
                                     on_select=lambda e: self.set_filter(e.control.value))
         self.select_all = ft.Checkbox(value=False, active_color=T.ACCENT, check_color=T.ON_ACCENT,
@@ -162,7 +162,7 @@ class ScreenshotsView:
             self.grid.controls = []
             if not self.shots:
                 empty = C.empty_state(
-                    ft.Icons.PHOTO_CAMERA_OUTLINED, tr("No screenshots yet"),
+                    ft.Icons.PHOTO_CAMERA_ROUNDED, tr("No screenshots yet"),
                     tr("Take one in the headset with Steam's screenshot shortcut; it shows up here. Screenshots "
                        "are matched to the FramePort game that was running."))
                 empty.expand, empty.padding = False, T.px(48)  # (expand inside a scrolling column: invalid layout)
@@ -226,7 +226,7 @@ class ScreenshotsView:
                                                           colors=[ft.Colors.TRANSPARENT, T.soft("#000000", 0.8)]),
                                border_radius=ft.BorderRadius(0, 0, T.RADIUS_SM, T.RADIUS_SM))
         tile = ft.Container(
-            ft.Stack([C.art_fill(self._thumb_url(s), radius=T.RADIUS_SM, placeholder_icon=ft.Icons.IMAGE_OUTLINED,
+            ft.Stack([C.art_fill(self._thumb_url(s), radius=T.RADIUS_SM, placeholder_icon=ft.Icons.IMAGE_ROUNDED,
                                  left=0, right=0, top=0, bottom=0),
                       caption, ft.Container(check, left=0, top=0)]),
             width=T.px(256), height=T.px(144), border_radius=T.RADIUS_SM, ink=True,
@@ -262,14 +262,14 @@ class ScreenshotsView:
         if not several and self.filter == ALL and key in {o.key for o in self.dropdown.options}:
             out.append((tr("Show only this game's screenshots") if s.get("package")
                         else tr("Show only screenshots not from a FramePort game"),
-                        ft.Icons.FILTER_ALT_OUTLINED, lambda e: self._filter_to(key)))
+                        ft.Icons.FILTER_ALT_ROUNDED, lambda e: self._filter_to(key)))
         out.append(None)
         if several:
             out.append((tr("Clear selection"), ft.Icons.CLOSE_ROUNDED, lambda e: self._clear_selection()))
         else:
             on = s["path"] in self.selected
             out.append((tr("Deselect") if on else tr("Select"),
-                        ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED if on else ft.Icons.CHECK_BOX_OUTLINED,
+                        ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED if on else ft.Icons.CHECK_BOX_ROUNDED,
                         lambda e: self._toggle(s["path"], not on)))
         out += [None, (tr("Delete {n} screenshots…").format(n=len(shots)) if several else tr("Delete…"),
                        ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self.delete(shots))]
@@ -378,16 +378,15 @@ class ScreenshotsView:
         def delete(e):
             page.pop_dialog()
             self.delete([shots[state["i"]]])
-        page.show_dialog(ft.AlertDialog(
-            content=ft.Container(ft.Column([img, ft.Row([
+        page.show_dialog(C.viewer(
+            ft.Container(ft.Column([img, ft.Row([
                 C.icon_btn(ft.Icons.CHEVRON_LEFT_ROUNDED, tr("Previous"), lambda e: show(-1)),
                 ft.Column([caption, details], spacing=0, expand=True),
                 C.icon_btn(ft.Icons.CHEVRON_RIGHT_ROUNDED, tr("Next"), lambda e: show(1)),
                 C.secondary(tr("Download…"), ft.Icons.DOWNLOAD_ROUNDED, download),
                 C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Delete…"), delete),
                 C.ghost(tr("Close"), on_click=lambda e: page.pop_dialog())], spacing=T.S2,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER)], spacing=T.S2, tight=True), width=T.px(1100)),
-            bgcolor=T.BG, shape=ft.RoundedRectangleBorder(radius=T.RADIUS), content_padding=T.S3))
+                vertical_alignment=ft.CrossAxisAlignment.CENTER)], spacing=T.S2, tight=True), width=T.px(1100))))
         show()
 
     # ---------------------------------------------------------------- actions

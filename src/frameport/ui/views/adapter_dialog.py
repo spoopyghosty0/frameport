@@ -123,7 +123,7 @@ def _open(app: FramePortApp, package: str, g: dict | None, values: dict) -> None
         choices = list(spec[0])
         if v not in [c for c, _ in choices]:
             choices.append((v, str(v)))  # a value set elsewhere (CLI, catalog) stays selectable
-        return ft.Dropdown(value=str(v), width=T.px(220), dense=True, border_color=T.BORDER,
+        return C.dropdown(value=str(v), width=T.px(220),
                            options=[ft.DropdownOption(key=str(c), text=tr(label)) for c, label in choices],
                            on_select=lambda e: set_value(key, e.control.value))
 
@@ -201,12 +201,8 @@ def _open(app: FramePortApp, package: str, g: dict | None, values: dict) -> None
           if show_adv else []),
     ], spacing=T.S3, scroll=ft.ScrollMode.AUTO, tight=True)
     title = tr("Game settings · {title}").format(title=app._title(package) if g else package)
-    app.page.show_dialog(ft.AlertDialog(
-        title=ft.Text(title, weight=ft.FontWeight.W_600), bgcolor=T.SURFACE_2,
-        shape=ft.RoundedRectangleBorder(radius=T.RADIUS),
-        content=ft.Container(content, width=T.px(640), height=T.px(560)),
-        actions=[C.ghost(tr("Reset to recommended"), ft.Icons.RESTART_ALT_ROUNDED, reset),
-                 C.ghost(tr("Cancel"), on_click=lambda e: app.page.pop_dialog()),
-                 C.primary(tr("Save"), on_click=save)],
-        actions_alignment=ft.MainAxisAlignment.END))
+    app.page.show_dialog(C.dialog(
+        title, content, [C.ghost(tr("Reset to recommended"), ft.Icons.RESTART_ALT_ROUNDED, reset),
+                         C.ghost(tr("Cancel"), on_click=lambda e: app.page.pop_dialog()),
+                         C.primary(tr("Save"), on_click=save)], height=T.px(560)))
     apply_visibility()
