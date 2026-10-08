@@ -92,6 +92,9 @@ class FilesView:
         self.hidden_switch = C.switch(tr("Show hidden files"), wrap=False, value=False, on_change=self._toggle_hidden)
         self.selected: set[str] = set()  # paths of checked entries in the current folder
         self.checks: dict[str, ft.Checkbox] = {}
+        self.rows: dict[str, tuple] = {}  # path → (row, quiet checkbox, quiet actions)
+        self.hot: set[str] = set()  # rows under the mouse or with keyboard focus inside
+        self._select_mode = False
         self.select_all = ft.Checkbox(value=False, active_color=T.ACCENT, check_color=T.ON_ACCENT,
                                       tooltip=tr("Select all"), on_change=self._toggle_all)
         self.sel_label = C.body("", T.TEXT, weight=ft.FontWeight.W_500)
@@ -289,7 +292,7 @@ class FilesView:
                             .format(value=posixpath.join(android, rel) if rel else android)
                             if android else self.path)
         rows = []
-        self.checks = {}
+        self.checks, self.rows, self.hot = {}, {}, set()
         if self.path != loc["path"]:
             rows.append(self._row(None))
         rows += [self._row(e) for e in self.entries]
@@ -324,15 +327,22 @@ class FilesView:
                             on_change=lambda ev, p=e.path: self._toggle(p, ev.control.value),
                             disabled=self._protected(e))
         self.checks[e.path] = check
+        # quiet rows: the checkbox and the actions show on hover, keyboard focus or when something is selected
+        for c in (check, *actions):
+            c.on_focus = lambda ev, p=e.path: self._focus(p, True)
+            c.on_blur = lambda ev, p=e.path: self._focus(p, False)
+        quiet_check, quiet_actions = C.quiet(check), C.quiet(*actions)
         row = ft.Container(
-            ft.Row([check,
+            ft.Row([quiet_check,
                     ft.Icon(file_icon(e.name, e.is_dir), size=T.px(20), color=T.ACCENT if e.is_dir else T.TEXT_2),
                     ft.Column([C.body(e.name, T.TEXT, weight=ft.FontWeight.W_500, max_lines=1,
                                       overflow=ft.TextOverflow.ELLIPSIS), C.meta(info)], spacing=0, expand=True),
-                    *actions], spacing=T.S3),
+                    quiet_actions], spacing=T.S3),
             padding=ft.Padding(T.S3, T.px(6), T.S2, T.px(6)), border_radius=T.RADIUS_SM, ink=e.is_dir,
             on_click=(lambda ev, p=e.path: self.cd(p)) if e.is_dir else None,
-            on_hover=lambda ev, p=e.path: self.drag.hover(p, ev.data in (True, "true")))
+            on_hover=lambda ev, p=e.path: self._hover(p, ev.data in (True, "true")))
+        self.rows[e.path] = (row, quiet_check, quiet_actions)
+        self._paint_row(e.path)
         return ft.GestureDetector(content=row, on_secondary_tap_down=lambda ev, x=e: self.open_menu(x,
                                                                                                     ev.global_position))
 
@@ -409,7 +419,34 @@ class FilesView:
         if check is not None and check.value != on:
             check.value = on
             C.update(check)
+        if self._paint_row(path):
+            C.update(self.rows[path][0])
         self._update_selection()
+
+    # ---------------------------------------------------------------- quiet rows
+    def _hover(self, path: str, inside: bool) -> None:
+        self.drag.hover(path, inside)
+        self._set_hot(path, inside)
+
+    def _focus(self, path: str, on: bool) -> None:
+        self._set_hot(path, on)
+
+    def _set_hot(self, path: str, on: bool) -> None:
+        (self.hot.add if on else self.hot.discard)(path)
+        if path in self.rows and self._paint_row(path):
+            C.update(self.rows[path][0])
+
+    def _paint_row(self, path: str) -> bool:
+        """Properties only: the selected look and whether the checkbox/actions show. True when something changed."""
+        row, quiet_check, quiet_actions = self.rows[path]
+        on = path in self.selected
+        before = (row.bgcolor, row.gradient is not None)
+        C.selected_style(row, on)
+        changed = before != (row.bgcolor, row.gradient is not None)
+        show = on or path in self.hot or bool(self.selected)
+        changed |= C.reveal(quiet_check, show)
+        changed |= C.reveal(quiet_actions, on or path in self.hot)
+        return changed
 
     def _toggle_all(self, e) -> None:
         self.selected = {x.path for x in self.entries if self._selectable(x)} if e.control.value else set()
@@ -436,6 +473,11 @@ class FilesView:
         self.sel_label.value = (tr("{n} selected").format(n=n)
                                 + (tr(" · {human} in files").format(human=human(size)) if size else ""))
         self.sel_bar.visible = bool(n)
+        if bool(n) != self._select_mode:  # select mode starts/ends: every row's checkbox shows/hides
+            self._select_mode = bool(n)
+            changed = [path for path in self.rows if self._paint_row(path)]
+            if render and changed:
+                C.update(self.listing)
         self.select_all.value = bool(self.entries) and n == len([x for x in self.entries if self._selectable(x)])
         if render:
             for c in (self.sel_bar, self.select_all):

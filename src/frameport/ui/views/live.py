@@ -70,13 +70,14 @@ class LiveView:
         self._busy = False
         self._ticker: threading.Thread | None = None
         self.root = None
+        self.idle = None  # the "start the live view" hint below the bar while not streaming
         self.dot = C.dot(T.TEXT_3, 10)
         self.state = C.body(tr("Not streaming"), T.TEXT, weight=ft.FontWeight.W_500)
         self.detail = C.meta("")
-        self.quality_dd = C.dropdown(label=tr("Quality"), value=self.quality, width=T.px(260),
+        self.quality_dd = C.dropdown(label=tr("Quality"), value=self.quality, width=T.px(230),
                                       options=[ft.DropdownOption(key=k, text=t) for k, t in QUALITIES],
                                       on_select=self._set_quality)
-        self.start_btn = C.primary(tr("Start live view"), ft.Icons.PLAY_ARROW_ROUNDED, self._start, big=True)
+        self.start_btn = C.primary(tr("Start live view"), ft.Icons.PLAY_ARROW_ROUNDED, self._start)
         self.open_btn = C.secondary(tr("Open viewer"), ft.Icons.OPEN_IN_NEW_ROUNDED, self._open)
         self.stop_btn = C.ghost(tr("Stop"), ft.Icons.STOP_ROUNDED, self._stop_click)
         self.url = C.meta("", selectable=True)
@@ -93,21 +94,30 @@ class LiveView:
                               tr("The live view can start once FramePort is connected to the Frame."),
                               C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
         if self.root is None:
+            parts = C.transit_parts()
+            h = T.px(56)
+            self.idle = ft.Container(ft.Column([
+                ft.Row([ft.Image(src=parts["portal"], height=h, width=h * 24 / 50, fit=ft.BoxFit.CONTAIN),
+                        ft.Image(src=parts["headset"], height=h * 0.86, fit=ft.BoxFit.CONTAIN)],
+                       spacing=T.S3, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                C.body(tr("Start the live view to watch the headset in your browser"), T.TEXT_2,
+                       text_align=ft.TextAlign.CENTER),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S4, tight=True),
+                alignment=ft.Alignment.CENTER, expand=True, padding=T.S6)
             self.root = ft.Column([
                 app.top_bar(heading, sub),
+                ft.Row([C.meta(tr("The headset's view and sound open in your web browser. Stop the stream when "
+                                  "you're done."), T.TEXT_2), C.help_icon("live_view", 16)],
+                       spacing=T.px(2), tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                # status, Start/Open/Stop and Quality in one bar
                 C.card(ft.Column([
-                    ft.Row([self.dot, self.state], spacing=T.S2,
-                           vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                    self.detail,
-                    ft.Container(height=T.S2),
-                    ft.Row([self.start_btn, self.open_btn, self.stop_btn, self.quality_dd],  # (no expand child: wraps)
-                           spacing=T.S3, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    ft.Row([self.dot, ft.Column([self.state, self.detail], spacing=T.px(2), expand=True),
+                            self.quality_dd, self.start_btn, self.open_btn, self.stop_btn],
+                           spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     self.url,
                 ], spacing=T.S2)),
-                C.callout(ft.Row([C.body(tr("The headset's view and sound open in your web browser. Stop the "
-                                            "stream when you're done."), T.TEXT, expand=True),
-                                  C.help_icon("live_view")], spacing=T.px(4))),
-            ], spacing=T.S4, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
+                self.idle,
+            ], spacing=T.S4, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, expand=True)
         self._refresh(update=False)
         self._ensure_ticker()
         return self.root
@@ -132,11 +142,12 @@ class LiveView:
         self.quality_dd.disabled = running or self._busy
         self.url.value = (tr("Viewer address on this PC: {url}").format(url=live.url) if running else "")
         self.url.visible = running
+        self.idle.visible = live is None
         if update:  # called from the ticker / start / stream-end threads: send through Flet's event loop
             if self._push is None:
                 self._push = C.LoopUpdater(self.app.page)
             self._push(self.dot, self.state, self.detail, self.start_btn, self.open_btn, self.stop_btn,
-                       self.quality_dd, self.url)
+                       self.quality_dd, self.url, self.idle)
 
     def _ensure_ticker(self) -> None:
         if self._ticker and self._ticker.is_alive():

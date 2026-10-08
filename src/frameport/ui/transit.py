@@ -5,7 +5,7 @@ The stage names come from the install job (app._submit_install), build.py, pipel
 intentionally not translated so they can be mapped here."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 # step keys (stable) and their labels (translated when shown)
 STEPS = ("analyze", "patch", "sign", "upload", "install", "test")
@@ -94,3 +94,22 @@ def job_state(job) -> TransitState:
     """transit_state() for a ui.jobs.Job."""
     return transit_state(job.state, job.stage, job.stages, job.fraction, job.speed, job.message, job.kind,
                          getattr(job, "to", "frame"))
+
+
+class Monotonic:
+    """Keeps one place's bar from moving back within a run: the installer reports the upload's fraction over all its
+    files (APK, then data), but a new stage clears the job's fraction until the first tick ("Upload data" started at
+    the Upload step's 0 % after the APK had filled it). The fraction never decreases for the same job unless the step
+    goes back (the job started over, e.g. after the Frame was lost)."""
+
+    def __init__(self):
+        self.key = None
+        self.step = -1
+        self.best = 0.0
+
+    def follow(self, key, state: TransitState) -> TransitState:
+        if key != self.key or state.step < self.step:
+            self.key, self.best = key, 0.0
+        self.step = state.step
+        self.best = max(self.best, state.fraction)
+        return state if state.fraction == self.best else replace(state, fraction=self.best)

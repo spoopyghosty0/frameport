@@ -445,18 +445,35 @@ def dropdown(**kw) -> ft.Dropdown:
 
 # ------------------------------------------------------------------------------------------ selection
 def selected_style(box: ft.Container, on: bool, icon: ft.Control | None = None, text: ft.Control | None = None,
-                   idle_bg: str | None = None) -> None:
+                   idle_bg: str | None = None, subtle: bool = False) -> None:
     """The app-wide "this one is selected" look, set on an existing container (call again when it changes): dual
     themes = the portal fade with a white icon and label (an orange icon on the fade clashed: owner), else the accent
-    tint with an accent icon. `idle_bg` = the background when not selected."""
+    tint with an accent icon. `idle_bg` = the background when not selected; subtle = a lighter fade (an overlay on
+    a picture, e.g. a selected screenshot)."""
     if T.DUAL:
-        box.bgcolor, box.gradient = (None, portal_gradient(opacity=0.22)) if on else (idle_bg, None)
+        box.bgcolor, box.gradient = (None, portal_gradient(opacity=0.14 if subtle else 0.22)) if on else (idle_bg, None)
     else:
-        box.bgcolor, box.gradient = (T.ACCENT_SOFT if on else idle_bg), None
+        box.bgcolor, box.gradient = (T.soft(T.ACCENT, 0.12) if subtle else T.ACCENT_SOFT) if on else idle_bg, None
     if icon is not None:
         icon.color = (T.TEXT if T.DUAL else T.ACCENT) if on else T.TEXT_2
     if text is not None:
         text.color = T.TEXT if on else T.TEXT_2
+
+
+def quiet(*controls: ft.Control, shown: bool = False) -> ft.Container:
+    """Row/tile actions that only show on hover, keyboard focus or selection ("quiet rows"): opacity 0 keeps their
+    space, so the layout doesn't jump when they appear. Toggle with reveal()."""
+    content = controls[0] if len(controls) == 1 else ft.Row(list(controls), spacing=0, tight=True)
+    return ft.Container(content, opacity=1.0 if shown else 0.0, animate_opacity=ft.Animation(120))
+
+
+def reveal(box: ft.Container, on: bool) -> bool:
+    """Show/hide a quiet() box; True when it changed (the caller updates it)."""
+    value = 1.0 if on else 0.0
+    if box.opacity == value:
+        return False
+    box.opacity = value
+    return True
 
 
 def segmented(options: list[tuple[str, str]], value: str | None, on_change: Callable[[str], None]) -> ft.Container:
@@ -900,10 +917,11 @@ class Transit:
         self.frac = 0.0
         self.done = False
         self._job_id = None
+        self._mono = None
         icon_h = T.px(22 if compact else 30)
         self.track_h = T.px(26 if compact else 36)
         self.bar_h = T.px(4 if compact else 6)
-        self.cover_s = T.px(18 if compact else 26)
+        self.cover_s = T.px(22 if compact else 36)  # fits the track height
         self.portal_w, self.portal_h = self.track_h * 24 / 50, self.track_h
         self.parts = transit_parts()
         size = lambda name, h: (h * glyphs.TRANSIT_SIZES[name][0] / glyphs.TRANSIT_SIZES[name][1], h)  # noqa: E731
@@ -954,8 +972,8 @@ class Transit:
             update(self.track)
 
     def _place(self) -> None:
-        """Riders from the progress head: the portal centred on it, the cover just before it; once done the cover
-        has come out on the far side."""
+        """Riders from the progress head: the portal centred on it, the cover just before it (not overlapping); once
+        done the cover has come out on the far side."""
         w, pw, cs, gap = self.width, self.portal_w, self.cover_s, T.px(2)
         if w <= 0:
             return
@@ -967,15 +985,16 @@ class Transit:
         head = min(max(self.frac * w, cs + gap + pw / 2), w - pw / 2)
         self.fill.width = max(0.0, min(w, self.frac * w))
         self.portal.left = head - pw / 2
-        self.cover.left = max(0.0, self.portal.left - cs - gap + pw * 0.25)  # its edge slips into the portal
+        self.cover.left = max(0.0, self.portal.left - cs - gap)  # just before the portal, not under it
 
     # ------------------------------------------------------------------ state
     def set(self, job, title: str = "", dest: str = "", art: str | None = None, icon=None, extra: str = "") -> None:
         """Show `job` (ui.jobs.Job). title/dest: "Title → Frame"; art: the cover's asset URL (icon when none);
         extra: appended to the detail (e.g. " · 2 more queued")."""
-        from .transit import WAITING, job_state
+        from .transit import WAITING, Monotonic, job_state
 
-        s = job_state(job)
+        self._mono = self._mono or Monotonic()
+        s = self._mono.follow(job.id, job_state(job))
         if job.id != self._job_id:  # another job: its cover and destination
             self._job_id = job.id
             self.cover.image = ft.DecorationImage(src=art, fit=ft.BoxFit.COVER) if art else None

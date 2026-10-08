@@ -203,6 +203,7 @@ class LibraryView:
         self.f = app.lib_filters
         self.cards: dict[str, tuple[tuple, ft.Control]] = {}  # package -> (state key, card)
         self.checks: dict[str, ft.Control] = {}  # package -> selection checkbox overlay
+        self.marks: dict[str, tuple] = {}  # package -> (card tile, selection fade overlay, hovered?)
         self.selected: set[str] = set()
         self.select_mode = False
         self.sel_bar = ft.Container(visible=False)
@@ -357,6 +358,8 @@ class LibraryView:
         for pkg, chk in self.checks.items():
             chk.visible = on
             chk.content.value = pkg in self.selected
+        for pkg in self.marks:
+            self._paint_card(pkg)
         self._update_sel_bar()
         C.update(self.grid, self.sel_bar, self.select_btn)
 
@@ -366,7 +369,18 @@ class LibraryView:
         if chk:
             chk.content.value = pkg in self.selected
             C.update(chk)
+        if pkg in self.marks:
+            self._paint_card(pkg)
+            C.update(self.marks[pkg][0])
         self._update_sel_bar()
+
+    def _paint_card(self, pkg: str) -> None:
+        """A card's border + selection fade (properties only): selected = 2 px accent + the portal fade, hovered =
+        1 px accent, else the plain border."""
+        tile, overlay, hovered = self.marks[pkg]
+        on = self.select_mode and pkg in self.selected
+        C.selected_style(overlay, on, subtle=True)
+        tile.border = ft.Border.all(2 if on else 1, T.ACCENT if on or hovered else T.BORDER)
 
     def select_visible(self) -> None:
         shown = filter_games(self.games, self.f, self.app.frame_info, set(self.app.pc_installs()))
@@ -621,6 +635,7 @@ class LibraryView:
                              bgcolor=T.soft("#000000", 0.6), border_radius=T.RADIUS_SM, left=T.px(6), top=T.px(40),
                              visible=self.select_mode)
         self.checks[pkg] = check
+        overlay = ft.Container(left=0, right=0, top=0, bottom=0, border_radius=T.RADIUS)  # the selected fade
         quick_label, quick_kind = app.quick_action(g)
         circle = ft.Container(
             ft.Icon(quick_icon(quick_kind), size=T.px(56), color=T.ON_ACCENT),
@@ -642,6 +657,7 @@ class LibraryView:
                 # platform + state badges in one row that wraps: on a narrow card "On Frame" covered "Android"
                 ft.Container(ft.Row([platform, *badges], spacing=T.px(4), run_spacing=T.px(4), wrap=True),
                              left=T.px(10), right=T.px(10), top=T.px(10)),
+                overlay,
                 *([quick] if quick else []),
                 check,
                 ft.Container(ft.Column([
@@ -662,13 +678,16 @@ class LibraryView:
             on = e.data in (True, "true")
             self.drag.hover(pkg, on)
             tile.scale = 1.03 if on else 1.0
-            tile.border = ft.Border.all(1, T.ACCENT if on else T.BORDER)
+            self.marks[pkg] = (tile, overlay, on)
+            self._paint_card(pkg)
             tile.shadow = card_shadow(on)
             if quick:
                 quick.opacity = 1 if on and not self.select_mode else 0
                 circle.scale = 1.0 if on else 0.85
             tile.update()
         tile.on_hover = hover
+        self.marks[pkg] = (tile, overlay, False)
+        self._paint_card(pkg)
         # no key=: Flet freezes keyed controls, and cards change in place (hover, state); the grid only ever holds
         # the matching cards in order (see _apply), which is what fixed search and sorting
         return ft.GestureDetector(content=tile, expand=True,

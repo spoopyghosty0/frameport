@@ -93,3 +93,26 @@ def test_failed_keeps_the_step():
 def test_unknown_stage_keeps_the_previous_step():
     s = run(QUEST + INSTALL[:1] + ["Ensuring Proton"])
     assert s.step == 3
+
+
+def test_upload_never_goes_back_between_apk_and_data():
+    from frameport.ui.transit import Monotonic
+
+    mono = Monotonic()
+    base = QUEST + INSTALL[:2]
+    seen = [mono.follow("j", run(base, fraction=f)).fraction for f in (0.0, 0.1, 0.2)]
+    # "Upload data" starts: the job's fraction is cleared until the first tick, then continues over all files
+    seen += [mono.follow("j", run(QUEST + INSTALL[:3], fraction=f)).fraction for f in (None, 0.2, 0.6, 1.0)]
+    seen.append(mono.follow("j", run(QUEST + INSTALL[:4])).fraction)
+    assert seen == sorted(seen)
+    assert seen[3] == pytest.approx(3.2 / 6) and seen[-2] == pytest.approx(4 / 6)
+
+
+def test_monotonic_resets_for_another_job_or_a_new_run():
+    from frameport.ui.transit import Monotonic
+
+    mono = Monotonic()
+    assert mono.follow("a", run(QUEST + INSTALL[:3], fraction=0.9)).fraction == pytest.approx(3.9 / 6)
+    assert mono.follow("a", run(["Patching the game"])).fraction == 0.0  # started over
+    mono.follow("a", run(QUEST + INSTALL[:3], fraction=0.9))
+    assert mono.follow("b", run(QUEST[:1])).fraction == 0.0

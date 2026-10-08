@@ -70,6 +70,8 @@ class ScreenshotsView:
         self.games: list[dict] = []
         self.selected: set[str] = set()  # paths
         self.checks: dict[str, ft.Checkbox] = {}
+        self.tiles: dict[str, tuple] = {}  # path → (tile, quiet checkbox, selection overlay)
+        self.hot: set[str] = set()  # tiles under the mouse or with keyboard focus
         self._gen = 0
         self._loaded = False
         self._lock = threading.Lock()
@@ -77,7 +79,8 @@ class ScreenshotsView:
                                     options=[ft.DropdownOption(key=ALL, text=tr("All games"))],
                                     on_select=lambda e: self.set_filter(e.control.value))
         self.select_all = ft.Checkbox(value=False, active_color=T.ACCENT, check_color=T.ON_ACCENT,
-                                      tooltip=tr("Select all"), on_change=self._toggle_all)
+                                      label=tr("Select all"), label_style=ft.TextStyle(color=T.TEXT_2, size=T.T_BODY),
+                                      on_change=self._toggle_all)
         self.toolbar = ft.Row([
             self.dropdown, self.select_all, ft.Container(expand=True),
             C.secondary(tr("Download all…"), ft.Icons.DOWNLOAD_ROUNDED, self._download_all),
@@ -158,7 +161,7 @@ class ScreenshotsView:
             self.shots, self.games = r.get("shots") or [], r.get("games") or []
             self.selected &= {s["path"] for s in self.shots}
             self._fill_dropdown()
-            self.checks = {}
+            self.checks, self.tiles, self.hot = {}, {}, set()
             self.grid.controls = []
             if not self.shots:
                 empty = C.empty_state(
@@ -225,14 +228,22 @@ class ScreenshotsView:
                                                           end=ft.Alignment.BOTTOM_CENTER,
                                                           colors=[ft.Colors.TRANSPARENT, T.soft("#000000", 0.8)]),
                                border_radius=ft.BorderRadius(0, 0, T.RADIUS_SM, T.RADIUS_SM))
+        check.on_focus = lambda e, p=s["path"]: self._set_hot(p, True)
+        check.on_blur = lambda e, p=s["path"]: self._set_hot(p, False)
+        quiet_check = C.quiet(check)
+        quiet_check.left, quiet_check.top = 0, 0
+        overlay = ft.Container(left=0, right=0, top=0, bottom=0, border_radius=T.RADIUS_SM)
         tile = ft.Container(
             ft.Stack([C.art_fill(self._thumb_url(s), radius=T.RADIUS_SM, placeholder_icon=ft.Icons.IMAGE_OUTLINED,
                                  left=0, right=0, top=0, bottom=0),
-                      caption, ft.Container(check, left=0, top=0)]),
+                      overlay, caption, quiet_check]),
             width=T.px(256), height=T.px(144), border_radius=T.RADIUS_SM, ink=True,
+            border=ft.Border.all(2, ft.Colors.TRANSPARENT),
             tooltip=f"{s.get('title') or ''} · {day_label(s.get('time'))} {when}",
             on_click=lambda e, i=i: self.viewer(i),
-            on_hover=lambda e, p=s["path"]: self.drag.hover(p, e.data in (True, "true")))
+            on_hover=lambda e, p=s["path"]: self._hover(p, e.data in (True, "true")))
+        self.tiles[s["path"]] = (tile, quiet_check, overlay)
+        self._paint(s["path"])
         return ft.GestureDetector(content=tile, on_secondary_tap_down=lambda e, s=s: self.open_menu(s,
                                                                                                   e.global_position))
 
@@ -293,36 +304,41 @@ class ScreenshotsView:
     # ---------------------------------------------------------------- selection
     def _toggle(self, path: str, on: bool) -> None:
         (self.selected.add if on else self.selected.discard)(path)
-        check = self.checks.get(path)
-        if check is not None and check.value != on:
-            check.value = on
-            C.update(check)
         self._update_selection()
 
     def _toggle_all(self, e) -> None:
-        on = bool(e.control.value)
-        self.selected = {s["path"] for s in self.shots} if on else set()
-        for check in self.checks.values():
-            if check.value != on:
-                check.value = on
-                C.update(check)
+        self.selected = {s["path"] for s in self.shots} if e.control.value else set()
         self._update_selection()
 
     def _select_all(self) -> None:
         self.selected = {s["path"] for s in self.shots}
-        for check in self.checks.values():
-            if not check.value:
-                check.value = True
-                C.update(check)
         self._update_selection()
 
     def _clear_selection(self) -> None:
         self.selected.clear()
-        for check in self.checks.values():
-            if check.value:
-                check.value = False
-                C.update(check)
         self._update_selection()
+
+    # quiet tiles: the checkbox shows on hover, keyboard focus or while anything is selected
+    def _hover(self, path: str, inside: bool) -> None:
+        self.drag.hover(path, inside)
+        self._set_hot(path, inside)
+
+    def _set_hot(self, path: str, on: bool) -> None:
+        (self.hot.add if on else self.hot.discard)(path)
+        if path in self.tiles and self._paint(path):
+            C.update(self.tiles[path][0])
+
+    def _paint(self, path: str) -> bool:
+        """Properties only: checkbox value + visibility, the accent border and the selection fade. True = changed."""
+        tile, quiet_check, overlay = self.tiles[path]
+        on = path in self.selected
+        check = self.checks[path]
+        before = (check.value, quiet_check.opacity, overlay.bgcolor, overlay.gradient is not None)
+        check.value = on
+        C.reveal(quiet_check, on or path in self.hot or bool(self.selected))
+        C.selected_style(overlay, on, subtle=True)
+        tile.border = ft.Border.all(2, T.ACCENT if on else ft.Colors.TRANSPARENT)
+        return before != (check.value, quiet_check.opacity, overlay.bgcolor, overlay.gradient is not None)
 
     def _update_selection(self, render: bool = True) -> None:
         n = len(self.selected)
@@ -330,9 +346,12 @@ class ScreenshotsView:
         self.sel_label.value = tr("{n} selected").format(n=n) + (f" · {human(size)}" if size else "")
         self.sel_bar.visible = bool(n)
         self.select_all.value = bool(self.shots) and n == len(self.shots)
+        changed = [path for path in self.tiles if self._paint(path)]
         if render:
             for c in (self.sel_bar, self.select_all):
                 C.update(c)
+            for path in changed:
+                C.update(self.tiles[path][0])
 
     def _chosen(self) -> list[dict]:
         return [s for s in self.shots if s["path"] in self.selected]
