@@ -32,7 +32,9 @@ _PORTAL = {
     "TEXT": "#EDEEF2", "TEXT_2": "#A7ABB7", "TEXT_3": "#717583",
     "ACCENT": "#FF8A1F", "ACCENT_SOFT": "#3A2512", "ON_ACCENT": "#160C03",
     "SECONDARY": "#3AA8FF", "SECONDARY_SOFT": "#0F2A40",
-    "OK": "#3DD68C", "WARN": "#F2C94C", "ERROR": "#FF6166", "INFO": "#3AA8FF", "PC": "#3AA8FF",
+    # INFO is a cyan of its own: next to PC (the portal blue) it tells data series apart (Monitor: Steam vs
+    # SteamVR processes, CPU vs memory) and stays clear of OK's green
+    "OK": "#3DD68C", "WARN": "#F2C94C", "ERROR": "#FF6166", "INFO": "#5CD0E6", "PC": "#3AA8FF",
 }
 BUILTIN: dict[str, dict] = {
     "portal": {"name": "Portal", "dual": True, "colors": _PORTAL},

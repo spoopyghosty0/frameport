@@ -568,10 +568,11 @@ class Sparkline:
     """A small line chart with a soft area fill (Flet canvas, built into Flet: no charts extension). Created once;
     set() replaces only the paths' elements, so a tick sends a small patch. Fills its width (on_resize)."""
 
-    def __init__(self, color: str = T.ACCENT, height: int = 36, slots: int = 120, lo: float = 0.0,
+    def __init__(self, color: str | None = None, height: int = 36, slots: int = 120, lo: float = 0.0,
                  hi: float | None = None, min_slots: int = 30, fit: float | None = None):
         import flet.canvas as cv
 
+        color = color or T.ACCENT
         self.cv, self.slots, self.min_slots, self.lo, self.hi = cv, slots, min_slots, lo, hi
         self.fit = fit  # zoom to the data: a scale of at least this span around it (temperatures, fan speed)
         self.width, self.height = 0.0, T.px(height)

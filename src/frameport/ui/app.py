@@ -196,7 +196,8 @@ class FramePortApp:
         self._build_shell()
         if hasattr(self, "_nav"):
             del self._nav  # _refresh_sidebar builds the sidebar's controls again
-        self.library_view = self.files_view = self.screenshots_view = None
+        self.stop_monitor()  # its stream runs only while the tab is shown (a theme switch happens in Settings)
+        self.library_view = self.files_view = self.screenshots_view = self.monitor_view = None
         if self.keyboard_view is not None and self.keyboard_view.stopped:
             self.keyboard_view = None
         for view in (self.live_view, self.keyboard_view):

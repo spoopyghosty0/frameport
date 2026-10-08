@@ -24,10 +24,21 @@ if TYPE_CHECKING:
 ROWS = 50            # process rows shown at most (the agent sends up to 150; the search narrows them)
 DETAIL_HEIGHT = 250  # the three detail cards share one height (px at 100 %)
 RETRY_SECONDS = 5    # reconnect after the stream was lost, while the tab is open
-LEVEL_COLOR = {"ok": T.TEXT, "warn": T.WARN, "error": T.ERROR}
-GROUP_COLOR = {"Game": T.ACCENT, "Steam": T.INFO, "SteamVR": T.PC, "Desktop": T.TEXT_2, "Other": T.TEXT_3}
-CLUSTER_COLORS = (T.INFO, T.ACCENT, T.PC, T.OK)
-POWER_COLORS = (T.INFO, T.ACCENT, T.PC, T.TEXT_3)  # CPU, GPU, NPU, other
+LEVEL_COLOR: dict[str, str] = {}
+GROUP_COLOR: dict[str, str] = {}
+CLUSTER_COLORS: list[str] = []
+POWER_COLORS: list[str] = []  # CPU, GPU, NPU, other
+
+
+def _fill_colors() -> None:
+    """(Re)fill the colour maps with the active theme's colours, in place (theme switches)."""
+    LEVEL_COLOR.update({"ok": T.TEXT, "warn": T.WARN, "error": T.ERROR})
+    GROUP_COLOR.update({"Game": T.ACCENT, "Steam": T.INFO, "SteamVR": T.PC, "Desktop": T.TEXT_2, "Other": T.TEXT_3})
+    CLUSTER_COLORS[:] = [T.INFO, T.ACCENT, T.PC, T.OK]
+    POWER_COLORS[:] = [T.INFO, T.ACCENT, T.PC, T.TEXT_3]
+
+
+T.on_change(_fill_colors)
 
 
 def label(name: str) -> str:
