@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 UI = ROOT / "src" / "frameport" / "ui"
 # calls whose first argument is text shown to the user
 TEXT_CALLS = {"body", "meta", "title", "h2", "primary", "secondary", "ghost", "pill", "callout", "toast", "switch",
-              "section", "Text", "TextButton", "empty_state", "confirm", "kv", "status_row"}
+              "section", "Text", "TextButton", "empty_state", "confirm", "kv"}
 
 
 @pytest.fixture(autouse=True)

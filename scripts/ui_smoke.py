@@ -430,7 +430,9 @@ def main() -> int:
              ("files", lambda a: a.go("files")), ("screenshots", lambda a: a.go("screenshots")),
              ("live", lambda a: a.go("live")), ("keyboard", lambda a: a.go("keyboard")),
              ("monitor", lambda a: a.go("monitor")), ("monitor-details", open_monitor_details),
-             ("tools", lambda a: a.go("settings"))]
+             ("tools", lambda a: a.go("settings")),
+             # the index on the left: "This PC" scrolls the page there
+             ("settings-index", lambda a: a.page.run_task(a.settings_view.show_section, "pc"))]
     if game:
         steps.insert(1, ("game", lambda a: a.open_game(game)))
         steps.insert(2, ("game-customize", lambda a: a.open_game(game, advanced=True)))
@@ -582,14 +584,8 @@ def main() -> int:
             return run
 
         def appearance(a):
-            """Settings' Appearance section on its own (it is near the end of the page)."""
-            from frameport.ui import components as C
-            from frameport.ui.views.settings import SettingsView
-
+            """Settings: Appearance is its first section."""
             a.go("settings")
-            a.body.content = ft.Column([a.top_bar("Settings", "Appearance"),
-                                        C.section("Appearance", C.card(SettingsView(a).appearance()))])
-            a.page.update()
         steps = [("appearance", appearance)]
         for name in [n for n in T.THEMES if n != T.THEME] + [T.THEME]:
             steps.append((f"{name}-switched", switch(name)))

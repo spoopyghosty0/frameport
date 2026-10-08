@@ -21,6 +21,20 @@ if TYPE_CHECKING:
 TOOL_TITLES = {"java": tr("Java runtime"), "overport": "OVRPort", "apksigner": "apksigner", "revive": tr("Revive")}
 TOOL_WHY = {"java": tr("Runs OVRPort and apksigner"), "overport": tr("Converts Quest games to OpenXR"),
             "apksigner": tr("Signs rebuilt games"), "revive": tr("Runs Oculus PC games on OpenXR")}
+# the page's sections in order (the index on the left lists them): Appearance near the top (it's the most used),
+# "Remove FramePort" last
+SECTIONS = ("appearance", "updates", "links", "installing", "tools", "pc", "data", "feedback", "about", "remove")
+
+
+def section_titles() -> dict[str, str]:
+    """Index labels of SECTIONS (the sections' own headings may be longer)."""
+    return {"appearance": tr("Appearance"), "updates": tr("Updates"), "links": tr("Install links"),
+            "installing": tr("Installing"), "tools": tr("Tools"), "pc": tr("This PC"), "data": tr("Data"),
+            "feedback": tr("Problems and feedback"), "about": tr("About"), "remove": tr("Remove FramePort")}
+
+
+def scroll_key(section: str) -> str:
+    return f"settings-{section}"
 
 
 class SettingsView:
@@ -28,6 +42,8 @@ class SettingsView:
         self.app = app
         self.tools = ft.Column(spacing=0)
         self.pc = ft.Column(spacing=0)
+        self.page_col: ft.Column | None = None  # the scrolling column of sections (build())
+        self.index: dict[str, ft.Container] = {}  # section -> its entry in the index
 
     def fill_tools(self, check_latest=False):
         from ...tools import toolchain
@@ -43,37 +59,37 @@ class SettingsView:
                     detail += " · " + s.detail.split("·")[-1].strip()
             else:
                 detail += tr(" · downloaded when first needed") if s.optional else tr(" · not installed yet")
-            rows.append(C.status_row(True if s.installed else (None if s.optional else False),
-                                     TOOL_TITLES.get(s.name, s.name), detail,
-                                     help="revive" if s.name == "revive" else None))
-        self.tools.controls = rows
+            rows.append(C.Check(True if s.installed else ("warn" if s.optional else False),
+                                TOOL_TITLES.get(s.name, s.name), detail, "revive" if s.name == "revive" else None,
+                                None if s.optional else (tr("Install"), ft.Icons.DOWNLOAD_ROUNDED,
+                                                         self.app.update_tools)))
+        self.tools.controls = [C.checklist(rows)]
         C.update(self.tools)
 
     def fill_pc(self):
         from ...core import winhost
 
         if not winhost.available():
-            self.pc.controls = [C.status_row(
-                None, tr("Windows not detected"),
-                tr("PC VR games can run on this PC only with Windows (or WSL on Windows)"))]
+            items = [C.Check("warn", tr("Windows not detected"),
+                             tr("PC VR games can run on this PC only with Windows (or WSL on Windows)"))]
         else:
             try:
                 from ...targets.pc_revive import PcReviveTarget
 
                 d = PcReviveTarget().describe()
-                self.pc.controls = [
-                    C.status_row(bool(d["steam"]), tr("Steam"),
-                                 tr("Found") if d["steam"] else tr("Steam for Windows not found")),
-                    C.status_row(d["steamvr"] or None, tr("SteamVR"),
-                                 tr("Installed") if d["steamvr"]
-                                 else tr("Install SteamVR from Steam to play PC VR games"),
-                                 help="steamvr_pc"),
-                    C.status_row(bool(d["revive"]), tr("Revive"), (f"{d['revive_version']} · {d['revive']}"
-                                                              if d["revive"] else tr("Downloaded when first needed")),
-                                 help="revive"),
+                items = [
+                    C.Check(bool(d["steam"]), tr("Steam"),
+                            tr("Found") if d["steam"] else tr("Steam for Windows not found")),
+                    C.Check(True if d["steamvr"] else "warn", tr("SteamVR"),
+                            tr("Installed") if d["steamvr"] else tr("Install SteamVR from Steam to play PC VR games"),
+                            "steamvr_pc"),
+                    C.Check(bool(d["revive"]), tr("Revive"), (f"{d['revive_version']} · {d['revive']}"
+                                                             if d["revive"] else tr("Downloaded when first needed")),
+                            "revive"),
                 ]
             except Exception as exc:  # noqa: BLE001
-                self.pc.controls = [C.status_row(False, tr("Couldn't check this PC"), explain(exc))]
+                items = [C.Check(False, tr("Couldn't check this PC"), explain(exc))]
+        self.pc.controls = [C.checklist(items)]
         C.update(self.pc)
 
     def installing(self) -> ft.Control:
@@ -339,8 +355,10 @@ class SettingsView:
                              on_change=lambda e: self.app.set_live_card(e.control.value))
         live_note = C.meta(tr("Streams a small sample from the Frame every 5 seconds (game, frame rate, battery). "
                               "Turn off to save the Frame's processor."))
+        motion = C.switch(tr("Reduce motion (no fades between pages, no portal pulse when the Frame connects)"),
+                          value=self.app.reduce_motion, on_change=lambda e: self.app.set_reduce_motion(e.control.value))
         controls = [self.theme_picker(), ft.Container(height=T.S2), dd, note, ft.Container(height=T.S2), live_card,
-                    live_note]
+                    live_note, motion]
         languages = i18n.available()
         if len(languages) > 1:  # only once a translation exists
             def language_changed(e):
@@ -368,27 +386,55 @@ class SettingsView:
             text += tr(" · Frame not connected")
         return text
 
+    def index_column(self) -> ft.Control:
+        """The page's index (left): one entry per section; a click scrolls there and highlights the entry."""
+        def entry(key: str, label: str) -> ft.Container:
+            text = C.body(label, T.TEXT_2, weight=ft.FontWeight.W_500)
+
+            async def click(e, k=key):
+                await self.show_section(k)
+            box = ft.Container(text, padding=ft.Padding(T.S3, T.px(7), T.S3, T.px(7)), border_radius=T.RADIUS_SM,
+                               ink=True, on_click=click, data=text)
+            self.index[key] = box
+            return box
+        titles = section_titles()
+        col = ft.Column([entry(k, titles[k]) for k in SECTIONS], spacing=T.px(2))
+        self._mark(SECTIONS[0])
+        return ft.Container(col, width=T.px(180), padding=ft.Padding(0, T.px(2), T.S4, 0))
+
+    def _mark(self, current: str) -> None:
+        for key, box in self.index.items():
+            C.selected_style(box, key == current, text=box.data)
+
+    async def show_section(self, key: str) -> None:
+        """Scroll the page to a section (index click; ui_smoke calls it too)."""
+        self._mark(key)
+        C.update(*self.index.values())
+        if self.page_col is not None:
+            await self.page_col.scroll_to(scroll_key=scroll_key(key), duration=0 if self.app.reduce_motion else 300)
+
     def build(self) -> ft.Control:
         app = self.app
-        self.tools.controls = [ft.Row([C.spinner(),
-                                       C.meta(tr("Checking tools…"))], spacing=T.S2)]
+        self.tools.controls = [C.checklist([C.Check(None, tr("Checking tools…"))])]
         app.run_bg(self.fill_tools)
-        self.pc.controls = [ft.Row([C.spinner(),
-                                    C.meta(tr("Checking this PC…"))], spacing=T.S2)]
+        self.pc.controls = [C.checklist([C.Check(None, tr("Checking this PC…"))])]
         app.run_bg(self.fill_pc)
         from ... import __version__ as ver
         data = str(user_data_dir())
-        return ft.Column([
-            app.top_bar(tr("Settings"), tr("Updates, tools, this PC and where FramePort keeps its data")),
-            C.section(tr("Updates"), C.card(self.updates_card(), padding=T.S4), help="app_updates"),
-            C.section(tr("Tools"), C.card(self.tools, padding=ft.Padding(T.S4, T.S2, T.S4, T.S2)),
-                      subtitle=tr("FramePort manages its own copies; nothing is installed system-wide"),
-                      action=ft.Row([C.ghost(tr("Update tools"), ft.Icons.UPDATE_ROUNDED,
-                                             lambda e: app.update_tools(update=True)),
-                                     C.secondary(tr("Install missing"), ft.Icons.DOWNLOAD_ROUNDED,
-                                                 lambda e: app.update_tools())], spacing=T.S2)),
-            C.section(tr("This PC (for PC VR games)"), C.card(self.pc, padding=ft.Padding(T.S4, T.S2, T.S4, T.S2))),
-            C.section(tr("Data"), C.card(ft.Column([
+        sections = {
+            "appearance": C.section(tr("Appearance"), C.card(self.appearance(), padding=T.S4), help="ui_scale"),
+            "updates": C.section(tr("Updates"), C.card(self.updates_card(), padding=T.S4), help="app_updates"),
+            "links": C.section(tr("Install links"), C.card(self.links_card(), padding=T.S4), help="install_links"),
+            "installing": C.section(tr("Installing"), C.card(self.installing(), padding=T.S4), help="launch_test"),
+            "tools": C.section(tr("Tools"), C.card(self.tools, padding=ft.Padding(T.S4, T.S2, T.S4, T.S2)),
+                               subtitle=tr("FramePort manages its own copies; nothing is installed system-wide"),
+                               action=ft.Row([C.ghost(tr("Update tools"), ft.Icons.UPDATE_ROUNDED,
+                                                      lambda e: app.update_tools(update=True)),
+                                              C.secondary(tr("Install missing"), ft.Icons.DOWNLOAD_ROUNDED,
+                                                          lambda e: app.update_tools())], spacing=T.S2)),
+            "pc": C.section(tr("This PC (for PC VR games)"),
+                            C.card(self.pc, padding=ft.Padding(T.S4, T.S2, T.S4, T.S2))),
+            "data": C.section(tr("Data"), C.card(ft.Column([
                 C.kv(tr("Data folder"), ft.Row([C.body(data, T.TEXT, selectable=True, expand=True),
                                             C.icon_btn(ft.Icons.CONTENT_COPY_ROUNDED, tr("Copy path"),
                                                        lambda e: app.copy(data))]), "data_folder"),
@@ -397,7 +443,7 @@ class SettingsView:
                 self.catalog_updates(),
             ], spacing=T.S2))),
             # text above, buttons below (side by side, the buttons squeezed the text in a narrow window)
-            C.section(tr("Problems and feedback"), C.card(ft.Column([
+            "feedback": C.section(tr("Problems and feedback"), C.card(ft.Column([
                 C.body(tr("Something not working? Collect a diagnostics zip (logs, settings, device info; personal "
                        "data removed) and attach it to a GitHub issue. For one game, use its menu instead.")),
                 ft.Row([C.secondary(tr("Report a problem…"), ft.Icons.BUG_REPORT_OUTLINED,
@@ -405,16 +451,7 @@ class SettingsView:
                         C.ghost(tr("Collect app logs"), ft.Icons.FOLDER_ZIP_OUTLINED, lambda e: app.collect_logs())],
                        spacing=T.S3, run_spacing=T.S2, wrap=True),
             ], spacing=T.S3)), help="diag_bundle"),
-            C.section(tr("Remove FramePort"), C.card(ft.Column([
-                C.body(tr("Removes everything FramePort created: its data and tools on this PC, the Steam entries it "
-                       "added, and (optionally) its games and files on the Frame. Your game dumps aren't touched.")),
-                C.danger(tr("Uninstall FramePort…"), ft.Icons.DELETE_FOREVER_OUTLINED, lambda e: app.uninstall_app(),
-                         outline=True),
-            ], spacing=T.S3, horizontal_alignment=ft.CrossAxisAlignment.START))),
-            C.section(tr("Installing"), C.card(self.installing(), padding=T.S4), help="launch_test"),
-            C.section(tr("Install links"), C.card(self.links_card(), padding=T.S4), help="install_links"),
-            C.section(tr("Appearance"), C.card(self.appearance(), padding=T.S4), help="ui_scale"),
-            C.section(tr("About"), C.card(ft.Column([
+            "about": C.section(tr("About"), C.card(ft.Column([
                 C.kv(tr("Version"), ver),
                 C.kv(tr("Frame agent"), self.agent_text(), "frame_agent"),
                 C.kv(tr("Source"), C.ghost(REPO_URL.removeprefix("https://"), ft.Icons.OPEN_IN_NEW_ROUNDED,
@@ -422,4 +459,19 @@ class SettingsView:
                 C.meta(tr("Uses OVRPort, Revive (LibreVR), Valve's Lepton and Proton. "
                           "Not affiliated with Valve or Meta.")),
             ], spacing=T.S2))),
-        ], spacing=T.S5, scroll=ft.ScrollMode.AUTO, expand=True)
+            "remove": C.section(tr("Remove FramePort"), C.card(ft.Column([
+                C.body(tr("Removes everything FramePort created: its data and tools on this PC, the Steam entries it "
+                       "added, and (optionally) its games and files on the Frame. Your game dumps aren't touched.")),
+                C.danger(tr("Uninstall FramePort…"), ft.Icons.DELETE_FOREVER_OUTLINED, lambda e: app.uninstall_app(),
+                         outline=True),
+            ], spacing=T.S3, horizontal_alignment=ft.CrossAxisAlignment.START))),
+        }
+        # the bottom padding lets the last sections scroll up to the top too
+        self.page_col = ft.Column([ft.Container(sections[k], key=ft.ScrollKey(scroll_key(k))) for k in SECTIONS]
+                                  + [ft.Container(height=T.px(240))],
+                                  spacing=T.S5, scroll=ft.ScrollMode.AUTO, expand=True)
+        return ft.Column([
+            app.top_bar(tr("Settings"), tr("Updates, tools, this PC and where FramePort keeps its data")),
+            ft.Row([self.index_column(), self.page_col], expand=True, spacing=0,
+                   vertical_alignment=ft.CrossAxisAlignment.START),
+        ], spacing=T.S5, expand=True)

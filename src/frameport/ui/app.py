@@ -81,6 +81,13 @@ def window_geometry(saved: dict | None, scale: float) -> dict:
         out["maximized"] = True
     return out
 
+REDUCE_MOTION = "ui.reduce_motion"  # library setting: no view fades, no portal pulse (Settings → Appearance)
+
+
+def reduce_motion_setting() -> bool:
+    return bool(library.setting(REDUCE_MOTION, False))
+
+
 class FramePortApp:
     def __init__(self, page: ft.Page):
         from .views.library import load_filters
@@ -115,6 +122,9 @@ class FramePortApp:
         # Frame card, "monitor" = the Monitor tab); it runs only while someone subscribes
         self.monitor_hub = MonitorHub(lambda: self.target if self.frame_state == "connected" else None)
         self.live_card = bool(library.setting(FC.SETTING, True))  # Settings → Appearance (kept here: no I/O on ticks)
+        self.reduce_motion = reduce_motion_setting()  # Settings → Appearance: no view fades / portal pulse
+        self.settings_view = None  # the Settings page last built (views/settings.SettingsView: its index scrolls)
+        self._pulsed_state = "none"  # frame_state when the sidebar last looked (the portal pulses on "connected")
         self._card_sample: dict | None = None  # the newest sample the card got (games + battery)
         self._card_state = "idle"  # the hub's state as the card last heard it
         self._card_fps = FC.fps_history()  # the running game's fps, 2 minutes
@@ -177,16 +187,24 @@ class FramePortApp:
         Built again by restyle() with the new theme's colours."""
         from .views.activity import ActivityPanel
 
-        self.body = ft.Container(expand=True, padding=ft.Padding(T.S6, T.S5, T.S5, 0))
+        # views fade into each other (150 ms) when the route changes; same-route redraws swap the content in place
+        self.switcher = ft.AnimatedSwitcher(ft.Container(), duration=0, reverse_duration=0,
+                                            transition=ft.AnimatedSwitcherTransition.FADE,
+                                            switch_in_curve=ft.AnimationCurve.EASE_OUT,
+                                            switch_out_curve=ft.AnimationCurve.EASE_IN, expand=True)
+        self._shown_route: tuple | None = None
+        self.body = ft.Container(self.switcher, expand=True, padding=ft.Padding(T.S6, T.S5, T.S5, 0))
         self.nav_col = ft.Column(spacing=T.px(2))
         self.conn_card = ft.Container()
         self.power_row = ft.Container(visible=False)  # the Frame's power button (sleep / restart / shut down)
         self.activity_card = ft.Container()
         self.activity = ActivityPanel(self)
+        wordmark = C.wordmark(T.px(17))
+        self._portal_mark = wordmark.data  # the wordmark's portal (dual themes): pulses once on connect
         sidebar = ft.Container(ft.Column([
             ft.Container(ft.Row([
                 C.logo(T.px(34)),
-                C.wordmark(T.px(17))], spacing=T.S3),
+                wordmark], spacing=T.S3),
                 padding=ft.Padding(T.S1, T.S2, 0, T.S5)),
             self.nav_col,
             ft.Container(expand=True),
@@ -383,6 +401,10 @@ class FramePortApp:
                                         "cancelled": tr("canceled")}.get(recent.state, "")
             self._act_idle_text.color = T.ERROR if recent and recent.state == "failed" else T.TEXT_3
         st = self.frame_state
+        if st != self._pulsed_state:
+            if st == "connected":
+                self._pulse_portal()
+            self._pulsed_state = st
         color = {"connected": T.OK, "connecting": T.WARN, "offline": T.ERROR}.get(st, T.TEXT_3)
         self._conn_dot.bgcolor = color
         self._conn_name.value = (self.target.label if self.target else None) or self._saved_name() or tr("Steam Frame")
@@ -561,7 +583,8 @@ class FramePortApp:
                     self.monitor_view = MonitorView(self)
                 view = self.monitor_view.mount()
             elif kind == "settings":
-                view = SettingsView(self).build()
+                self.settings_view = SettingsView(self)
+                view = self.settings_view.build()
             else:
                 view = ft.Row([WelcomeView(self).build()], alignment=ft.MainAxisAlignment.CENTER, expand=True,
                               vertical_alignment=ft.CrossAxisAlignment.START)
@@ -569,11 +592,46 @@ class FramePortApp:
             traceback.print_exc()
             view = C.empty_state(ft.Icons.ERROR_OUTLINE_ROUNDED, tr("Something went wrong"), explain(exc),
                                  C.primary(tr("Back to library"), on_click=lambda e: self.go("library")))
-        self.body.content = view
+        self._show_view(view)
         self._refresh_sidebar(update=False)
         self.page.update()
         if kind == "library":
             self.library_view.refresh_async()
+
+    def _show_view(self, view: ft.Control) -> None:
+        """Put a view into the body: a new route fades in (a new wrapper = a switch for Flutter's AnimatedSwitcher,
+        150 ms, none with Reduce motion); a redraw of the same route replaces the wrapper's content (no animation).
+        The wrapper fills the body (the switcher lays its children out in a centring Stack)."""
+        if self.route != self._shown_route or not isinstance(self.switcher.content, ft.Container):
+            self._shown_route = self.route
+            ms = 0 if self.reduce_motion else 150
+            self.switcher.duration = self.switcher.reverse_duration = ms
+            self.switcher.content = ft.Container(view, expand=True, alignment=ft.Alignment.TOP_LEFT)
+        else:
+            self.switcher.content.content = view
+
+    def set_reduce_motion(self, on: bool) -> None:
+        self.reduce_motion = bool(on)
+        library.set_setting(REDUCE_MOTION, self.reduce_motion)
+
+    def _pulse_portal(self) -> None:
+        """The wordmark's portal grows and settles once (the Frame just connected)."""
+        mark = self._portal_mark
+        if mark is None or self.reduce_motion:
+            return
+
+        async def pulse():
+            import asyncio
+
+            mark.scale = 1.35
+            C.update(mark)
+            await asyncio.sleep(0.25)
+            mark.scale = 1.0
+            C.update(mark)
+        try:
+            self.page.run_task(pulse)
+        except Exception:  # noqa: BLE001 - no event loop (tests, closing): it's only decoration
+            pass
 
     def refresh_view(self) -> None:
         """Bring the visible view up to date after a state change without blocking: the library updates only the

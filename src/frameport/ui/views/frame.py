@@ -86,38 +86,35 @@ class FrameView:
 
     def readiness(self, info: dict) -> ft.Control:
         app = self.app
-        rows = []
+        items = []
         lepton = info.get("lepton")
-        rows.append(C.status_row(bool(lepton), tr("Quest games (Lepton)"),
-                                 tr("Ready") if lepton
-                                 else tr("Valve's Android runtime isn't installed (needs Developer Mode)"),
-                                 None if lepton else C.secondary(tr("Install"), ft.Icons.DOWNLOAD_ROUNDED,
-                                                                 lambda e: app.install_lepton()),
-                                 help="lepton"))
+        items.append(C.Check(bool(lepton), tr("Quest games (Lepton)"),
+                             tr("Ready") if lepton
+                             else tr("Valve's Android runtime isn't installed (needs Developer Mode)"),
+                             "lepton", (tr("Install"), ft.Icons.DOWNLOAD_ROUNDED, app.install_lepton)))
         pr = info.get("proton") or {}
         ready, sug = pr.get("ready"), pr.get("suggested")
         if pr:
-            rows.append(C.status_row(
+            items.append(C.Check(
                 bool(ready), tr("PC VR games (Proton)"),
                 tr("{display_name} installed").format(display_name=ready['display_name']) if ready else
                 (tr("{display_name} can be installed (about 1 GiB; Steam restarts once)")
                  .format(display_name=sug['display_name']) if sug else
                  tr("Not offered by Steam on this Frame yet")),
-                C.secondary(tr("Test"), G.TEST, lambda e: app.test_proton()) if ready else
-                C.primary(tr("Install…"), ft.Icons.DOWNLOAD_ROUNDED, lambda e: app.install_proton(), disabled=not sug),
-                help="proton"))
+                "proton", (tr("Install…"), ft.Icons.DOWNLOAD_ROUNDED, app.install_proton) if sug else None,
+                C.secondary(tr("Test"), G.TEST, lambda e: app.test_proton()) if ready else None))
             xr = (pr.get("openxr") or {}).get("name")
-            rows.append(C.status_row(bool(xr), tr("OpenXR runtime"), xr or tr("None found"), help="openxr"))
+            items.append(C.Check(bool(xr), tr("OpenXR runtime"), xr or tr("None found"), "openxr"))
         keys = info.get("kernel_keys") or {}
         if keys.get("max_keys"):
             high = keys["keys"] > keys["max_keys"] * 0.75
-            rows.append(C.status_row(not high if keys["keys"] < keys["max_keys"] else False, tr("Game launch capacity"),
-                                     tr("{used}/{max} kernel keys used").format(used=keys["keys"],
-                                                                                max=keys["max_keys"])
-                                     + (tr(" · restart the Frame soon to reset it") if high else ""),
-                                     help="kernel_keys"))
-        return C.section(tr("Ready to play"), C.card(ft.Column(rows, spacing=0),
-                                                     padding=ft.Padding(T.S4, T.S2, T.S4, T.S2)))
+            items.append(C.Check(not high if keys["keys"] < keys["max_keys"] else False, tr("Game launch capacity"),
+                                 tr("{used}/{max} kernel keys used").format(used=keys["keys"], max=keys["max_keys"])
+                                 + (tr(" · restart the Frame soon to reset it") if high else ""),
+                                 "kernel_keys",
+                                 (tr("Restart the Frame…"), ft.Icons.RESTART_ALT_ROUNDED,
+                                  lambda: app.frame_power("restart"))))
+        return C.section(tr("Ready to play"), C.card(C.checklist(items), padding=ft.Padding(T.S4, T.S2, T.S4, T.S2)))
 
     def installed(self, info: dict) -> ft.Control:
         """The list fills in the background (icon thumbnails may need creating the first time)."""

@@ -23,7 +23,7 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     Frame, and 24 px line glyphs `fp:frame|port|patch|container|test|pc|sync|live|shot|keys|recipe|link`, copied into
     the assets dir and shown as tinted `ft.Image`s: pass `G.FRAME` … wherever an icon goes, `C.as_icon` / the button
     helpers handle both kinds; `src/assets/icon.png` = the bundles' app icon), `components.py` (pill, card, callout,
-    status_row, art_fill, confirm, `update()` = safe update: in Flet 1.0 reading `.page` of an unmounted control
+    checklist, art_fill, confirm, `update()` = safe update: in Flet 1.0 reading `.page` of an unmounted control
     raises), `jobs.py` (background FIFO job queue, one at a time, cancel via Reporter; no Flet), `views/`
     (library: search/filters/tags/sort as pure tested helpers; game: hero + one-click install, patches under
     "Customize"; frame: device + readiness + installed, or connect wizard; files: the Frame's file manager (persistent
@@ -81,8 +81,18 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     **Never recreate clickable controls on progress ticks** (sidebar, activity tiles): update their properties —
     replacing them 5×/s swallowed clicks (couldn't leave the Library during an upload).
     Labelled switches: `C.switch(label, …)` (Material's default label colour is dark on our dark theme).
+    Setup checklists (Frame → Ready to play, Settings → Tools / This PC) = `C.checklist([C.Check(ok, title, detail,
+    help, fix=(label, icon, handler), extra=control)])`: ok True/False/"warn"/None (= spinner); the fix button shows
+    inline only while an item isn't ready — wire existing actions only. Motion: `app.body` holds an
+    `ft.AnimatedSwitcher` (`app._show_view`): a new route gets a new wrapper (150 ms fade), a same-route redraw swaps
+    the wrapper's content (no animation; persistent views just remount); the wordmark's portal (`wordmark().data`)
+    pulses once when frame_state turns "connected"; both off with setting `ui.reduce_motion` (Settings → Appearance
+    "Reduce motion", `app.reduce_motion`). Settings has a fixed index column (`settings.SECTIONS` order, Appearance
+    first, Remove FramePort last): entries scroll the section column via `scroll_to(scroll_key=…)` (sections wrapped
+    in Containers with `ft.ScrollKey`), the header stays; `app.settings_view.show_section(key)` (ui_smoke
+    `settings-index`).
     Help hints: wording for non-obvious terms lives in `ui/help.py` (`HELP`); show it with `C.help_icon(key)` or the
-    `help=` argument of `section`/`status_row`/`kv`, tooltips via `C.tip()` (wraps). Game actions for the Library
+    `help=` argument of `section`/`kv` (`C.Check` help key), tooltips via `C.tip()` (wraps). Game actions for the Library
     right-click menu (one `ft.ContextMenu` around the grid, filled on right-click) and the game page's "…" menu come
     from `app.game_actions()`. Picking art (`sources.apply_choice`) downloads into a staging dir and keeps the old
     art if nothing came back; "Update Steam art on Frame" re-sends the art set to the game's anchor (agent ≥ 12).

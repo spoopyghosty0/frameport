@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from types import SimpleNamespace
+from typing import NamedTuple
 
 import flet as ft
 
@@ -299,9 +300,10 @@ def wordmark(size: float) -> ft.Control:
 
     mark = glyphs.portal_mark(user_data_dir(), T.ACCENT, T.SECONDARY, T.BG)
     word = lambda text, color: ft.Text(text, size=size, weight=ft.FontWeight.W_800, color=color)  # noqa: E731
-    return ft.Row([word("Frame", T.ACCENT),
-                   ft.Image(src=asset_url(mark), width=size * 0.8, height=size * 1.4, fit=ft.BoxFit.CONTAIN),
-                   word("Port", T.SECONDARY)],
+    portal = ft.Image(src=asset_url(mark), width=size * 0.8, height=size * 1.4, fit=ft.BoxFit.CONTAIN, scale=1.0,
+                      animate_scale=ft.Animation(220, ft.AnimationCurve.EASE_OUT))
+    # .data = the portal (the app pulses it once when the Frame connects)
+    return ft.Row([word("Frame", T.ACCENT), portal, word("Port", T.SECONDARY)], data=portal,
                   spacing=size * 0.08, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
 
@@ -591,17 +593,53 @@ def kv(label: str, value: str | ft.Control, help: str | None = None) -> ft.Row:
                                 expand=True)], vertical_alignment=ft.CrossAxisAlignment.START)
 
 
-def status_row(ok: bool | None, heading: str, detail: str = "", action: ft.Control | None = None,
-               help: str | None = None) -> ft.Container:
-    icon, color = {True: (ft.Icons.CHECK_CIRCLE_ROUNDED, T.OK), False: (ft.Icons.ERROR_ROUNDED, T.ERROR),
-                   None: (ft.Icons.RADIO_BUTTON_UNCHECKED_ROUNDED, T.WARN)}[ok]
-    return ft.Container(ft.Row([
-        as_icon(icon, T.px(20), color),
-        ft.Column([with_help(body(heading, T.TEXT, weight=ft.FontWeight.W_500), help)]
-                  + ([meta(detail)] if detail else []),
-                  spacing=1, expand=True),
-        *([action] if action else []),
-    ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S3), padding=ft.Padding(0, T.px(6), 0, T.px(6)))
+class Check(NamedTuple):
+    """One line of a setup checklist (checklist()). ok: True = ready, False = a problem, "warn" = optional/not
+    needed yet, None = still checking (spinner). fix = (label, icon, handler) shown on the right while the item isn't
+    ready (handler() takes no arguments); extra = a control shown on the right in every state (e.g. "Test")."""
+    ok: bool | str | None
+    title: str
+    detail: str = ""
+    help: str | None = None
+    fix: tuple[str, str | None, Callable[[], object]] | None = None
+    extra: ft.Control | None = None
+
+
+def check_look(ok: bool | str | None) -> tuple[str | None, str]:
+    """(icon, colour) of a checklist mark; icon None = a spinner (still checking)."""
+    return {True: (ft.Icons.CHECK_CIRCLE_ROUNDED, T.OK), False: (ft.Icons.ERROR_ROUNDED, T.ERROR),
+            "warn": (ft.Icons.RADIO_BUTTON_UNCHECKED_ROUNDED, T.WARN),
+            None: (None, T.SECONDARY if T.DUAL else T.ACCENT)}[ok]
+
+
+def check_fix(item: Check) -> tuple[str, str | None, Callable[[], object]] | None:
+    """The fix button an item shows: only while it's a problem or not set up (not while ready or still checking)."""
+    return item.fix if item.ok in (False, "warn") else None
+
+
+def checklist(items: list[Check | tuple]) -> ft.Column:
+    """The setup checklists (Frame → Ready to play, Settings → Tools and This PC): a mark, the title (+ help) and
+    detail, and the item's fix button inline on the right. Put it in a card(padding=Padding(S4, S2, S4, S2))."""
+    rows = []
+    for raw in items:
+        item = raw if isinstance(raw, Check) else Check(*raw)
+        icon, color = check_look(item.ok)
+        mark = ft.Container(spinner() if icon is None else as_icon(icon, T.px(20), color), width=T.px(20),
+                            alignment=ft.Alignment.CENTER)
+        right: list[ft.Control] = []
+        fix = check_fix(item)
+        if fix:
+            label, fix_icon, handler = fix
+            right.append(secondary(label, fix_icon, lambda e, h=handler: h()))
+        if item.extra is not None:
+            right.append(item.extra)
+        rows.append(ft.Container(ft.Row([
+            mark,
+            ft.Column([with_help(body(item.title, T.TEXT, weight=ft.FontWeight.W_500), item.help)]
+                      + ([meta(item.detail)] if item.detail else []), spacing=1, expand=True),
+            *right,
+        ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S3), padding=ft.Padding(0, T.px(6), 0, T.px(6))))
+    return ft.Column(rows, spacing=0)
 
 
 def art_fill(src: str | None, radius: int | None = None, placeholder_icon: str = ft.Icons.VIDEOGAME_ASSET_OUTLINED,
