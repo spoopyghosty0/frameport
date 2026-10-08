@@ -1,0 +1,23 @@
+package: com.VR_HOT.VR_HOT_Quest
+title: VR HOT Quest
+status: works
+tested_version: 0.8.8.1
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+- frame.oculusos
+device:
+- device.text_input_window
+adapter:
+  controller_models: 1
+  haptic_fix: 1
+verified:
+  date: '2026-10-08'
+  known_good_sha256: c321606c536eba1673572a9f44fd9e20d2cb5bd9609d536189e6ad7057b9cd67
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20260922.6101926'
+  agent: 59
+  issue: 98
+source_hint: VR-HOT-Quest-0.8.8.1

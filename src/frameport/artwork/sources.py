@@ -304,6 +304,68 @@ def apply_custom(package: str, kind: str, path: str | Path) -> Path:
     return out
 
 
+# A Linux app's own icon (GitHub #99: from its .desktop file / AppImage), applied automatically: no PICKED marker, and
+# APP_ICON records which icon.* it is, so a later pick (store art, the user's own) is told apart from it.
+APP_ICON = ".app-icon"
+APP_ICON_MIN_PX = 16
+
+
+def _sha256(path: Path) -> str:
+    import hashlib
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def icon_source(package: str) -> str:
+    """What the game's icon artwork is: "custom" (the user's pick, store art or an install link's icon), "app" (the
+    Linux app's own icon, applied automatically) or "generated" (no icon: Steam's is composed or a placeholder). The
+    Frame's agent puts the app's own icon first unless this says "custom"."""
+    d = fetch.artwork_dir(package)
+    icon = next(iter(sorted(d.glob("icon.*"))), None)
+    if icon is None:
+        return "generated"
+    marker = d / APP_ICON
+    try:
+        if marker.read_text(encoding="utf-8").strip() == _sha256(icon):
+            return "app"
+    except OSError:
+        pass
+    return "custom"
+
+
+def apply_app_icon(package: str, data: bytes) -> Path | None:
+    """Store a Linux app's own icon (PNG/JPEG bytes) as the game's icon when it has none and nothing was picked (the
+    user's choice and store art always stay). Not marked as the user's pick. Returns the stored file, or None when
+    nothing changed."""
+    import io
+
+    from PIL import Image, UnidentifiedImageError
+
+    d = fetch.artwork_dir(package)
+    if (d / fetch.PICKED).exists() or icon_source(package) == "custom":
+        return None
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            im.load()
+            im = im.copy()
+    except (OSError, UnidentifiedImageError, Image.DecompressionBombError):
+        return None
+    if min(im.size) < APP_ICON_MIN_PX:
+        return None
+    if max(im.size) > 1024:
+        im.thumbnail((1024, 1024), Image.LANCZOS)
+    tmp = d / ".app-icon.tmp"
+    im.convert("RGBA").save(tmp, "PNG", optimize=True)
+    out = d / "icon.png"
+    if out.exists() and out.read_bytes() == tmp.read_bytes():
+        tmp.unlink()
+        return None
+    _drop_kind(d, "icon")
+    tmp.replace(out)
+    (d / APP_ICON).write_text(_sha256(out), encoding="utf-8")
+    return out
+
+
 def remove_custom(package: str, kind: str) -> None:
     """Remove one kind of artwork (the Steam set then composes it from the other kinds, or uses a placeholder)."""
     if kind not in CUSTOM_KINDS:

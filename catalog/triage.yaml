@@ -18,6 +18,16 @@ signatures:
     severity: fatal
     diagnosis: 32-bit-only APK. The Steam Frame has no AArch32; this cannot run. Use the PC (Rift) version via Revive.
     suggest: []
+  - id: android-too-new
+    pattern: '(NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError)\b.*(Landroid/window/|android\.window\.|(storeStoreFence|loadLoadFence)\(\)V in class Ljava/lang/invoke/VarHandle)'
+    severity: fatal
+    diagnosis: The app calls Android 12/13+ classes (android.window.*, VarHandle fences) that the Frame's Android 11 (API 30) container doesn't have; it needs a newer Android (e.g. minSdk 34 apps). Nothing to patch - it can't run until Valve updates the Frame's Android.
+    suggest: []
+  - id: web-wrapper
+    pattern: '(Creating TwaLauncher for com\.oculus\.browser|NameNotFoundException:? com\.oculus\.browser)'
+    severity: fatal
+    diagnosis: The app is a website in an Android wrapper (Trusted Web Activity) that opens Meta's browser (com.oculus.browser), which the Frame doesn't have, so nothing opens. There's no game to port - open the website (TWALauncherActivity's "Using URL" line) in a browser instead.
+    suggest: []
   - id: unity-render-crash
     pattern: 'CRASH\s*:.*#\d+\s+pc [0-9a-f]+\s+\S*libgallium_dri\.so'
     severity: fatal

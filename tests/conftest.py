@@ -24,7 +24,7 @@ def isolated_home(tmp_path, monkeypatch):
 
 # ---------------------------------------------------------------------------------------------- AXML builder
 def build_axml(elements, strings_extra=()):
-    """elements: list of ("start", name, [(attr, kind, value)]) / ("end", name). kind: "str" | "bool".
+    """elements: list of ("start", name, [(attr, kind, value)]) / ("end", name). kind: "str" | "bool" | "int" | "ref".
     Produces a UTF-16 string-pool binary XML like aapt does (enough for our editor)."""
     ns = "http://schemas.android.com/apk/res/android"
     pool = []
@@ -61,6 +61,9 @@ def build_axml(elements, strings_extra=()):
             for a, kind, v in e[2]:
                 if kind == "str":
                     attrs += struct.pack("<IIIHBBI", idx(ns), idx(a), idx(v), 8, 0, 0x03, idx(v))
+                elif kind in ("int", "ref"):  # decimal integer / resource reference (@string/…)
+                    attrs += struct.pack("<IIIHBBI", idx(ns), idx(a), 0xFFFFFFFF, 8, 0, 0x10 if kind == "int" else 0x01,
+                                         v)
                 else:
                     attrs += struct.pack("<IIIHBBI", idx(ns), idx(a), 0xFFFFFFFF, 8, 0, 0x12, 0xFFFFFFFF if v else 0)
             ext = struct.pack("<IIHHHHHH", 0xFFFFFFFF, idx(e[1]), 20, 20, len(e[2]), 0, 0, 0)

@@ -7,7 +7,7 @@ from pathlib import Path
 from ..core.events import Reporter
 from ..core.models import Recipe
 from ..frame.connection import Frame, FrameTarget, sh_quote
-from ..install import installer
+from ..install import drives, installer
 from ..validate import device
 from .base import Target
 
@@ -19,6 +19,12 @@ class FrameLeptonTarget(Target):
         self.target = target
         self.frame = Frame(target, password)
         self.label = target.label
+        self.dest: str | None = None  # where new games go; None = the library setting (drives.install_dest)
+
+    def install_dest(self) -> str | None:
+        """A drive's install dir for new installs (GitHub #90), None = internal storage. Reinstalls stay where the
+        game is (the agent keeps an installed game's folder)."""
+        return self.dest if self.dest is not None else drives.install_dest()
 
     def connect(self) -> FrameLeptonTarget:
         if self.frame.client is not None and not self.frame.alive():
@@ -33,8 +39,10 @@ class FrameLeptonTarget(Target):
     def installed(self) -> list[dict]:
         return self.connect().frame.agent("list_installed")["games"]
 
-    def install(self, package, title, apk: Path, data_dir, recipe: Recipe, reporter: Reporter, apk_only=False):
-        plan = installer.InstallPlan(package, title, apk, data_dir, recipe, apk_only)
+    def install(self, package, title, apk: Path, data_dir, recipe: Recipe, reporter: Reporter, apk_only=False,
+                data_files=None):
+        plan = installer.InstallPlan(package, title, apk, data_dir, recipe, apk_only, dest=self.install_dest(),
+                                     data_files=data_files)
         return installer.install(self.connect().frame, plan, reporter)
 
     def add_to_library(self, packages, reporter):
@@ -60,12 +68,26 @@ class FrameLeptonTarget(Target):
 
     def install_pcvr(self, package, title, game_dir, exe, recipe, reporter, **extra):
         plan = installer.PcvrPlan(package, title, Path(game_dir), exe, recipe, extra.get("revive_dir"),
-                                  extra.get("exe_sha256"), extra.get("revive_version"), extra.get("art_lookup"))
+                                  extra.get("exe_sha256"), extra.get("revive_version"), extra.get("art_lookup"),
+                                  dest=self.install_dest())
         return installer.install_pcvr(self.connect().frame, plan, reporter)
 
-    def install_linux(self, package, title, root, exe, files, appimage, openxr, reporter, x86_64=False):
-        plan = installer.LinuxPlan(package, title, Path(root), exe, files, appimage, openxr, x86_64)
+    def install_linux(self, package, title, root, exe, files, appimage, openxr, reporter, x86_64=False,
+                      desktop_entry=True):
+        plan = installer.LinuxPlan(package, title, Path(root), exe, files, appimage, openxr, x86_64,
+                                   dest=self.install_dest(), desktop_entry=desktop_entry)
         return installer.install_linux(self.connect().frame, plan, reporter)
+
+    def drives(self) -> list[dict]:
+        return drives.list_drives(self.connect().frame)
+
+    def move(self, package: str, dest: str, reporter: Reporter) -> dict:
+        """Move an installed game's files to another drive (or back to internal storage: dest "internal")."""
+        return drives.move(self.connect().frame, package, dest, reporter)
+
+    def set_desktop_entry(self, package: str, enabled: bool) -> dict:
+        """A Linux app's Desktop Mode entry on or off (GitHub #84)."""
+        return self.connect().frame.agent("desktop_entry", package=package, enabled=enabled)
 
     def proton_status(self, tool: str | None = None) -> dict:
         return self.connect().frame.agent("proton_status", tool=tool)

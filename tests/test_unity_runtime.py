@@ -258,7 +258,7 @@ def test_scan_finds_games_in_download_manager_layouts(tmp_path, monkeypatch):
 
     from frameport.sources import quest_dump
 
-    monkeypatch.setattr(quest_dump, "_package_of", lambda apk: Path(apk).stem)
+    monkeypatch.setattr(quest_dump, "_apk_ids", lambda apk: (Path(apk).stem, None))
 
     def apk(path):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -336,7 +336,7 @@ def test_install_builds_a_game_that_was_never_built(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "build_game", build)
     monkeypatch.setattr(pipeline, "remove_converted_copies", lambda package: 0)
     installed = []
-    target = SimpleNamespace(label="frame", install=lambda *a: installed.append(a[2]) or {"ok": True},
+    target = SimpleNamespace(label="frame", install=lambda *a, **k: installed.append(a[2]) or {"ok": True},
                              add_to_library=lambda pkgs, rep: None)
     pipeline.install_game("com.x.fresh", target, None)  # used to fail with KeyError 'apk'
     assert installed == [out]

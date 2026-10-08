@@ -10,7 +10,7 @@ from .apk.workspace import ApkWorkspace
 from .core.events import Reporter
 from .core.models import Analysis, BuildResult, Recipe, SourceGame
 from .core.paths import work_dir
-from .patches import base
+from .patches import base, upstream
 from .patches.overport import OVERPORT_PATCHES
 from .tools import overport as overport_tool
 from .validate.static import check_apk
@@ -36,25 +36,28 @@ def overport_ids(recipe: Recipe, alt: bool = False) -> list[str]:
     return ids
 
 
-def apk_patches(recipe: Recipe) -> list[base.Patch]:
-    patches = [base.get(pid) for pid in recipe.patches if base.get(pid).stage == "apk"]
+def apk_patches(selection: dict) -> list[base.Patch]:
+    patches = [base.get(pid) for pid in selection if base.get(pid).stage == "apk"]
     return sorted(patches, key=lambda p: p.order)
 
 
 def apply_frame_fixes(apk_in: Path, apk_out_unsigned: Path, analysis: Analysis, recipe: Recipe,
-                      reporter: Reporter) -> tuple[list[str], list[dict]]:
+                      reporter: Reporter) -> tuple[list[str], list[dict], dict[str, str]]:
+    """Apply the recipe's apk-stage patches; returns (applied ids, checks, workarounds left out because OVRPort's
+    output already has the upstream fix (patches/upstream.py))."""
     applied, checks = [], []
     with ApkWorkspace(apk_in) as ws:
-        for patch in apk_patches(recipe):
+        selection = upstream.resolve(ws, recipe.patches, reporter)
+        for patch in apk_patches(selection.patches):
             reporter.check_cancel()
-            ctx = base.ApkContext(ws, analysis, recipe.params(patch.id), reporter, recipe.patches)
+            ctx = base.ApkContext(ws, analysis, selection.patches.get(patch.id) or {}, reporter, selection.patches)
             if patch.apply(ctx):
                 applied.append(patch.id)
                 reporter.log(f"applied {patch.id}" + (f" ({'; '.join(ctx.notes)})" if ctx.notes else ""))
             for name, ok, detail in patch.validate(ctx):
                 checks.append({"name": name, "ok": ok, "detail": detail})
         ws.write(apk_out_unsigned)
-    return applied, checks
+    return applied, checks, selection.superseded
 
 
 def build(source: SourceGame, analysis: Analysis, recipe: Recipe, outdir: Path, reporter: Reporter,
@@ -73,7 +76,7 @@ def build(source: SourceGame, analysis: Analysis, recipe: Recipe, outdir: Path, 
     variants = [("primary", False)] + ([("alt", True)] if recipe.alt_patches and recipe.overport else [])
     alt_copy = Path(source.apk).with_name(f"{pkg}.alt-noforcequit.apk")
     results = {}
-    all_checks, applied = [], []
+    all_checks, applied, superseded = [], [], {}
     try:
         for variant, alt in variants:
             input_apk = alt_copy if converted and alt and alt_copy.exists() else Path(source.apk)
@@ -88,7 +91,9 @@ def build(source: SourceGame, analysis: Analysis, recipe: Recipe, outdir: Path, 
                 shutil.copyfile(input_apk, patched)
             reporter.stage(f"Frame fixes ({variant})")
             unsigned = work / f"{pkg}.{variant}.unsigned.apk"
-            applied, checks = apply_frame_fixes(patched, unsigned, analysis, recipe, reporter)
+            applied, checks, left_out = apply_frame_fixes(patched, unsigned, analysis, recipe, reporter)
+            if variant == "primary":
+                superseded = left_out
             patched.unlink(missing_ok=True)
             reporter.stage(f"sign ({variant})")
             final = outdir / (f"{pkg}.apk" if not alt else f"{pkg}.alt-noforcequit.apk")
@@ -106,4 +111,4 @@ def build(source: SourceGame, analysis: Analysis, recipe: Recipe, outdir: Path, 
     primary, alt_apk = results["primary"], results.get("alt")
     return BuildResult(pkg, primary, alt_apk, sha256(primary), sha256(alt_apk) if alt_apk else None, applied,
                        all_checks, {"overport": overport_ids(recipe), "alt_overport": overport_ids(recipe, True)
-                                    if alt_apk else None})
+                                    if alt_apk else None, "superseded": superseded})

@@ -67,7 +67,7 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     mouse drags/right-clicks.
     Live Frame data comes from one app-owned `app.monitor_hub` (`frame/monitor_hub.py`): subscribers name modules +
     interval, the hub runs one agent `_monitor` stream (union of modules, fastest interval; per-module collection
-    needs agent v63), reconnects after a lost stream and stops it when nobody subscribes; `_poll` retries an "error".
+    needs agent v65), reconnects after a lost stream and stops it when nobody subscribes; `_poll` retries an "error".
     Subscribers: "monitor" (the Monitor tab, everything, only while shown) and "card" = the sidebar's live Frame card
     (`ui/frame_card.py` helpers: battery ring, "now playing" row with fps + 2-min sparkline → click opens Monitor;
     games + battery every 5 s, paused while a job's stage is "Upload…", only while connected and setting
@@ -102,6 +102,14 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     uploads are interruptible (Cancel checked per MiB) and resumable (big files via SFTP `.part` append, small files
     streamed in tar batches; the agent counts files already in `incoming/`). Multi-select in the Library queues
     installs after asking every needed question up front. Failures end in one pop-up (Resume / Uninstall / log).
+  - Other drives (GitHub #90, agent v63): anchors stay in ~/Applications/quest-frame, a game's files may live in
+    `<mount>/FramePort/<pkg>` (`deployment.json` base). Agent `drives` (/proc/mounts, /run/media + Steam library
+    drives; vfat/exfat/ntfs/read-only refused), prepare*/finalize_linux `dest` (unmounted = error, never a fallback;
+    installed games keep their base), `move` (detached systemd-run + `move_status`; cp -a under podman unshare,
+    count+bytes check, symlink retarget, launch.sh: Quest app_dir line / Linux+PC VR rewritten from the record's
+    `launcher` field, else text swap), list_installed `drive`/`drive_missing` (install_state keeps such games
+    "installed"). PC: `install/drives.py`, library setting `install.drive` (Frame page → Storage), game menu
+    "Move to…" (job kind tool-frame), CLI `frame drives`/`frame move`/`install --dest`. Untested on the device.
   - **PC VR repacks are pre-patched to run directly** (proven: Rick and Morty, Vader Immortal run when the exe is
     launched directly; Revive breaks them). So Rift games default to `as_is` = install the copy unchanged and launch
     the exe directly (`pcvr.xr_timefix` for the Frame OpenXR-1.1→1.0 fix, `pcvr.no_crash_reporter` for Unreal).
@@ -162,6 +170,11 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
     OpenXR, source) instead of recipe/patches, `C.missing_libraries` callout (Frame deployment, else last install);
     no Analyze/Rebuild/recipe/share/Game settings actions, Frame only; platform "Linux" badge + library filter; Steam
     tags "Linux app on Frame"/"Linux"; `_follow_catalog` skips them; local files of a lone AppImage = the file only.
+    Desktop Mode entries (GitHub #84, agent v63): finalize_linux writes `frameport-<slug>.desktop` to
+    ~/.local/share/applications (+ ~/Desktop if it exists; `X-FramePort-Package` marks ours), launch.sh with
+    `FRAMEPORT_DESKTOP=1` skips the Steam-parent watchdog and Steam's display; ensure_host_fixes refreshes entries
+    (older installs, stale ones removed), uninstall/purge remove them. Per app: library entry field `desktop_entry`
+    (default on; patches don't apply to Linux apps) → game page switch → agent `desktop_entry`. Untested on device.
   - Quest/Rift twins stay separate entries, shown and named in Steam "Title (Quest)"/"(Rift)" (`core/titles.py`).
   - `Recipe.as_is` = install unchanged (pre-patched libraries): `pipeline.prepare_as_is`; auto for APKs that already
     contain FrameBridge (`frame_patched`). For Rift it changes nothing (the dump is never modified; the Frame copy
@@ -177,6 +190,10 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
   - `patches/` — **the unit of modularity**. `base.py` (Patch interface, registry), `overport.py` (overport CLI patch ids,
     discovered dynamically via `overport patches`), `frame/*.py` (one module per Frame fix), `settings.py` (FrameBridge
     adapter keys + device files as patches). Add a patch = add a module that calls `register(...)`.
+    `upstream.py`: upstream fixes that replace a workaround per build (a probe finds the fix in OVRPort's output →
+    the build leaves the workaround out, `build.superseded`; recipes unchanged). Registered: `ovrport.haptic_envelope`
+    (→ `adapter.haptic_fix`, `frame/haptic_envelope.py`) and `ovrport.microphone_stream` (→ `frame.ovr_microphone`),
+    both fixed in OVRPort runtime 3.4.3-aa54c3f (ovrport/app#73; haptics owner-verified with Lucky's Tale 2026-10-07).
   - `analysis/` — APK/ELF inspection (`detect.py`), `elf.py` (pyelftools reads; own DT_NEEDED writer), `stubgen.py`
     (generates the ovr_* stub .so without a compiler).
   - `apk/` — `axml.py` (binary manifest editor), `workspace.py` (staged zip edits), `sign.py` (apksigner; it aligns too).
@@ -557,7 +574,7 @@ recipe keeps it on). I Am Cat works with issues (judder; scale 0.8 no help). Rob
 libroblox, also with the Vulkan shim). Installs skip the Steam restart when the shortcut is unchanged and wait while a
 game runs (agent v37). New default fixes in FramePort's code reach games already in a library: after every app update
 `library._follow_catalog` re-derives each non-user recipe once (setting `recipes.app_version`; tests switch it off via
-`library.REFRESH_ON_UPDATE`); analysis fields added later still need a re-analysis. Troubleshooting techniques: docs/PLAYBOOK.md "Debugging techniques". Unity `boot.config` "vulkan" substring mislabels GLES games as Vulkan
+`library.REFRESH_ON_UPDATE`). Analysis fields added later: **bump `analysis/detect.ANALYSIS_VERSION`** (stored as `analysis.extra.analysis_version`); older entries whose APK is still there are analysed again at the GUI's start (background thread, not a job: ~8 s per 900 MB APK) and before a build (`pipeline.refresh_analyses`, GitHub #104); only `analysis`/`suggested` change, user recipes stay; an unreadable APK gets `analysis_failed` = the version (not retried until the next bump). Troubleshooting techniques: docs/PLAYBOOK.md "Debugging techniques". Unity `boot.config` "vulkan" substring mislabels GLES games as Vulkan
 (I Am Cat ran GLES); OVRPlugin's "Unavailable OpenXR extension: XR_FB_scene" is routine (no longer triaged).
 **Round 4 (2026-10-04):** XR_KHR_android_surface_swapchain is listed by the Frame's runtime but returns
 FUNCTION_UNSUPPORTED → adapter `surface_emul` (default on, `native/adapter/surface_swapchain.c`): an ordinary runtime

@@ -11,7 +11,8 @@ Streaming: python3 frameport_agent.py _keyboard   (a virtual keyboard: JSON line
 
 Install layout (one Lepton container per game; same as the manual installs from 2026-09):
     ~/Applications/quest-frame/<pkg>/            anchor: launch.sh, deployment.json, artwork/ (always internal storage)
-    <dest>/<pkg>/lepton-app/{game.apk,obb/}      game files (dest defaults to ~/Applications/quest-frame)
+    <dest>/<pkg>/lepton-app/{game.apk,obb/}      game files (dest defaults to ~/Applications/quest-frame; another
+                                                 drive: <mount>/FramePort, see `drives`; `move` moves a game)
     <dest>/<pkg>/lepton-data/                    container data + saves (kept across reinstalls)
     <dest>/<pkg>/lepton-shaders/, settings.conf, launch.log
 
@@ -21,6 +22,7 @@ PC VR (Oculus Rift) games packed for the Frame (id "rift.<slug>"), run by Proton
     <dest>/<id>/revive/                          Revive (ReviveInjector.exe + DLLs)
     <dest>/<id>/compatdata/                      Proton prefix = saves (kept across reinstalls), launch.log
 """
+import base64
 import fcntl
 import glob
 import hashlib
@@ -36,7 +38,7 @@ import time
 import zlib
 from types import SimpleNamespace
 
-AGENT_VERSION = 63
+AGENT_VERSION = 65
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -679,6 +681,12 @@ def ensure_host_fixes():
         upgraded = []
     if upgraded:
         changed.append(f"launchers: exit watchdog, dashboard, play log ({len(upgraded)})")
+    try:
+        entries = refresh_desktop_entries()
+    except Exception:  # noqa: BLE001
+        entries = []
+    if entries:
+        changed.append(f"Desktop Mode entries ({len(entries)})")
     return changed
 
 
@@ -1027,7 +1035,7 @@ def shortcut_args(pkg):
     """(exe, title, start dir, icon, tag, tags, openvr) of an installed game's shortcut."""
     anchor = os.path.join(ANCHORS, pkg)
     dep = json.load(open(os.path.join(anchor, "deployment.json")))
-    icon = next(iter(glob.glob(os.path.join(anchor, "artwork/icon.*"))), "")
+    icon = app_icon_for(dep, anchor, steam=True)[0]  # a Linux app's own icon unless the user chose one
     flat = dep.get("vr") is False
     kind = dep.get("kind")
     tag = ("Windows game on Frame" if flat else "PC VR on Frame") if kind == "pcvr" else \
@@ -1100,6 +1108,10 @@ def _shortcuts_worker(payload):
     args = json.loads(payload)
     result = {"state": "done", "added": [], "errors": [], "finished": None}
     os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
+    try:  # new art (e.g. the user's own icon) also reaches Linux apps' Desktop Mode entries
+        refresh_desktop_entries()
+    except Exception:  # noqa: BLE001
+        pass
     try:
         users = library_users()
         # games Steam only knows through their devkit entry (this Frame's Steam drops FramePort's shortcuts.vdf
@@ -1215,6 +1227,176 @@ def cmd_shortcut_status(args):
         return {"state": "none"}
 
 
+# ------------------------------------------------------------------------------------------ drives (GitHub #90)
+# Games can live on another drive (a microSD card): their files go to <mount>/FramePort/<pkg>; the anchor (launch.sh,
+# deployment.json, artwork) always stays on internal storage, so the Steam shortcut never changes. SteamOS mounts
+# removable drives under /run/media/<user>/<label or uuid>.
+PROC_MOUNTS = "/proc/mounts"
+MEDIA_ROOT = "/run/media"
+DRIVE_DIR = "FramePort"
+# Lepton's container data and Proton prefixes need Unix permissions, owners and symlinks: these can't hold them
+UNUSABLE_FS = ("vfat", "msdos", "exfat", "ntfs", "ntfs3", "fuseblk")
+MOVE_STATUS = os.path.join(HOME, ".cache/frameport-move.json")
+MOVE_HEADROOM = 512 << 20
+# what stays in the anchor when a game's files live there too (base == anchor): never moved
+ANCHOR_ITEMS = ("launch.sh", "launch.sh.tmp", "deployment.json", "deployment.json.tmp", "artwork", "plays.log")
+
+
+def _unescape_mount(field):
+    """/proc/mounts writes spaces, tabs, newlines and backslashes in paths as octal escapes (\\040 ...)."""
+    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m[1], 8)), field)
+
+
+def mounts(path=None):
+    """[(device, mount point, fstype, options)] from /proc/mounts."""
+    out = []
+    try:
+        with open(path or PROC_MOUNTS, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                p = line.split()
+                if len(p) >= 4:
+                    out.append((_unescape_mount(p[0]), _unescape_mount(p[1]), p[2], p[3].split(",")))
+    except OSError:
+        pass
+    return out
+
+
+def _inside(path, root):
+    path, root = os.path.normpath(path), os.path.normpath(root)
+    return path == root or path.startswith(root.rstrip("/") + "/")
+
+
+def mount_of(path, table=None):
+    """The mount entry holding `path` (longest mount point prefix), or None."""
+    best = None
+    for m in mounts() if table is None else table:
+        if _inside(path, m[1]) and (best is None or len(m[1]) > len(best[1])):
+            best = m
+    return best
+
+
+def _space(path):
+    try:
+        st = os.statvfs(path)
+    except OSError:
+        return None, None
+    return st.f_bavail * st.f_frsize, st.f_blocks * st.f_frsize
+
+
+def _drive(path, install_dir, m, internal=False, steam_library=False):
+    fstype = m[2] if m else ""
+    free, total = _space(path)
+    reason = ""
+    if not internal:
+        if fstype in UNUSABLE_FS:
+            reason = (f"{fstype} can't hold game data (no Unix permissions or symlinks); format the drive in SteamOS "
+                      f"to install games on it")
+        elif m and "ro" in m[3]:
+            reason = "mounted read-only"
+        elif free is None:
+            reason = "can't be read"
+    return {"id": "internal" if internal else path, "path": path, "install_dir": install_dir,
+            "label": "Internal storage" if internal else (os.path.basename(path.rstrip("/")) or path),
+            "fstype": fstype, "device": m[0] if m else "", "internal": internal,
+            "removable": not internal and _inside(path, MEDIA_ROOT), "steam_library": steam_library,
+            "free_bytes": free, "total_bytes": total, "usable": not reason, "reason": reason}
+
+
+def list_drives(table=None):
+    """Internal storage, every drive mounted under /run/media and the drives of Steam library folders."""
+    table = mounts() if table is None else table
+    home_m = mount_of(HOME, table)
+    libs = [os.path.dirname(lib) for lib in steam_libraries()]
+    drives = [_drive(HOME, ANCHORS, home_m, internal=True, steam_library=any(_inside(lib, HOME) for lib in libs))]
+    seen = {home_m[1] if home_m else HOME}
+    for m in sorted(table, key=lambda m: m[1]):
+        if _inside(m[1], MEDIA_ROOT) and m[1] != os.path.normpath(MEDIA_ROOT) and m[1] not in seen \
+                and os.path.isdir(m[1]):
+            seen.add(m[1])
+            drives.append(_drive(m[1], os.path.join(m[1], DRIVE_DIR), m,
+                                 steam_library=any(_inside(lib, m[1]) for lib in libs)))
+    for lib in libs:  # a Steam library on a drive mounted elsewhere
+        m = mount_of(lib, table)
+        if m and m[1] not in seen and m[1] != "/" and not _inside(HOME, m[1]):
+            seen.add(m[1])
+            drives.append(_drive(m[1], os.path.join(m[1], DRIVE_DIR), m, steam_library=True))
+    return drives
+
+
+def cmd_drives(args):
+    """Where games can be installed: internal storage and other drives (microSD), with free space and whether they can
+    hold games (`usable`, else `reason`); `games` = how many installed games each holds."""
+    drives = list_drives()
+    games = cmd_list_installed({})["games"]
+    for d in drives:
+        d["games"] = sum(1 for g in games if drive_path(g["base"], drives) == d["path"])
+    return {"drives": drives}
+
+
+def drive_path(base, drives):
+    """The path of the listed drive holding `base` (internal storage: HOME), or None."""
+    best = None
+    for d in drives:
+        if not d["internal"] and _inside(base, d["path"]) and (best is None or len(d["path"]) > len(best)):
+            best = d["path"]
+    return best or (HOME if _inside(base, HOME) else None)
+
+
+def drive_missing(base, table=None):
+    """A game's files are on a drive that isn't there now (the microSD card was taken out)."""
+    if _inside(base, HOME):
+        return False
+    m = mount_of(base, table)
+    return m is None or m[1] == "/" or not os.path.isdir(base)
+
+
+def resolve_dest(dest, table=None):
+    """The install dir for new games: internal storage (None, "", "internal", ~/Applications/quest-frame) or a drive's
+    FramePort folder (its mount point is accepted too). A drive that isn't mounted is an error, never a silent
+    fallback to internal storage."""
+    if not dest or dest == "internal":
+        return ANCHORS
+    dest = os.path.normpath(os.path.expanduser(dest))
+    if dest == ANCHORS:
+        return ANCHORS
+    if not os.path.isabs(dest):
+        raise AgentError(f"bad install location {dest!r}")
+    for d in list_drives(table):
+        if d["internal"] or not _inside(dest, d["path"]):
+            continue
+        if not d["usable"]:
+            raise AgentError(f"{d['label']}: {d['reason']}")
+        if dest == d["path"]:
+            dest = d["install_dir"]
+        try:
+            os.makedirs(dest, exist_ok=True)
+        except OSError as exc:
+            raise AgentError(f"can't create {dest} on {d['label']}: {exc.strerror or exc}") from exc
+        return dest
+    raise AgentError(f"{dest}: that drive isn't inserted (or not mounted)")
+
+
+def check_base_present(base, title):
+    if drive_missing(base):
+        raise AgentError(f"{title}'s files are on a drive that isn't inserted ({base})")
+
+
+def new_base(args, pkg, dep):
+    """(base, free bytes there) for prepare*: an installed game keeps its base; a new one goes to args["dest"]."""
+    if dep:
+        check_base_present(dep["base"], dep.get("title") or pkg)
+        base = dep["base"]
+        probe = base
+        while not os.path.exists(probe) and probe != os.path.dirname(probe):
+            probe = os.path.dirname(probe)
+    else:
+        dest = resolve_dest(args.get("dest"))
+        base = os.path.join(dest, pkg)
+        probe = dest if os.path.exists(dest) else HOME
+    st = os.statvfs(probe)
+    return base, st.f_bavail * st.f_frsize
+
+
 # ------------------------------------------------------------------------------------------ install
 def deployment(pkg):
     path = os.path.join(ANCHORS, pkg, "deployment.json")
@@ -1231,6 +1413,7 @@ def deployment(pkg):
 
 def cmd_list_installed(args):
     games = []
+    table = mounts()
     for dep_path in sorted(glob.glob(os.path.join(ANCHORS, "*/deployment.json"))):
         try:
             dep = json.load(open(dep_path))
@@ -1244,6 +1427,15 @@ def cmd_list_installed(args):
         dep.setdefault("title", dep["package"])
         dep.setdefault("kind", "quest")
         dep["anchor"] = os.path.dirname(dep_path)  # its artwork/ feeds the Steam grid (shortcuts)
+        # GitHub #90: games on another drive (microSD); drive_missing = that drive isn't inserted now
+        dep["drive_missing"] = drive_missing(dep["base"], table)
+        if _inside(dep["base"], HOME):
+            dep["drive"] = {"internal": True, "path": HOME, "label": "Internal storage"}
+        else:
+            m = mount_of(dep["base"], table)
+            mp = m[1] if m and m[1] != "/" and not dep["drive_missing"] else \
+                os.path.dirname(os.path.dirname(dep["base"].rstrip("/")))  # <mount>/FramePort/<pkg>
+            dep["drive"] = {"internal": False, "path": mp, "label": os.path.basename(mp.rstrip("/")) or mp}
         if dep["kind"] == "linux":
             exe = os.path.join(dep["base"], "app", dep.get("exe", ""))
             dep["apk_present"] = os.path.isfile(exe)
@@ -1448,6 +1640,8 @@ def cmd_launch(args):
     dep = deployment(pkg)
     if not dep or not dep.get("appid"):
         raise AgentError(f"{pkg} is not installed")
+    if dep.get("base"):
+        check_base_present(dep["base"], dep.get("title") or pkg)
     if run(["pgrep", "-x", "steam"]).returncode != 0:
         raise AgentError("Steam isn't running on the Frame")
     devkit = devkit_gameid(pkg)
@@ -1902,10 +2096,9 @@ def cmd_prepare(args):
     pkg = check_pkg(args["package"])
     title = args["title"]
     ensure_host_fixes()
-    dest = os.path.expanduser(args.get("dest") or ANCHORS)
     anchor = os.path.join(ANCHORS, pkg)
     dep = deployment(pkg)
-    base = dep["base"] if dep else os.path.join(dest, pkg)
+    base, free = new_base(args, pkg, dep)
     appid = dep["appid"] if dep else shortcut_appid(f'"{anchor}/launch.sh"', title)
     if container_running(appid):
         raise AgentError(f"{title} is running on the Frame. Close it first.")
@@ -1923,12 +2116,10 @@ def cmd_prepare(args):
     want_sha = args.get("apk_sha256")
     same_apk = bool(want_sha and os.path.exists(apk) and os.path.getsize(apk) == args.get("apk_size")
                     and sha256_file(apk) == want_sha)
-    st = os.statvfs(base if os.path.exists(base)
-                    else os.path.dirname(base) if os.path.exists(os.path.dirname(base)) else HOME)
     lepton, _ = lepton_path()
     return {"package": pkg, "base": base, "anchor": anchor, "appid": appid, "incoming": incoming,
             "installed": bool(dep), "same_apk": same_apk, "existing_obb": existing,
-            "free_bytes": st.f_bavail * st.f_frsize, "lepton": lepton}
+            "free_bytes": free, "lepton": lepton}
 
 
 LAUNCH_SH = (r"""#!/usr/bin/env bash
@@ -2024,6 +2215,8 @@ def upgrade_launchers():
         except OSError:
             continue
         new = text
+        if "a Linux app. Generated by FramePort" in new and "FRAMEPORT_DESKTOP" not in new:
+            new = upgrade_linux_launcher(new)
         if OLD_WATCHDOG in new and "parent=$PPID" not in new:
             new = new.replace(OLD_WATCHDOG, WATCHDOG, 1)
         if "_dashboard_worker" not in new and 'child=$!\nwait "$child"' in new:
@@ -2051,6 +2244,18 @@ def upgrade_launchers():
         os.replace(tmp, path)
         changed.append(os.path.basename(os.path.dirname(path)))
     return changed
+
+
+def upgrade_linux_launcher(text):
+    """A Linux app's launcher from before agent v63, made fit for Desktop Mode's menu entry (GitHub #84): no Steam
+    parent watchdog and no display taken from Steam when FRAMEPORT_DESKTOP is set."""
+    old_if = 'if [[ -z "${DISPLAY:-}" ]]; then'
+    if old_if in text:
+        text = text.replace(old_if, 'if [[ -z "${FRAMEPORT_DESKTOP:-}" && -z "${DISPLAY:-}" ]]; then', 1)
+    if "\nparent=$PPID\n" in text:
+        text = text.replace("\nparent=$PPID\n",
+                            '\nparent=$PPID\n[[ -n "${FRAMEPORT_DESKTOP:-}" ]] && parent=1\n', 1)
+    return text
 
 
 def write_launcher(anchor, base, pkg, title, appid, lepton, env):
@@ -2493,10 +2698,9 @@ def cmd_prepare_pcvr(args):
     """Where to upload a Windows game + Revive, and what the Frame already has (unchanged files aren't re-sent)."""
     pkg = check_pkg(args["package"])
     title = args["title"]
-    dest = os.path.expanduser(args.get("dest") or ANCHORS)
     anchor = os.path.join(ANCHORS, pkg)
     dep = deployment(pkg)
-    base = dep["base"] if dep else os.path.join(dest, pkg)
+    base, free = new_base(args, pkg, dep)
     appid = dep["appid"] if dep else shortcut_appid(f'"{anchor}/launch.sh"', title)
     if dep and pcvr_pids(base):
         raise AgentError(f"{title} is running on the Frame. Close it first.")
@@ -2506,10 +2710,9 @@ def cmd_prepare_pcvr(args):
     # files already in place plus files uploaded by an interrupted install (still in incoming/): not sent again
     existing = {t: {**tree_manifest(os.path.join(base, t)), **tree_manifest(os.path.join(incoming, t))}
                 for t in PCVR_TREES}
-    st = os.statvfs(base if os.path.exists(base) else HOME)
     status = cmd_proton_status({"tool": args.get("tool")})
     return {"package": pkg, "base": base, "anchor": anchor, "appid": appid, "incoming": incoming,
-            "installed": bool(dep), "existing": existing, "free_bytes": st.f_bavail * st.f_frsize,
+            "installed": bool(dep), "existing": existing, "free_bytes": free,
             "proton": status.get("ready"), "proton_suggested": status.get("suggested"), "openxr": status.get("openxr")}
 
 
@@ -2731,6 +2934,7 @@ def cmd_finalize_pcvr(args):
            "sha256": args.get("exe_sha256"), "revive": revive, "revive_version": args.get("revive_version"),
            "proton": tool["name"], "xr_layer": xr_layer, "oculus_hmd": oculus_hmd, "vr": vr,
            "libovr_redirect": bool(args.get("libovr_redirect")),
+           "launcher": {"env": args.get("env") or {}, "game_args": args.get("game_args") or []},
            "recipe": args.get("recipe"),
            "installed_by": "frameport",
            "files": {t: manifests.get(t) or {} for t in PCVR_TREES},
@@ -2749,8 +2953,9 @@ LINUX_LAUNCH_SH = r"""#!/usr/bin/env bash
 set -uo pipefail
 cd {run_dir_q} || {{ echo "App files missing at {run_dir_q}" >&2; exit 1; }}
 export XDG_RUNTIME_DIR="${{XDG_RUNTIME_DIR:-/run/user/$(id -u)}}"
-# Steam passes the display session (gamescope's X/Wayland); headless launches (launch tests) take it from Steam
-if [[ -z "${{DISPLAY:-}}" ]]; then
+# Steam passes the display session (gamescope's X/Wayland); headless launches (launch tests) take it from Steam.
+# Started from Desktop Mode's menu (FRAMEPORT_DESKTOP=1, GitHub #84) the desktop's own session is used.
+if [[ -z "${{FRAMEPORT_DESKTOP:-}}" && -z "${{DISPLAY:-}}" ]]; then
     steam_pid=$(pgrep -x steam | head -n1 || true)
     if [[ -n "$steam_pid" && -r "/proc/$steam_pid/environ" ]]; then
         while IFS= read -r -d '' kv; do
@@ -2760,6 +2965,8 @@ if [[ -z "${{DISPLAY:-}}" ]]; then
     fi
 fi
 {extra_env}parent=$PPID
+# Desktop Mode's launcher exits right after starting this: no Steam parent to watch
+[[ -n "${{FRAMEPORT_DESKTOP:-}}" ]] && parent=1
 {exe_q} "$@" >{log_q} 2>&1 &
 child=$!
 trap 'kill -TERM $child 2>/dev/null' INT TERM
@@ -2823,7 +3030,7 @@ def cmd_prepare_linux(args):
     pkg = check_pkg(args["package"])
     anchor = os.path.join(ANCHORS, pkg)
     dep = deployment(pkg)
-    base = dep["base"] if dep else anchor
+    base, free = new_base(args, pkg, dep)
     appid = dep["appid"] if dep else shortcut_appid(f'"{anchor}/launch.sh"', args["title"])
     if dep and pcvr_pids(base):
         raise AgentError(f"{args['title']} is running on the Frame. Close it first.")
@@ -2831,9 +3038,8 @@ def cmd_prepare_linux(args):
     os.makedirs(os.path.join(incoming, "app"), exist_ok=True)
     existing = {"app": {**tree_manifest(os.path.join(base, "app")), **tree_manifest(os.path.join(incoming, "app"))}}
     existing["app"] = {k: v for k, v in existing["app"].items() if not k.startswith("squashfs-root/")}
-    st = os.statvfs(base if os.path.exists(base) else HOME)
     return {"package": pkg, "base": base, "anchor": anchor, "appid": appid, "incoming": incoming,
-            "installed": bool(dep), "existing": existing, "free_bytes": st.f_bavail * st.f_frsize}
+            "installed": bool(dep), "existing": existing, "free_bytes": free}
 
 
 def cmd_finalize_linux(args):
@@ -2841,7 +3047,7 @@ def cmd_finalize_linux(args):
     libraries, write the launcher and deployment.json."""
     pkg = check_pkg(args["package"])
     title = args["title"]
-    prep = cmd_prepare_linux({"package": pkg, "title": title})
+    prep = cmd_prepare_linux({"package": pkg, "title": title, "dest": args.get("dest")})
     base, anchor, appid, incoming = prep["base"], prep["anchor"], prep["appid"], prep["incoming"]
     exe_rel = os.path.normpath(args["exe"])
     if exe_rel.startswith("..") or os.path.isabs(exe_rel):
@@ -2889,13 +3095,46 @@ def cmd_finalize_linux(args):
         q = os.path.normpath(os.path.join(app, name))
         if q.startswith(app + os.sep) and os.path.isfile(q):
             os.chmod(q, os.stat(q).st_mode | 0o111)
-    command = prefix + [program]
     # ldd can't read x86_64 programs here: their libraries come from FEX's x86 root (/usr/share/guestos/fex-mesa)
     missing = [] if x86 else missing_libraries(app, appimage_programs(run_dir) if appimage else [exe])
     os.makedirs(anchor, exist_ok=True)
-    extra = "".join(f"export {k}={shlex.quote(str(v))}\n" for k, v in (args.get("env") or {}).items()
+    write_linux_launcher(anchor, base, pkg, title, exe_rel, appimage, prefix, args.get("env"))
+    art_in = os.path.join(base, "incoming-artwork")
+    if os.path.isdir(art_in):
+        shutil.rmtree(os.path.join(anchor, "artwork"), ignore_errors=True)
+        shutil.move(art_in, os.path.join(anchor, "artwork"))
+    vr = bool(args.get("openxr"))
+    dep = {"package": pkg, "kind": "linux", "appid": int(appid), "base": base, "title": title, "exe": exe_rel,
+           "appimage": appimage, "vr": vr, "x86_64": x86, "tags": args.get("tags") or [],
+           "sha256": args.get("exe_sha256"),
+           "missing_libraries": missing, "recipe": args.get("recipe"), "installed_by": "frameport",
+           "launcher": {"env": args.get("env") or {}}, "desktop_entry": args.get("desktop_entry", True) is not False,
+           "files": {"app": want or {}}, "agent_version": AGENT_VERSION, "time": time.time()}
+    with open(os.path.join(anchor, "deployment.json"), "w") as f:
+        json.dump(dep, f, indent=2)
+    try:  # the app's own icon (GitHub #99), found again for every install: a new version may bring another
+        own_icon = ensure_app_icon(dep, anchor, refresh=True)["icon"]
+    except OSError:
+        own_icon = None
+    desktop = None
+    try:
+        if dep["desktop_entry"]:
+            desktop = write_desktop_entry(pkg)
+        else:
+            remove_desktop_entries(pkg)
+    except OSError:
+        pass
+    return {"ok": True, "base": base, "appid": appid, "moved_files": moved, "missing_libraries": missing,
+            "desktop_entry": desktop, "app_icon": app_icon_result(own_icon)}
+
+
+def write_linux_launcher(anchor, base, pkg, title, exe_rel, appimage, prefix, env):
+    """launch.sh of a Linux app; prefix = FEX's command for x86_64 builds ([] for arm64)."""
+    run_dir, program = linux_run_target(base, exe_rel, appimage)
+    command = list(prefix) + [program]
+    extra = "".join(f"export {k}={shlex.quote(str(v))}\n" for k, v in (env or {}).items()
                     if re.fullmatch(r"[A-Z_][A-Z0-9_]*", k))
-    if x86:  # fex-compat-tool exits ("No compat data path?") without it; FEX keeps its config in <it>/fex-emu
+    if prefix:  # fex-compat-tool exits ("No compat data path?") without it; FEX keeps its config in <it>/fex-emu
         data = shlex.quote(os.path.join(base, "compatdata"))
         extra = f"mkdir -p {data}\nexport STEAM_COMPAT_DATA_PATH={data}\n" + extra
     text = LINUX_LAUNCH_SH.format(title=title.replace("\n", " "), pkg=pkg, run_dir_q=shlex.quote(run_dir),
@@ -2907,19 +3146,346 @@ def cmd_finalize_linux(args):
         f.write(text)
     os.chmod(path + ".tmp", 0o755)
     os.replace(path + ".tmp", path)
-    art_in = os.path.join(base, "incoming-artwork")
-    if os.path.isdir(art_in):
-        shutil.rmtree(os.path.join(anchor, "artwork"), ignore_errors=True)
-        shutil.move(art_in, os.path.join(anchor, "artwork"))
-    vr = bool(args.get("openxr"))
-    dep = {"package": pkg, "kind": "linux", "appid": int(appid), "base": base, "title": title, "exe": exe_rel,
-           "appimage": appimage, "vr": vr, "x86_64": x86, "tags": args.get("tags") or [],
-           "sha256": args.get("exe_sha256"),
-           "missing_libraries": missing, "recipe": args.get("recipe"), "installed_by": "frameport",
-           "files": {"app": want or {}}, "agent_version": AGENT_VERSION, "time": time.time()}
-    with open(os.path.join(anchor, "deployment.json"), "w") as f:
-        json.dump(dep, f, indent=2)
-    return {"ok": True, "base": base, "appid": appid, "moved_files": moved, "missing_libraries": missing}
+
+
+# ------------------------------------------------------------------------------------------ Linux apps' own icons
+# The icon an AppImage or app folder brings (GitHub #99): its .DirIcon, else the Icon= of its .desktop file, looked up
+# next to it, in usr/share/icons/hicolor/<size>/apps and usr/share/pixmaps. Copied to <anchor>/artwork/app-icon.<ext>
+# and used for the Desktop Mode entry and the Steam shortcut unless the user chose an icon on the PC: the PC writes
+# what the art set's icon is into artwork/.icon-source ("custom" = the user's pick or store art, "app" = the app's own,
+# "generated" = FramePort's placeholder). Never reads outside the app's folder (symlinks are resolved and checked).
+APP_ICON = "app-icon"
+ICON_SOURCE = ".icon-source"
+APP_ICON_MAX = 4 << 20
+APP_ICON_SEND = 1 << 20  # the PNG goes back to the PC (library artwork) up to this size
+ICON_EXTS = (".png", ".svg")
+
+
+def _real_file_in(root, path):
+    """The real path of `path` when it is a file inside `root` (symlinks resolved), else None."""
+    real_root = os.path.realpath(root)
+    real = os.path.realpath(path)
+    if real.startswith(real_root + os.sep) and os.path.isfile(real):
+        return real
+    return None
+
+
+def icon_format(path):
+    """("png", width) or ("svg", 0) by content, None for anything else (xpm, ico, unreadable)."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(1024)
+    except OSError:
+        return None
+    if head[:8] == b"\x89PNG\r\n\x1a\n" and len(head) >= 24:
+        return "png", struct.unpack(">I", head[16:20])[0]
+    if b"<svg" in head:
+        return "svg", 0
+    return None
+
+
+def desktop_fields(path):
+    """The [Desktop Entry] group of a .desktop file as {key: value} (localised keys left out)."""
+    out, group = {}, None
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("["):
+                    group = line
+                elif group == "[Desktop Entry]" and "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    if "[" not in k:
+                        out.setdefault(k.strip(), v.strip())
+    except OSError:
+        pass
+    return out
+
+
+def app_desktop_file(root, appimage):
+    """The app's own .desktop file: an AppImage's top-level one, else the first within three folder levels."""
+    if appimage:
+        found = sorted(glob.glob(os.path.join(glob.escape(root), "*.desktop")))
+    else:
+        found = []
+        for dirpath, dirs, files in os.walk(root):
+            depth = 0 if dirpath == root else os.path.relpath(dirpath, root).count(os.sep) + 1
+            dirs[:] = sorted(dirs) if depth < 3 else []
+            found += [os.path.join(dirpath, n) for n in sorted(files) if n.endswith(".desktop")]
+    for path in found:
+        if _real_file_in(root, path):
+            return path
+    return None
+
+
+def _icon_candidates(base, name):
+    """Files that may be the icon called `name` (an Icon= value) under the folder `base`."""
+    if not name or os.path.isabs(name) or ".." in name.split("/"):
+        return []
+    stem = name[:-4] if name.lower().endswith(ICON_EXTS + (".xpm",)) else name
+    out = [os.path.join(base, name)] if "/" in name or name != stem else []
+    if "/" in name:
+        return out
+    esc = glob.escape
+    for share in (os.path.join(base, "usr", "share"), os.path.join(base, "share")):
+        for ext in ICON_EXTS:
+            out += glob.glob(os.path.join(esc(share), "icons", "hicolor", "*", "apps", esc(stem) + ext))
+            out.append(os.path.join(share, "pixmaps", stem + ext))
+    out += [os.path.join(base, stem + ext) for ext in ICON_EXTS]
+    return out
+
+
+def find_app_icon(root, appimage):
+    """{"icon": real path or None, "wmclass": the .desktop file's StartupWMClass or None} of an app's folder (an
+    AppImage's squashfs-root). The icon: the biggest PNG when it is at least 128 px, else an SVG, else the biggest
+    PNG; .DirIcon (an AppImage's own icon, often a symlink) counts like the .desktop file's Icon=."""
+    if not os.path.isdir(root):
+        return {"icon": None, "wmclass": None}
+    desktop = app_desktop_file(root, appimage)
+    fields = desktop_fields(desktop) if desktop else {}
+    paths = [os.path.join(root, ".DirIcon")] if appimage else []
+    bases = [root]
+    if desktop:  # a folder app's .desktop file may sit in a subfolder with the icon next to it
+        d = os.path.dirname(desktop)
+        while d.startswith(root + os.sep):
+            bases.append(d)
+            d = os.path.dirname(d)
+    for base in bases:
+        paths += _icon_candidates(base, fields.get("Icon", ""))
+    pngs, svgs, seen = [], [], set()
+    for p in paths:
+        real = _real_file_in(root, p)
+        if not real or real in seen:
+            continue
+        seen.add(real)
+        try:
+            if os.path.getsize(real) > APP_ICON_MAX:
+                continue
+        except OSError:
+            continue
+        fmt = icon_format(real)
+        if fmt and fmt[0] == "png":
+            pngs.append((fmt[1], real))
+        elif fmt:
+            svgs.append(real)
+    best = max(pngs, default=None, key=lambda t: t[0])
+    icon = best[1] if best and best[0] >= 128 else svgs[0] if svgs else best[1] if best else None
+    return {"icon": icon, "wmclass": fields.get("StartupWMClass") or None}
+
+
+def linux_app_root(dep):
+    app = os.path.join(dep["base"], "app")
+    return os.path.join(app, "squashfs-root") if dep.get("appimage") else app
+
+
+def ensure_app_icon(dep, anchor, refresh=False):
+    """The Linux app's own icon in <anchor>/artwork/app-icon.<ext> (copied from its files when missing, or always with
+    `refresh`, e.g. after an install), plus its StartupWMClass: {"icon": path or None, "wmclass": ...}."""
+    found = find_app_icon(linux_app_root(dep), dep.get("appimage"))
+    art = os.path.join(anchor, "artwork")
+    have = sorted(glob.glob(os.path.join(glob.escape(art), APP_ICON + ".*")))
+    icon = have[0] if have else None
+    if found["icon"] and (refresh or not icon):
+        dst = os.path.join(art, f"{APP_ICON}.{icon_format(found['icon'])[0]}")
+        os.makedirs(art, exist_ok=True)
+        for p in have:
+            if p != dst:
+                os.remove(p)
+        shutil.copyfile(found["icon"], dst + ".tmp")
+        os.replace(dst + ".tmp", dst)
+        icon = dst
+    elif refresh and not found["icon"]:
+        for p in have:
+            os.remove(p)
+        icon = None
+    return {"icon": icon, "wmclass": found["wmclass"]}
+
+
+def icon_source(anchor):
+    """What the art set's icon is, as the PC wrote it ("custom", "app", "generated"), or None (older PC app)."""
+    try:
+        with open(os.path.join(anchor, "artwork", ICON_SOURCE), encoding="utf-8") as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
+def app_icon_for(dep, anchor, steam=False):
+    """(icon file, StartupWMClass) for a game's Desktop Mode entry / Steam shortcut: the user's chosen icon (PC:
+    "custom") > a Linux app's own icon > the art set's icon (FramePort's placeholder). Steam gets PNGs only."""
+    art_icon = next(iter(sorted(glob.glob(os.path.join(glob.escape(anchor), "artwork", "icon.*")))), "")
+    if dep.get("kind") != "linux" or not dep.get("base"):
+        return art_icon, None
+    try:
+        own = ensure_app_icon(dep, anchor)
+    except OSError:
+        return art_icon, None
+    if icon_source(anchor) == "custom" and art_icon:
+        return art_icon, own["wmclass"]
+    if own["icon"] and (not steam or own["icon"].endswith(".png")):
+        return own["icon"], own["wmclass"]
+    return art_icon, own["wmclass"]
+
+
+def app_icon_result(icon):
+    """finalize_linux's report of the app's own icon; a PNG comes back (base64) for the PC's library artwork."""
+    if not icon:
+        return None
+    out = {"file": os.path.basename(icon), "size": os.path.getsize(icon)}
+    if icon.endswith(".png") and out["size"] <= APP_ICON_SEND:
+        with open(icon, "rb") as f:
+            out["png"] = base64.b64encode(f.read()).decode("ascii")
+    return out
+
+
+# ------------------------------------------------------------------------------------------ Desktop Mode entries
+# Linux apps also get an entry in Desktop Mode's application menu and an icon on its desktop (GitHub #84: some apps
+# work better with the desktop's mouse and keyboard than in Gaming Mode, where Steam Input owns the controllers).
+DESKTOP_APPS = os.path.join(HOME, ".local/share/applications")
+DESKTOP_DIR = os.path.join(HOME, "Desktop")
+DESKTOP_KEY = "X-FramePort-Package"
+GAME_TAGS = {"game", "games", "action", "adventure", "arcade", "casual", "fighting", "platformer", "puzzle", "racing",
+             "rhythm", "rpg", "role playing", "shooter", "simulation", "sports", "strategy", "survival", "horror"}
+
+
+def desktop_value(text):
+    """A Desktop Entry string value: one line, backslashes escaped."""
+    return re.sub(r"[\r\n\t]", " ", str(text).replace("\\", "\\\\"))
+
+
+def desktop_exec_arg(arg):
+    """One Exec argument (Desktop Entry spec): in double quotes with \\ " ` $ backslash-escaped and % doubled, then
+    escaped once more as a string value."""
+    quoted = '"' + re.sub(r'([\\"`$])', r"\\\1", str(arg)).replace("%", "%%") + '"'
+    return desktop_value(quoted)
+
+
+def desktop_file_name(pkg):
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", pkg[len("linux."):] if pkg.startswith("linux.") else pkg)
+    return f"frameport-{slug.strip('-.') or 'app'}.desktop"
+
+
+def desktop_entry_text(dep, anchor):
+    icon, wmclass = app_icon_for(dep, anchor)
+    tags = {str(t).lower() for t in dep.get("tags") or []}
+    category = "Game;" if tags & GAME_TAGS else "Utility;"
+    lines = ["[Desktop Entry]", "Type=Application", f"Name={desktop_value(dep.get('title') or dep['package'])}",
+             "Comment=Installed by FramePort",
+             f"Exec=env FRAMEPORT_DESKTOP=1 {desktop_exec_arg(os.path.join(anchor, 'launch.sh'))}",
+             f"Path={desktop_value(anchor)}", "Terminal=false", f"Categories={category}"]
+    if icon:
+        lines.append(f"Icon={desktop_value(icon)}")
+    if wmclass:  # KDE's task bar groups the app's window under this entry (and shows its icon)
+        lines.append(f"StartupWMClass={desktop_value(wmclass)}")
+    lines.append(f"{DESKTOP_KEY}={dep['package']}")
+    return "\n".join(lines) + "\n"
+
+
+def _write_if_changed(path, text, mode):
+    try:
+        with open(path, encoding="utf-8") as f:
+            if f.read() == text and os.stat(path).st_mode & 0o777 == mode:
+                return False
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        f.write(text)
+    os.chmod(path + ".tmp", mode)
+    os.replace(path + ".tmp", path)
+    return True
+
+
+def desktop_entries(pkg=None, folder=None):
+    """FramePort's .desktop files (of one app, or all) in the menu and desktop folders: {path: package}."""
+    out = {}
+    for d in [folder] if folder else (DESKTOP_APPS, DESKTOP_DIR):
+        for path in sorted(glob.glob(os.path.join(d, "frameport-*.desktop"))):
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    m = re.search(rf"^{DESKTOP_KEY}=(.+)$", f.read(), re.M)
+            except OSError:
+                continue
+            if m and (pkg is None or m[1].strip() == pkg):
+                out[path] = m[1].strip()
+    return out
+
+
+def write_desktop_entry(pkg):
+    """The app's menu entry, plus a copy on ~/Desktop when that folder exists (Plasma starts executable .desktop files
+    there without asking). Returns {"menu": path, "desktop": path or None, "changed": bool}."""
+    anchor = os.path.join(ANCHORS, pkg)
+    dep = deployment(pkg)
+    if not dep:
+        raise AgentError(f"{pkg} is not installed")
+    text = desktop_entry_text(dep, anchor)
+    name = desktop_file_name(pkg)
+    for path in desktop_entries(pkg):  # the same app's entry under an older file name
+        if os.path.basename(path) != name:
+            os.remove(path)
+    menu = os.path.join(DESKTOP_APPS, name)
+    changed = _write_if_changed(menu, text, 0o755)
+    desk = None
+    if os.path.isdir(DESKTOP_DIR):
+        desk = os.path.join(DESKTOP_DIR, name)
+        changed = _write_if_changed(desk, text, 0o755) or changed
+    return {"menu": menu, "desktop": desk, "changed": changed}
+
+
+def remove_desktop_entries(pkg=None):
+    removed = []
+    for path in desktop_entries(pkg):
+        try:
+            os.remove(path)
+            removed.append(path)
+        except OSError:
+            pass
+    return removed
+
+
+def refresh_desktop_entries():
+    """Entries for every installed Linux app that wants one (older installs, changed art or titles); entries of apps
+    that are gone or switched off are removed. Returns the packages whose entries changed."""
+    changed, wanted = [], set()
+    for dep_path in sorted(glob.glob(os.path.join(ANCHORS, "*/deployment.json"))):
+        try:
+            with open(dep_path) as f:
+                dep = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(dep, dict) or dep.get("kind") != "linux" or not dep.get("package") \
+                or dep.get("desktop_entry", True) is False:
+            continue
+        wanted.add(dep["package"])
+        try:
+            if write_desktop_entry(dep["package"])["changed"]:
+                changed.append(dep["package"])
+        except (OSError, AgentError):
+            pass
+    for path, pkg in desktop_entries().items():
+        if pkg not in wanted:
+            os.remove(path)
+            changed.append(pkg)
+    return sorted(set(changed))
+
+
+def cmd_desktop_entry(args):
+    """Turn a Linux app's Desktop Mode entry on or off (deployment.json keeps the choice)."""
+    pkg = check_pkg(args["package"])
+    dep = deployment(pkg)
+    if not dep or dep.get("kind") != "linux":
+        raise AgentError(f"{pkg} is not an installed Linux app")
+    on = bool(args.get("enabled", True))
+    path = os.path.join(ANCHORS, pkg, "deployment.json")
+    with open(path) as f:
+        raw = json.load(f)
+    raw["desktop_entry"] = on
+    with open(path + ".tmp", "w") as f:
+        json.dump(raw, f, indent=2)
+    os.replace(path + ".tmp", path)
+    if on:
+        return {"enabled": True, **write_desktop_entry(pkg)}
+    return {"enabled": False, "removed": remove_desktop_entries(pkg)}
 
 
 def cmd_usb_link(args):
@@ -3067,6 +3633,9 @@ def cmd_uninstall(args):
             os.remove(p)
     if not keep_data:
         remove_tree(base)
+        remove_empty_drive_dir(base)
+    if linux:
+        remove_desktop_entries(pkg)
     anchor = os.path.join(ANCHORS, pkg)
     removed_sc = False
     if args.get("remove_shortcut") and steam_users():
@@ -3084,6 +3653,310 @@ def cmd_uninstall(args):
             p = os.path.join(anchor, name)
             remove_tree(p)
     return {"removed": True, "kept_saves": keep_data, "shortcut_removed": removed_sc}
+
+
+# ------------------------------------------------------------------------------------------ move (GitHub #90)
+def remove_empty_drive_dir(base):
+    """<drive>/FramePort once its last game is gone."""
+    parent = os.path.dirname(os.path.normpath(base))
+    if os.path.basename(parent) != DRIVE_DIR or _inside(parent, HOME):
+        return False
+    try:
+        os.rmdir(parent)
+        return True
+    except OSError:
+        return False
+
+
+def base_items(base, anchor):
+    """The entries of a game's base that are the game's files (with base == anchor, the anchor's own files stay)."""
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        return []
+    if os.path.normpath(base) == os.path.normpath(anchor):
+        names = [n for n in names if n not in ANCHOR_ITEMS]
+    return names
+
+
+def as_owner():
+    """Commands that must reach files owned by Lepton containers' user ids (overlayfs work dirs, the app's own
+    files) run in podman's user namespace, where the steamos user owns them all."""
+    return ["podman", "unshare"] if shutil.which("podman") else []
+
+
+def tree_stats(root, names):
+    """(files, bytes) of these entries of root: regular files and symlinks count (symlinks without size)."""
+    paths = [os.path.join(root, n) for n in names if os.path.lexists(os.path.join(root, n))]
+    if not paths:
+        return 0, 0
+    p = run(as_owner() + ["find"] + paths + ["(", "-type", "f", "-o", "-type", "l", ")", "-printf", r"%y %s\n"])
+    files = size = 0
+    for line in p.stdout.splitlines():
+        kind, _, n = line.partition(" ")
+        files += 1
+        if kind == "f" and n.isdigit():
+            size += int(n)
+    return files, size
+
+
+def replace_path(text, old, new):
+    """launch.sh text with the game's old folder replaced (the plain path and Wine's Z:\\ form). Paths that need
+    quoting differently can't be swapped as text: those launchers are written again instead."""
+    if "'" in new or (shlex.quote(old) == old and shlex.quote(new) != new):
+        raise AgentError(f"can't rewrite the launcher for {new!r}; reinstall the game once, then move it")
+    for o, n in ((old, new), (windows_path(old), windows_path(new))):
+        text = re.sub(re.escape(o) + r"(?=[/\\'\"\s;)|&]|$)", lambda m, n=n: n, text, flags=re.M)
+    return text
+
+
+def rebase_launcher(dep, anchor, new):
+    """launch.sh pointing at the game's new folder: the Quest launcher's app_dir line, Linux and PC VR launchers written
+    again from the install record (their settings are kept there since agent v63), else the path swapped as text."""
+    pkg, old = dep["package"], dep["base"]
+    path = os.path.join(anchor, "launch.sh")
+    with open(path) as f:
+        text = f.read()
+    kind = dep.get("kind", "quest")
+    launcher = dep.get("launcher")
+    if kind == "quest":
+        text, n = re.subn(r"^app_dir=.*$", lambda m: "app_dir=" + shlex.quote(new), text, count=1, flags=re.M)
+        if not n:
+            raise AgentError("launch.sh has no app_dir line; reinstall the game once, then move it")
+    elif kind == "linux" and launcher is not None:
+        prefix = []
+        if dep.get("x86_64"):
+            tool = pick_tool("linux_x86", linux_x86_tools())
+            prefix = compat_command(tool["dir"]) if tool and tool.get("dir") else None
+        if prefix is not None:
+            write_linux_launcher(anchor, new, pkg, dep.get("title") or pkg, dep["exe"], dep.get("appimage"), prefix,
+                                 launcher.get("env"))
+            return
+        text = replace_path(text, old, new)
+    elif kind == "pcvr" and launcher is not None:
+        tool = next((t for t in proton_tools() if t["name"] == dep.get("proton")), None)
+        if tool and tool.get("dir"):
+            write_proton_launcher(anchor, new, pkg, dep.get("title") or pkg, dep["appid"], tool, dep["exe"],
+                                  dep.get("revive", True), launcher.get("env"), dep.get("xr_layer"),
+                                  launcher.get("game_args") or [], dep.get("oculus_hmd"), vr=dep.get("vr", True))
+            return
+        text = replace_path(text, old, new)
+    else:
+        text = replace_path(text, old, new)
+    with open(path + ".tmp", "w") as f:
+        f.write(text)
+    os.chmod(path + ".tmp", 0o755)
+    if shutil.which("bash") and run(["bash", "-n", path + ".tmp"]).returncode != 0:
+        os.remove(path + ".tmp")
+        raise AgentError("the rewritten launcher isn't valid; nothing was moved")
+    os.replace(path + ".tmp", path)
+
+
+def retarget_symlinks(root, names, old, new):
+    """Symlinks in the moved files that point into the old folder (PC VR: the LibOVRRT redirect to Revive's runtime,
+    links in the Proton prefix) point into the new one."""
+    fixed = 0
+    for name in names:
+        for r, dirs, files in os.walk(os.path.join(root, name)):
+            for n in files + dirs:
+                p = os.path.join(r, n)
+                if not os.path.islink(p):
+                    continue
+                target = os.readlink(p)
+                if os.path.isabs(target) and _inside(target, old):
+                    try:
+                        os.remove(p)
+                        os.symlink(new + target[len(os.path.normpath(old)):], p)
+                        fixed += 1
+                    except OSError:
+                        pass
+    return fixed
+
+
+def _write_json(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w") as f:
+        json.dump(data, f, indent=2)
+    os.replace(path + ".tmp", path)
+
+
+def same_device(a, b):
+    return os.stat(a).st_dev == os.stat(b).st_dev
+
+
+def game_is_running(dep):
+    if dep.get("kind") in ("pcvr", "linux"):
+        return bool(pcvr_pids(dep["base"]))
+    return container_running(dep["appid"])
+
+
+def cmd_move(args):
+    """Move an installed game's files to another drive (or back to internal storage): `dest` as for prepare (a drive's
+    FramePort folder or its mount point, "internal"). The launcher, Steam shortcut and saves stay valid. Copies run
+    detached (poll move_status); detach=False runs it here (tests)."""
+    pkg = check_pkg(args["package"])
+    dep = deployment(pkg)
+    if not dep:
+        raise AgentError(f"{pkg} is not installed")
+    title = dep.get("title") or pkg
+    old = os.path.normpath(dep["base"])
+    check_base_present(old, title)
+    dest = resolve_dest(args.get("dest"))
+    new = os.path.normpath(os.path.join(dest, pkg))
+    anchor = os.path.join(ANCHORS, pkg)
+    if new == old:
+        raise AgentError(f"{title} is already there")
+    if game_is_running(dep):
+        raise AgentError(f"{title} is running on the Frame. Close it first.")
+    try:
+        cur = json.load(open(MOVE_STATUS))
+        if cur.get("state") == "running" and cur.get("pid") and os.path.exists(f"/proc/{cur['pid']}"):
+            raise AgentError(f"another move is running ({cur.get('title') or cur.get('package')})")
+    except (OSError, ValueError):
+        pass
+    items = base_items(old, anchor)
+    clash = [n for n in items if os.path.lexists(os.path.join(new, n))]
+    if new != anchor and os.path.isdir(new) and os.listdir(new):
+        clash = clash or sorted(os.listdir(new))
+    if clash:
+        raise AgentError(f"{new} already has files ({clash[0]}); remove them first")
+    os.makedirs(dest, exist_ok=True)
+    same_fs = same_device(old, dest)
+    files, size = tree_stats(old, items)
+    if not same_fs:
+        free = _space(dest)[0] or 0
+        if size > free - MOVE_HEADROOM:
+            raise AgentError(f"not enough space: {title} needs {size / 2**30:.1f} GiB, the drive has "
+                             f"{free / 2**30:.1f} GiB free")
+    job = {"package": pkg, "title": title, "from": old, "to": new, "items": items, "same_fs": same_fs,
+           "files": files, "total_bytes": size, "status": args.get("status") or MOVE_STATUS}
+    _write_json(job["status"], {"state": "running", "phase": "starting", "package": pkg, "title": title, "from": old,
+                                "to": new, "done_bytes": 0, "total_bytes": size, "started": time.time()})
+    if args.get("detach", True) is False:
+        move_worker(json.dumps(job))
+        return json.load(open(job["status"]))
+    p = run(["systemd-run", "--user", "--collect", "--quiet", f"--unit=frameport-move-{int(time.time())}",
+             "--setenv=HOME=" + HOME, sys.executable, os.path.abspath(__file__), "_move_worker", json.dumps(job)])
+    if p.returncode != 0:
+        _write_json(job["status"], {"state": "failed", "package": pkg, "error": p.stderr.strip()[-300:]})
+        raise AgentError(f"couldn't start the move: {p.stderr.strip()[-300:]}")
+    return {"started": True, "package": pkg, "from": old, "to": new, "total_bytes": size, "files": files,
+            "same_drive": same_fs, "status": job["status"]}
+
+
+def cmd_move_status(args):
+    try:
+        return json.load(open(args.get("status") or MOVE_STATUS))
+    except (OSError, ValueError):
+        return {"state": "none"}
+
+
+def move_worker(payload):
+    job = json.loads(payload)
+    status = {"state": "running", "phase": "copying", "package": job["package"], "title": job["title"],
+              "from": job["from"], "to": job["to"], "done_bytes": 0, "total_bytes": job["total_bytes"],
+              "started": time.time(), "pid": os.getpid()}
+    _write_json(job["status"], status)
+    try:
+        status.update(_move(job, status))
+        status["state"] = "done"
+    except Exception as exc:  # noqa: BLE001
+        status.update(state="failed", error=str(exc) if isinstance(exc, AgentError) else f"{type(exc).__name__}: {exc}")
+    status.update(finished=time.time(), phase=status["state"])
+    _write_json(job["status"], status)
+
+
+def _move(job, status):
+    import threading
+
+    pkg, old, new, items = job["package"], job["from"], job["to"], job["items"]
+    anchor = os.path.join(ANCHORS, pkg)
+    dep = deployment(pkg)
+    if not dep or os.path.normpath(dep["base"]) != old:
+        raise AgentError("the game's install record changed; nothing was moved")
+    os.makedirs(new, exist_ok=True)
+    done = []
+    try:
+        if job["same_fs"]:  # same drive: rename, nothing to copy
+            for n in items:
+                os.rename(os.path.join(old, n), os.path.join(new, n))
+                done.append(n)
+        else:
+            stop = threading.Event()
+
+            def watch():  # progress for the PC: what has arrived so far
+                while not stop.wait(3):
+                    arrived = [n for n in items if os.path.lexists(os.path.join(new, n))]
+                    status["done_bytes"] = tree_stats(new, arrived)[1]
+                    _write_json(job["status"], status)
+
+            t = threading.Thread(target=watch, daemon=True)
+            t.start()
+            try:
+                for n in items:
+                    done.append(n)
+                    p = run(as_owner() + ["cp", "-a", "--", os.path.join(old, n), new + "/"])
+                    if p.returncode != 0:
+                        raise AgentError(f"copy failed: {(p.stderr or p.stdout).strip()[-300:]}")
+            finally:
+                stop.set()
+                t.join(5)
+            status["phase"] = "verifying"
+            _write_json(job["status"], status)
+            have = tree_stats(new, items)
+            if have != (job["files"], job["total_bytes"]):
+                raise AgentError(f"the copy doesn't match ({have[0]} files, {have[1]} bytes; expected "
+                                 f"{job['files']} files, {job['total_bytes']} bytes)")
+            status["done_bytes"] = job["total_bytes"]
+        status["relinked"] = retarget_symlinks(new, items, old, new)
+        old_launcher = open(os.path.join(anchor, "launch.sh")).read()
+        rebase_launcher(dep, anchor, new)
+    except BaseException:
+        if job["same_fs"]:
+            for n in reversed(done):
+                try:
+                    os.rename(os.path.join(new, n), os.path.join(old, n))
+                except OSError:
+                    pass
+        else:
+            for n in done:
+                _remove_owned(os.path.join(new, n))
+        if new != anchor:
+            try:
+                os.rmdir(new)
+            except OSError:
+                pass
+            remove_empty_drive_dir(new)
+        raise
+    dep_path = os.path.join(anchor, "deployment.json")
+    try:
+        with open(dep_path) as f:
+            raw = json.load(f)
+        raw.update(base=new, moved={"from": old, "time": time.time()})
+        _write_json(dep_path, raw)
+    except Exception:
+        with open(os.path.join(anchor, "launch.sh"), "w") as f:  # keep the game where it was
+            f.write(old_launcher)
+        raise
+    status["phase"] = "removing"
+    _write_json(job["status"], status)
+    if not job["same_fs"]:
+        for n in items:
+            _remove_owned(os.path.join(old, n))
+    if old != os.path.normpath(anchor):
+        try:
+            os.rmdir(old)
+        except OSError:
+            pass
+        remove_empty_drive_dir(old)
+    return {"base": new}
+
+
+def _remove_owned(path):
+    """Remove a copied or moved tree, including files owned by the container's user ids."""
+    remove_tree(path)
+    if os.path.lexists(path) and as_owner():
+        run(as_owner() + ["rm", "-rf", "--", path])
 
 
 # ------------------------------------------------------------------------------------------ launch tests
@@ -3521,6 +4394,11 @@ def purge_worker(payload):
             if not keep and os.path.lexists(base):
                 result["errors"].append(f"couldn't remove {base}")
             result["removed"].append(d.get("title") or d["package"])
+        for path in remove_desktop_entries():  # Linux apps' Desktop Mode entries
+            result["removed"].append(path)
+        for d in games:  # <drive>/FramePort folders left empty
+            if remove_empty_drive_dir(d["base"]):
+                result["removed"].append(os.path.dirname(d["base"].rstrip("/")))
         if not keep or not result["kept"]:
             remove_tree(ANCHORS)
         else:  # anchors hold only launchers/artwork; saves live in the bases
@@ -3572,10 +4450,15 @@ def cmd_cleanup(args):
                 freed += os.path.getsize(p)
                 os.remove(p)
                 removed.append(p)
+    bases = [d["base"] for d in cmd_list_installed({})["games"]]
+    drive_dirs = [d["install_dir"] for d in list_drives() if not d["internal"]]
     for extra in args.get("paths", []):
         p = os.path.realpath(os.path.expanduser(extra))
         first = os.path.relpath(p, HOME).split(os.sep)[0] if p.startswith(HOME + os.sep) else ""
-        if not first or first.startswith(".") or p == ANCHORS or p.startswith(ANCHORS + os.sep):
+        # inside a drive's FramePort folder (leftovers of games on a microSD), never an installed game's files
+        on_drive = any(p != os.path.realpath(d) and _inside(p, os.path.realpath(d)) for d in drive_dirs) \
+            and not any(_inside(p, os.path.realpath(b)) or _inside(os.path.realpath(b), p) for b in bases)
+        if not on_drive and (not first or first.startswith(".") or p == ANCHORS or p.startswith(ANCHORS + os.sep)):
             # only ordinary folders in the home folder: never dot folders (.ssh, .steam, .local, .config…)
             raise AgentError(f"refusing to remove {extra}")
         if os.path.exists(p):
@@ -3838,7 +4721,7 @@ MON_INTERVALS = (0.1, 0.25, 0.5, 1, 2, 5)  # seconds between samples; processes 
 MON_DEFAULT_INTERVAL = 0.5
 SCAN_SECONDS = 2.0
 MON_FILTERS = ("game", "steam", "all")
-# what a client can ask for ({"modules": [...]}, agent v63); without that message every module is collected
+# what a client can ask for ({"modules": [...]}, agent v65); without that message every module is collected
 MON_MODULES = ("games", "procs", "cpu", "gpu", "mem", "temps", "power", "battery", "net", "disk")
 MON_PROC_LIMIT = 150
 MON_CONTEXT = 3  # "game" filter: the busiest other processes, shown for context
@@ -4661,6 +5544,9 @@ def main():
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "_purge_worker":
         purge_worker(sys.argv[2])
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] == "_move_worker":
+        move_worker(sys.argv[2])
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "_xr_probe":
         xr_probe(sys.argv[2])

@@ -7,12 +7,16 @@ Walking Dead: Saints & Sinners Ch. 2) dereferences a NULL stream: SIGSEGV in lib
 seconds after the logo. Meta's own library allows that order. The function is rewritten in place (same size) to return
 0 while no stream is open and behave as before otherwise.
 
-Upstream: Android-XR-Bridge/OVRPort#2, ovrport/app#73; tracked in GitHub #73 (drop this patch once fixed upstream).
+Upstream: Android-XR-Bridge/OVRPort#2, ovrport/app#73; tracked in GitHub #73. OVRPort runtime 3.4.3-aa54c3f checks
+the handle and the stream itself (returns 48000 without one): builds made with it leave this patch out
+(`microphone_checked`, patches/upstream.py).
 """
 from __future__ import annotations
 
 from ...analysis import elf
 from ..base import ApkContext, Patch, Suggestion, register
+from ..upstream import UpstreamFix, lib_probe
+from ..upstream import register as register_upstream_fix
 
 LOADER = "libovrplatformloader.so"
 FUNC = "ovr_Microphone_GetOutputBufferMaxSize"
@@ -31,9 +35,8 @@ def _words(data: bytes | bytearray, off: int, n: int) -> list[int]:
     return [int.from_bytes(data[off + 4 * i:off + 4 * i + 4], "little") for i in range(n)]
 
 
-def guard_microphone(data: bytes) -> bytes | None:
-    """The loader with a NULL-stream check in ovr_Microphone_GetOutputBufferMaxSize, or None if the function isn't
-    OVRPort's unchecked 7-instruction version (already fixed, Meta's library, another OVRPort build)."""
+def _function_offset(data: bytes, size: int) -> int | None:
+    """File offset of FUNC in the loader (None: not an ELF, no such export, or shorter than `size` bytes)."""
     try:
         dynsym = elf._elf(data).get_section_by_name(".dynsym")
     except Exception:  # noqa: BLE001
@@ -41,9 +44,31 @@ def guard_microphone(data: bytes) -> bytes | None:
     found = dynsym.get_symbol_by_name(FUNC) if dynsym is not None else None
     if not found or not found[0]["st_value"]:
         return None
-    vaddr = found[0]["st_value"]
-    off = elf.vaddr_to_offset(elf.load_segments(data), vaddr)
-    if off is None or off + 28 > len(data):
+    off = elf.vaddr_to_offset(elf.load_segments(data), found[0]["st_value"])
+    return off if off is not None and off + size <= len(data) else None
+
+
+def microphone_checked(data: bytes) -> bool | None:
+    """True when OVRPort's GetOutputBufferMaxSize tests something (a cbz/cbnz) before its first call, as the fixed
+    runtime does; False when it is the unchecked version this patch rewrites; None when it can't tell."""
+    if guard_microphone(data) is not None:
+        return False
+    off = _function_offset(data, 48)
+    if off is None:
+        return None
+    for word in _words(data, off, 12):
+        if word & BL_MASK == BL:
+            return None
+        if word & 0x7E000000 == 0x34000000:  # CBZ / CBNZ (32 or 64 bit)
+            return True
+    return None
+
+
+def guard_microphone(data: bytes) -> bytes | None:
+    """The loader with a NULL-stream check in ovr_Microphone_GetOutputBufferMaxSize, or None if the function isn't
+    OVRPort's unchecked 7-instruction version (already fixed, Meta's library, another OVRPort build)."""
+    off = _function_offset(data, 28)
+    if off is None:
         return None
     w = _words(data, off, 7)
     if w[:3] != [STP, MOV_FP, LDR_STREAM] or w[3] & BL_MASK != BL or w[4:] != [SXTW, LDP, RET]:
@@ -88,3 +113,11 @@ class OvrMicrophone(Patch):
 
 
 register(OvrMicrophone)
+register_upstream_fix(UpstreamFix(
+    id="ovrport.microphone_stream",
+    workaround=OvrMicrophone.id,
+    title="OVRPort checks for an unopened microphone stream",
+    upstream="ovrport/app#73 (runtime 3.4.3-aa54c3f)",
+    probe=lib_probe(LOADER, microphone_checked),
+    tracker="#73",
+))

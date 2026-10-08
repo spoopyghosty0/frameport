@@ -141,7 +141,7 @@ class PcReviveTarget(Target):
         return out
 
     # ------------------------------------------------------------------ install
-    def install(self, package, title, apk, data_dir, recipe, reporter, apk_only=False):
+    def install(self, package, title, apk, data_dir, recipe, reporter, apk_only=False, data_files=None):
         raise NotImplementedError("Quest (APK) games install on the Steam Frame, not on the PC")
 
     def install_pcvr(self, package, title, game_dir, exe, recipe: Recipe, reporter: Reporter, **extra):

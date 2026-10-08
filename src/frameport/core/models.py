@@ -15,11 +15,21 @@ class SourceGame:
     data_dir: Path | None = None  # folder whose contents go to Android/obb/<package>/
     origin: Path | None = None  # the folder the game was found in
     alt_apks: list[Path] = field(default_factory=list)
+    # only these files of data_dir are the game's data (expansion files found by name, e.g. next to the APK); None =
+    # everything below data_dir
+    data_files: list[str] | None = None
 
     def data_bytes(self) -> int:
-        if not self.data_dir or not self.data_dir.is_dir():
-            return 0
-        return sum(p.stat().st_size for p in self.data_dir.rglob("*") if p.is_file())
+        return sum(data_manifest(self.data_dir, self.data_files).values())
+
+
+def data_manifest(data_dir: Path | None, files: list[str] | None = None) -> dict[str, int]:
+    """{path relative to data_dir: size} of a game's data: every file below data_dir, or only `files` (names in it)."""
+    if not data_dir or not data_dir.is_dir():
+        return {}
+    if files is not None:
+        return {name: (data_dir / name).stat().st_size for name in sorted(files) if (data_dir / name).is_file()}
+    return {p.relative_to(data_dir).as_posix(): p.stat().st_size for p in sorted(data_dir.rglob("*")) if p.is_file()}
 
 
 @dataclass

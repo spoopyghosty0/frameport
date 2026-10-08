@@ -85,6 +85,11 @@ which would end Desktop Mode). This is new: please report anything odd with **Re
 - If the Frame goes to sleep, turns off or leaves the Wi-Fi, the queue **waits** and continues once it's back; uploads
   pick up where they stopped. While installs run, FramePort keeps the Frame from going to sleep. Before a large batch
   it checks the Frame has enough free space.
+- **microSD card / other drives:** the **Steam Frame** page's **Storage** section lists the Frame's drives and sets
+  where new games go (**Install new games to**). Games go into a `FramePort` folder on the card. To move a game that's
+  installed already, right-click it → **Move to…** (the game must be closed; saves, settings and the Steam entry stay).
+  A game on the card only starts while the card is inserted (FramePort then says "SD Card not inserted"). Cards
+  formatted as FAT, exFAT or NTFS can't hold games: format the card in SteamOS first.
 - Your own game files are never changed. The converted copy is temporary: it's removed once the game is on the Frame
   (Settings → Installing: keep them, or remove all now).
 - **Game settings…** (game menu or the Steam Frame page): sharpness, refresh rate, controllers, menus, 360° video and
@@ -218,6 +223,9 @@ work like for other games.
 - The app must bring the libraries SteamOS doesn't have (checked for arm64 builds; x86_64 builds use FEX's x86
   system, which has glibc and Mesa, and aren't checked ahead). If some are missing, the install reports them and the game
   page lists them: look for a build that includes them.
+- **Desktop Mode:** Linux apps also appear in Desktop Mode's application menu and as an icon on its desktop. Some
+  apps work better there, with a mouse and keyboard, than in Gaming Mode (where Steam Input turns the controllers into
+  a gamepad). Switch it off per app on the game page (**Desktop Mode**).
 - From the command line: `frameport add-linux <AppImage, folder or archive> [--exe <program>]`.
 
 ## Files on the Frame (videos, documents, mods, saves)
@@ -262,6 +270,7 @@ and `frameport <command> --help` describe every option. The main ones:
 | `build <game>` / `install <game>` / `test <game>` | build, install on the Frame (`--to pc` for PC VR on this PC), launch test |
 | `frame discover` / `frame connect` / `frame info` | find, pair with and describe the Frame |
 | `frame send` / `frame storage` / `frame cleanup` | copy files to the Frame, show where they go, free space |
+| `frame drives` / `frame move <game> --to <drive>` / `install --dest <drive>` | the Frame's drives (microSD), move a game, install to a drive |
 | `tools status` / `tools install` | the tools FramePort downloads |
 | `open-link "<link>"` | install from an "Install with FrameDrop" button's address or a manifest/APK/zip link (`--yes`, `--no-install`) |
 | `diag report <game>` / `share-recipe <game>` | report a problem / share a working recipe |

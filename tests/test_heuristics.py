@@ -73,3 +73,22 @@ def test_enabled_patch_is_never_hidden():
     r.patches["frame.vrapi_bridge"] = {}
     shown, _ = engine.visible_patches(a, r)
     assert "frame.vrapi_bridge" in {p.id for p in shown}
+
+
+def test_newer_android_than_the_frames_only_warns():
+    """GitHub #71/#72: minSdk 34 apps crash at start on Android 13+ classes; Lepton runs Android 11."""
+    _, r = suggest(extra={"size": 1, "min_sdk": 34})
+    assert r.status != "unsupported"  # the manifest alone never decides (a launch test does)
+    assert "asks for Android 14 (API 34)" in r.notes and "Android is 11 (API 30)" in r.notes
+    # Quest games declare up to 32 (Quest's Android 12L) and run (16 catalog games do)
+    for ok in (None, 23, 29, 32):
+        _, r = suggest(extra={"size": 1, "min_sdk": ok})
+        assert r.status != "unsupported" and "asks for Android" not in r.notes
+
+
+def test_web_wrapper_only_warns():
+    """GitHub #86: a Trusted Web Activity opens a website in Meta's browser; there's nothing to port."""
+    _, r = suggest(extra={"size": 1, "web_wrapper": {"url": "https://mahjong-vr.pages.dev/"}})
+    assert r.status != "unsupported" and "open https://mahjong-vr.pages.dev/ in a browser" in r.notes
+    _, r = suggest(extra={"size": 1, "web_wrapper": {"url": None}})
+    assert r.status != "unsupported" and "website" in r.notes

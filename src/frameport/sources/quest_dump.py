@@ -3,10 +3,17 @@
 Accepted layouts:
   <folder>/<something>.apk [+ <folder>/<package>/ (OBB or raw asset data)]   e.g. common downloader layouts
   <folder>/<package>.apk + <folder>/obb/                                       FramePort/PATCHED output layout
+  <folder>/x.apk + <folder>/obb/<package>/ or Android/obb/<package>/          backups with an obb folder
+  <game>/apk/x.apk + <game>/obb/<package>/                                     SideQuest-style backups (one game)
+  <folder>/x.apk + (main|patch).<versionCode>.<package>.obb anywhere nearby    found by file name (next to the APK,
+                                                                               <package>/apk/ + <package>/obb/, ...)
   a single .apk file
+(find_data has the details.)
 """
 from __future__ import annotations
 
+import contextvars
+import os
 import re
 import zipfile
 from pathlib import Path
@@ -22,13 +29,23 @@ def display_name(folder_name: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "_", TAG.sub("", folder_name).strip())
 
 
-def _package_of(apk: Path) -> str | None:
+def _apk_ids(apk: Path) -> tuple[str | None, int | None]:
+    """(package, versionCode) from the APK's manifest; None for what can't be read."""
     try:
         from pyaxmlparser import APK
 
-        return APK(str(apk)).package
+        a = APK(str(apk))
     except Exception:
-        return None
+        return None, None
+    try:
+        vc = int(a.version_code)
+    except (TypeError, ValueError):
+        vc = None
+    return a.package, vc
+
+
+def _package_of(apk: Path) -> str | None:
+    return _apk_ids(apk)[0]
 
 
 def _is_apk(path: Path) -> bool:
@@ -39,12 +56,185 @@ def _is_apk(path: Path) -> bool:
         return False
 
 
+OBB_FOLDERS = ("obb", "obbs")
+
+
+# folder listings, kept while scan() runs: every game of a collection searches its neighbours (slow on NTFS drives)
+_LISTINGS: contextvars.ContextVar[dict | None] = contextvars.ContextVar("quest_dump_listings", default=None)
+
+
+def _list(d: Path) -> list[tuple[Path, bool]]:
+    """(entry, is a folder) in d, sorted; [] when it can't be read."""
+    cache = _LISTINGS.get()
+    if cache is not None and d in cache:
+        return cache[d]
+    try:
+        with os.scandir(d) as it:
+            out = sorted((Path(e.path), e.is_dir()) for e in it)
+    except OSError:
+        out = []
+    if cache is not None:
+        cache[d] = out
+    return out
+
+
+def _subdirs(d: Path) -> list[Path]:
+    return [p for p, is_dir in _list(d) if is_dir and not p.name.startswith(("_", "."))]
+
+
+def _has_apks(d: Path) -> bool:
+    return any(p.suffix.lower() == ".apk" and not is_dir for p, is_dir in _list(d))
+
+
+def _child(d: Path, name: str) -> Path | None:
+    """d/name, matching the name's case loosely (backups come from Windows: 'OBB', a lower-case package folder)."""
+    exact = d / name
+    if exact.is_dir():
+        return exact
+    return next((p for p in _subdirs(d) if p.name.lower() == name.lower()), None)
+
+
+def _nonempty(d: Path | None) -> bool:
+    try:
+        return bool(d) and d.is_dir() and any(d.iterdir())
+    except OSError:
+        return False
+
+
+def _has_obb(d: Path) -> bool:
+    return any(p.suffix.lower() == ".obb" and not is_dir for p, is_dir in _list(d))
+
+
+def _package_dir_below(d: Path, pkg: str, depth: int, skip: Path | None = None, other_games: bool = False) \
+        -> Path | None:
+    """A folder named like the package holding .obb files, at most `depth` levels below d. other_games: skip
+    folders with APKs of their own (a neighbouring game folder, e.g. another version of the same game)."""
+    for sub in _subdirs(d):
+        if skip is not None and sub == skip:
+            continue
+        if sub.name.lower() == pkg.lower():
+            if _has_obb(sub):
+                return sub
+            continue
+        if depth > 1 and not (other_games and _has_apks(sub)):
+            found = _package_dir_below(sub, pkg, depth - 1)
+            if found:
+                return found
+    return None
+
+
+def _find_data_dir(apk_dir: Path, pkg: str | None) -> Path | None:
+    """The folder whose contents go to Android/obb/<package>/ (so the folder holding the .obb files themselves):
+      <apk dir>/<package>/                       downloader layouts
+      <apk dir>/obb/<package>/ or <apk dir>/obb/  FramePort/PATCHED output, backups with an obb folder
+      a <package> folder with .obb files up to 3 levels below the APK's folder (e.g. Android/obb/<package>/) or 2
+      below its parent (SideQuest-style backups: <game>/apk/x.apk + <game>/obb/<package>/; the parent's folders
+      with APKs of their own are other games and are skipped)."""
+    own = _child(apk_dir, pkg) if pkg else None
+    if _nonempty(own):
+        return own
+    for obb in (_child(apk_dir, name) for name in OBB_FOLDERS):
+        if obb is None:
+            continue
+        inner = _child(obb, pkg) if pkg else None
+        if _nonempty(inner):
+            return inner
+        if _nonempty(obb):
+            return obb
+    if not pkg:
+        return None
+    found = _package_dir_below(apk_dir, pkg, 3)
+    if found is None and apk_dir.parent != apk_dir:
+        found = _package_dir_below(apk_dir.parent, pkg, 2, skip=apk_dir, other_games=True)
+    return found
+
+
+# Android's expansion file names: main.<versionCode>.<package>.obb, patch.<versionCode>.<package>.obb
+OBB_NAME = re.compile(r"^(main|patch)\.(\d+)\.(.+)\.obb$", re.IGNORECASE)
+
+
+def _named_obbs(d: Path, pkg: str) -> list[tuple[str, int, Path]]:
+    """(kind, versionCode, file) of the package's expansion files directly in d."""
+    out = []
+    for f, is_dir in _list(d):
+        m = OBB_NAME.match(f.name)
+        if m and m.group(3).lower() == pkg.lower() and not is_dir:
+            out.append((m.group(1).lower(), int(m.group(2)), f))
+    return out
+
+
+def _obb_folders(apk_dir: Path, pkg: str, depth: int = 3) -> list[tuple[Path, list[tuple[str, int, Path]]]]:
+    """Folders holding the package's expansion files by name, nearest first: the APK's own folder, the folders below
+    it, its parent, then the parent's other folders (each up to `depth` levels). Folders with APKs of their own are
+    other games (e.g. another version of this one) and aren't searched."""
+    found: list[tuple[Path, list]] = []
+
+    def visit(d: Path) -> None:
+        obbs = _named_obbs(d, pkg)
+        if obbs:
+            found.append((d, obbs))
+
+    def below(d: Path, level: int, skip: Path | None = None) -> None:
+        for sub in _subdirs(d):
+            if sub == skip or _has_apks(sub):
+                continue
+            visit(sub)
+            if level > 1:
+                below(sub, level - 1)
+
+    visit(apk_dir)
+    below(apk_dir, depth)
+    parent = apk_dir.parent
+    if parent != apk_dir:
+        visit(parent)
+        below(parent, depth, skip=apk_dir)
+    return found
+
+
+def _pick_obbs(obbs: list[tuple[str, int, Path]], version_code: int | None) -> list[Path]:
+    """The expansion files for this APK: per kind (main, patch) the newest one not newer than the APK's versionCode
+    (expansion files keep the versionCode they were introduced with, so that's its own one when there is one); only
+    when there is none at all, the newest ones (another version of the game's files: better than nothing)."""
+    usable = [o for o in obbs if version_code is not None and o[1] <= version_code] or obbs
+    picked = []
+    for kind in ("main", "patch"):
+        same = sorted((vc, f) for k, vc, f in usable if k == kind)
+        if same:
+            picked.append(same[-1][1])
+    return picked
+
+
+def find_data(apk_dir: Path, pkg: str | None, version_code: int | None = None) -> tuple[Path | None, list[str] | None]:
+    """(data folder, files) for the APK in apk_dir. files is None when the whole folder is the game's data (the
+    layouts of _find_data_dir), else the names of the expansion files to send from it (found by file name, e.g.
+    lying next to the APK: the APK and anything else in that folder stay on the PC)."""
+    data = _find_data_dir(apk_dir, pkg)
+    if data is not None or not pkg:
+        return data, None
+    folders = _obb_folders(apk_dir, pkg)
+    if not folders:
+        return None, None
+    d, obbs = next((f for f in folders if any(vc == version_code for _, vc, _ in f[1])), folders[0])
+    files = _pick_obbs(obbs, version_code)
+    everything = {p.name for p, _ in _list(d)}
+    names = [f.name for f in files]
+    return d, (None if everything == set(names) else names)
+
+
+def find_data_dir(apk_dir: Path, pkg: str | None, version_code: int | None = None) -> Path | None:
+    return find_data(apk_dir, pkg, version_code)[0]
+
+
+# a folder that only holds the APK inside a game folder (<game>/apk/x.apk + <game>/obb/…): the game is the parent
+APK_FOLDERS = ("apk", "apks")
+
+
 def from_path(path: Path) -> SourceGame | None:
     path = Path(path)
     if path.is_file() and path.suffix.lower() == ".apk":
-        pkg = _package_of(path)
-        data = next((d for d in (path.parent / (pkg or ""), path.parent / "obb") if pkg and d.is_dir()), None)
-        return SourceGame(display_name(path.stem), path, data, path.parent)
+        pkg, vc = _apk_ids(path)
+        data, files = find_data(path.parent, pkg, vc)
+        return SourceGame(display_name(path.stem), path, data, path.parent, data_files=files)
     if not path.is_dir():
         return None
     apks = sorted(p for p in path.glob("*.apk") if _is_apk(p))
@@ -52,13 +242,10 @@ def from_path(path: Path) -> SourceGame | None:
         return None
     primary = [a for a in apks if ".alt-" not in a.name]
     apk = primary[0] if primary else apks[0]
-    pkg = _package_of(apk)
-    data = None
-    for cand in ((path / pkg) if pkg else None, path / "obb"):
-        if cand and cand.is_dir() and any(cand.iterdir()):
-            data = cand
-            break
-    return SourceGame(display_name(path.name), apk, data, path, [a for a in apks if a != apk])
+    pkg, vc = _apk_ids(apk)
+    data, files = find_data(path, pkg, vc)
+    game_dir = path.parent if path.name.lower() in APK_FOLDERS else path
+    return SourceGame(display_name(game_dir.name), apk, data, game_dir, [a for a in apks if a != apk], files)
 
 
 def _no_quest_games_below(d: Path) -> bool:
@@ -77,7 +264,8 @@ def _other_folders(d: Path, game: SourceGame) -> list[Path]:
     except OSError:
         return []
     own = {game.data_dir.resolve()} if game.data_dir else set()
-    return [p for p in subs if p.resolve() not in own and p.name.lower() not in ("obb", "android")]
+    own |= set(game.data_dir.resolve().parents) if game.data_dir else set()  # e.g. Android/ of Android/obb/<pkg>
+    return [p for p in subs if p.resolve() not in own and p.name.lower() not in (*OBB_FOLDERS, "android")]
 
 
 def scan(root: Path, depth: int = 5) -> list[SourceGame]:
@@ -111,5 +299,9 @@ def scan(root: Path, depth: int = 5) -> list[SourceGame]:
     if root.is_file():
         g = from_path(root)
         return [g] if g else []
-    walk(root, 0)
+    token = _LISTINGS.set({})
+    try:
+        walk(root, 0)
+    finally:
+        _LISTINGS.reset(token)
     return found

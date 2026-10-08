@@ -1,0 +1,21 @@
+package: com.FourPlayersStudio.Retronika
+title: Retronika
+status: works
+tested_version: 3.2.601
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-07'
+  known_good_sha256: 290bfda3969547d5f1ff621ab5a8be9dd322fc9eee6b243c863576d4ff5b4b81
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261006.6173745'
+  agent: 59
+  issue: 97
+source_hint: Retronika

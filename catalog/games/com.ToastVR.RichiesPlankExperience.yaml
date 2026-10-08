@@ -1,0 +1,22 @@
+package: com.ToastVR.RichiesPlankExperience
+title: Richie's Plank Experience
+status: works
+tested_version: 2.3.585
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+- frame.oculusos
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-07'
+  known_good_sha256: 7eb1366c2398e554624a5d66aefb0c731c64b1b6944bc1726d9187f123c37fb7
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20260922.6101926'
+  agent: 59
+  issue: 95
+source_hint: apks

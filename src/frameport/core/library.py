@@ -120,9 +120,10 @@ def _refresh_data_fields(g: dict, a: dict) -> bool:
         return False
     from ..analysis import langpacks
 
+    data = g.get("data_dir") if g.get("data_files") is None else None  # expansion files only: no packs
     try:
-        extra.setdefault("lang_packs", langpacks.find_tags(g.get("data_dir")))
-        extra.setdefault("asset_files", langpacks.find_content_files(g.get("data_dir")))
+        extra.setdefault("lang_packs", langpacks.find_tags(data))
+        extra.setdefault("asset_files", langpacks.find_content_files(data))
     except OSError:
         return False
     return True

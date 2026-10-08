@@ -9,19 +9,83 @@ from pathlib import Path
 from ..apk import axml
 from ..core.models import Analysis
 from . import elf
+from .unity_split import split_build as unity_split_build
 
 logging.getLogger("pyaxmlparser").setLevel(logging.ERROR)
 
 UNITY_GGM = "assets/bin/Data/globalgamemanagers"
 IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 
+# The version of what analyze() stores (Analysis.extra["analysis_version"]). BUMP IT whenever analyze() gains a field
+# or detects something differently that patches/heuristics read: library entries analysed by an older FramePort are
+# then analysed again in the background at the next start (pipeline.refresh_analyses), so their new patches are
+# offered (GitHub #104: entries from before `sdl_java` never got frame.sdl_clipboard). Entries without it are 0.
+# 1: sdl_java, min_sdk, web_wrapper, expects_obb, vr_activity, unity_version (2026-10)
+# 2: unity_split (a Unity split-binary build expects an OBB too: expects_obb) (2026-10)
+ANALYSIS_VERSION = 2
 
-def _read_manifest_info(path: Path) -> tuple[str, str, str, str | None]:
+
+# Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
+ANDROID_VERSIONS = {29: "10", 30: "11", 31: "12", 32: "12L", 33: "13", 34: "14", 35: "15", 36: "16", 37: "17"}
+FRAME_API = 30
+# Quest games declare up to API 32 (Quest's Android 12L) and run on the Frame (OVRPort lowers minSdk to 29; they
+# don't call newer Android classes). From API 33 on, apps call Android 13+ classes at start (GitHub #71/#72: minSdk
+# 34, NoClassDefFoundError android/window/OnBackInvokedCallback, NoSuchMethodError VarHandle.storeStoreFence).
+MAX_RUNNABLE_MIN_SDK = 32
+
+
+def android_version(api: int) -> str:
+    """'14' for API 34."""
+    return ANDROID_VERSIONS.get(api, f"API {api}")
+
+
+def too_new_android(min_sdk: int | None) -> bool:
+    """The APK needs a newer Android than the Frame's Lepton (11): it crashes at start on missing Android classes."""
+    return bool(min_sdk) and min_sdk > MAX_RUNNABLE_MIN_SDK
+
+
+TWA_URL_KEY = "android.support.customtabs.trusted.DEFAULT_URL"
+TWA_ACTIVITY = "com.google.androidbrowserhelper.trusted.LauncherActivity"
+UE_OBB_KEY = ".GameActivity.bHasOBBFiles"  # com.epicgames.ue4.… (UE4) / com.epicgames.unreal.… (UE5)
+
+
+def expects_obb(meta: dict) -> bool:
+    """Unreal packaged the game's content as an OBB (expansion file) and opens it at start."""
+    return any(k.endswith(UE_OBB_KEY) and v in (True, "true", "True") for k, v in meta.items())
+
+
+def _read_manifest_info(path: Path):
+    """(package, versionName, label, main activity, pyaxmlparser APK)."""
     from pyaxmlparser import APK
 
     apk = APK(str(path))
     label = apk.application or apk.package
-    return apk.package, apk.version_name or "", label, apk.get_main_activity()
+    return apk.package, apk.version_name or "", label, apk.get_main_activity(), apk
+
+
+def _resolve_string(apk, value) -> str | None:
+    """A meta-data value: the string itself, or a @string/… reference resolved through resources.arsc."""
+    if isinstance(value, str):
+        return value
+    if apk is None or isinstance(value, bool) or not isinstance(value, int):
+        return None
+    try:
+        res = apk.get_android_resources()
+        for _config, v in (res.get_resolved_res_configs(value) if res else ()):
+            if isinstance(v, str) and v:
+                return v
+    except Exception:  # noqa: BLE001 - a broken resource table only loses the URL
+        pass
+    return None
+
+
+def web_wrapper(meta: dict, manifest_strings: list[str], apk=None) -> dict | None:
+    """A Trusted Web Activity (Bubblewrap, Meta's PWA packaging): the APK only opens a website in a browser app
+    (Meta's com.oculus.browser on Quest), which Lepton doesn't have (GitHub #86). {"url": str | None} or None."""
+    if TWA_URL_KEY not in meta and TWA_ACTIVITY not in manifest_strings:
+        return None
+    url = _resolve_string(apk, meta.get(TWA_URL_KEY))
+    return {"url": url if url and url.startswith(("https://", "http://")) else None}
 
 
 def _unreal_version(z: zipfile.ZipFile, lib: str) -> str | None:
@@ -111,8 +175,10 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
                 if "assets/bin/Data/boot.config" in names else "")
         ggm = z.read(UNITY_GGM) if deep and UNITY_GGM in names else None
         il2cpp_meta = z.read(IL2CPP_METADATA) if deep and IL2CPP_METADATA in names and "libil2cpp.so" in libs else None
+        # a Unity split build: the rest of the game is in a zip OBB (analysis/unity_split.py)
+        unity_split = "libunity.so" in libs and unity_split_build(z, names, ggm, deep)
 
-    package, version, label, activity = _read_manifest_info(path)
+    package, version, label, activity, apk_info = _read_manifest_info(path)
     libset = set(libs)
     engine = ("Unreal" if libset & {"libUE4.so", "libUnreal.so"} else "Unity" if "libunity.so" in libset
               else "CryEngine" if "libCrySystem.so" in libset else "Other")
@@ -159,6 +225,7 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
     manifest_strings = axml.Axml(manifest).strings()
     features = _features(manifest)
     used_perms, _ = axml.used_and_declared_permissions(manifest)
+    meta = axml.meta_data(manifest)
     return Analysis(
         package=package,
         version=version,
@@ -178,6 +245,7 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
         is_overport_output=is_overport,
         debuggable=bool(axml.Axml(manifest).get_bool("application", "debuggable")),
         extra={
+            "analysis_version": ANALYSIS_VERSION,
             "frame_patched": "libframe_settings.so" in libset,  # already has FramePort's FrameBridge adapter
             # Team Beef's TBXR ports pick their OpenXR path by headset maker (frame.tbxr_vendor): their libraries
             # the game asks Meta's platform for asset files (content shipped as separate files, frame.asset_files)
@@ -216,6 +284,14 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             # a 2D launcher activity that starts a separate VR activity (frame.start_activity)
             "vr_activity": axml.vr_activity(manifest),
             "unity_version": unity_version(ggm, lib_bytes.get("libunity.so")) if engine == "Unity" else None,
+            # the minimum Android version the APK declares (read from the original: OVRPort lowers it to 29)
+            "min_sdk": axml.min_sdk(manifest),
+            # a website in an Android wrapper (TWA): nothing to port
+            "web_wrapper": web_wrapper(meta, manifest_strings, apk_info),
+            # Unreal packaged its content as an OBB (expansion file), or a Unity split build keeps all but its first
+            # scene in one: without it the game hangs at start (GitHub #85, #92)
+            "expects_obb": expects_obb(meta) or unity_split,
+            "unity_split": unity_split,
         },
     )
 

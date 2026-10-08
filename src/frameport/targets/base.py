@@ -21,7 +21,7 @@ class Target(ABC):
 
     @abstractmethod
     def install(self, package: str, title: str, apk: Path, data_dir: Path | None, recipe: Recipe,
-                reporter: Reporter, apk_only: bool = False) -> dict: ...
+                reporter: Reporter, apk_only: bool = False, data_files: list[str] | None = None) -> dict: ...
 
     @abstractmethod
     def add_to_library(self, packages: list[str], reporter: Reporter) -> dict: ...
@@ -33,7 +33,8 @@ class Target(ABC):
         """Start an installed game for playing, through the target's Steam (Steam library shortcut)."""
         raise NotImplementedError(f"{self.label} can't launch games")
 
-    def install_linux(self, package, title, root, exe, files, appimage, openxr, reporter, x86_64=False) -> dict:
+    def install_linux(self, package, title, root, exe, files, appimage, openxr, reporter, x86_64=False,
+                      desktop_entry=True) -> dict:
         """Install a Linux app (only the Frame runs them; x86_64 ones through FEX)."""
         raise NotImplementedError(f"{self.label} can't install Linux apps")
 

@@ -1,0 +1,21 @@
+package: com.characterBank.ruinsmagus
+title: RUINSMAGUS
+status: works
+tested_version: 1.2.3
+engine: Unity
+xr: VrApi
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-07'
+  known_good_sha256: 230e5625fbdfebb47c4d96aeb87f45270e4e6c79a33c08315c90626ab7465fe5
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261006.6173745'
+  agent: 59
+  issue: 89
+source_hint: RUINSMAGUS

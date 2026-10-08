@@ -163,3 +163,27 @@ def test_x86_linux_program_without_fex():
     log = "launch.sh: line 20: /home/steamos/Applications/quest-frame/linux.x/app/x: cannot execute binary file: " \
           "Exec format error\n"
     assert "linux-x86-no-fex" in [f.id for f in triage.triage(log).findings]
+
+
+def test_android_too_new_signatures():
+    """GitHub #71 (XTADIUM) and #72 (NBA): minSdk 34 apps on Lepton's Android 11."""
+    for line in (
+        "10-06 20:11:02.123  4211  4211 E AndroidRuntime: java.lang.NoClassDefFoundError: Failed resolution of: "
+        "Landroid/window/OnBackInvokedCallback;",
+        "10-06 20:11:02.123  4211  4230 E AndroidRuntime: java.lang.NoSuchMethodError: No static method "
+        "storeStoreFence()V in class Ljava/lang/invoke/VarHandle; or its super classes",
+    ):
+        r = triage(line + "\n", "EXITED")
+        assert [f.id for f in r.findings] == ["android-too-new"] and r.verdict == "fail"
+    assert not triage("E AndroidRuntime: java.lang.NoClassDefFoundError: Lcom/example/Foo;\n", "EXITED").findings
+
+
+def test_web_wrapper_signature():
+    """GitHub #86 (Mahjong Table VR): a TWA looking for Meta's browser."""
+    log = ("10-06 18:02:11.100  3301  3301 D TWALauncherActivity: Using URL from Manifest "
+           "(https://mahjong-vr.pages.dev/).\n"
+           "10-06 18:02:11.120  3301  3301 D TwaLauncher: Creating TwaLauncher for com.oculus.browser\n"
+           "10-06 18:02:11.130  3301  3301 W PackageIdentity: android.content.pm.PackageManager$"
+           "NameNotFoundException: com.oculus.browser\n")
+    r = triage(log, "EXITED")
+    assert {f.id for f in r.findings} == {"web-wrapper"} and r.verdict == "fail"

@@ -9,6 +9,7 @@ PC (Revive + local Steam) or on the Frame (Proton + Revive).
 """
 from __future__ import annotations
 
+import dataclasses
 import threading
 import time
 from pathlib import Path
@@ -21,6 +22,7 @@ from .core import library
 from .core.events import Reporter
 from .core.models import Recipe, SourceGame
 from .core.paths import output_dir
+from .patches import upstream
 from .recommend import engine
 from .sources import quest_dump, rift_dump
 from .targets.base import Target
@@ -284,6 +286,30 @@ def is_linux(entry: dict) -> bool:
     return entry.get("kind") == "linux"
 
 
+def analysis_warnings(entry: dict) -> list[str]:
+    """Blockers read from a Quest/Android game's APK, for the CLI (the game page shows them as callouts)."""
+    if is_rift(entry) or is_linux(entry) or not entry.get("analysis"):
+        return []
+    out = engine.blocker_notes(library.analysis_from_dict(entry["analysis"]))
+    if missing_obb(entry):
+        out.append(MISSING_OBB_NOTE.format(package=entry.get("package", "<package>")))
+    return out
+
+
+MISSING_OBB_NOTE = ("This game's data file (.obb) wasn't found next to the APK. Put the .obb files in a folder named "
+                    "{package} (or obb/) next to the APK and add the folder again; without it the game hangs at start.")
+
+
+def missing_obb(entry: dict) -> bool:
+    """A Quest game whose APK expects an OBB (analysis expects_obb: Unreal's bHasOBBFiles) but no data folder was
+    found next to it (GitHub #85: TRIANGLE STRATEGY hung silently after OVRPlugin's JNI_OnLoad). Library fields
+    only: no disk access (used by the game page)."""
+    if is_rift(entry) or is_linux(entry):
+        return False
+    extra = (entry.get("analysis") or {}).get("extra") or {}
+    return bool(extra.get("expects_obb")) and not (entry.get("data_dir") and entry.get("data_bytes") != 0)
+
+
 def add_linux_app(path: Path | str, reporter: Reporter | None = None, exe: str | None = None) -> dict:
     """Add a Linux app to the library (no conversion: it's installed as it is): arm64, or x86_64 (run through FEX on
     the Frame). `exe` overrides the program FramePort picked (relative to the app's folder)."""
@@ -327,8 +353,11 @@ def add_linux_app(path: Path | str, reporter: Reporter | None = None, exe: str |
         from .artwork import fetch
 
         fetch.artwork_dir(package)
-        from .artwork import steam
+        from .artwork import sources, steam
 
+        icon = None if info["files"] else linux.find_icon(root)  # a lone AppImage's icon comes from the Frame
+        if icon:
+            sources.apply_app_icon(package, icon.read_bytes())
         steam.ensure_cover(package)  # placeholder art (name on a colour) until the user picks some
     except Exception:  # noqa: BLE001 - artwork is optional
         pass
@@ -426,7 +455,8 @@ def install_linux(package: str, target: Target, reporter: Reporter, add_to_libra
     extra = (entry.get("analysis") or {}).get("extra") or {}
     result = target.install_linux(package, steam_title(entry), Path(entry["game_dir"]), entry["exe"],
                                   extra.get("files"), bool(extra.get("appimage")), bool(extra.get("openxr")),
-                                  reporter, x86_64=bool(extra.get("x86_64")))
+                                  reporter, x86_64=bool(extra.get("x86_64")),
+                                  desktop_entry=entry.get("desktop_entry", True) is not False)
     if extra.get("x86_64"):
         reporter.check("x86 translation", True, "runs through FEX on SteamOS's x86 system (its libraries come from "
                                                  "there; not checked ahead)")
@@ -445,12 +475,13 @@ def add_game(src: SourceGame, reporter: Reporter | None = None) -> dict:
     if reporter:
         reporter.log(f"analyzing {src.apk.name}")
     a = analyze(src.apk, data_bytes=src.data_bytes())
-    a.extra["lang_packs"] = langpacks.find_tags(src.data_dir)
-    a.extra["asset_files"] = langpacks.find_content_files(src.data_dir)
+    a.extra["lang_packs"] = langpacks.find_tags(_data_folder(src))
+    a.extra["asset_files"] = langpacks.find_content_files(_data_folder(src))
     recipe = engine.suggest(a)
     return library.upsert_game(
         a.package, title=recipe.title or a.label, name=src.name, apk=str(src.apk),
-        data_dir=str(src.data_dir) if src.data_dir else None, data_bytes=src.data_bytes(), origin=str(src.origin),
+        data_dir=str(src.data_dir) if src.data_dir else None, data_files=src.data_files, data_bytes=src.data_bytes(),
+        origin=str(src.origin),
         analysis=a.to_dict(), recipe=library.recipe_to_dict(recipe), suggested=library.recipe_to_dict(recipe),
         status=recipe.status,
     )
@@ -460,25 +491,110 @@ def reanalyze(package: str, reporter: Reporter | None = None) -> dict:
     """Read a Quest/Android game's APK again (e.g. after FramePort learned to detect something new). The suggestion is
     refreshed; the recipe too unless the user changed it (then their choices stay)."""
     entry = library.game(package)
-    if entry is None or is_rift(entry):
+    if entry is None or is_rift(entry) or is_linux(entry):
         raise ValueError("only Quest/Android games can be analyzed again")
+    return _store_analysis(package, _analyze_entry(entry, reporter))
+
+
+def _analyze_entry(entry: dict, reporter: Reporter | None = None):
     src = source_of(entry)
     if reporter:
         reporter.log(f"analyzing {src.apk.name}")
     a = analyze(src.apk, data_bytes=src.data_bytes())
-    a.extra["lang_packs"] = langpacks.find_tags(src.data_dir)
-    a.extra["asset_files"] = langpacks.find_content_files(src.data_dir)
+    a.extra["lang_packs"] = langpacks.find_tags(_data_folder(src))
+    a.extra["asset_files"] = langpacks.find_content_files(_data_folder(src))
+    return a
+
+
+def _store_analysis(package: str, a) -> dict:
+    """Replace only the entry's analysis and suggestion; the recipe follows unless it is the user's own (tags, art,
+    title, builds and installs are untouched)."""
     suggested = engine.suggest(a)
-    keep = library.recipe_from_dict(entry["recipe"]).source == "user"
-    return library.upsert_game(package, analysis=a.to_dict(), suggested=library.recipe_to_dict(suggested),
-                               **({} if keep else {"recipe": library.recipe_to_dict(suggested),
-                                                   "status": suggested.status}))
+
+    def change(g: dict) -> None:
+        g["analysis"] = a.to_dict()
+        g["suggested"] = library.recipe_to_dict(suggested)
+        g.pop("analysis_failed", None)
+        # checked under the library lock: the user may have saved a recipe while the APK was read
+        if library.recipe_from_dict(g.get("recipe") or {"package": package}).source != "user":
+            g["recipe"] = library.recipe_to_dict(suggested)
+            g["status"] = suggested.status
+    return library.update_game(package, change)
+
+
+def analysis_outdated(entry: dict) -> bool:
+    """A Quest/Android entry analysed by an older FramePort (fields newer patches depend on are missing) whose APK is
+    still there, and whose re-analysis didn't already fail for this analysis version. Rift/Linux entries: no."""
+    from .analysis.detect import ANALYSIS_VERSION
+
+    a = entry.get("analysis")
+    if not isinstance(a, dict) or not entry.get("apk") or is_rift(entry) or is_linux(entry):
+        return False
+    if str(a.get("package") or "").startswith("rift."):
+        return False
+    if ((a.get("extra") or {}).get("analysis_version") or 0) >= ANALYSIS_VERSION:
+        return False
+    if entry.get("analysis_failed") == ANALYSIS_VERSION:
+        return False
+    try:
+        return Path(entry["apk"]).is_file()  # on a drive that isn't connected now: tried again at a later start
+    except OSError:
+        return False
+
+
+def outdated_analyses() -> list[str]:
+    return [g["package"] for g in library.games() if analysis_outdated(g)]
+
+
+def refresh_analyses(packages: list[str] | None = None, reporter: Reporter | None = None) -> int:
+    """Analyse again the entries an older FramePort analysed (see detect.ANALYSIS_VERSION): runs in the background at
+    start (GUI) and before a build (CLI and GUI). Only the APK analysis (no OVRPort, no Cpp2IL). An APK that can't be
+    read leaves the entry as it was and is marked, so it isn't read again at every start. Returns how many changed."""
+    from .analysis.detect import ANALYSIS_VERSION
+
+    todo = outdated_analyses() if packages is None else \
+        [p for p in packages if analysis_outdated(library.game(p) or {})]
+    done = 0
+    for i, pkg in enumerate(todo):
+        entry = library.game(pkg)
+        if entry is None or not analysis_outdated(entry):
+            continue
+        if reporter:
+            reporter.check_cancel()
+            reporter.progress(i / len(todo), entry.get("title") or pkg)
+        try:
+            a = _analyze_entry(entry, reporter)
+        except Exception as exc:  # noqa: BLE001 - unreadable APK: keep the old analysis, don't retry every start
+            if reporter:
+                reporter.log(f"{pkg}: couldn't analyze the APK again: {exc}")
+            library.update_game(pkg, lambda g: g.__setitem__("analysis_failed", ANALYSIS_VERSION))
+            continue
+        if a.package != pkg:  # a different APK at that path now: leave the entry alone
+            library.update_game(pkg, lambda g: g.__setitem__("analysis_failed", ANALYSIS_VERSION))
+            continue
+        _store_analysis(pkg, a)
+        done += 1
+    return done
+
+
+def _data_folder(src: SourceGame) -> Path | None:
+    """The data folder when all of it is the game's data (language packs and content files are looked for there);
+    None when only expansion files found by name are (that folder also holds other things, e.g. the APK)."""
+    return None if src.data_files is not None else src.data_dir
+
+
+def data_paths(entry: dict) -> list[Path]:
+    """A Quest game's data on this PC: its data folder, or only its expansion files when those were found by name."""
+    if not entry.get("data_dir"):
+        return []
+    d = Path(entry["data_dir"])
+    return [d / n for n in entry["data_files"]] if entry.get("data_files") is not None else [d]
 
 
 def source_of(entry: dict) -> SourceGame:
     return SourceGame(entry.get("name") or entry["package"], Path(entry["apk"]),
                       Path(entry["data_dir"]) if entry.get("data_dir") else None,
-                      Path(entry["origin"]) if entry.get("origin") else None)
+                      Path(entry["origin"]) if entry.get("origin") else None, data_files=entry.get("data_files"))
 
 
 def set_recipe(package: str, recipe: Recipe) -> None:
@@ -595,6 +711,8 @@ def _build_lock(package: str) -> threading.Lock:
 
 
 def build_game(package: str, reporter: Reporter, outdir: Path | None = None) -> dict:
+    if analysis_outdated(library.game(package) or {}):  # analysed by an older FramePort: new fields first
+        refresh_analyses([package], reporter)
     entry = library.game(package)
     if is_linux(entry):  # nothing to convert: installed as it is
         return {"ok": True, "linux": True}
@@ -611,7 +729,8 @@ def build_game(package: str, reporter: Reporter, outdir: Path | None = None) -> 
     art, store_title = artwork.fetch(package, res.apk)
     build_info = {"apk": str(res.apk), "alt_apk": str(res.alt_apk) if res.alt_apk else None, "sha256": res.sha256,
                   "alt_sha256": res.alt_sha256, "applied": res.applied, "checks": res.checks, "ok": res.ok,
-                  "overport": res.meta.get("overport"), "recipe_fp": recipe_fingerprint(entry["recipe"])}
+                  "overport": res.meta.get("overport"), "recipe_fp": recipe_fingerprint(entry["recipe"]),
+                  "superseded": res.meta.get("superseded") or {}}
     library.upsert_game(package, build=build_info, title=entry.get("title") or store_title)
     return build_info
 
@@ -634,9 +753,12 @@ def install_game(package: str, target: Target, reporter: Reporter, apk_only: boo
     if not test_build and not apk.exists():  # the converted copy was removed after an earlier install: make it again
         build_game(package, reporter)
         return install_game(package, target, reporter, apk_only, add_to_library)
+    if not test_build and b.get("superseded"):  # workarounds this build left out (upstream fixed): not in settings.conf
+        recipe = dataclasses.replace(recipe, patches=upstream.without_superseded(recipe.patches, b["superseded"]))
     data_dir = Path(entry["data_dir"]) if entry.get("data_dir") else None
     title = steam_title(entry)
-    result = target.install(package, title, apk, data_dir, recipe, reporter, apk_only)
+    result = target.install(package, title, apk, data_dir, recipe, reporter, apk_only,
+                            data_files=entry.get("data_files"))
     if add_to_library:
         target.add_to_library([package], reporter)
     _record_install(package, target.label, {"apk": str(apk), "result": result, "time": time.time()})
@@ -670,13 +792,14 @@ def local_game_files(package: str) -> list[Path]:
     elif is_linux(g):
         paths += linux_local_files(g)
     else:
-        paths += [Path(p) for p in (g.get("apk"), g.get("data_dir")) if p]
+        paths += [Path(g["apk"])] if g.get("apk") else []
+        paths += data_paths(g)
     b = g.get("build") or {}
     out = output_dir().resolve()
     paths += [Path(b[k]) for k in ("apk", "alt_apk") if b.get(k) and out in Path(b[k]).resolve().parents]
     others = [o for o in library.games() if o.get("package") != package]
     used = [Path(p).resolve() for o in others if not is_linux(o)
-            for p in (o.get("apk"), o.get("data_dir"), o.get("game_dir")) if p]
+            for p in (o.get("apk"), o.get("game_dir"), *data_paths(o)) if p]
     used += [p.resolve() for o in others if is_linux(o) for p in linux_local_files(o)]  # (lone AppImages: the file)
 
     def shared(p: Path) -> bool:  # the same path, a path inside it, or a folder around it belongs to another game
@@ -795,6 +918,10 @@ def install_rift(package: str, target: Target, reporter: Reporter, add_to_librar
 
 def test_game(package: str, target: Target, reporter: Reporter, seconds: int = 45) -> dict:
     result, log = target.launch_test(package, reporter, seconds)
+    if missing_obb(library.game(package) or {}):
+        from .validate.triage import add_missing_obb
+
+        add_missing_obb(result)
     from .core.paths import user_data_dir
 
     logs = user_data_dir() / "logs"

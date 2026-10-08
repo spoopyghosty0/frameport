@@ -174,6 +174,23 @@ def test_install_state_tracks_patch_settings():
     assert C.install_state(g, {"installed": []}) == "missing"
 
 
+def test_game_on_a_missing_sd_card_is_still_installed():
+    """GitHub #90: a game whose microSD card is out has no files to see, but it is installed (not "Not installed")."""
+    from frameport.ui import components as C
+
+    sd = {"internal": False, "path": "/run/media/steamos/SD", "label": "SD"}
+    gone = frame({"package": "com.x", "sha256": "a", "apk_present": False, "drive": sd, "drive_missing": True})
+    assert install_state(game("a"), gone) == "installed"
+    assert C.drive_note(C.frame_drive(game("a"), gone)) == " · SD not inserted"
+    here = frame({"package": "com.x", "sha256": "a", "apk_present": True, "drive": sd, "drive_missing": False})
+    assert C.drive_note(C.frame_drive(game("a"), here)) == " · on SD"
+    internal = frame({"package": "com.x", "sha256": "a", "drive": {"internal": True, "path": "/home/steamos",
+                                                                     "label": "Internal storage"}})
+    assert C.drive_note(C.frame_drive(game("a"), internal)) == ""
+    assert C.frame_drive(game("a"), frame({"package": "com.x"})) is None  # an agent before v63
+    assert install_state(game("a"), frame({"package": "com.x", "sha256": "a", "apk_present": False})) == "missing"
+
+
 def test_library_writes_from_many_threads_are_not_lost():
     """Every thread's change survives (library.json read-modify-write used to race between jobs and the UI)."""
     import threading

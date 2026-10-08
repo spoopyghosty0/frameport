@@ -156,6 +156,40 @@ class FakeTarget:
                         "apk_present": True, "recipe": None, "exe": g.get("exe"),
                         "missing_libraries": ["libwebkit2gtk-4.1.so.0"]}
                        for g in library.games() if g.get("kind") == "linux" and g["package"] == LINUX_APPIMAGE]
+        # GitHub #90: most games on internal storage, the second one on a microSD card
+        sd = {"internal": False, "path": "/run/media/steamos/SD Card", "label": "SD Card"}
+        for i, g in enumerate(self.games):
+            g["drive"] = sd if i == 1 else {"internal": True, "path": "/home/steamos", "label": "Internal storage"}
+            g["drive_missing"] = False
+
+    def drives(self) -> list[dict]:
+        sd_games = sum(1 for g in self.games if not g["drive"]["internal"])
+        return [{"id": "internal", "path": "/home/steamos", "install_dir": "/home/steamos/Applications/quest-frame",
+                 "label": "Internal storage", "fstype": "ext4", "internal": True, "removable": False,
+                 "free_bytes": 312 * 2**30, "total_bytes": 460 * 2**30, "usable": True, "reason": "",
+                 "games": len(self.games) - sd_games},
+                {"id": "/run/media/steamos/SD Card", "path": "/run/media/steamos/SD Card",
+                 "install_dir": "/run/media/steamos/SD Card/FramePort", "label": "SD Card", "fstype": "ext4",
+                 "internal": False, "removable": True, "free_bytes": 187 * 2**30, "total_bytes": 238 * 2**30,
+                 "usable": True, "reason": "", "games": sd_games},
+                {"id": "/run/media/steamos/USB", "path": "/run/media/steamos/USB", "install_dir":
+                 "/run/media/steamos/USB/FramePort", "label": "USB", "fstype": "exfat", "internal": False,
+                 "removable": True, "free_bytes": 50 * 2**30, "total_bytes": 64 * 2**30, "usable": False,
+                 "reason": "exfat can't hold game data (no Unix permissions or symlinks); format the drive in "
+                           "SteamOS to install games on it", "games": 0}]
+
+    def move(self, package, dest, reporter) -> dict:
+        reporter.stage("Move game files")
+        for i in range(5):
+            reporter.progress(i / 4, f"Copying {i / 2:.1f}/2.0 GiB")
+            time.sleep(0.5)
+        return {"state": "done", "package": package}
+
+    def set_desktop_entry(self, package, enabled) -> dict:
+        for g in self.games:
+            if g["package"] == package:
+                g["desktop_entry"] = enabled
+        return {"enabled": enabled}
 
     def describe(self) -> dict:
         return {"hostname": "steamframe", "os": "SteamOS", "os_version": "3.8", "build_id": "20260922",
@@ -471,6 +505,8 @@ def main() -> int:
         # a pretend install of --game, mid-upload: the transit in the sidebar, the game page and Activity
         steps += [("transit-game", lambda a: (a.page.pop_dialog(), start_fake_install(a, game), a.open_game(game))),
                   ("transit-activity", lambda a: a.show_activity(True))]
+        if args.fake_frame:  # GitHub #90: the Move to… dialog (drives load in the background)
+            steps.append(("move-dialog", lambda a: (a.page.pop_dialog(), a.move_game(game))))
         # last: the right-click menu stays open over whatever comes next
         steps.append(("library-menu", lambda a: (a.show_activity(False), a.navigate(0), time.sleep(3),
                                                  a.library_view.open_menu(game))))
@@ -568,7 +604,9 @@ def main() -> int:
                  ("linux-folder-customize", lambda a: a.open_game(LINUX_FOLDER, advanced=True)),
                  ("linux-change-program", lambda a: a.choose_exe(LINUX_FOLDER)),
                  ("frame", lambda a: (a.page.pop_dialog(), a.navigate(1))),
-                 ("linux-menu", lambda a: (a.navigate(0), time.sleep(3), a.library_view.open_menu(LINUX_APPIMAGE)))]
+                 ("linux-move", lambda a: a.move_game(LINUX_APPIMAGE) if args.fake_frame else None),
+                 ("linux-menu", lambda a: (a.page.pop_dialog(), a.navigate(0), time.sleep(3),
+                                           a.library_view.open_menu(LINUX_APPIMAGE)))]
     if args.links:
         from frameport import deeplink
         from frameport.ui.views import link_dialog

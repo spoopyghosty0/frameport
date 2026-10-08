@@ -1041,6 +1041,7 @@ class FramePortApp:
             "details": lambda e: self.refresh_details(pkg),
             "logs": lambda e: self.collect_logs(pkg),
             "report": lambda e: self.report_problem_dialog(pkg),
+            "move": lambda e: self.move_game(pkg),
             "uninstall_frame": lambda e: self.uninstall(pkg, "frame"),
             "uninstall_pc": lambda e: self.uninstall(pkg, "pc"),
             "remove": lambda e: self.remove_from_library(pkg),
@@ -1056,7 +1057,8 @@ class FramePortApp:
             installs=[] if busy or not quick else enabled(self.install_options(g)),
             settings=self.has_game_settings(g), programs=rift or (linux and bool(self.linux_programs(g))),
             selectable=lv is not None,
-            media_button=C.is_media_player(g) and not rift)
+            media_button=C.is_media_player(g) and not rift,
+            movable=connected and C.frame_drive(g, self.frame_info) is not None)
         return menu_sections(g, st, handlers.__getitem__)
 
     def open_game_menu(self, pkg: str) -> None:
@@ -1159,11 +1161,11 @@ class FramePortApp:
         def ask_frame_oculus():
             # Installing an Oculus/LibOVR Rift game on the Frame: warn that it needs Revive (which can't run there)
             if to != "frame":
-                return ask_license()
+                return ask_obb()
             oculus = [g for g in games if g.get("kind") == "rift"
                       and "pcvr.revive" in (g.get("recipe") or {}).get("patches", {})]
             if not oculus:
-                return ask_license()
+                return ask_obb()
             boxes = {g["package"]: ft.Checkbox(label=self._title(g["package"]), value=False, active_color=T.ACCENT)
                      for g in oculus}
             pick = C.one_choice()
@@ -1178,7 +1180,7 @@ class FramePortApp:
                                   "those Oculus games need PC mode (SteamVR + Revive)."))
                     finished()
                     return
-                ask_license()
+                ask_obb()
             self.page.show_dialog(C.dialog(
                 tr("These games can't run on the Steam Frame"),
                 ft.Column([
@@ -1187,6 +1189,38 @@ class FramePortApp:
                            "want to put on the Frame to experiment (they'll likely run flat or crash).")),
                     *boxes.values()], spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
                 height=T.px(min(130 + 36 * len(boxes), 480)),  # fits the list; scrolls when long
+                modal=True, on_dismiss=pick(closed),
+                actions=[C.ghost(tr("Cancel"), on_click=pick(cancel)),
+                         C.primary(tr("Continue"), on_click=pick(ok))]))
+
+        def ask_obb():
+            # the game expects a data file (.obb) that wasn't found next to its APK: it would hang at start (#85)
+            missing = [g for g in games if pipeline.missing_obb(g)]
+            if not missing:
+                return ask_license()
+            boxes = {g["package"]: ft.Checkbox(label=self._title(g["package"]), value=False, active_color=T.ACCENT)
+                     for g in missing}
+            pick = C.one_choice()
+
+            def ok(e):
+                nonlocal games
+                self.page.pop_dialog()
+                keep = {p for p, b in boxes.items() if b.value}
+                games = [g for g in games if g not in missing or g["package"] in keep]
+                if not games:
+                    self.toast(tr("Nothing to install: add the games' .obb files first"))
+                    finished()
+                    return
+                ask_license()
+            self.page.show_dialog(C.dialog(
+                tr("Game data (.obb) not found"),
+                ft.Column([
+                    C.body(tr("These games keep their content in a data file (.obb), and none was found next to "
+                              "their APK. Without it they hang at start. Put the .obb files in a folder named like "
+                              "the game's package (or obb/) next to the APK and add the folder again. Tick any you "
+                              "still want to install.")),
+                    *boxes.values()], spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
+                height=T.px(min(150 + 36 * len(boxes), 480)),  # fits the list; scrolls when long
                 modal=True, on_dismiss=pick(closed),
                 actions=[C.ghost(tr("Cancel"), on_click=pick(cancel)),
                          C.primary(tr("Continue"), on_click=pick(ok))]))
@@ -1474,6 +1508,67 @@ class FramePortApp:
             library.update_game(pkg, lambda e: e.pop("steam_art_stale", None))
             return tr("{title}: Steam artwork updated on the Frame").format(title=self._title(pkg))
         return self.submit(tr("Update Steam art: {title}").format(title=self._title(pkg)), run, pkg, "art")
+
+    def move_game(self, pkg: str) -> None:
+        """Move to…: pick another drive of the Frame (microSD card, internal storage) for an installed game; the copy
+        runs as a Frame job (GitHub #90)."""
+        from ..install import drives
+
+        title = self._title(pkg)
+        here = C.frame_drive(library.game(pkg) or {"package": pkg}, self.frame_info)
+        group = ft.RadioGroup(content=ft.Column([C.meta(tr("Looking for drives…"))], spacing=T.S2))
+        go = C.primary(tr("Move"), ft.Icons.DRIVE_FILE_MOVE_ROUNDED, disabled=True)
+        found: dict[str, dict] = {}
+
+        def picked(e):
+            go.disabled = not group.value
+            C.update(go)
+
+        group.on_change = picked
+
+        def fill():
+            try:
+                listed = self._target_for("frame").drives()
+            except Exception as exc:  # noqa: BLE001
+                group.content.controls = [C.meta(tr("Couldn't list the Frame's drives: {error}")
+                                                 .format(error=explain(exc)))]
+                C.update(group)
+                return
+            rows = []
+            for d in listed:
+                key = drives.INTERNAL if d["internal"] else d["install_dir"]
+                current = drives.is_on({"drive": here}, d) if here else d["internal"]
+                found[key] = d
+                note = tr("it's here now") if current else \
+                    (d.get("reason") or "") if not d.get("usable") else drives.free_text(d)
+                rows.append(ft.Row([
+                    ft.Radio(value=key, active_color=T.ACCENT, disabled=current or not d.get("usable")),
+                    ft.Icon(ft.Icons.SD_CARD_ROUNDED if d.get("removable") else ft.Icons.STORAGE_OUTLINED,
+                            size=T.px(18), color=T.TEXT_2),
+                    ft.Column([C.body(tr("Internal storage") if d["internal"] else d["label"], T.TEXT),
+                               C.meta(note)], spacing=T.px(2), expand=True),
+                ], spacing=T.S2))
+            group.content.controls = rows or [C.meta(tr("Only internal storage"))]
+            C.update(group)
+
+        def start(e):
+            dest = group.value
+            if not dest:
+                return
+            self.page.pop_dialog()
+            label = tr("Internal storage") if dest == drives.INTERNAL else found.get(dest, {}).get("label", dest)
+
+            def run(job: Job):
+                self._target_for("frame").move(pkg, dest, job.reporter)
+                return tr("{title} moved to {label}").format(title=title, label=label)
+            self.submit(tr("Move {title} to {label}").format(title=title, label=label), run, pkg, "tool-frame")
+
+        go.on_click = start
+        self.page.show_dialog(C.dialog(
+            tr("Move {title} to…").format(title=title),
+            ft.Column([C.body(C.HELP["move_game"]), group], spacing=T.S3, tight=True), size="s",
+            actions=[C.ghost(tr("Cancel"), on_click=lambda e: self.page.pop_dialog()), go]))
+        self.run_bg(fill)
 
     def build_game(self, pkg: str) -> Job:
         def run(job: Job):
@@ -1952,6 +2047,7 @@ class FramePortApp:
     def _startup(self):
         from ..frame.connection import parse_target, saved_targets
 
+        self.run_bg(self._analysis_refresh)
         self._art_backfill()
         saved = saved_targets()
         if saved:
@@ -1962,6 +2058,18 @@ class FramePortApp:
         for f in browse(4, scan=False):
             self.connect(parse_target(f"{f.user}@{f.host}"), quiet=True)
             break
+
+    def _analysis_refresh(self) -> None:
+        """Games analysed by an older FramePort lack fields newer fixes depend on (GitHub #104): their APKs are read
+        again once, in the background. Not a job: ~8 s per large APK, and the queue would hold the user's installs
+        for minutes (a build of such a game analyses it first itself). Recipes the user didn't edit then follow."""
+        if not pipeline.outdated_analyses():
+            return
+        n = pipeline.refresh_analyses()
+        if n:
+            self.refresh_view()
+            self.toast(tr_n("{n} game was analyzed again for new fixes", "{n} games were analyzed again for new fixes",
+                            n))
 
     def _art_backfill(self) -> None:
         """Rift games added before automatic artwork (or while offline): fetch it once in the background."""

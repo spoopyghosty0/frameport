@@ -41,6 +41,22 @@ def _deployment(game: dict, frame_info: dict | None) -> dict | None:
     return next((d for d in (frame_info or {}).get("installed", []) if d.get("package") == game.get("package")), None)
 
 
+def frame_drive(game: dict, frame_info: dict | None) -> dict | None:
+    """The drive the game is installed on ({internal, path, label, missing}), None if not installed / old agent."""
+    from ..install.drives import game_drive
+
+    return game_drive(_deployment(game, frame_info))
+
+
+def drive_note(drive: dict | None) -> str:
+    """" · on SD Card" / " · SD Card not inserted" for a game on another drive, "" on internal storage."""
+    if not drive or drive.get("internal"):
+        return ""
+    if drive.get("missing"):
+        return tr(" · {label} not inserted").format(label=drive.get("label") or tr("its drive"))
+    return tr(" · on {label}").format(label=drive.get("label") or "")
+
+
 def settings_diff(game: dict, frame_info: dict | None) -> tuple[list[str], list[str]] | None:
     """(patches turned on, patches turned off) in the app since the Frame's copy was installed; None if the same (or
     unknown: installs from before FramePort recorded their recipe)."""
@@ -99,7 +115,9 @@ def install_state(game: dict, frame_info: dict | None) -> str | None:
     if frame_info is None:
         return None
     dep = _deployment(game, frame_info)
-    if not dep or dep.get("apk_present") is False:  # no record, or the game files are gone (half uninstalled)
+    # no record, or the game files are gone (half uninstalled); a game on a microSD card that isn't inserted now is
+    # still installed (GitHub #90)
+    if not dep or (dep.get("apk_present") is False and not dep.get("drive_missing")):
         return "missing"
     b = game.get("build") or {}
     built = {b.get("sha256"), b.get("alt_sha256")} - {None}

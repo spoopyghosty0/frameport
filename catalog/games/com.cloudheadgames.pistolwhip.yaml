@@ -1,0 +1,22 @@
+package: com.cloudheadgames.pistolwhip
+title: Pistol Whip
+status: works
+notes: 120 HZ
+tested_version: 1.6.0.2
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-08'
+  known_good_sha256: ebd97af54c59d59d473c98492c1bb26ce6059b7e59f27a08acfc5ada23d0b774
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261006.6173745'
+  agent: 59
+  issue: 100
+source_hint: Pistol Whip

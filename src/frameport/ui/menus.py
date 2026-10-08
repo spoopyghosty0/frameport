@@ -33,6 +33,7 @@ class MenuState:
     programs: bool = False         # "Change program…" makes sense
     selectable: bool = False       # the Library view exists (Select)
     media_button: bool = False     # the game page shows "Add videos" already
+    movable: bool = False          # the Frame knows which drive it's on (agent v63+, microSD): Move to…
 
 
 def menu_sections(g: dict, st: MenuState, act: Callable[[str], Callable]) -> list:
@@ -49,6 +50,8 @@ def menu_sections(g: dict, st: MenuState, act: Callable[[str], Callable]) -> lis
         top.append((tr("Screenshots"), G.SHOT, act("screenshots")))
     if st.on_frame and not rift and not linux and not job and not st.media_button:
         top.append((tr("Add videos and files"), ft.Icons.VIDEO_LIBRARY_OUTLINED, act("files")))
+    if st.movable and st.on_frame and not job:
+        top.append((tr("Move to…"), ft.Icons.DRIVE_FILE_MOVE_ROUNDED, act("move")))
 
     artwork = [(tr("Find artwork…"), ft.Icons.IMAGE_SEARCH_ROUNDED, act("find_art")),
                (tr("Use your own artwork…"), ft.Icons.UPLOAD_FILE_OUTLINED, act("custom_art"))]

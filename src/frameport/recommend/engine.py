@@ -80,6 +80,7 @@ def suggest(analysis: Analysis, use_catalog: bool = True) -> Recipe:
             recipe.status = "unsupported"
             recipe.notes = f"No 64-bit ARM code ({', '.join(analysis.abis)}): the Steam Frame can't run it."
         if not rift:
+            _static_blockers(analysis, recipe)
             _non_quest(analysis, recipe)
     if not rift and not entry and (analysis.extra or {}).get("frame_patched"):
         # already has FramePort's adapter (e.g. a PATCHED/ build): installing it unchanged is the safe default
@@ -175,6 +176,39 @@ def warnings(recipe: Recipe) -> list[str]:
     if "frame.adapter" not in recipe.patches:
         out.append("Without the FrameBridge adapter most games fail on the Frame runtime.")
     return out
+
+
+def android_version_note(analysis: Analysis) -> str | None:
+    """'Its manifest asks for Android 14 (API 34)…' when the APK's minimum Android is newer than the Frame's."""
+    from ..analysis.detect import FRAME_API, android_version, too_new_android
+
+    min_sdk = (analysis.extra or {}).get("min_sdk")
+    if not too_new_android(min_sdk):
+        return None
+    return (f"Its manifest asks for Android {android_version(min_sdk)} (API {min_sdk}); the Frame's Android is "
+            f"{android_version(FRAME_API)} (API {FRAME_API}). Apps like this often crash at start on newer Android "
+            "parts, but not always: a launch test tells.")
+
+
+def web_wrapper_note(analysis: Analysis) -> str | None:
+    """A Trusted Web Activity: the APK only opens a website in Meta's browser (analysis.detect.web_wrapper)."""
+    ww = (analysis.extra or {}).get("web_wrapper")
+    if not ww:
+        return None
+    where = f"open {ww['url']} in a browser instead" if ww.get("url") else "open the website in a browser instead"
+    return (f"This app looks like a website in an Android wrapper (Trusted Web Activity): it opens the site in "
+            f"Meta's browser, which the Frame doesn't have. If nothing opens, {where}.")
+
+
+def blocker_notes(analysis: Analysis) -> list[str]:
+    """Warnings read from the APK's manifest that it may not run on the Frame (whatever the recipe says). Only
+    warnings: the manifest alone never marks a game unsupported (owner's rule); a launch test's triage decides."""
+    return [n for n in (android_version_note(analysis), web_wrapper_note(analysis)) if n]
+
+
+def _static_blockers(analysis: Analysis, recipe: Recipe) -> None:
+    for note in blocker_notes(analysis):
+        recipe.notes = _add(recipe.notes, note)
 
 
 def _non_quest(analysis: Analysis, recipe: Recipe) -> None:

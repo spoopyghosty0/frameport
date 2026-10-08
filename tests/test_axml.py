@@ -76,3 +76,63 @@ def test_start_activity_moves_launcher_to_the_vr_activity():
     # only those two attribute values changed: the rest parses as before
     assert axml.Axml(fixed).attr_str(next(e for e in axml.Axml(fixed).elements() if e.name == "manifest"),
                                      "package") == "org.x.game"
+
+
+def _sdk_manifest(min_sdk):
+    from conftest import build_axml
+
+    return build_axml([
+        ("start", "manifest", [("package", "str", "org.x.app")]),
+        ("start", "uses-sdk", [("minSdkVersion", "int", min_sdk), ("targetSdkVersion", "int", 34)]),
+        ("end", "uses-sdk"),
+        ("end", "manifest"),
+    ])
+
+
+def test_min_sdk(quest_manifest):
+    assert axml.min_sdk(_sdk_manifest(34)) == 34
+    assert axml.min_sdk(_sdk_manifest(29)) == 29
+    assert axml.min_sdk(quest_manifest) is None  # no uses-sdk element
+
+
+def _twa_manifest(value_kind, value):
+    from conftest import build_axml
+
+    return build_axml([
+        ("start", "manifest", [("package", "str", "dev.pages.mahjong_vr.twa")]),
+        ("start", "uses-sdk", [("minSdkVersion", "int", 23)]),
+        ("end", "uses-sdk"),
+        ("start", "application", []),
+        ("start", "meta-data", [("name", "str", "asset_statements"), ("resource", "ref", 0x7F0F0001)]),
+        ("end", "meta-data"),
+        ("start", "activity", [("name", "str", "com.google.androidbrowserhelper.trusted.LauncherActivity")]),
+        ("start", "meta-data", [("name", "str", "android.support.customtabs.trusted.DEFAULT_URL"),
+                                ("value", value_kind, value)]),
+        ("end", "meta-data"),
+        ("start", "meta-data", [("name", "str", "com.example.flag"), ("value", "bool", True)]),
+        ("end", "meta-data"),
+        ("end", "activity"),
+        ("end", "application"),
+        ("end", "manifest"),
+    ])
+
+
+def test_meta_data_and_web_wrapper(tmp_path):
+    import zipfile
+
+    from frameport.analysis.detect import analyze, web_wrapper
+
+    m = _twa_manifest("str", "https://mahjong-vr.pages.dev/")
+    meta = axml.meta_data(m)
+    assert meta == {"asset_statements": 0x7F0F0001, "android.support.customtabs.trusted.DEFAULT_URL":
+                    "https://mahjong-vr.pages.dev/", "com.example.flag": True}
+    assert web_wrapper(meta, axml.Axml(m).strings()) == {"url": "https://mahjong-vr.pages.dev/"}
+    # @string/launchUrl (Bubblewrap) without a resource table: still a wrapper, URL unknown
+    ref = _twa_manifest("ref", 0x7F0F0002)
+    assert web_wrapper(axml.meta_data(ref), axml.Axml(ref).strings()) == {"url": None}
+    assert web_wrapper({}, ["com.example.Main"]) is None
+    apk = tmp_path / "twa.apk"
+    with zipfile.ZipFile(apk, "w") as z:
+        z.writestr("AndroidManifest.xml", m)
+    a = analyze(apk)
+    assert a.extra["web_wrapper"] == {"url": "https://mahjong-vr.pages.dev/"} and a.extra["min_sdk"] == 23

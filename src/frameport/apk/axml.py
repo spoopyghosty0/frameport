@@ -15,6 +15,9 @@ RES_XML_START_ELEMENT = 0x0102
 RES_XML_END_ELEMENT = 0x0103
 TYPE_STRING = 0x03
 TYPE_INT_BOOLEAN = 0x12
+TYPE_REFERENCE = 0x01
+TYPE_INT_DEC = 0x10
+TYPE_INT_HEX = 0x11
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 LAUNCHER = "android.intent.category.LAUNCHER"
 INFO = "android.intent.category.INFO"
@@ -212,6 +215,48 @@ def used_and_declared_permissions(manifest: bytes) -> tuple[list[str], set[str]]
 def undeclared_meta_permissions(manifest: bytes) -> list[str]:
     used, declared = used_and_declared_permissions(manifest)
     return [p for p in used if p.startswith(("com.oculus.permission.", "horizonos.permission.")) and p not in declared]
+
+
+def min_sdk(manifest: bytes) -> int | None:
+    """<uses-sdk android:minSdkVersion> (None when absent or a preview codename)."""
+    x = Axml(manifest)
+    names = x.strings()
+    for el in x.elements():
+        if el.name != "uses-sdk":
+            continue
+        for a in el.attrs:
+            if a.name < len(names) and names[a.name] == "minSdkVersion":
+                if a.dtype in (TYPE_INT_DEC, TYPE_INT_HEX):
+                    return a.value
+                s = x.attr_str(el, "minSdkVersion")
+                return int(s) if s and s.isdigit() else None
+    return None
+
+
+def meta_data(manifest: bytes) -> dict[str, str | int | bool | None]:
+    """<meta-data android:name android:value|resource> entries: a string, a bool, an int, or a resource id (int)
+    for references (@string/…), None when the value isn't one of those."""
+    x = Axml(manifest)
+    names = x.strings()
+    out: dict = {}
+    for el in x.elements():
+        if el.name != "meta-data":
+            continue
+        key = x.attr_str(el, "name")
+        if not key:
+            continue
+        value = None
+        for a in el.attrs:
+            if a.name >= len(names) or names[a.name] not in ("value", "resource"):
+                continue
+            if a.raw < len(names) or a.dtype == TYPE_STRING:
+                value = x.attr_str(el, names[a.name])
+            elif a.dtype == TYPE_INT_BOOLEAN:
+                value = a.value != 0
+            elif a.dtype in (TYPE_INT_DEC, TYPE_INT_HEX, TYPE_REFERENCE):
+                value = a.value
+        out[key] = value
+    return out
 
 
 def categories(manifest: bytes) -> set[str]:

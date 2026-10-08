@@ -135,3 +135,103 @@ def test_failed_pc_game_on_stable_suggests_experimental_proton():
     recipe = pipeline.apply_suggestions("rift.x", [pipeline.PROTON_TOOL])
     assert recipe.patches[pipeline.PROTON_TOOL] == {"tool": "proton-experimental"}
     assert not pipeline.proton_alternative_worth_trying("rift.x", "fail")  # already on Experimental
+
+
+# ------------------------------------------------------------------------------------------ the app's own icon (#99)
+def png_bytes(size: int, colour=(200, 40, 40, 255)) -> bytes:
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGBA", (size, size), colour).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_find_icon_in_a_folder_app(tmp_path):
+    root = tmp_path / "Tool-1.0-arm64"
+    (root / "share/applications").mkdir(parents=True)
+    (root / "share/applications/tool.desktop").write_text("[Desktop Entry]\nExec=tool\nIcon=org.tool\n")
+    for size in (48, 256):
+        d = root / f"share/icons/hicolor/{size}x{size}/apps"
+        d.mkdir(parents=True)
+        (d / "org.tool.png").write_bytes(png_bytes(size))
+    (root / "share/icons/hicolor/scalable/apps").mkdir(parents=True)
+    (root / "share/icons/hicolor/scalable/apps/org.tool.svg").write_text("<svg/>")
+    assert linux.find_icon(root) == (root / "share/icons/hicolor/256x256/apps/org.tool.png").resolve()
+    # nothing outside the app folder, also through a symlink
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(png_bytes(512))
+    for p in list(root.rglob("org.tool.png")):
+        p.unlink()
+    (root / ".DirIcon").symlink_to(outside)
+    assert linux.find_icon(root) is None
+    assert linux.find_icon(tmp_path / "missing") is None
+
+
+def test_add_linux_folder_uses_its_own_icon(tmp_path):
+    from frameport.artwork import fetch, sources
+
+    root = tmp_path / "Tool"
+    root.mkdir()
+    (root / "tool").write_bytes(elf(linux.EM_AARCH64))
+    (root / "tool.desktop").write_text("[Desktop Entry]\nExec=tool\nIcon=tool\n")
+    (root / "tool.png").write_bytes(png_bytes(128))
+    g = pipeline.add_linux_app(root)
+    d = fetch.artwork_dir(g["package"])
+    assert (d / "icon.png").exists() and not (d / fetch.PICKED).exists()  # automatic: not the user's pick
+    assert sources.icon_source(g["package"]) == "app"
+
+
+def test_app_icon_never_replaces_a_chosen_icon(tmp_path):
+    from frameport.artwork import fetch, sources
+
+    pkg = "linux.tool"
+    assert sources.icon_source(pkg) == "generated"
+    assert sources.apply_app_icon(pkg, png_bytes(64)) is not None and sources.icon_source(pkg) == "app"
+    assert sources.apply_app_icon(pkg, png_bytes(64)) is None  # unchanged
+    assert sources.apply_app_icon(pkg, png_bytes(64, (0, 0, 255, 255))) is not None  # a new version's icon
+    assert sources.apply_app_icon(pkg, b"not an image") is None and sources.apply_app_icon(pkg, png_bytes(8)) is None
+    custom = tmp_path / "mine.png"
+    custom.write_bytes(png_bytes(128, (0, 255, 0, 255)))
+    sources.apply_custom(pkg, "icon", custom)
+    assert sources.icon_source(pkg) == "custom"
+    before = (fetch.artwork_dir(pkg) / "icon.png").read_bytes()
+    assert sources.apply_app_icon(pkg, png_bytes(64)) is None
+    assert (fetch.artwork_dir(pkg) / "icon.png").read_bytes() == before
+    # store art the user picked (with no icon) also keeps the app's icon out of the library
+    other = "linux.other"
+    (fetch.artwork_dir(other) / fetch.PICKED).write_text("meta")
+    assert sources.apply_app_icon(other, png_bytes(64)) is None
+
+
+def test_install_takes_the_icon_the_frame_found(tmp_path):
+    import base64
+
+    from frameport.artwork import fetch, sources
+    from frameport.core import library
+    from frameport.core.events import Reporter
+    from frameport.install import installer
+
+    class Frame:
+        def __init__(self):
+            self.puts, self.runs = [], []
+
+        def put(self, local, remote, resume=True):
+            self.puts.append(remote)
+
+        def run(self, command, stdin=None):
+            self.runs.append(command)
+
+    pkg = "linux.tool"
+    library.upsert_game(pkg, kind="linux", title="Tool")
+    frame = Frame()
+    result = {"app_icon": {"file": "app-icon.png", "png": base64.b64encode(png_bytes(64)).decode()}}
+    installer.apply_app_icon(frame, pkg, "/anchor", result, Reporter())
+    assert sources.icon_source(pkg) == "app" and not (fetch.artwork_dir(pkg) / fetch.PICKED).exists()
+    assert "/anchor/artwork/icon.png" in frame.puts  # the Frame's art set is sent again
+    assert frame.runs == ["printf %s 'app' > '/anchor/artwork/.icon-source'"]
+    frame.puts.clear()
+    installer.apply_app_icon(frame, pkg, "/anchor", result, Reporter())  # unchanged: nothing sent
+    installer.apply_app_icon(frame, pkg, "/anchor", {"app_icon": {"file": "app-icon.svg"}}, Reporter())
+    assert frame.puts == []

@@ -489,7 +489,7 @@ def test_an_already_converted_apk_is_not_converted_again(tmp_path, monkeypatch):
     used = []
     monkeypatch.setattr(build.overport_tool, "patch", lambda *a, **k: (_ for _ in ()).throw(AssertionError("OVRPort")))
     monkeypatch.setattr(build, "apply_frame_fixes",
-                        lambda src, out, *a: (used.append(src.read_bytes()), out.write_bytes(b"u"), ([], []))[2])
+                        lambda src, out, *a: (used.append(src.read_bytes()), out.write_bytes(b"u"), ([], [], {}))[2])
     monkeypatch.setattr(build.sign, "sign", lambda src, dst, pkg: dst.write_bytes(b"signed"))
     monkeypatch.setattr(build, "check_apk", lambda *a, **k: [])
     analysis = _analysis(package="com.x", is_overport_output=True)

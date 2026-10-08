@@ -102,6 +102,60 @@ def _desktop_name(root: Path) -> str | None:
     return None
 
 
+def _png_width(path: Path) -> int | None:
+    try:
+        with open(path, "rb") as f:
+            head = f.read(24)
+    except OSError:
+        return None
+    if head[:8] != b"\x89PNG\r\n\x1a\n" or len(head) < 24:
+        return None
+    return int.from_bytes(head[16:20], "big")
+
+
+def find_icon(root: Path) -> Path | None:
+    """The app's own icon in a folder (GitHub #99): the Icon= of its bundled .desktop file, looked up next to the
+    file, in (usr/)share/icons/hicolor/<size>/apps and (usr/)share/pixmaps, or a top-level .DirIcon; the biggest PNG
+    (the PC can't draw SVG icons; the Frame's agent uses those for Desktop Mode). Nothing outside `root` (symlinks
+    are resolved and checked). AppImages are read on the Frame instead (their files are compressed)."""
+    root = Path(root)
+    try:
+        real_root = root.resolve()
+    except OSError:
+        return None
+    paths = [root / ".DirIcon"]
+    desktops = [p for p in sorted(root.rglob("*.desktop"))[:5] if len(p.relative_to(root).parts) <= 4]
+    for desktop in desktops:
+        m = re.search(r"^Icon=(.+)$", desktop.read_text(encoding="utf-8", errors="replace"), re.M)
+        name = m.group(1).strip() if m else ""
+        if not name or name.startswith("/") or ".." in name.split("/"):
+            continue
+        stem = re.sub(r"\.(png|svg|xpm)$", "", name, flags=re.I)
+        bases = [root] + [d for d in desktop.parents if d != root and real_root in d.resolve().parents]
+        for base in bases:
+            paths += [base / name, base / f"{stem}.png"]
+            for share in (base / "usr" / "share", base / "share"):
+                paths += sorted(share.glob(f"icons/hicolor/*/apps/{glob_escape(stem)}.png"))
+                paths.append(share / "pixmaps" / f"{stem}.png")
+        break
+    best: tuple[int, Path] | None = None
+    for p in paths:
+        try:
+            real = p.resolve()
+            if real_root not in real.parents or not real.is_file() or real.stat().st_size > 4 << 20:
+                continue
+        except OSError:
+            continue
+        width = _png_width(real)
+        if width and (best is None or width > best[0]):
+            best = (width, real)
+    return best[1] if best else None
+
+
+def glob_escape(text: str) -> str:
+    return re.sub(r"([*?\[])", r"[\1]", text)
+
+
 def rank_programs(root: Path) -> list[tuple[Path, int]]:
     """(ELF program, machine) candidates, best first: the .desktop Exec= name, then a name like the folder's, then
     shallow and big ones. Libraries (*.so*) are never programs."""

@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 import flet as ft
 
 from ...core import library
-from ...i18n import tr
+from ...errors import explain
+from ...i18n import tr, tr_n
 from .. import components as C
 from .. import glyphs as G
 from .. import theme as T
@@ -116,6 +117,64 @@ class FrameView:
                                   lambda: app.frame_power("restart"))))
         return C.section(tr("Ready to play"), C.card(C.checklist(items), padding=ft.Padding(T.S4, T.S2, T.S4, T.S2)))
 
+    def storage(self, info: dict) -> ft.Control:
+        """Drives games can go on (GitHub #90) and where new games go. The list comes from the Frame in the
+        background."""
+        from ...install import drives
+
+        app = self.app
+        current = drives.install_dest()
+        pick = C.dropdown(label=tr("Install new games to"), value=current or drives.INTERNAL, width=T.px(380),
+                          dense=True, text_size=T.T_BODY, disabled=True,
+                          options=[ft.DropdownOption(key=drives.INTERNAL, text=tr("Internal storage"))])
+        rows = ft.Column([C.meta(tr("Looking for drives…"))], spacing=T.px(6))
+
+        def choose(e):
+            value = e.control.value or drives.INTERNAL
+            drives.set_install_dest(None if value == drives.INTERNAL else value)
+            label = next((o.text for o in pick.options if o.key == value), value)
+            app.toast(tr("New games go to {label}").format(label=label))
+
+        pick.on_select = choose
+
+        def name(d: dict) -> str:
+            return tr("Internal storage") if d["internal"] else d["label"]
+
+        def fill():
+            try:
+                found = app.target.drives() if app.target else []
+            except Exception as exc:  # noqa: BLE001 - shown in place of the list
+                rows.controls = [C.meta(tr("Couldn't list the Frame's drives: {error}").format(error=explain(exc)))]
+                C.update(rows)
+                return
+            opts, lines = [], []
+            for d in found:
+                free = drives.free_text(d)
+                if d.get("usable"):
+                    opts.append(ft.DropdownOption(key=drives.INTERNAL if d["internal"] else d["install_dir"],
+                                                  text=" · ".join(filter(None, [name(d), free]))))
+                state = tr_n("{n} game", "{n} games", d.get("games", 0)) if d.get("usable") else \
+                    tr("can't hold games: {reason}").format(reason=d.get("reason") or "")
+                lines.append(ft.Row([
+                    ft.Icon(ft.Icons.SD_CARD_ROUNDED if d.get("removable") else ft.Icons.STORAGE_OUTLINED,
+                            size=T.px(18), color=T.TEXT_2 if d.get("usable") else T.TEXT_3),
+                    C.body(name(d), T.TEXT if d.get("usable") else T.TEXT_3, expand=True),
+                    C.meta(" · ".join(filter(None, [d.get("fstype"), free, state]))),
+                ], spacing=T.S2))
+            if current and not any(o.key == current for o in opts):  # the chosen card isn't inserted now
+                label = current.rstrip("/").rsplit("/", 2)[-2] if current.rstrip("/").endswith("/FramePort") \
+                    else current
+                opts.append(ft.DropdownOption(key=current, text=tr("{label} (not inserted)").format(label=label)))
+            pick.options = opts or pick.options
+            pick.disabled = len(opts) < 2
+            rows.controls = lines or [C.meta(tr("Only internal storage"))]
+            C.update(pick)
+            C.update(rows)
+
+        app.run_bg(fill)
+        return C.section(tr("Storage"), C.card(ft.Column([pick, rows], spacing=T.S3), padding=T.S4),
+                         help="install_drive")
+
     def installed(self, info: dict) -> ft.Control:
         """The list fills in the background (icon thumbnails may need creating the first time)."""
         items = info.get("installed") or []
@@ -139,6 +198,7 @@ class FrameView:
             return spacer
 
         from ...artwork import thumbs
+        from ...install.drives import game_drive as drive_of
         from .files_dialog import show_files_dialog
         from .library import display_title, twins
 
@@ -155,7 +215,9 @@ class FrameView:
             sub = (tr("PC VR · Proton") + (tr(" + Revive") if d.get("revive") else "")) if pcvr else \
                 (C.platform(games[pkg])[0] if in_lib else tr("Linux") if d.get("kind") == "linux" else tr("Quest"))
             sub += (tr(" · {value:.1f} GiB").format(value=size / 2**30) if size >= 2**30
-                    else tr(" · {value:.0f} MiB").format(value=size / 2**20))
+                    else tr(" · {value:.0f} MiB").format(value=size / 2**20)) if size or not d.get("drive_missing") \
+                else ""
+            sub += C.drive_note(drive_of(d))
             title = display_title(games[pkg], tw) if in_lib else (d.get("title") or pkg)
             rows.append(ft.Container(ft.Row([
                 C.art_fill(art, radius=T.RADIUS_SM, width=T.px(44), height=T.px(44)),
@@ -419,5 +481,5 @@ class FrameView:
             return self.wizard()
         return ft.Column([
             app.top_bar(tr("Steam Frame"), tr("Your headset, what it's ready for and what's installed")),
-            self.device_card(info), self.readiness(info), self.installed(info),
+            self.device_card(info), self.readiness(info), self.storage(info), self.installed(info),
         ], spacing=T.S5, scroll=ft.ScrollMode.AUTO, expand=True)

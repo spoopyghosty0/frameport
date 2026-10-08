@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import flet as ft
 
 from ... import pipeline
+from ...analysis.detect import android_version, too_new_android
 from ...artwork import thumbs
 from ...core import library
 from ...i18n import tr, tr_n
@@ -197,6 +198,10 @@ class GameView:
         rift_platform = self.rift and (g["analysis"].get("extra") or {}).get("platform_sdk")
         frame_color = (T.TEXT_3 if (rift_oculus or rift_platform) and not frame_ok else
                        T.OK if st == "installed" else T.WARN if st == "outdated" else T.TEXT_3)
+        drive = C.frame_drive(g, app.frame_info) if frame_ok else None  # a microSD card (GitHub #90)
+        frame_line += C.drive_note(drive)
+        if drive and drive.get("missing"):
+            frame_color = T.WARN
         frame_sub = (tr("Oculus game — needs Revive, which doesn't run on the Frame. Play it on this PC (SteamVR).")
                      if rift_oculus else
                      tr("Needs the Oculus Platform (Meta Horizon app) for its license check, which the Frame doesn't "
@@ -298,7 +303,32 @@ class GameView:
                 C.body(tr("The Frame's Steam library still shows the old artwork."), T.TEXT, expand=True),
                 C.secondary(tr("Update Steam art on Frame"), ft.Icons.IMAGE_OUTLINED,
                             lambda e: self.app.update_steam_art(pkg))]), "info", ft.Icons.IMAGE_OUTLINED))
-        if recipe.status == "unsupported":
+        min_sdk = extra.get("min_sdk")
+        too_new = not self.rift and not self.linux and too_new_android(min_sdk)
+        if too_new:
+            # whatever the recipe says: the manifest asks for a newer Android (a warning only, a launch test decides)
+            out.append(C.callout(tr("Its manifest asks for Android {version} (API {api}); the Frame's Android is 11 "
+                                    "(API 30). Apps like this often crash at start, but not always: try it, a "
+                                    "launch test tells.").format(version=android_version(min_sdk), api=min_sdk),
+                                 "warn", ft.Icons.PHONELINK_ERASE_ROUNDED))
+        if pipeline.missing_obb(g):
+            out.append(C.callout(tr("This game's data file (.obb) wasn't found next to the APK. Put the .obb files "
+                                    "in a folder named {package} (or obb/) next to the APK and add the folder again; "
+                                    "without it the game hangs at start.").format(package=pkg), "error",
+                                 ft.Icons.FOLDER_OFF_OUTLINED))
+        web = (extra.get("web_wrapper") or None) if not self.rift and not self.linux else None
+        if web:
+            out.append(C.callout(ft.Column([
+                C.body(tr("This app looks like a website in an Android wrapper: it opens the site in Meta's "
+                          "browser, which the Frame doesn't have. If nothing opens, use the website in a browser "
+                          "instead."), T.TEXT)]
+                + ([C.meta(web["url"], T.TEXT_2, selectable=True)] if web.get("url") else []), spacing=T.px(4)),
+                "warn", ft.Icons.LANGUAGE_ROUNDED))
+        static = " ".join(engine.blocker_notes(library.analysis_from_dict(g["analysis"]))) \
+            if (too_new or web) else ""
+        if static and recipe.notes.strip() == static:
+            pass  # the recipe's note says the same (shown above)
+        elif recipe.status == "unsupported":
             out.append(C.callout(recipe.notes or tr("This game can't run on the Steam Frame."), "error"))
         elif recipe.notes and not (self.rift and extra.get("platform_sdk")):
             out.append(C.callout(recipe.notes, "info"))
@@ -462,11 +492,27 @@ class GameView:
             C.kv(tr("VR (OpenXR)"), tr("Yes: uses the Frame's OpenXR runtime") if vr else
                  tr("No: a 2D app")),
             C.kv(tr("Source"), extra.get("source") or g.get("game_dir") or ""),
+            C.kv(tr("Desktop Mode"), C.switch(tr("In the menu and on the desktop"),
+                                              value=g.get("desktop_entry", True) is not False,
+                                              on_change=self.set_desktop_entry), "desktop_entry"),
         ]
         return C.section(tr("What FramePort will do"), C.card(ft.Column([
             ft.Row([ft.Icon(ft.Icons.TERMINAL_ROUNDED, color=T.PC, size=T.px(18)),
                     C.body(lead, T.TEXT, weight=ft.FontWeight.W_500, expand=True)], spacing=T.S2),
             *rows], spacing=T.S3)), help="linux_app")
+
+    def set_desktop_entry(self, e) -> None:
+        """A Linux app's Desktop Mode entry (GitHub #84): kept with the game, applied on the Frame at once when it's
+        installed there (else at the next install)."""
+        app, pkg, on = self.app, self.package, bool(e.control.value)
+
+        def work():
+            library.upsert_game(pkg, desktop_entry=on)
+            if app.frame_state == "connected" and app.target and \
+                    C.install_state(self.g, app.frame_info) in ("installed", "outdated"):
+                app.target.set_desktop_entry(pkg, on)
+            app.toast(tr("Added to Desktop Mode") if on else tr("Removed from Desktop Mode"))
+        app.run_bg(work)
 
     def recipe_summary(self) -> ft.Control:
         if self.linux:
@@ -541,6 +587,9 @@ class GameView:
         state = {"recipe": recipe}
         warn = C.body("", T.WARN)
         technical = bool(library.setting("ui.patch_details", False))  # remembered for every game
+        # workarounds the last build left out because OVRPort's output already had the fix (patches/upstream.py)
+        superseded = (g.get("build") or {}).get("superseded") or {}
+        upstream_note = tr("Not needed in the last build: OVRPort fixed this itself.")
 
         def save(r):
             r.source = "user"
@@ -600,12 +649,16 @@ class GameView:
 
                     vals = recipe_values(g)
                     changed = sum(1 for k, v in vals.items() if v != default(k))
+                    fixed = [base.get(pid).title for pid in superseded if pid.startswith("adapter.")]
+                    fixed_note = [C.meta(tr("Not needed in the last build, OVRPort fixed it itself: {names}").format(
+                        names=", ".join(tr(t) for t in fixed)), T.TEXT_3)] if fixed else []
                     sections.append(C.card(ft.Row([
                         ft.Column([ft.Row([C.body(CATEGORY_TITLES[cat], T.TEXT, weight=ft.FontWeight.W_600),
                                            C.help_icon("cat_adapter")], spacing=T.S2),
                                    C.meta(tr_n("{n} setting changed from the default",
                                                "{n} settings changed from the default", changed) if changed
-                                          else tr("All at their defaults"))], spacing=T.px(2), expand=True),
+                                          else tr("All at their defaults")), *fixed_note], spacing=T.px(2),
+                                  expand=True),
                         C.secondary(tr("Change settings…"), ft.Icons.TUNE_ROUNDED,
                                     lambda e: app.settings_dialog(package)),
                     ], spacing=T.S3), padding=ft.Padding(T.S4, T.S3, T.S4, T.S3)))
@@ -622,6 +675,8 @@ class GameView:
                     shown = tr(reason).replace("overport", "OVRPort") if technical else \
                         plain_reason(reason, p.default_on)
                     sub.insert(0, C.meta(shown, T.ACCENT))
+                if on and p.id in superseded:
+                    sub.append(C.meta(upstream_note, T.TEXT_3))
                 extra = None
                 choices = getattr(p, "CHOICES", None)
                 if choices:  # a plain choice instead of a switch + text field (e.g. Proton: Experimental / Stable)

@@ -141,6 +141,17 @@ HELP: dict[str, str] = _Translated({
                      "select a text field (in a game or app, in Steam or on the desktop), then type here.",
     "free_space": "Deletes the rollback copies kept from each game's previous install and leftover uploads. The "
                   "games and saves stay.",
+    "install_drive": "Where new games go on the Frame: its internal storage or another drive, such as a microSD card "
+                     "(in a FramePort folder on it). Games you installed already stay where they are; move one with "
+                     "right-click → Move to…. The launcher and Steam entry always stay on internal storage. Drives "
+                     "formatted as FAT, exFAT or NTFS can't hold games (Android and Proton need Linux file "
+                     "permissions): format the card in SteamOS first.",
+    "move_game": "Copies the game's files, data and saves to the other drive, checks the copy and then removes the "
+                 "old one. The Steam entry, settings and saves stay valid. The game must be closed. A game on a "
+                 "microSD card only starts while the card is inserted.",
+    "desktop_entry": "Adds the app to Desktop Mode's application menu and puts an icon on its desktop. Some apps work "
+                     "better there, with a mouse and keyboard, than in Gaming Mode, where Steam Input turns the "
+                     "controllers into a gamepad.",
     "adapter_settings": "Sharpness, refresh rate, controllers, menus and more for this game. Changes are used the "
                         "next time it starts.",
     "frame_summary": "Quest ✓: Lepton is installed, so Quest games can run. PC VR ✓: Proton is installed, so PC VR "

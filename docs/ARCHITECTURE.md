@@ -35,6 +35,11 @@
 ## Extending
 - **New fix**: `patches/frame/<name>.py` with a `Patch` subclass (`detect`, `apply`, optional `validate`), plus a
   signature in `catalog/triage.yaml` and a PLAYBOOK row. Stages: `overport` | `apk` | `install`.
+- **Upstream fixed a bug we work around**: register an `UpstreamFix` (`patches/upstream.py`) in the workaround's
+  module: a probe that finds the fix in OVRPort's output (True / False / None = can't tell). Each build runs the probes
+  on the converted APK and leaves out the workarounds whose fix is there (log "not needed: …", `build.superseded`,
+  left out of settings.conf at install; game page and `frameport show` say so). The recipe keeps asking for the fix,
+  so builds made with an older runtime keep the workaround. `FRAMEPORT_KEEP_WORKAROUNDS=1` turns it off.
 - **New heuristic**: put it in the patch's `detect()` (and `applies()` for visibility), with the evidence in the
   reason text; check `scripts/eval_heuristics.py` still reproduces the catalog and add a test in
   `tests/test_heuristics.py`.
