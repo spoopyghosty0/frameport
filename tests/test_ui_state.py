@@ -361,7 +361,7 @@ def test_activity_pins_the_running_job_above_a_long_queue():
     assert order[0] is running and order[1:41] == queued and len(order) == 61
     assert [j.title for j in order[41:43]] == ["done 24", "done 23"]  # finished: newest first, at most 20
     panel = ActivityPanel(SimpleNamespace(jobs=jm, job_followups=lambda j: [], copy=None, show_log_file=None,
-                                          show_activity=None))
+                                          show_activity=None, transit_info=lambda j: {"title": j.title}))
     panel.root.width = 400  # open
     panel.refresh(update=False)
     assert len(panel.pinned.controls) == 1  # the running job, outside the scrolling list
@@ -443,9 +443,12 @@ def test_activity_progress_ticks_only_touch_the_progress_controls(monkeypatch):
     from frameport.ui.views.activity import ActivityPanel
 
     jm = JobManager(save_logs=False)
-    run = Job("running", run=lambda j: None, state="running", created=1, started=1, fraction=0.1)
+    run = Job("running", run=lambda j: None, state="running", created=1, started=1, fraction=0.1,
+              stage="Upload APK", stages=["Patching the game", "Prepare Frame", "Upload APK"])
     jm.jobs = [run, *[Job(f"q{i}", run=lambda j: None, created=2 + i) for i in range(30)]]
-    panel = ActivityPanel(SimpleNamespace(jobs=jm, job_followups=lambda j: [], copy=None, show_log_file=None))
+    info = lambda j: {"title": "Game", "dest": "Frame", "art": None, "icon": None}  # noqa: E731
+    panel = ActivityPanel(SimpleNamespace(jobs=jm, job_followups=lambda j: [], copy=None, show_log_file=None,
+                                          transit_info=info))
     panel.root.width = 400
     updated = []
     monkeypatch.setattr(C, "update", lambda *controls: updated.append(controls))
@@ -454,8 +457,9 @@ def test_activity_progress_ticks_only_touch_the_progress_controls(monkeypatch):
     assert updated[-1] == (panel.root,)  # the first time: everything
     run.fraction = 0.5
     panel.refresh()
-    bar = panel._live[run.id][0]
-    assert bar.value == 0.5 and panel.root not in updated[-1] and bar in updated[-1]
+    transit = panel._live[run.id][0]  # the install transit: (step 3 + half the upload) / 6 steps
+    assert transit.frac == 3.5 / 6 and panel.root not in updated[-1] and transit.control in updated[-1]
+    assert transit.detail.value == "50%"
     assert panel.list.controls == first_list  # nothing rebuilt
 
 

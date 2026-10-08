@@ -277,6 +277,29 @@ class FakeMonitorSession:
         self.closed = True
 
 
+FAKE_INSTALL_STAGES = ["Patching the game", "OVRPort (primary)", "Frame fixes (primary)", "sign (primary)",
+                       "validate (primary)", "Prepare Frame", "Upload APK"]
+
+
+def start_fake_install(app: FramePortApp, package: str) -> None:
+    """A running install job of `package` that reports the real stage names up to the upload (62 %) and then waits
+    (it never ends: the smoke run exits with it)."""
+    from frameport.ui.jobs import Job
+
+    hold, reached = threading.Event(), threading.Event()
+
+    def run(job):
+        for stage in FAKE_INSTALL_STAGES:
+            job.reporter.stage(stage)
+        time.sleep(0.3)  # past the job queue's notification throttle
+        job.reporter.progress(0.62, "com.example.apk", speed="36.4 MB/s · ~1 min left")
+        reached.set()
+        hold.wait()
+
+    app.jobs.submit(Job(f"Install {app._title(package)} on Frame", run, package, "install"))
+    reached.wait(10)
+
+
 def open_type_tab(app: FramePortApp) -> None:
     """The Type on Frame tab, with one key 'pressed' so the screenshot shows it working."""
     app.type_on_frame()
@@ -414,8 +437,11 @@ def main() -> int:
         steps += [("share-dialog", lambda a: a.share_config_dialog(game)),
                   ("report-dialog", lambda a: (a.page.pop_dialog(), a.report_problem_dialog(game))),
                   ("custom-art-dialog", lambda a: (a.page.pop_dialog(), a.custom_artwork(game)))]
+        # a pretend install of --game, mid-upload: the transit in the sidebar, the game page and Activity
+        steps += [("transit-game", lambda a: (a.page.pop_dialog(), start_fake_install(a, game), a.open_game(game))),
+                  ("transit-activity", lambda a: a.show_activity(True))]
         # last: the right-click menu stays open over whatever comes next
-        steps.append(("library-menu", lambda a: (a.page.pop_dialog(), a.navigate(0), time.sleep(3),
+        steps.append(("library-menu", lambda a: (a.show_activity(False), a.navigate(0), time.sleep(3),
                                                  a.library_view.open_menu(game))))
     if args.docs:
         steps = [("library", lambda a: a.navigate(0))]

@@ -869,6 +869,149 @@ class Sparkline:
         self.guide.elements = guide
 
 
+def _darker(color: str, factor: float = 0.6) -> str:
+    c = color.lstrip("#")
+    return "#" + "".join(f"{round(int(c[i:i + 2], 16) * factor):02X}" for i in (0, 2, 4))
+
+
+def transit_parts() -> dict[str, str]:
+    """The logo's monitor, portal and headset in the active theme's colours (asset URLs; glyphs.transit_parts)."""
+    from ..artwork.thumbs import asset_url
+    from ..core.paths import user_data_dir
+
+    parts = glyphs.transit_parts(user_data_dir(), {
+        "line": T.TEXT, "body": T.BG, "screen": T.SECONDARY, "lens": T.ACCENT,
+        "near": T.SECONDARY if T.DUAL else T.ACCENT, "far": T.ACCENT, "hole": _darker(T.BG)})
+    return {k: asset_url(v) for k, v in parts.items()}
+
+
+class Transit:
+    """Install progress as a transit: the PC's monitor · a track the game's cover rides along, into the portal at the
+    progress head · the Frame headset (a monitor again for installs on this PC). Below: "Title → Frame" with what
+    happens now (heading=False: without "Title → Frame"), and the six steps (not when compact). Created once per
+    place; set() changes only properties, so it can follow every progress tick."""
+
+    def __init__(self, compact: bool = False, heading: bool = True):
+        from .transit import STEPS
+
+        self.compact = compact
+        heading = heading and not compact
+        self.width = 0.0
+        self.frac = 0.0
+        self.done = False
+        self._job_id = None
+        icon_h = T.px(22 if compact else 30)
+        self.track_h = T.px(26 if compact else 36)
+        self.bar_h = T.px(4 if compact else 6)
+        self.cover_s = T.px(18 if compact else 26)
+        self.portal_w, self.portal_h = self.track_h * 24 / 50, self.track_h
+        self.parts = transit_parts()
+        size = lambda name, h: (h * glyphs.TRANSIT_SIZES[name][0] / glyphs.TRANSIT_SIZES[name][1], h)  # noqa: E731
+        mw, mh = size("monitor", icon_h)
+        self._dest_sizes = {"frame": size("headset", icon_h * 0.86), "pc": (mw, mh)}
+        self.source = ft.Image(src=self.parts["monitor"], width=mw, height=mh, fit=ft.BoxFit.CONTAIN)
+        hw, hh = self._dest_sizes["frame"]
+        self.dest = ft.Image(src=self.parts["headset"], width=hw, height=hh, fit=ft.BoxFit.CONTAIN)
+        anim = ft.Animation(250, ft.AnimationCurve.EASE_OUT)
+        top = (self.track_h - self.bar_h) / 2
+        self.fill = ft.Container(left=0, top=top, height=self.bar_h, width=0, border_radius=self.bar_h,
+                                 gradient=portal_gradient() if T.DUAL else None,
+                                 bgcolor=None if T.DUAL else T.ACCENT, animate_size=anim)
+        self.cover = ft.Container(left=0, top=(self.track_h - self.cover_s) / 2, width=self.cover_s,
+                                  height=self.cover_s, border_radius=T.px(4), bgcolor=T.SURFACE_3,
+                                  border=ft.Border.all(1, T.BORDER_STRONG), alignment=ft.Alignment.CENTER,
+                                  clip_behavior=ft.ClipBehavior.ANTI_ALIAS, animate_position=anim)
+        self.portal = ft.Image(src=self.parts["portal"], left=0, top=0, width=self.portal_w, height=self.portal_h,
+                               fit=ft.BoxFit.CONTAIN, animate_position=anim, animate_opacity=anim)
+        base = ft.Container(left=0, right=0, top=top, height=self.bar_h, border_radius=self.bar_h,
+                            bgcolor=T.SURFACE_3)
+        self.track = ft.Container(ft.Stack([base, self.fill, self.cover, self.portal], height=self.track_h,
+                                           clip_behavior=ft.ClipBehavior.NONE),
+                                  expand=True, height=self.track_h, on_size_change=self._resized)
+        row = ft.Row([self.source, self.track, self.dest], spacing=T.px(6 if compact else 10),
+                     vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        self.heading = ft.Text("", size=T.T_META, weight=ft.FontWeight.W_600, color=T.TEXT, max_lines=1,
+                               overflow=ft.TextOverflow.ELLIPSIS, expand=True)
+        self.detail = ft.Text("", size=T.T_META, color=T.TEXT_2, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+                              expand=not heading, text_align=ft.TextAlign.RIGHT if heading else ft.TextAlign.LEFT)
+        info = ft.Row([self.heading, self.detail] if heading else [self.detail], spacing=T.S2,
+                      vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        labels = {"analyze": tr("Analyze"), "patch": tr("Patch"), "sign": tr("Sign"), "upload": tr("Upload"),
+                  "install": tr("Install"), "test": tr("Test")}
+        self.steps = [ft.Container(ft.Text(labels[k], size=T.T_SMALL, color=T.TEXT_3, max_lines=1, no_wrap=True,
+                                            text_align=ft.TextAlign.CENTER),
+                                    expand=True, alignment=ft.Alignment.CENTER,
+                                    padding=ft.Padding(0, 0, 0, T.px(3)),
+                                    border=ft.Border(bottom=ft.BorderSide(2, T.SURFACE_3))) for k in STEPS]
+        steps_row = ft.Row(self.steps, spacing=T.px(3), visible=not compact)
+        self.control = ft.Column([row, info, steps_row], spacing=T.px(4 if compact else 6), tight=True)
+
+    # ------------------------------------------------------------------ layout
+    def _resized(self, e) -> None:
+        if e.width and abs(e.width - self.width) > 0.5:
+            self.width = e.width
+            self._place()
+            update(self.track)
+
+    def _place(self) -> None:
+        """Riders from the progress head: the portal centred on it, the cover just before it; once done the cover
+        has come out on the far side."""
+        w, pw, cs, gap = self.width, self.portal_w, self.cover_s, T.px(2)
+        if w <= 0:
+            return
+        if self.done:
+            self.fill.width = w
+            self.cover.left = max(0.0, w - cs)
+            self.portal.left = max(0.0, w - cs - gap - pw)
+            return
+        head = min(max(self.frac * w, cs + gap + pw / 2), w - pw / 2)
+        self.fill.width = max(0.0, min(w, self.frac * w))
+        self.portal.left = head - pw / 2
+        self.cover.left = max(0.0, self.portal.left - cs - gap + pw * 0.25)  # its edge slips into the portal
+
+    # ------------------------------------------------------------------ state
+    def set(self, job, title: str = "", dest: str = "", art: str | None = None, icon=None, extra: str = "") -> None:
+        """Show `job` (ui.jobs.Job). title/dest: "Title → Frame"; art: the cover's asset URL (icon when none);
+        extra: appended to the detail (e.g. " · 2 more queued")."""
+        from .transit import WAITING, job_state
+
+        s = job_state(job)
+        if job.id != self._job_id:  # another job: its cover and destination
+            self._job_id = job.id
+            self.cover.image = ft.DecorationImage(src=art, fit=ft.BoxFit.COVER) if art else None
+            self.cover.content = None if art else as_icon(icon or ft.Icons.VIDEOGAME_ASSET_OUTLINED,
+                                                          self.cover_s * 0.66, T.TEXT_2)
+            self.dest.src = self.parts["monitor" if s.target == "pc" else "headset"]
+            self.dest.width, self.dest.height = self._dest_sizes[s.target]
+        self.frac, self.done = s.fraction, s.label == "done"
+        self.heading.value = f"{title} → {dest}" if dest else title
+        if s.waiting:
+            text, color = tr(WAITING), T.WARN
+        elif s.failed:
+            text, color = (job.error or tr("Failed")), T.ERROR
+        elif job.state == "queued":
+            text, color = tr("Queued"), T.TEXT_3
+        else:
+            text, color = (s.detail or tr("Starting…")), T.TEXT_2
+        self.detail.value, self.detail.color = text + extra, color
+        self.portal.opacity = 0.35 if s.waiting else 1.0
+        if s.failed:
+            self.fill.gradient, self.fill.bgcolor = None, T.ERROR
+        else:
+            self.fill.gradient = portal_gradient() if T.DUAL else None
+            self.fill.bgcolor = None if T.DUAL else T.ACCENT
+        for i, box in enumerate(self.steps):
+            text = box.content
+            current = i == s.step and not self.done
+            finished = i < s.step or self.done
+            text.color = T.ACCENT if current else T.TEXT_2 if finished else T.TEXT_3
+            text.weight = ft.FontWeight.W_600 if current else ft.FontWeight.W_400
+            box.border = ft.Border(bottom=ft.BorderSide(
+                2, (T.ERROR if s.failed else T.WARN if s.waiting else T.ACCENT) if current
+                else (T.SECONDARY if T.DUAL else T.ACCENT) if finished else T.SURFACE_3))
+        self._place()
+
+
 class MeterBar:
     """A thin horizontal bar of coloured segments (per-core load, power split); widths are fractions of the bar."""
 

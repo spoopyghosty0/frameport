@@ -40,18 +40,14 @@ def _dur(job: Job) -> str:
     return f"{s // 60}:{s % 60:02d}"
 
 
-
-def _progress_text(job: Job) -> str:
-    """Speed first: the line is ellipsized, and the file name matters least."""
-    return " · ".join(x for x in (job.speed, job.message) if x)
-
 class ActivityPanel:
     def __init__(self, app: FramePortApp):
         self.app = app
         self.expanded: set[int] = set()
         self.logs: set[int] = set()
         self._tiles: dict[int, tuple[tuple, ft.Control]] = {}  # job id -> (state key, tile)
-        self._live: dict[int, tuple] = {}  # running job id -> (progress bar, message, stage text, log text or None)
+        self._live: dict[int, tuple] = {}  # running job id -> (transit, log text or None)
+        self._transits: dict[int, C.Transit] = {}  # running job id -> its transit, kept across tile rebuilds
         # job id -> (log text, its scrolling column): kept across tile rebuilds so reading the log doesn't jump
         self._logviews: dict[int, tuple[ft.Text, ft.Column]] = {}
         self._lock = threading.Lock()  # refresh() runs from job threads and the UI thread
@@ -104,11 +100,9 @@ class ActivityPanel:
                 self._tiles[j.id] = cached
                 rebuilt = True
             elif running and j.id in self._live:
-                bar, msg, meta, log = self._live[j.id]
-                bar.value = j.fraction
-                msg.value = _progress_text(j)
-                meta.value = j.stage or ""
-                live += [bar, msg, meta]
+                transit, log = self._live[j.id]
+                transit.set(j, **self.app.transit_info(j))
+                live.append(transit.control)
                 if log is not None and len(j.log) != getattr(log, "_lines", -1):  # only when it grew
                     log.value = "\n".join(j.log[-400:])
                     log._lines = len(j.log)
@@ -128,6 +122,8 @@ class ActivityPanel:
             return
         self._layout = layout
         self._tiles = {j.id: self._tiles[j.id] for j in jobs}
+        self._transits = {jid: t for jid, t in self._transits.items()
+                          if any(j.id == jid and j.state == "running" for j in jobs)}
         self._logviews = {jid: v for jid, v in self._logviews.items() if jid in self._tiles}
         if self.app.jobs.paused == "frame":
             pinned.insert(0, self._paused_notice())
@@ -170,9 +166,8 @@ class ActivityPanel:
             icon, color, word = ft.Icons.WARNING_AMBER_ROUNDED, T.WARN, tr("Installed · launch test failed")
         running = job.state == "running"
         expanded = running or job.id in self.expanded
-        meta = C.meta(job.stage if running and job.stage else
-                      (job.error or word) + (f" · {_dur(job)}" if job.finished else ""),
-                      T.ERROR if job.state == "failed" else T.TEXT_2, max_lines=2)
+        meta = C.meta((job.error or word) + (f" · {_dur(job)}" if job.finished else ""),
+                      T.ERROR if job.state == "failed" else T.TEXT_2, max_lines=2, visible=not running)
         head = ft.Row([
             C.spinner() if running
             else ft.Icon(icon, color=color, size=T.px(20)),
@@ -183,11 +178,13 @@ class ActivityPanel:
               if job.active else []),
         ], vertical_alignment=ft.CrossAxisAlignment.START, spacing=T.S3)
         parts: list[ft.Control] = [head]
-        if running:
-            bar = C.progress_bar(job.fraction)
-            msg = C.meta(_progress_text(job), max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-            parts += [bar, msg]
-            self._live[job.id] = (bar, msg, meta, None)
+        if running:  # the game on its way through the portal, with the six steps
+            transit = self._transits.get(job.id)
+            if transit is None:
+                transit = self._transits[job.id] = C.Transit(heading=False)
+            transit.set(job, **self.app.transit_info(job))
+            parts.append(transit.control)
+            self._live[job.id] = (transit, None)
         if expanded:
             if job.stages:
                 parts.append(ft.Column([
@@ -218,7 +215,7 @@ class ActivityPanel:
                 log, col = self._log_view(job)
                 log.value = "\n".join(job.log[-400:])
                 if running:
-                    self._live[job.id] = (*self._live[job.id][:3], log)
+                    self._live[job.id] = (self._live[job.id][0], log)
                 else:
                     col.auto_scroll = False
                 parts.append(ft.Container(col, bgcolor=T.BG, border_radius=T.RADIUS_SM, padding=T.S2,

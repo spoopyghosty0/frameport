@@ -95,6 +95,7 @@ class FramePortApp:
         self.search_field: ft.TextField | None = None
         self.welcome_started = False
         self._pc_cache: tuple[float, dict] | None = None
+        self.hero_transit = None  # (package, components.Transit) on the open game page while a job runs for it
         self.library_view = None  # created once (views/library.LibraryView), re-mounted on every visit
         self.files_view = None  # likewise (views/files.FilesView): keeps the location/folder between visits
         self.screenshots_view = None  # likewise (views/screenshots.ScreenshotsView): keeps the game filter
@@ -271,12 +272,10 @@ class FramePortApp:
         # activity card: a "running" layout and an "idle" layout, switched by visibility
         self._act_title = ft.Text("", size=T.px(12), weight=ft.FontWeight.W_600, color=T.TEXT, expand=True, max_lines=1,
                                   overflow=ft.TextOverflow.ELLIPSIS)
-        self._act_pct = C.meta("")
-        self._act_bar = C.progress_bar(None)
-        self._act_stage = C.meta("", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        # the game on its way from the PC through the portal (% and speed: the line under the track)
+        self._act_transit = C.Transit(compact=True)
         self._act_running = ft.Column([
-            ft.Row([C.spinner(),
-                    self._act_title, self._act_pct], spacing=T.S2), self._act_bar, self._act_stage],
+            ft.Row([C.spinner(), self._act_title], spacing=T.S2), self._act_transit.control],
             spacing=T.px(6), visible=False)
         self._act_idle_text = C.meta(tr("No activity"), expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
         self._act_idle = ft.Row([ft.Icon(ft.Icons.HISTORY_ROUNDED, size=T.px(16), color=T.TEXT_3), self._act_idle_text],
@@ -368,11 +367,8 @@ class FramePortApp:
         self._act_box.border = ft.Border.all(1, T.ACCENT if cur else T.BORDER)
         if cur:
             self._act_title.value = cur.title
-            self._act_pct.value = (f"{cur.fraction:.0%}" if cur.fraction is not None else "") + \
-                (f" · {cur.speed.split(' · ')[0]}" if cur.speed else "")
-            self._act_bar.value = cur.fraction
             more = tr(" · {queued} more queued").format(queued=queued) if queued else ""
-            self._act_stage.value = (cur.stage or tr("Starting…")) + more
+            self._act_transit.set(cur, **self.transit_info(cur), extra=more)
         elif self.jobs.paused == "frame":
             self._act_idle_text.value = tr("Paused: waiting for your Frame")
             self._act_idle_text.color = T.WARN
@@ -725,10 +721,13 @@ class FramePortApp:
             self.refresh_view()
             if job.kind == "scan" and self.exe_queue:
                 self.page.run_thread(self.next_exe_choice)
-        elif job and job.state == "running" and job.package and self.route[:2] == ("game", job.package) and \
-                job.stage and getattr(job, "_shown_stage", None) != job.stage:
-            job._shown_stage = job.stage  # keep the hero's progress button current
-            self.render()
+        elif job and job.active and job.package and self.route[:2] == ("game", job.package):
+            pkg, transit = self.hero_transit or (None, None)
+            if pkg == job.package and transit is not None:  # the hero's transit: properties only, no re-render
+                transit.set(job, **self.transit_info(job))
+                C.update(transit.control)
+            elif job.state == "running":
+                self.render()
         elif job and job.state == "running" and job.package and self.route[0] == "library" and \
                 not getattr(job, "_card_marked", 0):
             job._card_marked = 1  # "Working…" badge on the card
@@ -779,6 +778,26 @@ class FramePortApp:
         if not self._pc_cache or time.time() - self._pc_cache[0] > 2:
             self._pc_cache = (time.time(), local_installs())
         return self._pc_cache[1]
+
+    def transit_info(self, job: Job) -> dict:
+        """What the install transit shows for a job besides its progress (title, destination, cover), looked up once
+        per job: the transit follows every progress tick."""
+        cache = self.__dict__.setdefault("_transit_infos", {})
+        info = cache.get(job.id)
+        if info is None:
+            from ..artwork import thumbs
+
+            pkg = job.package
+            g = library.game(pkg) if pkg else None
+            dest = tr("this PC") if job.to == "pc" else \
+                (self.target.label if self.target else None) or self._saved_name() or tr("Steam Frame")
+            info = {"title": self._title(pkg) if g else job.title, "dest": dest,
+                    "art": thumbs.url(pkg, ("icon", "square", "portrait"), 96, wait=False) if g else None,
+                    "icon": C.platform_icon(g or {})}
+            if len(cache) > 50:
+                cache.clear()
+            cache[job.id] = info
+        return info
 
     def _title(self, pkg: str) -> str:
         from .views.library import display_title, twins

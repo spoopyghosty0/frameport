@@ -119,17 +119,18 @@ class GameView:
         app, g, pkg = self.app, self.g, self.package
         job = app.jobs.busy_with(pkg)
         if job:
-            pct = (f" {job.fraction:.0%}" if job.fraction is not None else "") + \
-                (f" · {job.speed.split(' · ')[0]}" if job.speed else "")
+            # the install as a transit: the game crossing the portal; app._on_job updates it on every tick
+            transit = C.Transit()
+            transit.set(job, **app.transit_info(job))
+            app.hero_transit = (pkg, transit)
             return ft.Row([
-                ft.FilledButton(content=ft.Row([C.spinner(color=T.ON_ACCENT),
-                                                ft.Text(f"{job.stage or tr('Queued')}{pct}", color=T.ON_ACCENT,
-                                                        weight=ft.FontWeight.W_600)], spacing=T.px(10), tight=True),
-                                on_click=lambda e: app.show_activity(True),
-                                style=ft.ButtonStyle(bgcolor=T.ACCENT, shape=C.button_shape(),
-                                                     padding=ft.Padding(T.px(22), T.px(18), T.px(22), T.px(18)))),
+                ft.Container(transit.control, width=T.px(460), padding=ft.Padding(T.S4, T.S3, T.S4, T.S3),
+                             bgcolor=T.soft(T.SURFACE, 0.92), border=ft.Border.all(1, T.BORDER),
+                             border_radius=T.RADIUS_SM, ink=True, tooltip=tr("Activity"),
+                             on_click=lambda e: app.show_activity(True)),
                 C.ghost(tr("Cancel"), ft.Icons.CLOSE_ROUNDED, lambda e: app.jobs.cancel(job)),
-            ], spacing=T.S2)
+            ], spacing=T.S2, vertical_alignment=ft.CrossAxisAlignment.END)
+        app.hero_transit = None
         buttons: list[ft.Control] = []
         for i, (label, icon, handler, disabled, tip) in enumerate(app.play_options(g) + app.install_options(g)):
             buttons.append(C.primary(label, icon, handler, disabled, tip, big=True) if i == 0 else
