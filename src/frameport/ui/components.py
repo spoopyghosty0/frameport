@@ -573,8 +573,11 @@ def callout(text: str | ft.Control, kind: str = "info", icon: str | None = None)
                     "error": ft.Icons.ERROR_OUTLINE_ROUNDED, "ok": ft.Icons.CHECK_CIRCLE_OUTLINE_ROUNDED,
                     "pc": G.PC}[kind]
     content = body(text, T.TEXT) if isinstance(text, str) else text
+    # a bar (text + buttons in one Row) is taller than a line of text: centre the icon on it; text that wraps keeps
+    # the icon at its first line
+    align = ft.CrossAxisAlignment.CENTER if isinstance(content, ft.Row) else ft.CrossAxisAlignment.START
     return ft.Container(ft.Row([as_icon(icon, T.px(18), color), ft.Container(content, expand=True)],
-                               spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.START),
+                               spacing=T.S3, vertical_alignment=align),
                         bgcolor=T.soft(color, 0.08), border=ft.Border.all(1, T.soft(color, 0.35)),
                         border_radius=T.RADIUS_SM, padding=ft.Padding(T.px(14), T.px(12), T.px(14), T.px(12)))
 

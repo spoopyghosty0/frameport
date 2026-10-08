@@ -60,3 +60,11 @@ def test_reduce_motion_default_off():
     assert reduce_motion_setting() is False
     library.set_setting(REDUCE_MOTION, True)
     assert reduce_motion_setting() is True
+
+
+def test_callout_icon_alignment():
+    """A bar (text + buttons in a Row) centres its icon; wrapping text keeps it at the first line."""
+    bar = C.callout(ft.Row([C.body("Update available"), C.ghost("Not now")]), "info")
+    assert bar.content.vertical_alignment == ft.CrossAxisAlignment.CENTER
+    text = C.callout("A long note that wraps over several lines.", "warn")
+    assert text.content.vertical_alignment == ft.CrossAxisAlignment.START
