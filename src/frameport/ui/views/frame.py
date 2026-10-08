@@ -44,10 +44,48 @@ class FrameView:
             ft.Column([
                 C.secondary(tr("Refresh"), ft.Icons.REFRESH_ROUNDED, lambda e: app.refresh_frame()),
                 C.secondary(tr("Type on Frame"), G.KEYS, lambda e: app.type_on_frame(),
-                            tooltip=tr("Use this computer's keyboard on the Frame")),
-                C.ghost(tr("Switch Frame…"), ft.Icons.SWAP_HORIZ_ROUNDED, lambda e: app.disconnect()),
+                            tooltip=tr("Use this PC's keyboard on the Frame")),
+                C.ghost(tr("Switch Frame…"), ft.Icons.SWAP_HORIZ_ROUNDED, lambda e: self.switch_frame()),
+                C.ghost(tr("Disconnect"), ft.Icons.LINK_OFF_ROUNDED, lambda e: app.disconnect()),
             ], spacing=T.S2, horizontal_alignment=ft.CrossAxisAlignment.END),
         ], spacing=T.S4), padding=T.S5)
+
+    def switch_frame(self) -> None:
+        """A small picker of the remembered Frames (click one to connect), or "Find another Frame…" = the setup and
+        discovery page."""
+        from ...frame.connection import saved_targets
+
+        app = self.app
+        page = app.page
+        current = getattr(getattr(app.target, "target", None), "host", None)
+
+        def pick(target):
+            page.pop_dialog()
+            app.connect(target)
+
+        def find(e):
+            page.pop_dialog()
+            app.disconnect()
+        rows = []
+        for f in saved_targets():
+            here = f.host == current
+            rows.append(ft.Container(ft.Row([
+                C.as_icon(G.FRAME, T.px(22), T.ACCENT),
+                ft.Column([C.body(f.label, T.TEXT, weight=ft.FontWeight.W_500),
+                           C.meta(f"{f.user}@{f.host}")], spacing=T.px(2), expand=True),
+                C.pill(tr("Connected"), T.OK, ft.Icons.CIRCLE) if here else
+                C.secondary(tr("Connect"), on_click=lambda e, f=f: pick(f)),
+            ], spacing=T.S3), padding=ft.Padding(T.S3, T.px(8), T.S2, T.px(8)), bgcolor=T.SURFACE_3,
+                border_radius=T.RADIUS_SM))
+        if not rows:
+            rows = [C.body(tr("No other Frames remembered yet."))]
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text(tr("Switch Frame"), weight=ft.FontWeight.W_600),
+            content=ft.Container(ft.Column(rows, spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
+                                 width=T.px(440)),
+            bgcolor=T.SURFACE_2, shape=ft.RoundedRectangleBorder(radius=T.RADIUS),
+            actions=[C.ghost(tr("Find another Frame…"), ft.Icons.SEARCH_ROUNDED, find),
+                     C.ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog())]))
 
     def readiness(self, info: dict) -> ft.Control:
         app = self.app
@@ -69,7 +107,7 @@ class FrameView:
                  .format(display_name=sug['display_name']) if sug else
                  tr("Not offered by Steam on this Frame yet")),
                 C.secondary(tr("Test"), G.TEST, lambda e: app.test_proton()) if ready else
-                C.primary(tr("Install"), ft.Icons.DOWNLOAD_ROUNDED, lambda e: app.install_proton(), disabled=not sug),
+                C.primary(tr("Install…"), ft.Icons.DOWNLOAD_ROUNDED, lambda e: app.install_proton(), disabled=not sug),
                 help="proton"))
             xr = (pr.get("openxr") or {}).get("name")
             rows.append(C.status_row(bool(xr), tr("OpenXR runtime"), xr or tr("None found"), help="openxr"))
@@ -77,7 +115,8 @@ class FrameView:
         if keys.get("max_keys"):
             high = keys["keys"] > keys["max_keys"] * 0.75
             rows.append(C.status_row(not high if keys["keys"] < keys["max_keys"] else False, tr("Game launch capacity"),
-                                     f"{keys['keys']}/{keys['max_keys']} kernel keys used"
+                                     tr("{used}/{max} kernel keys used").format(used=keys["keys"],
+                                                                                max=keys["max_keys"])
                                      + (tr(" · restart the Frame soon to reset it") if high else ""),
                                      help="kernel_keys"))
         return C.section(tr("Ready to play"), C.card(ft.Column(rows, spacing=0),
@@ -94,7 +133,7 @@ class FrameView:
         send = C.ghost(tr("Files"), ft.Icons.FOLDER_OPEN_ROUNDED, lambda e: self.app.go("files"),
                        tooltip=C.tip(HELP["files"]))
         return C.section(tr("Installed games ({len})").format(len=len(items)), body,
-                         action=ft.Row([send, C.ghost(tr("Free up space"), ft.Icons.CLEANING_SERVICES_ROUNDED,
+                         action=ft.Row([send, C.ghost(tr("Free up space…"), ft.Icons.CLEANING_SERVICES_ROUNDED,
                                                       lambda e: self.app.cleanup_frame(),
                                                       tooltip=C.tip(HELP["free_space"]))], spacing=T.S2, tight=True)
                          if items else send)
@@ -163,8 +202,8 @@ class FrameView:
             res = browse(4)
             items = []
             for f in res:
-                label = {"devkit": "SteamOS · Developer Mode", "frameport": "Set up for FramePort",
-                         "saved": "Remembered", "scan": "SSH found by network scan"}.get(f.source, f.source)
+                label = {"devkit": tr("SteamOS · Developer Mode"), "frameport": tr("Set up for FramePort"),
+                         "saved": tr("Remembered"), "scan": tr("SSH found by network scan")}.get(f.source, f.source)
                 items.append(ft.Container(ft.Row([
                     C.as_icon(G.FRAME if f.source != "scan" else ft.Icons.DEVICES_OTHER_ROUNDED, T.px(24), T.ACCENT),
                     ft.Column([C.body(f.name if f.source != "scan" else f.host, T.TEXT, weight=ft.FontWeight.W_500),
@@ -173,9 +212,10 @@ class FrameView:
                                                                                    devkit=f.source == "devkit")),
                 ], spacing=T.S3), padding=ft.Padding(T.S3, T.px(8), T.S2, T.px(8)), bgcolor=T.SURFACE_2,
                     border_radius=T.RADIUS_SM))
-            found.controls = items or [C.body(tr("No Frames found. New Frame? Use first-time setup (step 1). Otherwise "
-                                              "make sure Developer Mode is on (Settings → System → Developer) and "
-                                              "the Frame is on the same network."))]
+            found.controls = items or [ft.Row([C.body(tr("No Frames found. New Frame? Use first-time setup (step "
+                                                         "1). Otherwise turn on Developer Mode and keep the Frame on "
+                                                         "the same network."), expand=True),
+                                               C.help_icon("developer_mode")], spacing=T.px(4))]
             found.controls.append(C.ghost(tr("Search again"), ft.Icons.REFRESH_ROUNDED, lambda e: app.run_bg(discover)))
             C.update(found)
 
@@ -205,7 +245,7 @@ class FrameView:
                     if server.requests or not server.running or app.pairing is not server:
                         return
                 server.hint = firewall_hint(server.port) or tr(
-                    "Check that the Frame and this computer are on the same network.")
+                    "Check that the Frame and this PC are on the same network.")
                 if app.route[0] == "frame" and app.pairing is server:
                     show_command()
             app.run_bg(check_network)
@@ -224,7 +264,7 @@ class FrameView:
                 tr("On the Frame, open Steam's Settings (Steam button → Settings)."),
                 tr("Go to System and turn on \"Enable Developer Mode\". A Developer page appears in Settings; nothing "
                    "else changes, your games and data stay as they are."),
-                tr("Connect the Frame's USB-C port to this computer with a USB cable (a data cable, not a charge-only "
+                tr("Connect the Frame's USB-C port to this PC with a USB cable (a data cable, not a charge-only "
                    "one)."),
             ]
             dlg = ft.AlertDialog(
@@ -255,7 +295,7 @@ class FrameView:
                              C.meta(tr("Waiting for the cable…"))], spacing=T.S2)
             pair_box.controls = [
                 C.body(tr("Looking for the Frame on a USB cable (Developer Mode on, USB-C port connected to this "
-                          "computer)."), T.TEXT),
+                          "PC)."), T.TEXT),
                 status,
             ]
             C.update(pair_box)
@@ -294,7 +334,7 @@ class FrameView:
             over_usb = bool(getattr(app.pairing, "host", ""))
             pair_box.controls = [
                 C.body(tr("On the Frame: SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
-                          "Konsole, and run (it reaches this computer over the USB cable):") if over_usb else
+                          "Konsole, and run (it reaches this PC over the USB cable):") if over_usb else
                        tr("On the Frame: SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
                           "Konsole, and run:"), T.TEXT),
                 ft.Container(ft.Row([ft.Text(line, font_family="monospace", selectable=True, size=T.px(12),
@@ -305,9 +345,8 @@ class FrameView:
                 ft.Row([ft.ProgressRing(width=T.px(14), height=T.px(14), stroke_width=T.px(2), color=T.ACCENT),
                         C.meta(tr("Waiting for your Frame… (code {code})").format(code=app.pairing.code))],
                        spacing=T.S2),
-                C.meta(tr("It trusts this app, turns on Developer Mode and installs Lepton if needed. Turning on "
-                       "Developer Mode closes the desktop; the setup finishes on its own and FramePort connects "
-                       "by itself. You only do this once.")),
+                ft.Row([C.meta(tr("You only do this once: FramePort connects by itself when the setup has finished."),
+                               expand=True), C.help_icon("first_time_setup")], spacing=T.px(4)),
             ]
             hint = getattr(app.pairing, "hint", "")
             if hint and not app.pairing.requests:  # nothing reached us yet: what may block it, and the other way in
@@ -315,9 +354,9 @@ class FrameView:
                     C.body(tr("Nothing has reached FramePort from the Frame yet (curl says “timed out”)?"), T.TEXT,
                            weight=ft.FontWeight.W_600),
                     C.body(hint, T.TEXT),
-                    C.meta(tr("Or turn on Developer Mode on the Frame (Settings → System → Developer): it then shows "
-                              "up under step 2. Open Settings → Developer → Pair new host on the Frame, click Connect "
-                              "there and approve FramePort. That way needs no connection into this computer.")),
+                    ft.Row([C.meta(tr("Or turn on Developer Mode on the Frame (Settings → System → Enable Developer "
+                                      "Mode) and pair it under step 2: that needs no connection into this PC."),
+                                   expand=True), C.help_icon("developer_mode")], spacing=T.px(4)),
                 ], spacing=T.S2), "warn"))
             if update:
                 C.update(pair_box)  # (a redraw of the page may have replaced it)
@@ -345,7 +384,7 @@ class FrameView:
                                         C.secondary(tr("Try again"), ft.Icons.REFRESH_ROUNDED,
                                                     lambda e: app.connect(saved[0]))]), "warn")
         elif app.frame_state == "connecting":
-            connecting = tr("Connecting to {value}…").format(value=saved[0].label if saved else 'your Frame')
+            connecting = tr("Connecting to {value}…").format(value=saved[0].label if saved else tr("your Frame"))
             offline = C.callout(ft.Row([ft.ProgressRing(width=T.px(16), height=T.px(16), stroke_width=T.px(2),
                                                         color=T.ACCENT),
                                         C.body(connecting, T.TEXT)],

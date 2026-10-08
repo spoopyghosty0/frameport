@@ -32,10 +32,10 @@ def advice(battery: dict | None, frame_work: bool, paused: str | None, warned: b
 
 
 def label(battery: dict | None) -> str:
-    """ "76 %" / "76 % ⚡" (charging or plugged in); "" without a battery reading."""
+    """ "76%" / "76% ⚡" (charging or plugged in); "" without a battery reading."""
     if not battery:
         return ""
-    return f"{battery.get('percent', 0)} %" + (" ⚡" if charging(battery) else "")
+    return f"{battery.get('percent', 0)}%" + (" ⚡" if charging(battery) else "")
 
 
 def icon(battery: dict) -> str:
@@ -55,10 +55,10 @@ def low(battery: dict | None) -> bool:
 def message(kind: str, battery: dict) -> str:
     pct = battery.get("percent", 0)
     if kind == "pause":
-        return tr("The Frame's battery is at {pct} %: installs paused so it doesn't switch off mid-upload. Plug it "
+        return tr("The Frame's battery is at {pct}%: installs paused so it doesn't switch off mid-upload. Plug it "
                   "in; the queue continues by itself.").format(pct=pct)
     if kind == "warn":
-        return tr("The Frame's battery is at {pct} % and not charging. Plug it in (a strong charger, not a PC "
-                  "port): long installs can drain it, and FramePort pauses them at {pause} %.").format(
+        return tr("The Frame's battery is at {pct}% and not charging. Plug it in (a strong charger, not a PC "
+                  "port): long installs can drain it, and FramePort pauses them at {pause}%.").format(
             pct=pct, pause=PAUSE_AT)
     return tr("The Frame is charging: continuing the installs.")

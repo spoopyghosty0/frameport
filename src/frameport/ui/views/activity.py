@@ -27,7 +27,7 @@ def _fill_styles() -> None:
                         "running": (ft.Icons.SYNC_ROUNDED, T.ACCENT, tr("Working")),
                         "done": (ft.Icons.CHECK_CIRCLE_ROUNDED, T.OK, tr("Done")),
                         "failed": (ft.Icons.ERROR_ROUNDED, T.ERROR, tr("Failed")),
-                        "cancelled": (ft.Icons.DO_NOT_DISTURB_ON_OUTLINED, T.TEXT_3, tr("Cancelled"))})
+                        "cancelled": (ft.Icons.DO_NOT_DISTURB_ON_OUTLINED, T.TEXT_3, tr("Canceled"))})
 
 
 T.on_change(_fill_styles)

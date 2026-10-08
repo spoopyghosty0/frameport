@@ -84,9 +84,9 @@ class FilesView:
         self.listing = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.status = C.meta("")
         self.toolbar = ft.Row([
-            C.primary(tr("Upload files"), ft.Icons.UPLOAD_FILE_ROUNDED, self.upload_files),
-            C.secondary(tr("Upload folder"), ft.Icons.DRIVE_FOLDER_UPLOAD_ROUNDED, self.upload_folder),
-            C.ghost(tr("New folder"), ft.Icons.CREATE_NEW_FOLDER_OUTLINED, lambda e: self.new_folder()),
+            C.primary(tr("Upload files…"), ft.Icons.UPLOAD_FILE_ROUNDED, self.upload_files),
+            C.secondary(tr("Upload folder…"), ft.Icons.DRIVE_FOLDER_UPLOAD_ROUNDED, self.upload_folder),
+            C.ghost(tr("New folder…"), ft.Icons.CREATE_NEW_FOLDER_OUTLINED, lambda e: self.new_folder()),
             C.icon_btn(ft.Icons.REFRESH_ROUNDED, tr("Refresh"), lambda e: self.load()),
         ], spacing=T.S2, wrap=True, run_spacing=T.S2)
         self.hidden_switch = C.switch(tr("Show hidden files"), wrap=False, value=False, on_change=self._toggle_hidden)
@@ -97,8 +97,8 @@ class FilesView:
         self.sel_label = C.body("", T.TEXT, weight=ft.FontWeight.W_500)
         self.sel_bar = ft.Container(ft.Row([
             self.sel_label, ft.Container(expand=True),
-            C.secondary(tr("Download"), ft.Icons.DOWNLOAD_ROUNDED, self._download_selected),
-            C.ghost(tr("Delete"), ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self._delete_selected()),
+            C.secondary(tr("Download…"), ft.Icons.DOWNLOAD_ROUNDED, self._download_selected),
+            C.ghost(tr("Delete…"), ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self._delete_selected()),
             C.ghost(tr("Clear"), ft.Icons.CLOSE_ROUNDED, lambda e: self._clear_selection()),
         ], spacing=T.S2), padding=ft.Padding(T.S3, T.px(6), T.S2, T.px(6)), border_radius=T.RADIUS_SM,
             bgcolor=T.ACCENT_SOFT, visible=False)
@@ -311,14 +311,14 @@ class FilesView:
                                 padding=ft.Padding(T.S3, T.px(8), T.S3, T.px(8)), border_radius=T.RADIUS_SM, ink=True,
                                 on_click=lambda ev: self.cd(posixpath.dirname(self.path)))
         when = time.strftime("%Y-%m-%d %H:%M", time.localtime(e.mtime)) if e.mtime else ""
-        info = (("folder" if e.is_dir else human(e.size)) + (tr(" · link") if e.link else "")
+        info = ((tr("folder") if e.is_dir else human(e.size)) + (tr(" · link") if e.link else "")
                 + (f" · {when}" if when else ""))
-        actions = [C.icon_btn(ft.Icons.DOWNLOAD_ROUNDED, tr("Download to this PC"),
+        actions = [C.icon_btn(ft.Icons.DOWNLOAD_ROUNDED, tr("Download to this PC…"),
                               lambda ev, x=e: self._download_later([x]))]
         if not self._protected(e):
-            actions += [C.icon_btn(ft.Icons.DRIVE_FILE_RENAME_OUTLINE_ROUNDED, tr("Rename"),
+            actions += [C.icon_btn(ft.Icons.DRIVE_FILE_RENAME_OUTLINE_ROUNDED, tr("Rename…"),
                                    lambda ev, x=e: self.rename(x)),
-                        C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Delete"), lambda ev, x=e: self.delete([x]))]
+                        C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Delete…"), lambda ev, x=e: self.delete([x]))]
         check = ft.Checkbox(value=e.path in self.selected, active_color=T.ACCENT, check_color=T.ON_ACCENT,
                             on_change=lambda ev, p=e.path: self._toggle(p, ev.control.value),
                             disabled=self._protected(e))
@@ -509,7 +509,7 @@ class FilesView:
 
     def delete(self, items: list) -> None:
         names = ", ".join(x.name for x in items[:3]) + (" …" if len(items) > 3 else "")
-        what = tr("folder and everything in it") if any(x.is_dir for x in items) else "file"
+        what = tr("folder and everything in it") if any(x.is_dir for x in items) else tr("file")
         C.confirm(self.app.page, tr("Delete {names}?").format(names=names),
                   tr("This deletes the {what} on the Frame. It can't be undone.").format(what=what),
                   tr("Delete"), lambda: (self.selected.difference_update(x.path for x in items),

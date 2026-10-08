@@ -124,7 +124,7 @@ class GameView:
             return ft.Row([
                 ft.FilledButton(content=ft.Row([ft.ProgressRing(width=T.px(16), height=T.px(16), stroke_width=T.px(2),
                                                                 color=T.ON_ACCENT),
-                                                ft.Text(f"{job.stage or 'Queued'}{pct}", color=T.ON_ACCENT,
+                                                ft.Text(f"{job.stage or tr('Queued')}{pct}", color=T.ON_ACCENT,
                                                         weight=ft.FontWeight.W_600)], spacing=T.px(10), tight=True),
                                 on_click=lambda e: app.show_activity(True),
                                 style=ft.ButtonStyle(bgcolor=T.ACCENT, shape=ft.RoundedRectangleBorder(radius=T.px(8)),
@@ -157,10 +157,10 @@ class GameView:
                 return ", ".join(tr(base.get(i).title) if i in base.REGISTRY else i for i in ids)
             changed = "; ".join(filter(None, [tr("on: {names}").format(names=names(diff[0])) if diff[0] else "",
                                               tr("off: {names}").format(names=names(diff[1])) if diff[1] else ""]))
-        frame_line = {"installed": "Installed",
-                      "outdated": (f"Installed · patch settings changed since ({changed}) — update to apply" if diff
-                                   else "Installed · a newer build is ready"),
-                      "missing": "Not installed", None: "Frame not connected"}[st]
+        frame_line = {"installed": tr("Installed"),
+                      "outdated": (tr("Installed · patch settings changed since ({changed}) — update to apply")
+                                   .format(changed=changed) if diff else tr("Installed · a newer build is ready")),
+                      "missing": tr("Not installed"), None: tr("Frame not connected")}[st]
         frame_ok = st in ("installed", "outdated")
         # Oculus/LibOVR Rift games need Revive, which can't run on the Frame — be honest about it
         patches = (g.get("recipe") or {}).get("patches", {})
@@ -197,7 +197,7 @@ class GameView:
                  if dep.get("launch") == "repack" else tr("Runs the game directly")) if dep else "",
                 [C.icon_btn(G.TEST, tr("Launch test on this PC"),
                             lambda e: app.test_game(pkg, "pc")),
-                 C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Remove from this PC's Steam library"),
+                 C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Uninstall from this PC…"),
                             lambda e: app.uninstall(pkg, "pc"))] if dep else []))
         return C.section(tr("Where it's installed"), ft.Row(cards, spacing=T.S3), help="where")
 
@@ -229,12 +229,12 @@ class GameView:
                 C.body(tr("FramePort picked {value} to start this game, but there are other candidates. "
                           "Check it before installing.").format(value=g.get('exe', '').rsplit('/', 1)[-1]),
                        T.TEXT, expand=True),
-                C.secondary(tr("Check"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.app.choose_exe(pkg))]), "warn",
+                C.secondary(tr("Check…"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.app.choose_exe(pkg))]), "warn",
                 ft.Icons.HELP_OUTLINE_ROUNDED))
         if self.rift and extra.get("platform_sdk"):
-            out.append(C.callout(tr("Uses the Oculus Platform SDK: it checks your Oculus license. Normally that "
-                                    "needs the Oculus app on this PC with a license you own, so it may quit right "
-                                    "after starting on the headset. You can still try it."), "warn"))
+            out.append(C.callout(tr("Uses the Oculus Platform SDK, which checks your Oculus license: it needs the "
+                                    "Oculus app on this PC and may quit right after starting. You can still try it."),
+                                 "warn"))
         installed = C.install_state(g, self.app.frame_info) in ("installed", "outdated")
         if should_ask_to_share(g, installed):
             def dismiss(e):
@@ -258,12 +258,12 @@ class GameView:
                 from ... import pipeline
 
                 pipeline.apply_catalog_update(pkg)
-                self.app.toast(tr("New config applied: use Update on Frame to install it"))
+                self.app.toast(tr("New recipe applied: use Update on Frame to install it"))
                 self.app.render()
             out.append(C.callout(ft.Row([
-                C.body(tr("A newer known-good config for this game is available (you changed this game's settings, "
+                C.body(tr("A newer known-good recipe for this game is available (you changed this game's settings, "
                           "so it wasn't applied by itself)."), T.TEXT, expand=True),
-                C.secondary(tr("Use the new config"), ft.Icons.AUTO_FIX_HIGH_OUTLINED, take_update)],
+                C.secondary(tr("Use the new recipe"), ft.Icons.AUTO_FIX_HIGH_OUTLINED, take_update)],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER), "info", ft.Icons.NEW_RELEASES_OUTLINED))
         if g.get("steam_art_stale") and installed:
             out.append(C.callout(ft.Row([
@@ -283,7 +283,7 @@ class GameView:
         for r in counterparts(g, self.games):
             other_rift = r.get("kind") == "rift"
             links.append(C.ghost(tr("Also in your library: {value} version")
-                                 .format(value='Rift' if other_rift else 'Quest'),
+                                 .format(value=tr("Rift") if other_rift else tr("Quest")),
                                  G.PC if other_rift else G.FRAME,
                                  lambda e, p=r["package"]: self.app.open_game(p), color=T.ACCENT))
         if links:
@@ -683,7 +683,7 @@ class GameView:
                 ft.Container(ft.Column(rows, spacing=T.S2), padding=ft.Padding(T.S4, 0, T.S4, T.S4))],
                 bgcolor=T.SURFACE, collapsed_bgcolor=T.SURFACE)
         if self.rift:
-            rows += [C.kv(tr("Folder"), g.get("game_dir") or ""), C.kv(tr("Executable"), g.get("exe") or ""),
+            rows += [C.kv(tr("Folder"), g.get("game_dir") or ""), C.kv(tr("Program"), g.get("exe") or ""),
                      C.kv(tr("Type"), f"{a['abis'][0]} · {a['graphics']}"),
                      C.kv(tr("Size"), tr("{value:.1f} GiB")
                           .format(value=(a.get('extra', {}).get('data_bytes') or 0) / 2**30))]

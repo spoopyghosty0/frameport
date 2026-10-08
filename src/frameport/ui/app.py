@@ -347,7 +347,7 @@ class FramePortApp:
             recent = next((j for j in self.jobs.recent(1)), None)
             self._act_idle_text.value = tr("No activity") if not recent else \
                 f"{recent.title} · " + {"done": tr("done"), "failed": tr("failed"),
-                                        "cancelled": tr("cancelled")}.get(recent.state, "")
+                                        "cancelled": tr("canceled")}.get(recent.state, "")
             self._act_idle_text.color = T.ERROR if recent and recent.state == "failed" else T.TEXT_3
         st = self.frame_state
         color = {"connected": T.OK, "connecting": T.WARN, "offline": T.ERROR}.get(st, T.TEXT_3)
@@ -366,7 +366,7 @@ class FramePortApp:
             warn = low(bat)
             self._conn_bat_icon.icon = getattr(ft.Icons, icon(bat))
             self._conn_bat_icon.color = T.WARN if warn else T.OK if charging(bat) else T.TEXT_2
-            self._conn_bat_text.value = f"{bat.get('percent', 0)} %"
+            self._conn_bat_text.value = f"{bat.get('percent', 0)}%"
             self._conn_bat_text.color = T.WARN if warn else T.TEXT_2
             self._conn_bat.tooltip = tr("Frame battery: charging") if charging(bat) else \
                 tr("Frame battery: not charging")
@@ -586,7 +586,7 @@ class FramePortApp:
                 msg = tr("{title} failed: {error}").format(title=job.title, error=job.error)
                 pkg = job.package
                 if job.kind in ("install", "test") and pkg:  # one click to the diagnostics + prefilled issue
-                    self.toast(msg, error=True, action=tr("Report a problem"),
+                    self.toast(msg, error=True, action=tr("Report a problem…"),
                                on_action=lambda e: self.report_problem_dialog(pkg))
                 else:
                     self.toast(msg, error=True, action=tr("Details"),
@@ -664,8 +664,8 @@ class FramePortApp:
                        "outdated": tr("Update on Frame")}.get(st, tr("Install on Frame"))
         blocked = (g.get("recipe") or {}).get("status") == "unsupported" and g.get("kind") != "rift"
         if blocked and connected:  # known blocker: still allowed (e.g. to try a fix), after a warning
-            frame_label = {"installed": tr("Reinstall anyway"),
-                           "outdated": tr("Update anyway")}.get(st, tr("Install anyway"))
+            frame_label = {"installed": tr("Reinstall anyway…"),
+                           "outdated": tr("Update anyway…")}.get(st, tr("Install anyway…"))
             return [(frame_label, ft.Icons.WARNING_AMBER_ROUNDED, lambda e: self.install_blocked(pkg), False,
                      tr("Marked \"Can't run\": ") + ((g.get("recipe") or {}).get("notes") or tr("a known blocker")))]
         frame_opt = (frame_label, G.FRAME, lambda e: self.install(pkg, "frame"), False, None) \
@@ -739,7 +739,7 @@ class FramePortApp:
                 started.pop((pkg, to), None)
                 self.toast(tr("The Frame's Steam couldn't start {title} (Steam error {code}). Please send a problem "
                               "report so we can see why.").format(title=title, code=steam.get("code")), error=True,
-                           action=tr("Report a problem"), on_action=lambda e: self.report_problem_dialog(pkg))
+                           action=tr("Report a problem…"), on_action=lambda e: self.report_problem_dialog(pkg))
             elif to == "frame":
                 self.toast(tr("Starting {title} on the Frame — put the headset on").format(title=title))
             elif res.get("steamvr") is False:
@@ -825,17 +825,17 @@ class FramePortApp:
                 if self.has_game_settings(g):
                     out.append((tr("Game settings…"), ft.Icons.TUNE_ROUNDED, lambda e: self.settings_dialog(pkg)))
                 if on_frame and not rift and not linux:
-                    out.append((tr("Add videos and files…"), ft.Icons.VIDEO_LIBRARY_OUTLINED,
+                    out.append((tr("Add videos and files"), ft.Icons.VIDEO_LIBRARY_OUTLINED,
                                 lambda e: self.go("files", pkg)))
                 if on_frame:
                     out.append((tr("Type on Frame"), G.KEYS, lambda e: self.type_on_frame()))
                 if not rift and not linux:
                     out.append((tr("Analyze again"), ft.Icons.MANAGE_SEARCH_ROUNDED, lambda e: self.reanalyze(pkg)))
                 if on_frame:
-                    out.append((tr("Uninstall from Frame"), ft.Icons.DELETE_OUTLINE_ROUNDED,
+                    out.append((tr("Uninstall from Frame…"), ft.Icons.DELETE_OUTLINE_ROUNDED,
                                 lambda e: self.uninstall(pkg, "frame")))
                 if on_pc:
-                    out.append((tr("Remove from this PC"), ft.Icons.DELETE_OUTLINE_ROUNDED,
+                    out.append((tr("Uninstall from this PC…"), ft.Icons.DELETE_OUTLINE_ROUNDED,
                                 lambda e: self.uninstall(pkg, "pc")))
             out.append(None)
             if self.library_view is not None:
@@ -843,7 +843,7 @@ class FramePortApp:
                 out.append((tr("Select"), ft.Icons.CHECKLIST_ROUNDED,
                             lambda e: (lv.selected.add(pkg), lv.set_select_mode(True))))
         if rift:
-            out.append((tr("Change executable…"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.choose_exe(pkg)))
+            out.append((tr("Change program…"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.choose_exe(pkg)))
         if linux and self.linux_programs(g):
             out.append((tr("Change program…"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.choose_exe(pkg)))
         if self.frame_state == "connected":
@@ -859,14 +859,13 @@ class FramePortApp:
             out.append((tr("Rebuild only (no install)") if not rift else tr("Check game files"), G.PORT,
                         lambda e: self.build_game(pkg)))
         if not linux:
-            out += [(tr("Reset to suggested recipe"), ft.Icons.RESTART_ALT_ROUNDED,
-                     lambda e: (pipeline.reset_recipe(pkg), self.toast(tr("Recipe reset")), self.refresh_view())),
+            out += [(tr("Reset to suggested recipe…"), ft.Icons.RESTART_ALT_ROUNDED, lambda e: self.reset_recipe(pkg)),
                     (tr("Save as known-good recipe"), G.RECIPE, lambda e: self.save_known_good(pkg)),
-                    (tr("Share working config…"), ft.Icons.SHARE_ROUNDED, lambda e: self.share_config_dialog(pkg))]
+                    (tr("Share working recipe…"), ft.Icons.SHARE_ROUNDED, lambda e: self.share_config_dialog(pkg))]
         out += [(tr("Collect logs"), ft.Icons.FOLDER_ZIP_OUTLINED, lambda e: self.collect_logs(pkg)),
                 (tr("Report a problem…"), ft.Icons.BUG_REPORT_OUTLINED, lambda e: self.report_problem_dialog(pkg)),
                 None,
-                (tr("Remove from library"), ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self.remove_from_library(pkg))]
+                (tr("Remove from library…"), ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self.remove_from_library(pkg))]
         return out
 
     @staticmethod
@@ -1073,10 +1072,10 @@ class FramePortApp:
                 buttons.append(C.primary(tr("Resume"), ft.Icons.PLAY_ARROW_ROUNDED,
                                          lambda e, p=pkg, t=to: (self.page.pop_dialog(), self._submit_install(p, t))))
             if to == "frame" and (pkg in installed or pkg in recs):
-                buttons.append(C.secondary(tr("Uninstall from Frame"), ft.Icons.DELETE_OUTLINE_ROUNDED,
+                buttons.append(C.secondary(tr("Uninstall from Frame…"), ft.Icons.DELETE_OUTLINE_ROUNDED,
                                            lambda e, p=pkg: (self.page.pop_dialog(), self.uninstall(p, "frame"))))
             elif to == "pc" and pkg in self.pc_installs():
-                buttons.append(C.secondary(tr("Remove from this PC"), ft.Icons.DELETE_OUTLINE_ROUNDED,
+                buttons.append(C.secondary(tr("Uninstall from this PC…"), ft.Icons.DELETE_OUTLINE_ROUNDED,
                                            lambda e, p=pkg: (self.page.pop_dialog(), self.uninstall(p, "pc"))))
             if job.log_path:
                 buttons.append(C.ghost(tr("Launch log"), ft.Icons.DESCRIPTION_ROUNDED,
@@ -1243,7 +1242,8 @@ class FramePortApp:
             title=ft.Text(tr("Install {title} anyway?").format(title=self._title(pkg))), bgcolor=T.SURFACE_2,
             content=ft.Column([C.body(tr("This game is marked \"Can't run\" on the Steam Frame:"), T.TEXT_2),
                                C.body(notes),
-                               C.body(tr("Install it anyway to try it, e.g. with different patches."), T.TEXT_2)],
+                               C.body(tr("Install it anyway to try it, for example with different patches."),
+                                      T.TEXT_2)],
                               tight=True, width=T.px(520)),
             actions=[C.ghost(tr("Cancel"), on_click=lambda e: self.page.pop_dialog()),
                      C.primary(tr("Install anyway"), ft.Icons.WARNING_AMBER_ROUNDED, go)]))
@@ -1274,7 +1274,8 @@ class FramePortApp:
     def build_game(self, pkg: str) -> Job:
         def run(job: Job):
             info = pipeline.build_game(pkg, job.reporter)
-            return f"{self._title(pkg)}: {'ready' if info['ok'] else 'checks failed'}"
+            return tr("{title}: ready").format(title=self._title(pkg)) if info["ok"] else \
+                tr("{title}: checks failed").format(title=self._title(pkg))
         return self.submit(tr("Prepare {title}").format(title=self._title(pkg)), run, pkg, "build")
 
     def uninstall(self, pkg: str, to: str = "frame") -> None:
@@ -1341,6 +1342,22 @@ class FramePortApp:
         if not self.target:
             raise RuntimeError(tr("the Frame isn't connected"))
         return self.target
+
+    def reset_recipe(self, pkg: str) -> None:
+        """Back to the suggested recipe, after asking (the user's changes to patches and settings are lost)."""
+        g = library.game(pkg) or {}
+        installed = (self.frame_state == "connected" and C.install_state(g, self.frame_info) in ("installed",
+                                                                                                "outdated")) \
+            or (g.get("kind") == "rift" and pkg in self.pc_installs())
+
+        def go():
+            pipeline.reset_recipe(pkg)
+            self.toast(tr("Recipe reset: update the game on the Frame to use it") if installed
+                       else tr("Recipe reset"))
+            self.refresh_view()
+        C.confirm(self.page, tr("Reset {title}'s recipe?").format(title=self._title(pkg)),
+                  tr("Your changes to its patches and game settings are replaced by the suggested recipe."),
+                  tr("Reset"), go)
 
     def save_known_good(self, package: str) -> None:
         catalog.save_user_entry(catalog.entry_from_library(library.game(package)))
@@ -1431,7 +1448,7 @@ class FramePortApp:
             self.run_bg(work)
         send.on_click = go
         self.page.show_dialog(ft.AlertDialog(
-            title=ft.Text(tr("Share working config · {title}").format(title=self._title(pkg))), bgcolor=T.SURFACE_2,
+            title=ft.Text(tr("Share working recipe · {title}").format(title=self._title(pkg))), bgcolor=T.SURFACE_2,
             content=ft.Column([
                 C.body(tr("Opens a prefilled GitHub issue with this game's recipe, so it can join the built-in catalog "
                        "(no account token needed; you review and submit it on GitHub). No game files or personal "
@@ -1488,7 +1505,7 @@ class FramePortApp:
     def add_windows_exe(self, path: str) -> Job:
         """One Windows program: run by Proton on the Frame (flat unless it has VR), like "Add one game folder…"."""
         def run(job: Job):
-            job.reporter.stage("Looking at the program")
+            job.reporter.stage(tr("Looking at the program"))
             g = pipeline.add_windows_exe(path, job.reporter)
             try:
                 from ..artwork import thumbs
@@ -1562,7 +1579,7 @@ class FramePortApp:
         name = Path(path).name
 
         def run(job: Job):
-            job.reporter.stage("Looking at the app")
+            job.reporter.stage(tr("Looking at the app"))
             g = pipeline.add_linux_app(path, job.reporter)  # ValueError (not a Linux program): the job fails with it
             pkg = g["package"]
             try:
@@ -1627,7 +1644,7 @@ class FramePortApp:
 
         def run(job: Job):
             rep = job.reporter
-            rep.stage("Looking for games")
+            rep.stage(tr("Looking for games"))
             added = pipeline.add_path(Path(path), rep, on_added=added_one, force_rift=single, art=True,
                                       only_new=only_new)
             if self.route[0] == "welcome" and added:
@@ -1667,9 +1684,9 @@ class FramePortApp:
         if n:
             library.load()  # re-derives recipes whose catalog entry changed
             self.refresh_view()
-            self.toast(tr_n("{n} game config was updated", "{n} game configs were updated", n))
+            self.toast(tr_n("{n} game recipe was updated", "{n} game recipes were updated", n))
         elif force:
-            self.toast(tr("Game configs are up to date"))
+            self.toast(tr("Game recipes are up to date"))
         return n
 
     def frame_power(self, action: str, force: bool = False) -> None:
@@ -1714,7 +1731,7 @@ class FramePortApp:
         def run(job: Job):
             d = pipeline.fetch_details(pkg, job.reporter)
             n = len(d.get("screenshots") or [])
-            sources = ', '.join(d.get('sources') or []) or 'nowhere'
+            sources = ', '.join(d.get('sources') or []) or tr("nowhere")
             return tr("{title}: details from {value}").format(title=self._title(pkg), value=sources) + \
                 (tr(", {n} screenshots").format(n=n) if n else "")
         return self.submit(tr("Store details: {title}").format(title=self._title(pkg)), run, pkg, "art")
@@ -1811,7 +1828,7 @@ class FramePortApp:
         pkg = game["package"]
         self.toast(tr("Your Frame restarted unexpectedly while {title} was running (or soon after). If that game "
                       "crashed it, please report it.").format(title=game.get("title") or pkg), error=True,
-                   action=tr("Report a problem"), on_action=lambda e: self.report_problem_dialog(pkg))
+                   action=tr("Report a problem…"), on_action=lambda e: self.report_problem_dialog(pkg))
 
     def _battery_check(self, fetch: bool) -> None:
         """Battery level for the sidebar, and the queue on battery power: warn once, pause before the Frame would
@@ -1968,7 +1985,7 @@ class FramePortApp:
         from ..frame.connection import parse_target
 
         if not (address or "").strip():
-            self.toast(tr("Enter the Frame's address (e.g. steamos@frame.local or its IP)"), error=True)
+            self.toast(tr("Enter the Frame's address (for example steamos@frame.local or its IP)"), error=True)
             return
         try:
             target = parse_target(address)
@@ -2049,10 +2066,11 @@ class FramePortApp:
 
     def test_proton(self):
         def run(job: Job):
-            job.reporter.stage("Running a Windows program under Proton")
+            job.reporter.stage(tr("Running a Windows program under Proton"))
             r = self.target.proton_selftest()
-            job.reporter.check("Windows program ran", bool(r.get("ran")), f"{r.get('seconds')} s")
-            job.reporter.check("OpenXR bridge registered", bool(r.get("openxr_runtime")), r.get("openxr_runtime") or "")
+            job.reporter.check(tr("Windows program ran"), bool(r.get("ran")), f"{r.get('seconds')} s")
+            job.reporter.check(tr("OpenXR bridge registered"), bool(r.get("openxr_runtime")),
+                               r.get("openxr_runtime") or "")
             if not r.get("ran"):
                 raise RuntimeError(tr("Proton couldn't run a test program (see the log)"))
             return tr("Proton works on your Frame ({tool})").format(tool=r['tool'])
@@ -2073,16 +2091,16 @@ class FramePortApp:
 
         def run(job: Job):
             rep = job.reporter
-            rep.stage("Checking for updates" if update else "Downloading tools")
+            rep.stage(tr("Checking for updates") if update else tr("Downloading tools"))
             statuses = toolchain.status(check_latest=update)
             todo = [s for s in statuses if not s.optional and (not s.installed or (update and s.latest and s.version
                                                                                       and s.latest != s.version))]
             for i, s in enumerate(todo):
-                rep.stage(f"Installing {s.name}")
+                rep.stage(tr("Installing {name}").format(name=s.name))
                 installer = {"java": toolchain.install_java, "overport": toolchain.install_overport,
                              "apksigner": toolchain.install_apksigner}[s.name]
                 installer(lambda f, i=i, name=s.name: rep.progress((i + f) / len(todo), name))
-                rep.check(s.name, True, "ready")
+                rep.check(s.name, True, tr("ready"))
             from ..patches import overport as op
             from ..tools import overport as ov
             from .views.settings import TOOL_TITLES

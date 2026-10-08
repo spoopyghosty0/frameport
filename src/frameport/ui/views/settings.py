@@ -108,7 +108,7 @@ class SettingsView:
 
         app = self.app
         last = library.setting("update.last_check")
-        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(last)) if last else "never"
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(last)) if last else tr("never")
         found = app.updater.found
         status = (C.callout(ft.Row([C.body(tr("FramePort {version} is available.").format(version=found.version),
                                            T.TEXT, expand=True),
@@ -122,8 +122,8 @@ class SettingsView:
 
         def auto_install(e):
             library.set_setting("update.auto_install", bool(e.control.value))
-        kind = {"bundle": "the downloaded app", "source": "a source checkout (git pull + uv sync)",
-                "wheel": "an installed Python package (reinstalled from the release)"}[updates.install_kind()]
+        kind = {"bundle": tr("the downloaded app"), "source": tr("a source checkout (git pull + uv sync)"),
+                "wheel": tr("an installed Python package (reinstalled from the release)")}[updates.install_kind()]
         return ft.Column([
             ft.Row([C.kv(tr("Installed"), tr("FramePort {version} · {kind}").format(version=__version__, kind=kind)),
                     ft.Container(expand=True),
@@ -151,7 +151,7 @@ class SettingsView:
         app = self.app
         st = catalog.remote_status()
         when = time.strftime("%Y-%m-%d %H:%M", time.localtime(st["checked"])) if st["checked"] else tr("never")
-        line = tr("Game configs from GitHub: last checked {when}").format(when=when)
+        line = tr("Game recipes from GitHub: last checked {when}").format(when=when)
         if st["skipped"]:
             line += " · " + tr_n("{n} needs a newer FramePort", "{n} need a newer FramePort", len(st["skipped"]))
 
@@ -162,7 +162,7 @@ class SettingsView:
                     C.ghost(tr("Check now"), ft.Icons.SYNC_ROUNDED,
                             lambda e: app.run_bg(lambda: app._refresh_catalog(force=True)))],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            C.switch(tr("Update game configs from GitHub automatically (confirmed configs arrive without a "
+            C.switch(tr("Update game recipes from GitHub automatically (confirmed recipes arrive without a "
                         "FramePort update)"), value=bool(library.setting("catalog.auto_update", True)),
                      on_change=toggle),
         ], spacing=T.S2)
@@ -306,7 +306,7 @@ class SettingsView:
             ft.Row([C.body(tr("Theme"), T.TEXT, weight=ft.FontWeight.W_500), ft.Container(width=T.S4),
                     C.ghost(tr("Copy this theme as a file"), ft.Icons.CONTENT_COPY_ROUNDED,
                             lambda e: (app.copy(T.theme_json(T.THEME)),
-                                       app.toast(tr("Copied: save it as a .json file, change the colours and "
+                                       app.toast(tr("Copied: save it as a .json file, change the colors and "
                                                     "install it")))),
                     C.secondary(tr("Install theme file…"), ft.Icons.FILE_OPEN_OUTLINED, install)],
                    spacing=T.S2, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -351,7 +351,7 @@ class SettingsView:
         from ...frame.connection import bundled_agent_version
 
         mine = bundled_agent_version()
-        text = f"v{mine}" if mine else "unknown"
+        text = f"v{mine}" if mine else tr("unknown")
         info = self.app.frame_info or {}
         remote = info.get("agent_version")
         if self.app.frame_state == "connected" and remote:

@@ -97,7 +97,7 @@ _HEX = re.compile(r"#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})")
 def _hex(value, key: str) -> str:
     m = _HEX.fullmatch(str(value).strip()) if isinstance(value, str) else None
     if not m:
-        raise ThemeError(f"{key}: \"{value}\" is not a colour like #FF8A1F")
+        raise ThemeError(f"{key}: \"{value}\" is not a color like #FF8A1F")
     h = m.group(1)
     return "#" + (h if len(h) == 6 else "".join(c * 2 for c in h)).upper()
 
@@ -134,7 +134,7 @@ def parse_theme(data: dict, fallback_name: str = "Custom theme") -> dict:
     for key, value in raw.items():
         token = str(key).upper()
         if token not in TOKENS:
-            raise ThemeError(f"unknown colour \"{key}\" (known: {', '.join(TOKENS)})")
+            raise ThemeError(f"unknown color \"{key}\" (known: {', '.join(TOKENS)})")
         colors[token] = _hex(value, token)
     # FramePort is dark only: a light window would leave Material's own parts (menus, inputs) unreadable
     if _luminance(colors["BG"]) > 0.05:

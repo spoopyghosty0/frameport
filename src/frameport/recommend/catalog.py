@@ -307,7 +307,7 @@ TOGGLED_DEVICE = ("device.text_input_window",)
 
 def entry_from_library(g: dict, status: str | None = None, notes: str | None = None,
                        verified: dict | None = None) -> CatalogEntry:
-    """A catalog recipe from a library entry (what "Save as known-good" and "Share working config" publish)."""
+    """A catalog recipe from a library entry (what "Save as known-good" and "Share working recipe" publish)."""
     import time
 
     from ..core import library

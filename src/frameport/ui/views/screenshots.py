@@ -80,14 +80,14 @@ class ScreenshotsView:
                                       tooltip=tr("Select all"), on_change=self._toggle_all)
         self.toolbar = ft.Row([
             self.dropdown, self.select_all, ft.Container(expand=True),
-            C.secondary(tr("Download all"), ft.Icons.DOWNLOAD_ROUNDED, self._download_all),
+            C.secondary(tr("Download all…"), ft.Icons.DOWNLOAD_ROUNDED, self._download_all),
             C.icon_btn(ft.Icons.REFRESH_ROUNDED, tr("Refresh"), lambda e: self.load()),
         ], spacing=T.S2, vertical_alignment=ft.CrossAxisAlignment.CENTER)
         self.sel_label = C.body("", T.TEXT, weight=ft.FontWeight.W_500)
         self.sel_bar = ft.Container(ft.Row([
             self.sel_label, ft.Container(expand=True),
-            C.secondary(tr("Download selected"), ft.Icons.DOWNLOAD_ROUNDED, self._download_selected),
-            C.ghost(tr("Delete"), ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self.delete(self._chosen())),
+            C.secondary(tr("Download selected…"), ft.Icons.DOWNLOAD_ROUNDED, self._download_selected),
+            C.ghost(tr("Delete…"), ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self.delete(self._chosen())),
             C.ghost(tr("Clear"), ft.Icons.CLOSE_ROUNDED, lambda e: self._clear_selection()),
         ], spacing=T.S2), padding=ft.Padding(T.S3, T.px(6), T.S2, T.px(6)), border_radius=T.RADIUS_SM,
             bgcolor=T.ACCENT_SOFT, visible=False)
@@ -383,8 +383,8 @@ class ScreenshotsView:
                 C.icon_btn(ft.Icons.CHEVRON_LEFT_ROUNDED, tr("Previous"), lambda e: show(-1)),
                 ft.Column([caption, details], spacing=0, expand=True),
                 C.icon_btn(ft.Icons.CHEVRON_RIGHT_ROUNDED, tr("Next"), lambda e: show(1)),
-                C.secondary(tr("Download"), ft.Icons.DOWNLOAD_ROUNDED, download),
-                C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Delete"), delete),
+                C.secondary(tr("Download…"), ft.Icons.DOWNLOAD_ROUNDED, download),
+                C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Delete…"), delete),
                 C.ghost(tr("Close"), on_click=lambda e: page.pop_dialog())], spacing=T.S2,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER)], spacing=T.S2, tight=True), width=T.px(1100)),
             bgcolor=T.BG, shape=ft.RoundedRectangleBorder(radius=T.RADIUS), content_padding=T.S3))

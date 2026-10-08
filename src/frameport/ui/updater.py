@@ -99,13 +99,13 @@ class Updater:
             return
         page = self.app.page
         kind = updates.install_kind()
-        how = {"bundle": "FramePort downloads it, checks it, closes and opens again as the new version. Your games, "
-                         "settings and Frame connection stay as they are.",
-               "source": "Updates this source checkout (git pull + uv sync), then restarts FramePort.",
-               "wheel": "Reinstalls FramePort from the release, then restarts it."}[kind]
+        how = {"bundle": tr("FramePort downloads it, checks it, closes and opens again as the new version. Your "
+                            "games, settings and Frame connection stay as they are."),
+               "source": tr("Updates this source checkout (git pull + uv sync), then restarts FramePort."),
+               "wheel": tr("Reinstalls FramePort from the release, then restarts it.")}[kind]
         notes = up.notes.strip() or tr("No release notes.")
 
-        def later(e):
+        def skip(e):
             updates.skip(up.version)
             self._set(None)
             page.pop_dialog()
@@ -126,7 +126,7 @@ class Updater:
                              border=ft.Border.all(1, T.BORDER)),
             ], spacing=T.S3, scroll=ft.ScrollMode.AUTO, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
                 width=T.px(560), height=T.px(min(420, 130 + 26 * len(notes.splitlines())))),
-            actions=[C.ghost(tr("Skip this version"), on_click=later),
+            actions=[C.ghost(tr("Skip this version"), on_click=skip),
                      C.ghost(tr("Release page"), ft.Icons.OPEN_IN_NEW_ROUNDED, lambda e: page.launch_url(up.page)),
                      C.primary(tr("Update now"), ft.Icons.SYSTEM_UPDATE_ROUNDED, go)]))
 
@@ -215,7 +215,7 @@ class Updater:
                         raise RuntimeError(tr("{value} failed ({returncode})")
                                            .format(value=cmd[0], returncode=out.returncode))
                 self.restart = self._restart_process
-            rep.stage("Restarting")
+            rep.stage(tr("Restarting"))
             return tr("FramePort {version} is ready: restarting").format(version=up.version)
         self.app.submit(tr("Update FramePort to {version}").format(version=up.version), run, None, kind="app-update",
                         open_panel=True)
@@ -274,8 +274,8 @@ def library_bar(app: FramePortApp) -> ft.Control | None:
         C.body(tr("FramePort {version} is available (you have {version2}).")
                .format(version=up.version, version2=__version__), T.TEXT, expand=True),
         C.primary(tr("Update now"), ft.Icons.SYSTEM_UPDATE_ROUNDED, lambda e: app.updater.install()),
-        C.ghost(tr("What's new"), on_click=lambda e: app.updater.show_dialog()),
-        C.ghost(tr("Later"), on_click=lambda e: (updates.skip(up.version), app.updater._set(None))),
+        C.ghost(tr("What's new…"), on_click=lambda e: app.updater.show_dialog()),
+        C.ghost(tr("Not now"), on_click=lambda e: (updates.snooze(up.version), app.updater._set(None))),
     ], spacing=T.S3), "info", ft.Icons.SYSTEM_UPDATE_ROUNDED)
 
 

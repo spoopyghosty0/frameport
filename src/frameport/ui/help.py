@@ -25,7 +25,7 @@ HELP: dict[str, str] = _Translated({
     "update_ready": "The copy on your Frame differs from what FramePort would install now (the recipe or your game "
                     "files changed). Update to install the new build; saves are kept.",
     "check_exe": "This game's folder has several programs and FramePort isn't sure which one starts the game. Open the "
-                 "game (or right-click → Change executable) to pick it.",
+                 "game (or right-click → Change program…) to pick it.",
     "platform_quest": "A Meta Quest game (APK). It's rebuilt for the Frame and runs in Lepton, Valve's Android "
                       "container.",
     "platform_windows": "A Windows game without VR, added with \"Add one game folder…\". On the Frame, Proton runs it "
@@ -39,8 +39,9 @@ HELP: dict[str, str] = _Translated({
     "platform_linux": "A native Linux program built for arm64 (aarch64), like the Frame's own CPU. It's installed "
                       "unchanged and runs directly on SteamOS (no Android container, no Proton), started from the "
                       "Frame's Steam library. VR apps use the Frame's OpenXR runtime.",
-    "linux_app": "An AppImage, a folder or a .zip/.tar archive with a Linux program built for arm64 (aarch64). x86_64 "
-                 "builds can't run on the Frame. The app must bring the libraries SteamOS doesn't have.",
+    "linux_app": "An AppImage, a folder or a .zip/.tar archive with a Linux program, best built for arm64 (aarch64). "
+                 "x86_64 builds run through FEX, Valve's x86 translator, but slower. The app must bring the "
+                 "libraries SteamOS doesn't have.",
     "appimage": "An AppImage is a Linux app packed into one file. FramePort unpacks it on the Frame once, so it starts "
                 "without FUSE.",
     "select": "Pick several games and install them in one go. FramePort asks every question first, then works through "
@@ -96,23 +97,27 @@ HELP: dict[str, str] = _Translated({
                    "starts.",
     "cat_device": "Files and environment variables placed next to the game on the Frame.",
     # ---- Frame
-    "developer_mode": "Developer Mode (on the Frame: Settings → System → Developer) lets FramePort find the Frame on "
-                      "your network and connect to it over SSH. The first-time setup command turns it on for you.",
+    "developer_mode": "Developer Mode (on the Frame: Settings → System → Enable Developer Mode) lets FramePort find "
+                      "the Frame on your network and connect to it over SSH. The first-time setup command turns it on "
+                      "for you. With Developer Mode on you can also pair without the setup command: on the Frame open "
+                      "Settings → Developer → Pair new host, click Connect there and approve FramePort. That way needs "
+                      "no connection from the Frame into this PC.",
     "first_time_setup": "The command fetches a small setup script from this app over your local network. It turns on "
                         "Developer Mode (which includes SSH), lets this app's key in and installs Lepton if needed. "
-                        "No password needed.",
+                        "Turning on Developer Mode closes the Frame's desktop; the setup finishes on its own and "
+                        "FramePort connects by itself. No password needed.",
     "password": "The Frame's desktop password, only needed the first time so FramePort can add its own key. After "
                 "that it connects with the key.",
     "lepton": "Lepton is Valve's Android container on the Frame. Quest games run inside it, one container per game. "
               "It needs Developer Mode.",
     "proton": "Proton is Valve's Windows compatibility layer. On the Frame it runs PC VR games. "
-              "Its ARM64 build isn't installed by default; FramePort can install it (Steam restarts once).",
+              "Its arm64 build isn't installed by default; FramePort can install it (Steam restarts once).",
     "openxr": "The VR runtime games talk to. On the Frame that's SteamVR.",
     "kernel_keys": "Every game start on the Frame used to leak one kernel key, and after about 200 launches every game "
                    "fails to start. FramePort switches that leak off, but keys already used only come back after a "
                    "restart of the Frame.",
     "ui_scale": "Size of text and layout. Automatic follows Windows' display scaling halfway "
-                "(150 % in Windows → 125 %) when FramePort runs under WSL, where the window doesn't get it from "
+                "(150% in Windows → 125%) when FramePort runs under WSL, where the window doesn't get it from "
                 "Windows itself.",
     "app_updates": "FramePort checks GitHub for a new release every few hours and shows it in the sidebar and the "
                    "Library. \"Update now\" downloads it, checks its checksum (and on Windows its signature), closes "
@@ -125,8 +130,15 @@ HELP: dict[str, str] = _Translated({
     "files": "Browse and manage files on the Frame (Files tab): upload from this PC, download, rename, delete. "
                   "Videos, Downloads and Documents are shared by every Quest game (/sdcard/Movies, /sdcard/Download, "
                   "/sdcard/Documents); each installed game also has its own storage (its /sdcard). Apps find files "
-                  "by browsing folders. Video players that list only their own folder (e.g. 4XVR's Internal "
+                  "by browsing folders. Video players that list only their own folder (for example 4XVR's Internal "
                   "Storage = 4XPlayer): upload into that folder in the game's storage.",
+    "live_view": "The picture opens in your default web browser, where it plays smoothly and can go full screen. "
+                 "It shows the headset's view with its sound (click Sound on in the player) whatever is running: "
+                 "Steam's menus, SteamVR or a game; while the headset sleeps the picture is black and updates about "
+                 "once a second. The Frame's hardware video encoder does the work (if it isn't available, the "
+                 "processor does, which costs a game more): stop the stream when you're done.",
+    "type_on_frame": "This PC's keyboard works as a keyboard on your Frame while this tab is open. In the headset, "
+                     "select a text field (in a game or app, in Steam or on the desktop), then type here.",
     "free_space": "Deletes the rollback copies kept from each game's previous install and leftover uploads. The "
                   "games and saves stay.",
     "adapter_settings": "Sharpness, refresh rate, controllers, menus and more for this game. Changes are used the "
@@ -149,9 +161,9 @@ HELP: dict[str, str] = _Translated({
                     "no GitHub token and no game files are involved.",
     "diag_bundle": "A zip with FramePort's logs, the game's recipe and analysis, launch-test logs and the Frame's "
                    "runtime details — enough to debug without the game files. IP addresses, host and user names, "
-                   "home folders and Steam ids are replaced by placeholders. Attach it to a GitHub issue.",
+                   "home folders and Steam IDs are replaced by placeholders. Attach it to a GitHub issue.",
     "monitor_gpu": "How much of the time the Frame's graphics chip was busy, added up from every program that draws "
-                   "(the game, SteamVR's compositor, Steam). Near 100 % the game can't keep its frame rate.",
+                   "(the game, SteamVR's compositor, Steam). Near 100% the game can't keep its frame rate.",
     "monitor_pressure": "Memory in use by everything on the Frame. \"Waiting\" is the share of time programs had to "
                         "wait for memory in the last 10 s: when it climbs, the Frame is running out and may freeze or "
                         "close a game.",

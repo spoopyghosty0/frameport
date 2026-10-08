@@ -113,7 +113,7 @@ def show_files_dialog(app: FramePortApp, package: str, title: str) -> None:
         trees = [(r, build_tree(r["name"], r["files"])) for r in result["roots"]]
         expanded: set[str] = set()
         rows = ft.ListView(spacing=0, expand=True)
-        search = ft.TextField(hint_text=tr("Filter files (e.g. .pak, Binaries)"), dense=True, expand=True,
+        search = ft.TextField(hint_text=tr("Filter files (for example .pak, Binaries)"), dense=True, expand=True,
                               border_radius=T.RADIUS_SM, bgcolor=T.SURFACE_3, border_color=ft.Colors.TRANSPARENT,
                               focused_border_color=T.ACCENT,
                               content_padding=ft.Padding(T.px(12), T.px(8), T.px(12), T.px(8)),

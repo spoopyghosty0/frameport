@@ -26,11 +26,11 @@ def test_no_action_without_frame_work_or_while_charging_or_paused_for_another_re
 
 def test_plugged_in_but_draining_counts_as_not_charging():
     weak = {"percent": 12, "status": "Discharging", "plugged": True, "draining": True}
-    assert B.advice(weak, True, None, True) == "pause" and B.low(weak) and B.label(weak) == "12 %"
+    assert B.advice(weak, True, None, True) == "pause" and B.low(weak) and B.label(weak) == "12%"
 
 
 def test_label():
-    assert B.label(bat(76)) == "76 %" and B.label(bat(76, True)) == "76 % ⚡" and B.label(None) == ""
+    assert B.label(bat(76)) == "76%" and B.label(bat(76, True)) == "76% ⚡" and B.label(None) == ""
     assert B.low(bat(20)) and not B.low(bat(20, True)) and not B.low(bat(60))
 
 

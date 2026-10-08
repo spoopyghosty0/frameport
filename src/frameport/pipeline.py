@@ -486,12 +486,7 @@ def set_recipe(package: str, recipe: Recipe) -> None:
 
 
 def reset_recipe(package: str) -> Recipe:
-    if is_rift(library.game(package) or {}):
-        entry = library.game(package)
-        a = library.analysis_from_dict(entry["analysis"])
-        recipe = engine.suggest(a)
-        set_recipe(package, recipe)
-        return recipe
+    """Back to the suggested recipe (catalog or heuristics) for the game's analysis (Quest and Rift alike)."""
     entry = library.game(package)
     recipe = engine.suggest(library.analysis_from_dict(entry["analysis"]))
     set_recipe(package, recipe)

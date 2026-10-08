@@ -301,11 +301,10 @@ class LibraryView:
             if not games:
                 self.body.content = C.empty_state(
                     ft.Icons.LIBRARY_ADD_ROUNDED, tr("Add your games"),
-                    tr("Point FramePort at a folder with Android games (APK + OBB, e.g. Quest games) or PC VR games "
-                       "(one folder per game, or a folder of them). It finds them, works out what each needs and "
-                       "fetches artwork."),
-                    C.primary(tr("Scan a folder"), ft.Icons.FOLDER_OPEN_ROUNDED, self.app.pick_folder, big=True),
-                    C.secondary(tr("Add an APK file"), ft.Icons.ANDROID_ROUNDED, self.app.pick_apk))
+                    tr("Point FramePort at a folder with Quest or Android games (APK + OBB) or PC VR games. It "
+                       "finds them, works out what each needs and fetches artwork."),
+                    C.primary(tr("Scan a folder…"), ft.Icons.FOLDER_OPEN_ROUNDED, self.app.pick_folder, big=True),
+                    C.secondary(tr("Add an APK file…"), ft.Icons.ANDROID_ROUNDED, self.app.pick_apk))
                 self.cards.clear()
                 C.update(self.root)
                 return
@@ -578,7 +577,7 @@ class LibraryView:
         if on_pc:
             badges.append(C.install_badge("on_pc"))
         if rift and g.get("exe_confirmed") is False:
-            badges.append(C.pill(tr("Check exe"), T.WARN, ft.Icons.HELP_OUTLINE_ROUNDED, overlay=True,
+            badges.append(C.pill(tr("Check program"), T.WARN, ft.Icons.HELP_OUTLINE_ROUNDED, overlay=True,
                                  tooltip=C.tip(HELP["check_exe"])))
         label, _, help_key = C.platform(g)
         platform = C.pill(label, T.PC if rift else T.TEXT, C.platform_icon(g), overlay=True,

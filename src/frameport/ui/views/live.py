@@ -104,12 +104,9 @@ class LiveView:
                            spacing=T.S3, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     self.url,
                 ], spacing=T.S2)),
-                C.callout(tr("The picture opens in your default web browser, where it plays smoothly and can go "
-                             "full screen. It shows the headset's view with its sound "
-                             "(click Sound on in the player) whatever is running: Steam's menus, SteamVR or a game; "
-                             "while the headset sleeps the picture is black and updates about once a second. "
-                             "The Frame's hardware video encoder does the work (if it isn't available, the "
-                             "processor does, which costs a game more); stop the stream when you're done.")),
+                C.callout(ft.Row([C.body(tr("The headset's view and sound open in your web browser. Stop the "
+                                            "stream when you're done."), T.TEXT, expand=True),
+                                  C.help_icon("live_view")], spacing=T.px(4))),
             ], spacing=T.S4, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
         self._refresh(update=False)
         self._ensure_ticker()

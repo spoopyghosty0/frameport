@@ -124,7 +124,7 @@ def check(force: bool = False) -> Update | None:
     up = update_from_release(data) if data else None
     if not up or not is_newer(up.version):
         return None
-    if not force and library.setting("update.skipped") == up.version:
+    if not force and hidden(up.version):
         return None
     return up
 
@@ -154,7 +154,7 @@ def cached_update() -> Update | None:
         up = update_from_release(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         return None
-    if not up or not is_newer(up.version) or library.setting("update.skipped") == up.version:
+    if not up or not is_newer(up.version) or hidden(up.version):
         return None
     return up
 
@@ -165,7 +165,26 @@ def cache_age() -> float | None:
 
 
 def skip(version: str) -> None:
+    """"Skip this version": never offered again automatically ("Check now" still finds it)."""
     library.set_setting("update.skipped", version)
+
+
+def snooze(version: str, hours: float = 24) -> None:
+    """The banner's "Later": hide this version for a while (a day by default), then offer it again."""
+    library.set_setting("update.snoozed", {"version": version, "until": time.time() + hours * 3600})
+
+
+def hidden(version: str) -> bool:
+    """True when the user skipped this version, or snoozed it and the snooze hasn't run out yet."""
+    if library.setting("update.skipped") == version:
+        return True
+    snoozed = library.setting("update.snoozed")
+    if isinstance(snoozed, dict) and snoozed.get("version") == version:
+        try:
+            return time.time() < float(snoozed.get("until") or 0)
+        except (TypeError, ValueError):
+            return False
+    return False
 
 
 # ------------------------------------------------------------------------------------------------- how installed

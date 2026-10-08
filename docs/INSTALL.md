@@ -241,7 +241,7 @@ Command line: `frameport frame send <files> --dest videos` (`frameport frame sto
 
 ## Sharing a working game, reporting a problem
 
-- **Share working config…** (game menu): opens a prefilled GitHub issue with the game's patches and settings. Accepted
+- **Share working recipe…** (game menu): opens a prefilled GitHub issue with the game's patches and settings. Accepted
   configs become built-in recipes. Untested games ask on their page once they've been installed or tested: **It
   works**, **It has issues** or **It doesn't run**.
 - **Report a problem…** (game menu, or Settings → Problems and feedback): saves a diagnostics zip to Documents (logs,

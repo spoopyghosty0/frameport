@@ -132,9 +132,9 @@ class ProcRow:
         self.group_box.bgcolor = T.soft(color, 0.12)
         self.lock.visible = bool(p.get("critical") or p.get("locked"))
         self.lock.color = T.TEXT_3 if p.get("locked") else T.WARN
-        self.cpu.value = f"{p.get('cpu', 0):.1f} %"
+        self.cpu.value = f"{p.get('cpu', 0):.1f}%"
         self.cpu.color = LEVEL_COLOR[M.level("cpu", p.get("cpu"))] if p.get("cpu", 0) >= 1 else T.TEXT_2
-        self.gpu.value = f"{p['gpu']:.0f} %" if p.get("gpu") else "–"
+        self.gpu.value = f"{p['gpu']:.0f}%" if p.get("gpu") else "–"
         self.mem.value = M.fmt_bytes(p.get("rss"))
         self.age.value = M.fmt_duration(p.get("age"))
 
@@ -459,7 +459,7 @@ class MonitorView:
             self.procs = s.get("procs") or []
             changed.append(self._bind_rows(update=False))
         cpu_share = (s.get("self_ms") or 0) / 10 / max(1.0, s.get("dt") or 1.0) / max(1, self.static.get("cores", 1))
-        self.overhead.value = tr("Monitor is using {pct} % of the Frame's CPU").format(pct=f"{cpu_share:.2f}")
+        self.overhead.value = tr("Monitor is using {pct}% of the Frame's CPU").format(pct=f"{cpu_share:.2f}")
         self.overhead.tooltip = tr("The time the Frame spends collecting these numbers")
         self._updater()(self.overhead, *[c for group in changed for c in group])
 
@@ -481,7 +481,7 @@ class MonitorView:
         if swap > 64 * 1024 ** 2:
             sub += " · " + tr("swap {n}").format(n=M.fmt_bytes(swap))
         if psi:
-            sub += " · " + tr("waiting {pct} %").format(pct=f"{psi:.0f}")
+            sub += " · " + tr("waiting {pct}%").format(pct=f"{psi:.0f}")
         lvl = max((M.level("mem", 100.0 * used / total if total else None), M.level("psi_memory", psi)),
                   key=("ok", "warn", "error").index)
         self.t_mem.set(M.fmt_pct(100.0 * used / total if total else None), sub, h.get("mem"), lvl)
@@ -566,7 +566,7 @@ class MonitorView:
         cores = (s.get("cpu") or {}).get("cores") or []
         for (bar, val), pct in zip(self.core_bars, cores, strict=False):
             bar.set([pct / 100.0])
-            val.value = f"{pct:.0f} %"
+            val.value = f"{pct:.0f}%"
             out += [bar.control, val]
         temps = s.get("temps") or {}
         zones = s.get("zones")
@@ -638,12 +638,12 @@ class MonitorView:
             actions.append((tr("Hide its processes") if p.get("expanded") else tr("Show its processes"),
                             ft.Icons.UNFOLD_MORE_ROUNDED, lambda e: self.toggle_group(p)))
             if not p.get("locked"):
-                actions += [None, (tr("End all {n}").format(n=n), ft.Icons.CLOSE_ROUNDED,
+                actions += [None, (tr("End all {n}…").format(n=n), ft.Icons.CLOSE_ROUNDED,
                                    lambda e: self.ask_kill(p, "TERM")),
-                            (tr("Force kill all {n}").format(n=n), ft.Icons.DANGEROUS_OUTLINED,
+                            (tr("Force quit all {n}…").format(n=n), ft.Icons.DANGEROUS_OUTLINED,
                              lambda e: self.ask_kill(p, "KILL"))]
             if p.get("game"):
-                actions += [None, (tr("End the whole game"), ft.Icons.STOP_CIRCLE_OUTLINED,
+                actions += [None, (tr("End game…"), ft.Icons.STOP_CIRCLE_OUTLINED,
                                    lambda e: self.ask_end_game(p["game"]))]
             actions += [None, (tr("Copy name"), ft.Icons.CONTENT_COPY_ROUNDED, lambda e: self.app.copy(name))]
             self.menu.items = C.menu_items(actions)
@@ -651,10 +651,10 @@ class MonitorView:
             self.app.page.run_task(self.menu.open, global_position=position)
             return
         if not p.get("locked"):
-            actions += [(tr("End process"), ft.Icons.CLOSE_ROUNDED, lambda e: self.ask_kill(p, "TERM")),
-                        (tr("Force kill"), ft.Icons.DANGEROUS_OUTLINED, lambda e: self.ask_kill(p, "KILL"))]
+            actions += [(tr("End…"), ft.Icons.CLOSE_ROUNDED, lambda e: self.ask_kill(p, "TERM")),
+                        (tr("Force quit…"), ft.Icons.DANGEROUS_OUTLINED, lambda e: self.ask_kill(p, "KILL"))]
         if p.get("game"):
-            actions += [None, (tr("End the whole game"), ft.Icons.STOP_CIRCLE_OUTLINED,
+            actions += [None, (tr("End game…"), ft.Icons.STOP_CIRCLE_OUTLINED,
                                lambda e: self.ask_end_game(p["game"]))]
         actions += [None, (tr("Copy PID {pid}").format(pid=pid), ft.Icons.CONTENT_COPY_ROUNDED,
                            lambda e: self.app.copy(str(pid))),
@@ -667,13 +667,13 @@ class MonitorView:
         name, pid = p.get("name", "?"), p.get("pid")
         if p.get("kind") == "group":
             n = p["count"]
-            heading = (tr("Force kill all {n} {name}?") if sig == "KILL" else tr("End all {n} {name}?")).format(
+            heading = (tr("Force quit all {n} {name}?") if sig == "KILL" else tr("End all {n} {name}?")).format(
                 n=n, name=name)
             text = tr("{n} processes named {name} with the same parent are ended.").format(n=n, name=name)
             if p.get("critical"):
                 text += " " + tr("They are part of Steam, SteamVR or the desktop: the headset view or Steam may "
                                  "restart, and anything running in the headset may stop.")
-            C.confirm(self.app.page, heading, text, tr("Force kill all") if sig == "KILL" else tr("End all"),
+            C.confirm(self.app.page, heading, text, tr("Force quit all") if sig == "KILL" else tr("End all"),
                       lambda: self.app.run_bg(self._kill, p, sig), danger=True)
             return
         if p.get("critical"):
@@ -681,14 +681,14 @@ class MonitorView:
             text = tr("{name} is part of Steam, SteamVR or the desktop. Ending it can close the headset view or "
                       "restart Steam, and anything running in the headset may stop.").format(name=name)
         elif sig == "KILL":
-            heading = tr("Force kill {name}?").format(name=name)
+            heading = tr("Force quit {name}?").format(name=name)
             text = tr("{name} (PID {pid}) stops at once without saving anything.").format(name=name, pid=pid)
         else:
             heading = tr("End {name}?").format(name=name)
             text = tr("{name} (PID {pid}) is asked to close.").format(name=name, pid=pid)
             if p.get("game"):
                 text += " " + tr("It belongs to a running game, which may stop with it.")
-        label = tr("Force kill") if sig == "KILL" else tr("End process")
+        label = tr("Force quit") if sig == "KILL" else tr("End process")
         C.confirm(self.app.page, heading, text, label, lambda: self.app.run_bg(self._kill, p, sig),
                   danger=sig == "KILL" or bool(p.get("critical")))
 
@@ -708,7 +708,7 @@ class MonitorView:
                     left.append(m["pid"])
             if left:
                 self.app.toast(tr("{n} of the {name} processes are still running.").format(n=len(left), name=name),
-                               action=None if sig == "KILL" else tr("Force kill"),
+                               action=None if sig == "KILL" else tr("Force quit"),
                                on_action=None if sig == "KILL" else lambda e: self.app.run_bg(self._kill, p, "KILL"))
             else:
                 self.app.toast(tr("All {n} {name} processes ended.").format(n=p["count"], name=name))
@@ -723,7 +723,7 @@ class MonitorView:
         if res.get("ended"):
             self.app.toast(tr("{name} ended.").format(name=name))
         else:
-            self.app.toast(tr("{name} is still running.").format(name=name), action=tr("Force kill"),
+            self.app.toast(tr("{name} is still running.").format(name=name), action=tr("Force quit"),
                            on_action=lambda e: self.app.run_bg(self._kill, p, "KILL"))
 
     def ask_end_game(self, pkg: str | None = None) -> None:

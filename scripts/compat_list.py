@@ -35,7 +35,7 @@ def render() -> str:
         rows.append(f"| {e.title} | {platform} | {STATUS[e.status]} | {note} |")
     return ("# Tested games\n\n"
             "Games tested on the Steam Frame with FramePort's recipes. Games not listed here may work too: FramePort "
-            "suggests patches for them, and a working config can be shared from the app (**Share working config…**).\n"
+            "suggests patches for them, and a working recipe can be shared from the app (**Share working recipe…**).\n"
             f"Tested a game? [Share a working config]({SHARE}) or [report a problem]({REPORT}) (in the app: the game's "
             "**…** menu does both and fills in the details).\n"
             "Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.\n\n"

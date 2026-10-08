@@ -47,7 +47,7 @@ class KeyboardView:
     # ---------------------------------------------------------------- building
     def mount(self) -> ft.Control:
         app = self.app
-        heading, sub = tr("Type on Frame"), tr("Use this computer's keyboard on the Frame")
+        heading, sub = tr("Type on Frame"), tr("Use this PC's keyboard on the Frame")
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(heading, sub),
@@ -64,9 +64,8 @@ class KeyboardView:
                     ft.Row([self.paste, C.secondary(tr("Type it"), ft.Icons.SEND_ROUNDED, self._send_text)],
                            spacing=T.S2),
                 ], spacing=T.S3)),
-                C.callout(tr("This computer's keyboard works as a keyboard on your Frame while this tab is open. In "
-                             "the headset, select a text field (in a game or app, in Steam or on the desktop), then "
-                             "type here.")),
+                C.callout(ft.Row([C.body(tr("In the headset, select a text field, then type here."), T.TEXT,
+                                         expand=True), C.help_icon("type_on_frame")], spacing=T.px(4))),
             ], spacing=T.S4, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
         self.start()
         return self.root

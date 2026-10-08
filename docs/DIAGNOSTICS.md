@@ -2,7 +2,7 @@
 
 Two ways users feed results back, both without a GitHub token:
 
-- **Share working config** (game menu, `frameport share-recipe <pkg>`): saves the recipe as a user catalog entry and
+- **Share working recipe** (game menu, `frameport share-recipe <pkg>`): saves the recipe as a user catalog entry and
   opens a prefilled issue from `.github/ISSUE_TEMPLATE/working-config.yml`. A maintainer checks it and adds the label
   `catalog-accepted`. Then `.github/workflows/catalog-from-issue.yml` runs `scripts/catalog_from_issue.py`, which reads
   only the YAML block, validates it, and writes `catalog/games/<pkg>.yaml`, and the workflow opens a PR.

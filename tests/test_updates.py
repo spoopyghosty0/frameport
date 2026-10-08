@@ -48,11 +48,29 @@ def test_check_skip_and_cached_hint(monkeypatch):
     assert library.setting("update.last_check")
     assert updates.cached_update().version == "9.9.9"  # read from the cache, no network
     updates.skip("9.9.9")
-    assert updates.check() is None and updates.cached_update() is None  # "Later" hides this version
+    assert updates.check() is None and updates.cached_update() is None  # "Skip this version" hides it
     assert updates.check(force=True).version == "9.9.9"                 # "Check now" still finds it
     monkeypatch.setattr(cache, "http_get", lambda url, **kw: (_ for _ in ()).throw(OSError("offline")))
     (cache.cache_dir() / "app-release.json").unlink()
     assert updates.check(force=True) is None                            # offline: no update, no error
+
+
+def test_snooze_hides_a_version_until_it_runs_out(monkeypatch):
+    monkeypatch.setattr(cache, "cached_json", lambda *a, **k: release())
+    cache.cache_dir().mkdir(parents=True, exist_ok=True)
+    (cache.cache_dir() / "app-release.json").write_text(json.dumps(release()), encoding="utf-8")
+    now = [1_000_000.0]
+    monkeypatch.setattr(updates.time, "time", lambda: now[0])
+    updates.snooze("9.9.9", hours=24)
+    assert updates.check() is None and updates.cached_update() is None   # "Later": hidden for a day
+    assert updates.check(force=True).version == "9.9.9"                  # "Check now" still finds it
+    now[0] += 23 * 3600
+    assert updates.check() is None
+    now[0] += 2 * 3600                                                   # a day later it is offered again
+    assert updates.check().version == "9.9.9" and updates.cached_update().version == "9.9.9"
+    updates.snooze("9.9.8")                                              # a snooze for another version doesn't hide it
+    assert updates.check().version == "9.9.9"
+    assert not updates.hidden("9.9.9")
 
 
 def test_older_release_is_no_update(monkeypatch):

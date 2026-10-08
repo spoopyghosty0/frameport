@@ -199,7 +199,7 @@ def test_formatting():
     assert M.fmt_bytes(None) == "–" and M.fmt_rate(2048) == "2 KB/s"
     assert M.fmt_watts(3.558) == "3.56 W" and M.fmt_watts(12.34) == "12.3 W"
     assert M.fmt_duration(45) == "45 s" and M.fmt_duration(720) == "12 min" and M.fmt_duration(3900) == "1 h 05 min"
-    assert M.fmt_pct(33.4) == "33 %" and M.fmt_pct(None) == "–"
+    assert M.fmt_pct(33.4) == "33%" and M.fmt_pct(None) == "–"
 
 
 def test_levels():

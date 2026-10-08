@@ -43,7 +43,7 @@ def show_art_dialog(app: FramePortApp, package: str) -> None:
             if installed:
                 app.toast(tr("Artwork updated for {get}. The Frame's Steam library still shows the old art.")
                           .format(get=g.get('title')),
-                          action=tr("Update on Frame"), on_action=lambda e: app.update_steam_art(package))
+                          action=tr("Update Steam art on Frame"), on_action=lambda e: app.update_steam_art(package))
             else:
                 app.toast(tr("Artwork updated for {get}").format(get=g.get('title')))
         app.run_bg(work)
@@ -80,7 +80,7 @@ def show_art_dialog(app: FramePortApp, package: str) -> None:
             if src and src != "none" and installed:
                 app.toast(tr("Artwork updated ({src}). The Frame's Steam library still shows the old art.")
                           .format(src=src),
-                          action=tr("Update on Frame"), on_action=lambda e: app.update_steam_art(package))
+                          action=tr("Update Steam art on Frame"), on_action=lambda e: app.update_steam_art(package))
             else:
                 app.toast(tr("Artwork: {value}").format(value=src or 'none found'))
         app.run_bg(work)
@@ -125,7 +125,7 @@ def show_custom_art_dialog(app: FramePortApp, package: str) -> None:
         app.refresh_view()
         if installed:
             app.toast(tr("{message} The Frame's Steam library still shows the old art.").format(message=message),
-                      action=tr("Update on Frame"), on_action=lambda e: app.update_steam_art(package))
+                      action=tr("Update Steam art on Frame"), on_action=lambda e: app.update_steam_art(package))
         else:
             app.toast(message)
 

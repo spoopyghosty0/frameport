@@ -109,7 +109,7 @@ will attempt to guess key patches. If you find a new config that works for an ap
 
 **[List of tested games](docs/GAMES.md)**
 
-**Tested something? Share it.** In FramePort open the game → **…** → **Share working config…** (it fills in the
+**Tested something? Share it.** In FramePort open the game → **…** → **Share working recipe…** (it fills in the
 recipe for you) or **Report a problem…** (attaches a diagnostics zip with personal data removed). Without the app:
 [share a working config](https://github.com/spoopyghosty0/frameport/issues/new?template=working-config.yml) · [report a problem](https://github.com/spoopyghosty0/frameport/issues/new?template=bug-report.yml). Shared configs become built-in recipes for everyone.
 

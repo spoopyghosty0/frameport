@@ -77,8 +77,8 @@ def test_theme_file_partial_and_validated():
     assert t["colors"]["ACCENT"] == "#FF8800" and t["colors"]["SECONDARY"] == "#00A0FF"
     assert t["colors"]["BG"] == T.BUILTIN["portal"]["colors"]["BG"]  # the rest comes from the base
     assert T.parse_theme({"base": "original", "colors": {}})["dual"] is False
-    bad = [({"colors": {"ACCENT": "orange"}}, "not a colour"),
-           ({"colors": {"GLOW": "#FFFFFF"}}, "unknown colour"),
+    bad = [({"colors": {"ACCENT": "orange"}}, "not a color"),
+           ({"colors": {"GLOW": "#FFFFFF"}}, "unknown color"),
            ({"colors": {"BG": "#F4F4F4", "TEXT": "#111111"}}, "too light"),
            ({"colors": {"TEXT": "#202020"}}, "hard to read"),
            ({"base": "nope"}, "isn't a built-in"),

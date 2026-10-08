@@ -6,7 +6,7 @@ Other games get suggested patches from detection rules; each suggestion states i
 switched on or off under **Customize**: described in plain words, with **Show technical details** for the exact
 effect of each patch.
 
-Tried an untested game? Its page asks how it runs; **Share working config…** opens a prefilled GitHub issue so your
+Tried an untested game? Its page asks how it runs; **Share working recipe…** opens a prefilled GitHub issue so your
 recipe can join the built-in catalog for everyone.
 
 ![Patches](images/patches.png)

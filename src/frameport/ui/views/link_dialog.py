@@ -57,7 +57,7 @@ def open_link(app: FramePortApp, text: str, pasted: bool = False) -> None:
         return
 
     def run(job: Job):
-        job.reporter.stage("Reading the install link")
+        job.reporter.stage(tr("Reading the install link"))
         m = deeplink.fetch_manifest(req)
         sizes = {f.url: deeplink.head_size(f.url) for f in m.files}
         icon = deeplink.fetch_icon(m)  # FramePort's manifest extension (None without one)
@@ -122,7 +122,7 @@ def download_and_install(app: FramePortApp, m: deeplink.Manifest, icon=None) -> 
     def run(job: Job):
         rep = job.reporter
         path = deeplink.download(m, rep)
-        rep.stage("Adding to the library")
+        rep.stage(tr("Adding to the library"))
         g = pipeline.add_from_link(m, path, rep, icon=icon)
         pkg = g["package"]
         try:

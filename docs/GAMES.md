@@ -1,6 +1,6 @@
 # Tested games
 
-Games tested on the Steam Frame with FramePort's recipes. Games not listed here may work too: FramePort suggests patches for them, and a working config can be shared from the app (**Share working config…**).
+Games tested on the Steam Frame with FramePort's recipes. Games not listed here may work too: FramePort suggests patches for them, and a working recipe can be shared from the app (**Share working recipe…**).
 Tested a game? [Share a working config](https://github.com/spoopyghosty0/frameport/issues/new?template=working-config.yml) or [report a problem](https://github.com/spoopyghosty0/frameport/issues/new?template=bug-report.yml) (in the app: the game's **…** menu does both and fills in the details).
 Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 
