@@ -182,9 +182,10 @@ def filters_active(f: dict) -> bool:
 def shelf_games(games: list[dict], f: dict, frame_info: dict | None, connected: bool, select_mode: bool = False,
                 limit: int = SHELF_MAX) -> list[dict]:
     """The "On your Frame" shelf: games installed on the connected Frame (outdated ones too), most recently used
-    first, at most `limit`. Empty (the shelf hides) without a connected Frame, while searching or filtering, and in
-    select mode."""
-    if not connected or select_mode or filters_active(f):
+    first, at most `limit`. Empty (the shelf hides) without a connected Frame and while searching or filtering. It
+    stays in select mode (`select_mode` is ignored): hiding it when a drag-select starts moved the grid up under the
+    mouse, and the drag selected the wrong cards."""
+    if not connected or filters_active(f):
         return []
     on = [g for g in games if C.install_state(g, frame_info) in ("installed", "outdated")]
     on.sort(key=lambda g: (-last_used(g), (g.get("title") or g["package"]).lower()))

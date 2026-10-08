@@ -48,11 +48,12 @@ def test_shelf_ignores_sort_and_blank_search():
     assert shelf_games(GAMES, f, FRAME, True)
 
 
-def test_shelf_hides_without_frame_or_in_select_mode():
+def test_shelf_hides_without_frame_but_stays_in_select_mode():
     f = dict(DEFAULT_FILTERS)
     assert shelf_games(GAMES, f, FRAME, False) == []
     assert shelf_games(GAMES, f, None, False) == []
-    assert shelf_games(GAMES, f, FRAME, True, select_mode=True) == []
+    # select mode keeps it: hiding it shifted the grid under a drag-select
+    assert shelf_games(GAMES, f, FRAME, True, select_mode=True) == shelf_games(GAMES, f, FRAME, True)
     assert shelf_games(GAMES, f, {"installed": []}, True) == []
 
 
