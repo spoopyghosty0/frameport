@@ -65,6 +65,14 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     await a FilePicker) must be coroutine functions or go through `page.run_task`: Flet doesn't await a lambda's
     coroutine (the Files row Download button silently did nothing). `ui_smoke.py --fake-frame --gestures` drives real
     mouse drags/right-clicks.
+    Live Frame data comes from one app-owned `app.monitor_hub` (`frame/monitor_hub.py`): subscribers name modules +
+    interval, the hub runs one agent `_monitor` stream (union of modules, fastest interval; per-module collection
+    needs agent v63), reconnects after a lost stream and stops it when nobody subscribes; `_poll` retries an "error".
+    Subscribers: "monitor" (the Monitor tab, everything, only while shown) and "card" = the sidebar's live Frame card
+    (`ui/frame_card.py` helpers: battery ring, "now playing" row with fps + 2-min sparkline → click opens Monitor;
+    games + battery every 5 s, paused while a job's stage is "Upload…", only while connected and setting
+    `ui.live_frame_card` (Settings → Appearance, default on) is on; else the battery comes from the 30 s poll).
+    ui_smoke injects `FakeMonitorSession` as the hub's `session_factory`.
     User tags live in library entries (`tags`), filters in library setting `ui.library`.
     **Performance rules** (the app froze before): never put image bytes in controls — artwork is served by URL from the
     GUI assets dir (= user data dir; `ft.run(assets_dir=…)`), as thumbnails (`artwork/thumbs.py`, Pillow); the

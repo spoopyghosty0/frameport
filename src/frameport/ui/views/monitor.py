@@ -1,13 +1,13 @@
 """Monitor: a live view of the Frame — the running game (fps, CPU/GPU/memory), CPU, GPU, memory, temperatures, power
-and battery with 2-minute sparklines, and its processes (end or kill one, end a game). Streamed by the agent's
-`_monitor` session (frame/monitor.py) only while the tab is shown: app.go / app.disconnect / closing the window call
-stop(), and the agent ends the stream at EOF, so nothing keeps running on the Frame.
+and battery with 2-minute sparklines, and its processes (end or kill one, end a game). Fed by the app's MonitorHub
+(frame/monitor_hub.py; one agent `_monitor` stream shared with the sidebar's live Frame card): the view subscribes to
+everything only while the tab is shown (app.go / app.disconnect / closing the window call stop()); the hub connects,
+reconnects and ends the stream when nobody needs it.
 
 Built once and updated in place (CLAUDE.md performance rules): a tick changes values, colours and sparkline paths;
 the process table is a fixed pool of rows re-bound to the newest data, so clicks and menus keep working."""
 from __future__ import annotations
 
-import threading
 from typing import TYPE_CHECKING
 
 import flet as ft
@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 
 ROWS = 50            # process rows shown at most (the agent sends up to 150; the search narrows them)
 DETAIL_HEIGHT = 250  # the three detail cards share one height (px at 100 %)
-RETRY_SECONDS = 5    # reconnect after the stream was lost, while the tab is open
 LEVEL_COLOR: dict[str, str] = {}
 GROUP_COLOR: dict[str, str] = {}
 CLUSTER_COLORS: list[str] = []
@@ -142,10 +141,7 @@ class ProcRow:
 class MonitorView:
     def __init__(self, app: FramePortApp):
         self.app = app
-        self.session = None          # frame.monitor.MonitorSession while the tab is open
-        self._connecting = False
-        self._gen = 0                # bumped by stop(): a connect that finishes after the tab was left closes itself
-        self.stopped = True
+        self.stopped = True          # not subscribed to the app's monitor hub (the tab isn't shown)
         self.root = None
         self.history = M.History()
         self.static: dict = {}
@@ -296,74 +292,63 @@ class MonitorView:
         return self.root
 
     # ---------------------------------------------------------------- session
+    @property
+    def hub(self):
+        return self.app.monitor_hub
+
     def start(self) -> None:
+        """Subscribe to the app's monitor hub (everything, at the chosen interval); the hub connects, reconnects
+        after a lost stream and shares it with the sidebar's live Frame card."""
         self.stopped = False
-        if self.session is not None or self._connecting:
+        hub = self.hub
+        if hub.subscribed("monitor"):
+            hub.reconnect()  # the Reconnect button (after an error)
             return
-        self._connecting = True
         self._set_live(tr("Connecting…"), T.TEXT_3, update=self.root is not None)
-        gen, target = self._gen, self.app.target
-        self.app.run_bg(self._connect, gen, target)
-
-    def _connect(self, gen: int, target) -> None:
-        try:
-            session = M.MonitorSession(target.frame, lambda s, g=gen: self._on_sample(g, s),
-                                       lambda why, g=gen: self._on_end(g, why))
-        except Exception as exc:  # noqa: BLE001
-            self._connecting = False
-            if gen == self._gen:
-                self._set_live(tr("Not connected: {error}").format(error=explain(exc)), T.ERROR)
-            return
-        self._connecting = False
-        if gen != self._gen:  # the tab was left while connecting
-            session.close()
-            return
-        self.session = session
-        if session.static != self.static:
-            self.static = session.static
-            self._build_static()
-        if self.interval.value != f"{M.DEFAULT_INTERVAL:g}":
-            session.set_interval(float(self.interval.value))
-        if self.filter.data != "game":
-            session.set_filter(self.filter.data)
+        hub.set_filter(self.filter.data)
+        hub.subscribe("monitor", "all", float(self.interval.value), self._on_sample, self._on_state)
         if self.paused:
-            session.pause(True)
-        self._set_live(tr("Live"), T.OK)
+            hub.pause("monitor", True)
 
-    def _on_end(self, gen: int, why: str) -> None:
-        if gen != self._gen:
+    def _on_state(self, name: str, state: str, detail) -> None:
+        """The hub's stream state (its connect/reader/timer threads)."""
+        if self.stopped:
             return
-        self.session = None
-        self._set_live(tr("Connection lost, reconnecting…"), T.WARN)
-        timer = threading.Timer(RETRY_SECONDS, lambda: gen == self._gen and not self.stopped and self.start())
-        timer.daemon = True
-        timer.start()
+        if state == "connecting":
+            self._set_live(tr("Connecting…"), T.TEXT_3)
+        elif state == "live":
+            static = self.hub.static
+            if static and static != self.static:
+                self.static = static
+                self._build_static()
+            self._set_live(tr("Live"), T.OK)
+        elif state == "lost":
+            self._set_live(tr("Connection lost, reconnecting…"), T.WARN)
+        elif state == "error":
+            self._set_live(tr("Not connected: {error}").format(error=explain(detail)), T.ERROR)
 
     def stop(self) -> None:
-        """End the stream (leaving the tab, disconnecting, closing the app)."""
-        self._gen += 1
+        """Stop receiving (leaving the tab, disconnecting, closing the app); the hub ends the stream when nobody else
+        (the live Frame card) needs it."""
         self.stopped = True
-        session, self.session = self.session, None
-        if session is not None:
-            session.close()
+        self.hub.unsubscribe("monitor")
 
     def _set_live(self, text: str, color: str, update: bool = True) -> None:
         self.live_text.value, self.live_dot.bgcolor = text, color
         self.reconnect.visible = color == T.ERROR
         if update:
-            C.update(self.live, self.reconnect)
+            self._updater()(self.live, self.reconnect)
 
     def _set_interval(self, e) -> None:
-        if self.session:
-            self.session.set_interval(float(self.interval.value))
+        self.hub.update("monitor", interval=float(self.interval.value))
 
     def toggle_pause(self) -> None:
         self.paused = not self.paused
-        if self.session:
-            self.session.pause(self.paused)
+        self.hub.pause("monitor", self.paused)  # paused: no samples here (the card keeps its own)
         self.pause_btn.icon = ft.Icons.PLAY_ARROW_ROUNDED if self.paused else ft.Icons.PAUSE_ROUNDED
         self.pause_btn.tooltip = tr("Resume") if self.paused else tr("Pause")
-        self._set_live(tr("Paused") if self.paused else tr("Live"), T.TEXT_3 if self.paused else T.OK, update=False)
+        if self.paused:
+            self._set_live(tr("Paused"), T.TEXT_3, update=False)
         C.update(self.pause_btn, self.live)
 
     def toggle_details(self) -> None:
@@ -375,8 +360,7 @@ class MonitorView:
         C.update(self.details, self.details_btn)
 
     def _set_filter(self, which: str) -> None:
-        if self.session:
-            self.session.set_filter(which)
+        self.hub.set_filter(which)
 
     def set_sort(self, key: str) -> None:
         if self.sort_key == key:
@@ -444,8 +428,8 @@ class MonitorView:
         return self.push
 
     # ---------------------------------------------------------------- samples
-    def _on_sample(self, gen: int, s: dict) -> None:
-        if gen != self._gen or self.root is None:
+    def _on_sample(self, s: dict) -> None:
+        if self.stopped or self.root is None:
             return
         self.last_sample = s
         for name, value in M.series_of(s).items():
@@ -667,8 +651,8 @@ class MonitorView:
                   danger=sig == "KILL" or bool(p.get("critical")))
 
     def _kill(self, p: dict, sig: str) -> None:
-        session = self.session
-        if session is None:
+        session = self.hub
+        if session.session is None:
             self.app.toast(tr("The monitor isn't connected."), error=True)
             return
         name = p.get("name", "?")
@@ -711,8 +695,8 @@ class MonitorView:
                   tr("End game"), lambda: self.app.run_bg(self._end_game, pkg, title), danger=True)
 
     def _end_game(self, pkg: str, title: str) -> None:
-        session = self.session
-        if session is None:
+        session = self.hub
+        if session.session is None:
             self.app.toast(tr("The monitor isn't connected."), error=True)
             return
         self.end_btn.disabled = True

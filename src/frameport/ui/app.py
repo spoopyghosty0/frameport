@@ -23,6 +23,7 @@ from ..frame.connection import NOT_IN_LIBRARY, AgentFailed
 from ..i18n import fmt_size, tr, tr_n
 from ..recommend import catalog
 from . import components as C
+from . import frame_card as FC
 from . import glyphs as G
 from . import jobs as jobs_module
 from . import theme as T
@@ -106,9 +107,22 @@ class FramePortApp:
         self.jobs = jobs_module.shared()  # one queue per process, shared by every window session
         self.jobs.subscribe(self._on_job)
         self._handled_jobs: set[int] = set()  # finished jobs this session has reacted to (pop-ups, refreshes)
+        from ..frame.monitor_hub import MonitorHub
+
+        # one `_monitor` stream for everything that shows live Frame data (subscribers: "card" = the sidebar's live
+        # Frame card, "monitor" = the Monitor tab); it runs only while someone subscribes
+        self.monitor_hub = MonitorHub(lambda: self.target if self.frame_state == "connected" else None)
+        self.live_card = bool(library.setting(FC.SETTING, True))  # Settings → Appearance (kept here: no I/O on ticks)
+        self._card_sample: dict | None = None  # the newest sample the card got (games + battery)
+        self._card_state = "idle"  # the hub's state as the card last heard it
+        self._card_fps = FC.fps_history()  # the running game's fps, 2 minutes
+        self._card_pkg: str | None = None
+        self._card_art: dict[str, str | None] = {}  # package -> artwork thumbnail URL (looked up once)
+        self._card_shown = 0.0
+        self._card_push = C.LoopUpdater(page)  # the card's updates from the stream's thread
         page.on_close = lambda e: (self.jobs.unsubscribe(self._on_job),  # session gone: stop drawing into it
                                    self.stop_live(),  # and stop a live view (it would keep the Frame encoding)
-                                   self.stop_keyboard(), self.stop_monitor(),
+                                   self.stop_keyboard(), self.stop_monitor(), self.monitor_hub.close(),
                                    _link_state.update(owner=None) if _link_state["owner"] is self else None)
         from .updater import Updater
 
@@ -272,24 +286,51 @@ class FramePortApp:
                                      tooltip=tr("Activity"),
                                      on_click=lambda e: self.show_activity(not self.activity.open))
         self.activity_card.content = self._act_box
-        # connection card
-        self._conn_dot = C.dot(T.TEXT_3, 9)
+        # connection card: the battery ring (the Frame's icon inside it without a reading), name, connection line;
+        # below it the live "now playing" row (ui/frame_card.py), shown while a game runs
+        ring = T.px(40)
+        self._conn_dot = C.dot(T.TEXT_3, 8)
         self._conn_name = C.body(tr("Steam Frame"), T.TEXT, weight=ft.FontWeight.W_600, max_lines=1,
                                  overflow=ft.TextOverflow.ELLIPSIS)
-        self._conn_line = C.meta(tr("Not set up"))
-        # battery: icon + "7 %" next to the name, like a phone's status bar (a text suffix wrapped in the sidebar)
-        self._conn_bat_icon = ft.Icon(ft.Icons.BATTERY_FULL_ROUNDED, size=T.px(15), color=T.TEXT_2)
-        self._conn_bat_text = C.meta("")
-        self._conn_bat = ft.Container(ft.Row([self._conn_bat_icon, self._conn_bat_text], spacing=T.px(2), tight=True,
-                                             vertical_alignment=ft.CrossAxisAlignment.CENTER), visible=False)
+        self._conn_line = C.meta(tr("Not set up"), max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._conn_ring = C.gauge(0, 40)
+        self._conn_bat_text = ft.Text("", size=T.px(12), weight=ft.FontWeight.W_700, color=T.TEXT)
+        self._conn_icon = C.as_icon(G.FRAME, T.px(20), T.TEXT_2)
+        self._conn_bat = ft.Container(ft.Stack([
+            self._conn_ring,
+            ft.Container(ft.Stack([self._conn_icon, self._conn_bat_text], alignment=ft.Alignment.CENTER),
+                         alignment=ft.Alignment.CENTER, width=ring, height=ring)], width=ring, height=ring),
+            width=ring, height=ring)
         self._conn_extra = ft.Container(C.meta(""), visible=False, tooltip=C.tip(C.HELP["frame_summary"]))
-        self.conn_card.content = ft.Container(ft.Row([
-            ft.Stack([C.as_icon(G.FRAME, T.px(22), T.TEXT_2),
-                      ft.Container(self._conn_dot, right=0, bottom=0)], width=T.px(24), height=T.px(24)),
-            ft.Column([ft.Row([ft.Container(self._conn_name, expand=True), self._conn_bat],
-                              spacing=T.px(6), vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                       self._conn_line, self._conn_extra], spacing=1, expand=True),
-        ], spacing=T.S3), padding=T.S3, border_radius=T.RADIUS_SM, bgcolor=T.SURFACE, ink=True,
+        art = T.px(36)
+        self._np_art = ft.Container(width=art, height=art, border_radius=T.RADIUS_XS, bgcolor=T.SURFACE_2,
+                                    alignment=ft.Alignment.CENTER,
+                                    content=ft.Icon(ft.Icons.SPORTS_ESPORTS_OUTLINED, size=T.px(18), color=T.TEXT_3))
+        self._np_title = ft.Text("", size=T.px(13), weight=ft.FontWeight.W_600, color=T.TEXT, max_lines=1,
+                                 overflow=ft.TextOverflow.ELLIPSIS)
+        self._np_line = C.meta("", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+        self._np_fps = ft.Text("–", size=T.px(16), weight=ft.FontWeight.W_700, color=T.TEXT)
+        self._np_spark = C.Sparkline(T.OK, height=24, slots=FC.FPS_POINTS, min_slots=FC.FPS_POINTS)
+        self._np_box = ft.Container(ft.Column([
+            ft.Row([self._np_art,
+                    ft.Column([self._np_title, self._np_line], spacing=0, expand=True, tight=True),
+                    ft.Column([self._np_fps, C.meta(tr("fps"))], spacing=0, tight=True,
+                              horizontal_alignment=ft.CrossAxisAlignment.END)],
+                   spacing=T.S2, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Container(self._np_spark.control, height=T.px(24)),
+        ], spacing=T.px(6), tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+            padding=ft.Padding(T.S2, T.S2, T.S2, T.px(6)), border_radius=T.RADIUS_XS, bgcolor=T.SURFACE_2, ink=True,
+            visible=False, tooltip=tr("Open the Monitor"), on_click=lambda e: self.go("monitor"))
+        self.conn_card.content = ft.Container(ft.Column([
+            ft.Row([
+                self._conn_bat,
+                ft.Column([self._conn_name,
+                           ft.Row([self._conn_dot, ft.Container(self._conn_line, expand=True)], spacing=T.px(6),
+                                  vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                           self._conn_extra], spacing=1, expand=True),
+            ], spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            self._np_box,
+        ], spacing=T.S3, tight=True), padding=T.S3, border_radius=T.RADIUS_SM, bgcolor=T.SURFACE, ink=True,
             border=ft.Border.all(1, T.BORDER), on_click=lambda e: self.go("frame"))
         # the Frame's power: three equal buttons in one bar styled like the cards around it (icon over a label)
         def power_button(action: str, label: str, icon, tip: str) -> ft.Control:
@@ -352,19 +393,9 @@ class FramePortApp:
                                  "offline": tr("Offline")}.get(
             st, "Not set up")
         self._conn_line.color = color
-        bat = (self.frame_info or {}).get("battery") if st == "connected" else None
-        self._conn_bat.visible = bool(bat)
         self.power_row.visible = st == "connected"
-        if bat:
-            from .battery import charging, icon, low
-
-            warn = low(bat)
-            self._conn_bat_icon.icon = getattr(ft.Icons, icon(bat))
-            self._conn_bat_icon.color = T.WARN if warn else T.OK if charging(bat) else T.TEXT_2
-            self._conn_bat_text.value = f"{bat.get('percent', 0)}%"
-            self._conn_bat_text.color = T.WARN if warn else T.TEXT_2
-            self._conn_bat.tooltip = tr("Frame battery: charging") if charging(bat) else \
-                tr("Frame battery: not charging")
+        self._sync_card()
+        self._apply_card()
         if st == "connected" and self.frame_info:
             pr = (self.frame_info.get("proton") or {}).get("ready")
             quest = tr("Quest ✓") if self.frame_info.get("lepton") else tr("Quest ✗")
@@ -375,6 +406,97 @@ class FramePortApp:
             self._conn_extra.visible = False
         if update:
             C.update(self.nav_col, self.activity_card, self.power_row, self.conn_card)
+
+    # ------------------------------------------------------------------ live Frame card
+    def _sync_card(self) -> None:
+        """Keep the card's monitor subscription in step: subscribed while connected and the setting is on, paused
+        while files are uploaded to the Frame (the link is busy), gone otherwise."""
+        hub = self.monitor_hub
+        if not (self.live_card and self.frame_state == "connected" and self.target is not None):
+            if hub.subscribed("card"):
+                hub.unsubscribe("card")
+                self._card_sample, self._card_state = None, "idle"
+            return
+        if not hub.subscribed("card"):
+            self._card_sample, self._card_state = None, "idle"
+            hub.subscribe("card", FC.CARD_MODULES, FC.CARD_INTERVAL, self._on_card_sample, self._on_card_state)
+        hub.pause("card", FC.uploading(self.jobs.current()))
+
+    def set_live_card(self, on: bool) -> None:
+        """Settings → Appearance: show the running game on the Frame card (or not), at once."""
+        self.live_card = bool(on)
+        library.set_setting(FC.SETTING, self.live_card)
+        self._refresh_sidebar()
+
+    def _on_card_state(self, name: str, state: str, detail) -> None:
+        self._card_state = state
+        if state != "live":  # lost / error / connecting: no stale game on the card, battery from the poll
+            self._apply_card()
+            self._card_push(self.conn_card)
+
+    def _on_card_sample(self, s: dict) -> None:
+        """A sample for the card (the stream's thread): remember it, keep the fps history, redraw at most once a
+        second (with the Monitor open the stream runs faster than the card's 5 s)."""
+        game = (s.get("games") or [None])[0]
+        pkg = game.get("package") if game else None
+        if pkg != self._card_pkg:
+            self._card_pkg = pkg
+            self._card_fps.clear()
+        if game:
+            self._card_fps.add("fps", game.get("fps"), s.get("t"))
+            if pkg not in self._card_art:  # once per game, here (library + thumbnail lookups are file I/O)
+                from ..artwork import thumbs
+                from .views.library import CARD_ART
+
+                self._card_art[pkg] = thumbs.url(pkg, CARD_ART, width=160, wait=False) if library.game(pkg) else None
+        was = self._card_sample
+        self._card_sample, self._card_state = s, "live"
+        shown_game = bool(was and was.get("games"))
+        now = time.monotonic()
+        if now - self._card_shown < 1.0 and shown_game == bool(game):
+            return
+        self._card_shown = now
+        self._apply_card()
+        self._card_push(self.conn_card)
+
+    def _apply_card(self) -> None:
+        """The card's battery ring and "now playing" row from the newest sample (no I/O: also called on render)."""
+        if not hasattr(self, "_nav"):
+            return
+        connected = self.frame_state == "connected"
+        s = self._card_sample if connected and self.live_card and self._card_state == "live" else None
+        bat = s.get("battery") if s and s.get("battery") else (self.frame_info or {}).get("battery") \
+            if connected else None
+        ring = FC.battery_ring(bat)
+        self._conn_icon.visible = ring is None
+        self._conn_bat_text.visible = ring is not None
+        if ring is None:
+            self._conn_ring.value = 0
+            self._conn_bat.tooltip = None
+        else:
+            from .battery import charging
+
+            self._conn_ring.value = ring["value"]
+            self._conn_ring.color = {"warn": T.WARN, "charging": T.OK}.get(ring["level"], T.OK)
+            self._conn_bat_text.value = ring["text"]
+            self._conn_bat_text.color = T.WARN if ring["level"] == "warn" else T.TEXT
+            self._conn_bat.tooltip = (tr("Frame battery: charging") if charging(bat) else
+                                      tr("Frame battery: not charging")) + f" · {bat.get('percent', 0)}%"
+        np = FC.now_playing(s, self._card_fps.get("fps")) if s else None
+        self._np_box.visible = np is not None
+        if np is None:
+            return
+        url = self._card_art.get(np["package"])
+        if self._np_art.data != np["package"]:
+            self._np_art.data = np["package"]
+            self._np_art.image = ft.DecorationImage(src=url, fit=ft.BoxFit.COVER) if url else None
+            self._np_art.content.visible = not url
+        self._np_title.value = np["title"]
+        self._np_line.value = np["line"]
+        color = {"ok": T.OK, "warn": T.WARN, "error": T.ERROR}.get(np["level"], T.TEXT_3)
+        self._np_fps.value, self._np_fps.color = np["fps_text"], color
+        self._np_spark.set_color(color if np["level"] != "none" else T.OK)
+        self._np_spark.set(self._card_fps.get("fps"), target=np["target"], hi=(np["target"] or 72) * 1.15)
 
     def _saved_name(self) -> str | None:
         from ..frame.connection import saved_targets
@@ -1783,6 +1905,8 @@ class FramePortApp:
                 if self.frame_state == "connected":
                     self.refresh_frame(quiet=True, background=False)
                     self._battery_check(fetch=False)
+                    if self.frame_state == "connected" and self.monitor_hub.state == "error":
+                        self.monitor_hub.reconnect()  # the monitor stream failed to start: try again
                 elif self.frame_state == "offline" and saved_targets():
                     self.connect(saved_targets()[0], quiet=True)
             except Exception:  # noqa: BLE001

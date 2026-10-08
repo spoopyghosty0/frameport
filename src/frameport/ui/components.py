@@ -508,6 +508,13 @@ def spinner(size: str = "s", color: str | None = None) -> ft.ProgressRing:
                            color=color or (T.SECONDARY if T.DUAL else T.ACCENT))
 
 
+def gauge(value: float = 0.0, size: int = 40, color: str | None = None, stroke: float = 3.5) -> ft.ProgressRing:
+    """A level as a ring (e.g. the Frame card's battery): value 0..1 on a SURFACE_3 track; `size` px at 100 %."""
+    px = T.px(size)
+    return ft.ProgressRing(value=value, width=px, height=px, stroke_width=T.px(stroke), color=color or T.OK,
+                           bgcolor=T.SURFACE_3)
+
+
 # ------------------------------------------------------------------------------------------ containers
 def card(content: ft.Control, padding: int | None = None, bgcolor: str | None = None, **kw) -> ft.Container:
     padding = T.S4 if padding is None else padding

@@ -335,7 +335,12 @@ class SettingsView:
 
         dd = C.dropdown(label=tr("Text and layout size"), value=str(current) if current != "auto" else "auto",
                          options=options, width=T.px(260), on_select=changed)
-        controls = [self.theme_picker(), ft.Container(height=T.S2), dd, note]
+        live_card = C.switch(tr("Show the running game on the Frame card"), value=self.app.live_card,
+                             on_change=lambda e: self.app.set_live_card(e.control.value))
+        live_note = C.meta(tr("Streams a small sample from the Frame every 5 seconds (game, frame rate, battery). "
+                              "Turn off to save the Frame's processor."))
+        controls = [self.theme_picker(), ft.Container(height=T.S2), dd, note, ft.Container(height=T.S2), live_card,
+                    live_note]
         languages = i18n.available()
         if len(languages) > 1:  # only once a translation exists
             def language_changed(e):

@@ -249,12 +249,19 @@ class FakeMonitorSession:
             "procs": procs, "filter": "game"}
 
     def _run(self) -> None:
-        for self.t in range(100000):
-            if self.closed:
-                return
+        self.t = 0
+        while not self.closed and self.t < 100000:
             self.on_sample(self._sample())
             if self.t >= self.BACKFILL:  # the first two minutes at once (full charts), then one per second
                 time.sleep(1)
+            self.t += 1
+
+    def set_modules(self, m):
+        # the hub asks for everything when the Monitor tab subscribes (the Frame card started the stream): send the
+        # two minutes again so its charts are full in screenshots too
+        if m == "all":
+            self.t = 0
+        return True
 
     def set_interval(self, s): pass  # noqa: E704
     def set_filter(self, w): pass  # noqa: E704
@@ -643,6 +650,7 @@ def main() -> int:
         try:
             app = FramePortApp(page)
             if args.fake_frame:
+                app.monitor_hub.session_factory = FakeMonitorSession  # the shared stream (Monitor tab, Frame card)
                 app.target = FakeTarget()
                 app.frame_info, app.frame_state = app.target.describe(), "connected"
         except Exception:  # noqa: BLE001
