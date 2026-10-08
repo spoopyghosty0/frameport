@@ -25,7 +25,7 @@ HELP: dict[str, str] = _Translated({
     "update_ready": "The copy on your Frame differs from what FramePort would install now (the recipe or your game "
                     "files changed). Update to install the new build; saves are kept.",
     "check_exe": "This game's folder has several programs and FramePort isn't sure which one starts the game. Open the "
-                 "game (or right-click → Change program…) to pick it.",
+                 "game and use … → Change program… to pick it.",
     "platform_quest": "A Meta Quest game (APK). It's rebuilt for the Frame and runs in Lepton, Valve's Android "
                       "container.",
     "platform_windows": "A Windows game without VR, added with \"Add a PC game folder…\". On the Frame, Proton "

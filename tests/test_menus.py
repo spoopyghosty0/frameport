@@ -53,54 +53,70 @@ def _section_of(entries, label):
     raise AssertionError(f"{label} not in menu")
 
 
-def test_library_menu_structure():
+def test_library_menu_is_short():
     for name, g, st in _states():
         entries = C.menu_entries(menu_sections(g, st, _key))
         labels = [e[0] for e in _items(entries)]
-        assert "Select" in labels[:4], (name, labels)
-        assert "Type on Frame" not in labels
+        assert not any(isinstance(e, Header) for e in entries), name  # no section headers
+        assert len(labels) <= 9, (name, labels)
+        assert all(e[1] for e in _items(entries)), name
+        assert "Open game page" in labels
+        if st.job:
+            assert labels == ["Show progress", "Cancel", "Open game page"]
+            continue
+        assert "Select" in labels[:3], (name, labels)
+        assert "More actions…" in labels
+        for gone in ("Find artwork…", "Analyze again", "Collect logs", "Screenshots", "Run launch test on Frame",
+                     "Share working recipe…", "Type on Frame"):
+            assert gone not in labels, (name, gone)
         # destructive items close the menu, after a divider
         n = sum(1 for lbl in labels if lbl in DESTRUCTIVE)
         assert labels[-n:] == [lbl for lbl in labels if lbl in DESTRUCTIVE] and labels[-1] == "Remove from library…"
-        first = next(i for i, e in enumerate(entries) if e is not None and not isinstance(e, Header)
-                     and e[0] in DESTRUCTIVE)
+        first = next(i for i, e in enumerate(entries) if e is not None and e[0] in DESTRUCTIVE)
         assert entries[first - 1] is None, name
-        # every header has items under it; every item has an icon
-        for i, e in enumerate(entries):
+        assert entries[first - 2][0] == "More actions…", name
+        if st.plays:
+            assert labels[0].startswith("Play on")
+        if st.installs:
+            assert st.installs[0][0] in labels
+        assert ("Game settings…" in labels) == st.settings
+        assert ("Uninstall from Frame…" in labels) == st.on_frame
+        assert ("Uninstall from this PC…" in labels) == st.on_pc
+
+
+def test_page_menu_is_the_full_one_without_its_buttons():
+    for name, g, st in _states():
+        st.quick = False
+        entries = menu_sections(g, st, _key)
+        labels = [e[0] for e in _items(entries)]
+        for gone in ("Select", "Open game page", "Show progress", "Cancel", "Play on Frame", "Reinstall on Frame",
+                     "Run launch test on Frame", "Uninstall from Frame…", "More actions…"):
+            assert gone not in labels, (name, gone)
+        assert labels[-1] == "Remove from library…"
+        assert entries[-2] is None
+        for i, e in enumerate(entries):  # every header has items under it
             if isinstance(e, Header):
                 assert i + 1 < len(entries) and entries[i + 1] is not None and not isinstance(entries[i + 1], Header)
         assert all(e[1] for e in _items(entries)), name
-        if st.on_frame and not st.job:
-            assert _section_of(entries, "Run launch test on Frame") == "Troubleshoot"
-        if st.plays and not st.job:
-            assert labels[0].startswith("Play on")
-
-
-def test_job_items_first_and_page_menu_leaves_out_its_buttons():
-    _, g, st = _states()[-1]
-    labels = [e[0] for e in _items(menu_sections(g, st, _key))]
-    assert labels[:2] == ["Show progress", "Cancel"]
-    for name, g, st in _states():
-        st.quick = False
-        labels = [e[0] for e in _items(menu_sections(g, st, _key))]
-        for gone in ("Select", "Open game page", "Show progress", "Cancel", "Play on Frame", "Reinstall on Frame",
-                     "Run launch test on Frame", "Uninstall from Frame…"):
-            assert gone not in labels, (name, gone)
-        assert labels[-1] == "Remove from library…"
 
 
 def test_sections_and_conditions():
     _, g, st = _states()[0]
+    st.quick = False
     entries = menu_sections(g, st, _key)
     heads = [e.label for e in entries if isinstance(e, Header)]
     assert heads == ["Artwork", "Recipe", "Troubleshoot"]
     assert _section_of(entries, "Analyze again") == "Troubleshoot"
     assert _section_of(entries, "Update Steam art on Frame") == "Artwork"
     assert _section_of(entries, "Share working recipe…") == "Recipe"
-    linux = menu_sections(LINUX, _states()[3][2], _key)
+    linux_st = _states()[3][2]
+    linux_st.quick = False
+    linux = menu_sections(LINUX, linux_st, _key)
     assert "Recipe" not in [e.label for e in linux if isinstance(e, Header)]
-    rift = [e[0] for e in _items(menu_sections(RIFT, _states()[2][2], _key))]
-    assert {"Run launch test on this PC", "Check game files", "Change program…", "Uninstall from this PC…"} <= set(rift)
+    rift_st = _states()[2][2]
+    rift_st.quick = False
+    rift = [e[0] for e in _items(menu_sections(RIFT, rift_st, _key))]
+    assert {"Check game files", "Change program…"} <= set(rift)
     assert "Analyze again" not in rift
     # the reset icon isn't the Frame's Restart icon
     reset = next(e for e in _items(entries) if e[0] == "Reset to suggested recipe…")

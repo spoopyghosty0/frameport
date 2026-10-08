@@ -167,7 +167,11 @@ class GameView:
                                           "into the folder it lists")))
         more = C.menu_button(C.menu_items(app.game_actions(pkg, quick=False)), icon=ft.Icons.MORE_HORIZ_ROUNDED,
                              icon_color=T.TEXT_2, tooltip=tr("More actions"))
-        return ft.Row(buttons + [more], spacing=T.S2, wrap=True)
+        # the same menu, opened from code (Library right-click → "More actions…", app.open_game_menu): a
+        # PopupMenuButton can't be opened programmatically, a ContextMenu can (no mouse triggers of its own)
+        self.more_menu = ft.ContextMenu(content=more, items=C.menu_items(app.game_actions(pkg, quick=False)),
+                                        secondary_trigger=None, tertiary_trigger=None)
+        return ft.Row(buttons + [self.more_menu], spacing=T.S2, wrap=True)
 
     # ---------------------------------------------------------------- sections
     def where(self) -> ft.Control:

@@ -63,7 +63,7 @@ def test_right_click_menu_follows_install_state(monkeypatch):
     app = _app(monkeypatch, g, {"installed": [{"package": "com.q", "sha256": "old"}]})
     installed = _labels(app.game_actions("com.q"))
     assert installed[:3] == ["Play on Frame", "Open game page", "Update on Frame"]
-    expected = {"Run launch test on Frame", "Game settings…", "Uninstall from Frame…", "Remove from library…"}
+    expected = {"More actions…", "Game settings…", "Uninstall from Frame…", "Remove from library…"}
     assert expected <= set(installed)
 
     missing = _labels(_app(monkeypatch, g, {"installed": []}).game_actions("com.q"))
@@ -102,10 +102,11 @@ def test_play_is_the_quick_action_when_installed(monkeypatch):
 
 def test_menus_offer_sharing_and_diagnostics(monkeypatch):
     g = {"package": "com.q", "title": "Q", "recipe": {"status": "works"}, "build": {"sha256": "x"}}
-    for quick in (True, False):
-        labels = _labels(_app(monkeypatch, g, {"installed": []}).game_actions("com.q", quick=quick))
-        assert {"Share working recipe…", "Collect logs", "Report a problem…"} <= set(labels)
-        assert labels[-1] == "Remove from library…"
+    labels = _labels(_app(monkeypatch, g, {"installed": []}).game_actions("com.q", quick=False))
+    assert {"Share working recipe…", "Collect logs", "Report a problem…"} <= set(labels)
+    assert labels[-1] == "Remove from library…"
+    quick = _labels(_app(monkeypatch, g, {"installed": []}).game_actions("com.q"))  # the short right-click menu
+    assert "More actions…" in quick and "Collect logs" not in quick and quick[-1] == "Remove from library…"
 
 
 def test_install_browser_explains_known_folders():
@@ -146,14 +147,17 @@ def test_linux_app_menus_have_no_conversion_actions(monkeypatch):
                      "Save as known-good recipe", "Share working recipe…", "Game settings…",
                      "Add videos and files", "Change program…"):
             assert gone not in labels, gone
-        assert {"Find artwork…", "Report a problem…", "Collect logs", "Screenshots"} <= set(labels)
+        if not quick:
+            assert {"Find artwork…", "Report a problem…", "Collect logs", "Screenshots"} <= set(labels)
         assert labels[-1] == "Remove from library…"
     quick = _labels(_app(monkeypatch, g, on_frame).game_actions("linux.tool"))
-    assert {"Play on Frame", "Reinstall on Frame", "Run launch test on Frame", "Uninstall from Frame…"} <= set(quick)
+    assert {"Play on Frame", "Reinstall on Frame", "More actions…", "Uninstall from Frame…"} <= set(quick)
     several = _linux_app(candidates=["tool", "tool-helper"])
-    assert "Change program…" in _labels(_app(monkeypatch, several, {"installed": []}).game_actions("linux.tool"))
+    page = _app(monkeypatch, several, {"installed": []}).game_actions("linux.tool", quick=False)
+    assert "Change program…" in _labels(page)
     lone = _linux_app(candidates=["a", "b"], files=["Tool.AppImage"])  # a lone AppImage: nothing to choose
-    assert "Change program…" not in _labels(_app(monkeypatch, lone, {"installed": []}).game_actions("linux.tool"))
+    page = _app(monkeypatch, lone, {"installed": []}).game_actions("linux.tool", quick=False)
+    assert "Change program…" not in _labels(page)
 
 
 def test_linux_apps_install_on_the_frame_only(monkeypatch):

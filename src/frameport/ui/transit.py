@@ -26,6 +26,15 @@ _PREFIXES = (
 _DONE = ("installed",)
 WAITING = "Waiting for the Frame"
 
+# the track: the portal stands still at the PC/Frame boundary. Analyze/Patch/Sign happen on the PC (the cover
+# approaches the portal), Upload is the crossing (the cover passes under the portal), Install/Test on the Frame (or
+# this PC's Steam) carry it on to the destination. Positions are fractions of the track.
+PORTAL_AT = 0.5
+CROSSING = 0.06  # half the crossing's share of the track, either side of the portal
+_LOCAL, _UPLOAD = 3, 4  # steps before the upload; the upload's own end
+# the steps row's column weights, so the Upload column sits under the portal
+STEP_WEIGHTS = (139, 139, 139, 166, 208, 208)
+
 
 @dataclass(frozen=True)
 class TransitState:
@@ -88,6 +97,19 @@ def transit_state(state: str = "running", stage: str = "", stages: list[str] | N
         detail = stage or message
     return TransitState(step=step, fraction=overall, label="done" if done else STEPS[step], detail=detail,
                         waiting=waiting, failed=state == "failed", target="pc" if to == "pc" else "frame")
+
+
+def position(fraction: float) -> float:
+    """Where the cover rides on the track (0..1) for an overall fraction (TransitState.fraction): the local steps
+    bring it from the start to just before the portal (PORTAL_AT − CROSSING), the upload carries it across, Install
+    and Test from just after the portal to the end; done = 1. Monotonic in `fraction`."""
+    x = min(1.0, max(0.0, float(fraction))) * len(STEPS)  # steps done, with the current one's share
+    before, after = PORTAL_AT - CROSSING, PORTAL_AT + CROSSING
+    if x <= _LOCAL:
+        return x / _LOCAL * before
+    if x <= _UPLOAD:
+        return before + (x - _LOCAL) * (after - before)
+    return after + (x - _UPLOAD) / (len(STEPS) - _UPLOAD) * (1.0 - after)
 
 
 def job_state(job) -> TransitState:

@@ -1022,6 +1022,7 @@ class FramePortApp:
             "progress": lambda e: self.show_activity(True),
             "cancel": lambda e: self.jobs.cancel(job),
             "open": lambda e: self.open_game(pkg),
+            "more": lambda e: self.open_game_menu(pkg),
             "select": lambda e: (lv.selected.add(pkg), lv.set_select_mode(True)),
             "settings": lambda e: self.settings_dialog(pkg),
             "screenshots": lambda e: self.go("screenshots", pkg),
@@ -1057,6 +1058,25 @@ class FramePortApp:
             selectable=lv is not None,
             media_button=C.is_media_player(g) and not rift)
         return menu_sections(g, st, handlers.__getitem__)
+
+    def open_game_menu(self, pkg: str) -> None:
+        """Library right-click → "More actions…": the game page with its full "…" menu open (opened once the page
+        is shown; the route switch fades for 150 ms)."""
+        self.open_game(pkg)
+        view = self.game_view
+
+        async def show():
+            import asyncio
+
+            await asyncio.sleep(0.35)
+            menu = getattr(view, "more_menu", None)
+            if menu is not None and self.game_view is view and self.route[:2] == ("game", pkg):
+                try:
+                    await menu.open()
+                except Exception:  # noqa: BLE001 - unmounted meanwhile: the page is shown, that's enough
+                    pass
+
+        self.page.run_task(show)
 
     @staticmethod
     def linux_programs(g: dict) -> list[str]:

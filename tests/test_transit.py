@@ -116,3 +116,32 @@ def test_monotonic_resets_for_another_job_or_a_new_run():
     assert mono.follow("a", run(["Patching the game"])).fraction == 0.0  # started over
     mono.follow("a", run(QUEST + INSTALL[:3], fraction=0.9))
     assert mono.follow("b", run(QUEST[:1])).fraction == 0.0
+
+
+def test_position_portal_at_the_pc_frame_boundary():
+    from frameport.ui.transit import PORTAL_AT, position
+
+    assert PORTAL_AT == 0.5
+    # Analyze/Patch/Sign (also halfway through Sign): before the portal
+    for stages, f in ((QUEST[:1], None), (QUEST[:2], None), (QUEST, None), (QUEST + ALT, None)):
+        assert position(run(stages, fraction=f).fraction) < 0.5
+    assert position(0.0) == 0.0
+    # the upload crosses the portal: just before it at 0 %, at it halfway, just after it at 100 %
+    up = [position(run(QUEST + INSTALL[:2], fraction=f).fraction) for f in (0.0, 0.5, 1.0)]
+    assert up[0] < 0.5 < up[2]
+    assert up[1] == pytest.approx(0.5)
+    # Install/Test on the Frame: after the portal; done: at the headset
+    assert position(run(QUEST + INSTALL).fraction) > 0.5
+    assert 0.5 < position(run(QUEST + INSTALL + ["Launch test (headless)"]).fraction) < 1.0
+    assert position(transit_state("done", "Installed", QUEST + INSTALL + ["Installed"]).fraction) == 1.0
+    # a PC install: same track (Prepare this PC = the crossing's start)
+    pc = run(["Checking the game", "Revive", "Prepare this PC", "Add to Steam library (this PC)"], to="pc")
+    assert position(pc.fraction) > 0.5
+
+
+def test_position_is_monotonic():
+    from frameport.ui.transit import position
+
+    xs = [i / 600 for i in range(601)]
+    ps = [position(x) for x in xs]
+    assert ps == sorted(ps) and ps[-1] == 1.0

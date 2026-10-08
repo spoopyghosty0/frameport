@@ -954,13 +954,15 @@ def transit_parts() -> dict[str, str]:
 
 
 class Transit:
-    """Install progress as a transit: the PC's monitor · a track the game's cover rides along, into the portal at the
-    progress head · the Frame headset (a monitor again for installs on this PC). Below: "Title → Frame" with what
+    """Install progress as a transit: the PC's monitor · a track with the portal standing at the PC/Frame boundary
+    (transit.PORTAL_AT): the game's cover approaches it while the game is prepared on the PC, passes through it
+    (under the portal's hole) during the upload and rides on to the Frame headset (a monitor again for installs on
+    this PC) while it installs and is tested. Below: "Title → Frame" with what
     happens now (heading=False: without "Title → Frame"), and the six steps (not when compact). Created once per
     place; set() changes only properties, so it can follow every progress tick."""
 
     def __init__(self, compact: bool = False, heading: bool = True):
-        from .transit import STEPS
+        from .transit import STEP_WEIGHTS, STEPS
 
         self.compact = compact
         heading = heading and not compact
@@ -991,9 +993,10 @@ class Transit:
                                   border=ft.Border.all(1, T.BORDER_STRONG), alignment=ft.Alignment.CENTER,
                                   clip_behavior=ft.ClipBehavior.ANTI_ALIAS, animate_position=anim)
         self.portal = ft.Image(src=self.parts["portal"], left=0, top=0, width=self.portal_w, height=self.portal_h,
-                               fit=ft.BoxFit.CONTAIN, animate_position=anim, animate_opacity=anim)
+                               fit=ft.BoxFit.CONTAIN, animate_opacity=anim)
         base = ft.Container(left=0, right=0, top=top, height=self.bar_h, border_radius=self.bar_h,
                             bgcolor=T.SURFACE_3)
+        # the portal above the cover: its dark hole hides the part of the cover that is "inside" while it crosses
         self.track = ft.Container(ft.Stack([base, self.fill, self.cover, self.portal], height=self.track_h,
                                            clip_behavior=ft.ClipBehavior.NONE),
                                   expand=True, height=self.track_h, on_size_change=self._resized)
@@ -1009,9 +1012,10 @@ class Transit:
                   "install": tr("Install"), "test": tr("Test")}
         self.steps = [ft.Container(ft.Text(labels[k], size=T.T_SMALL, color=T.TEXT_3, max_lines=1, no_wrap=True,
                                             text_align=ft.TextAlign.CENTER),
-                                    expand=True, alignment=ft.Alignment.CENTER,
+                                    expand=w, alignment=ft.Alignment.CENTER,
                                     padding=ft.Padding(0, 0, 0, T.px(3)),
-                                    border=ft.Border(bottom=ft.BorderSide(2, T.SURFACE_3))) for k in STEPS]
+                                    border=ft.Border(bottom=ft.BorderSide(2, T.SURFACE_3)))
+                      for k, w in zip(STEPS, STEP_WEIGHTS, strict=True)]
         steps_row = ft.Row(self.steps, spacing=T.px(3), visible=not compact)
         self.control = ft.Column([row, info, steps_row], spacing=T.px(4 if compact else 6), tight=True)
 
@@ -1023,20 +1027,29 @@ class Transit:
             update(self.track)
 
     def _place(self) -> None:
-        """Riders from the progress head: the portal centred on it, the cover just before it (not overlapping); once
-        done the cover has come out on the far side."""
+        """The portal stands at PORTAL_AT; the cover's centre follows transit.position(): from the start to just
+        before the portal (Analyze/Patch/Sign), across under it (Upload), just after it to the end (Install/Test).
+        The fill reaches the cover's centre."""
+        from .transit import CROSSING, PORTAL_AT, position
+
         w, pw, cs, gap = self.width, self.portal_w, self.cover_s, T.px(2)
         if w <= 0:
             return
-        if self.done:
-            self.fill.width = w
-            self.cover.left = max(0.0, w - cs)
-            self.portal.left = max(0.0, w - cs - gap - pw)
-            return
-        head = min(max(self.frac * w, cs + gap + pw / 2), w - pw / 2)
-        self.fill.width = max(0.0, min(w, self.frac * w))
-        self.portal.left = head - pw / 2
-        self.cover.left = max(0.0, self.portal.left - cs - gap)  # just before the portal, not under it
+        mid = PORTAL_AT * w
+        self.portal.left = mid - pw / 2
+        # pixel anchors of the cover's centre: start · touching the portal's near side · its far side · end
+        start, end = cs / 2, w - cs / 2
+        near, far = max(start, mid - pw / 2 - gap - cs / 2), min(end, mid + pw / 2 + gap + cs / 2)
+        p = 1.0 if self.done else position(self.frac)
+        before, after = PORTAL_AT - CROSSING, PORTAL_AT + CROSSING
+        if p <= before:
+            x = start + p / before * (near - start)
+        elif p <= after:
+            x = near + (p - before) / (after - before) * (far - near)
+        else:
+            x = far + (p - after) / (1.0 - after) * (end - far)
+        self.cover.left = x - cs / 2
+        self.fill.width = w if self.done else (x if p > 0 else 0.0)
 
     # ------------------------------------------------------------------ state
     def set(self, job, title: str = "", dest: str = "", art: str | None = None, icon=None, extra: str = "") -> None:

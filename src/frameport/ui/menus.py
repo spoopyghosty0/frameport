@@ -22,7 +22,7 @@ class Header(NamedTuple):
 @dataclass
 class MenuState:
     """What the menu depends on, gathered by the app (FramePortApp.game_actions)."""
-    quick: bool = True             # True: Library right-click; False: the game page's "…" (hero/cards show the rest)
+    quick: bool = True             # True: Library right-click (quick_menu); False: the game page's full "…" menu
     connected: bool = False        # a Frame is connected
     on_frame: bool = False         # installed on the Frame (current or outdated)
     on_pc: bool = False            # a PC VR game installed on this PC
@@ -39,24 +39,15 @@ def menu_sections(g: dict, st: MenuState, act: Callable[[str], Callable]) -> lis
     """The game's menu. `act(key)` gives the handler for an action key (tests pass `lambda k: k`)."""
     rift = g.get("kind") == "rift"
     linux = g.get("kind") == "linux"  # installed as it is: nothing to analyze, convert or share as a recipe
-    quick, job = st.quick, st.job
+    if st.quick:
+        return quick_menu(st, act)
+    job = st.job
     top: list = []
-    if job and quick:  # the game page shows progress + Cancel in its hero
-        top += [(tr("Show progress"), ft.Icons.SYNC_ROUNDED, act("progress")),
-                (tr("Cancel"), ft.Icons.CLOSE_ROUNDED, act("cancel"))]
-    if quick and not job:
-        top += st.plays
-    if quick:
-        top.append((tr("Open game page"), ft.Icons.OPEN_IN_NEW_ROUNDED, act("open")))
-        if st.selectable:
-            top.append((tr("Select"), ft.Icons.CHECKLIST_ROUNDED, act("select")))
-        if not job:
-            top += st.installs
     if st.settings and not job:
         top.append((tr("Game settings…"), ft.Icons.TUNE_ROUNDED, act("settings")))
     if st.connected:
         top.append((tr("Screenshots"), G.SHOT, act("screenshots")))
-    if st.on_frame and not rift and not linux and not job and (quick or not st.media_button):
+    if st.on_frame and not rift and not linux and not job and not st.media_button:
         top.append((tr("Add videos and files"), ft.Icons.VIDEO_LIBRARY_OUTLINED, act("files")))
 
     artwork = [(tr("Find artwork…"), ft.Icons.IMAGE_SEARCH_ROUNDED, act("find_art")),
@@ -69,11 +60,7 @@ def menu_sections(g: dict, st: MenuState, act: Callable[[str], Callable]) -> lis
         (tr("Save as known-good recipe"), G.RECIPE, act("save_recipe")),
         (tr("Share working recipe…"), ft.Icons.SHARE_ROUNDED, act("share"))]
 
-    trouble: list = []
-    if quick and not job and st.on_frame:  # the game page has these on its "Where it's installed" cards
-        trouble.append((tr("Run launch test on Frame"), G.TEST, act("test_frame")))
-    if quick and not job and st.on_pc:
-        trouble.append((tr("Run launch test on this PC"), G.TEST, act("test_pc")))
+    trouble: list = []  # launch tests and uninstalls are on the page's "Where it's installed" cards
     if not job and not rift and not linux:
         trouble.append((tr("Analyze again"), ft.Icons.MANAGE_SEARCH_ROUNDED, act("analyze")))
     if not job and not linux:
@@ -84,18 +71,34 @@ def menu_sections(g: dict, st: MenuState, act: Callable[[str], Callable]) -> lis
                 (tr("Collect logs"), ft.Icons.FOLDER_ZIP_OUTLINED, act("logs")),
                 (tr("Report a problem…"), ft.Icons.BUG_REPORT_OUTLINED, act("report"))]
 
-    danger: list = []
-    if quick and not job and st.on_frame:
-        danger.append((tr("Uninstall from Frame…"), ft.Icons.DELETE_OUTLINE_ROUNDED, act("uninstall_frame")))
-    if quick and not job and st.on_pc:
-        danger.append((tr("Uninstall from this PC…"), ft.Icons.DELETE_OUTLINE_ROUNDED, act("uninstall_pc")))
-    danger.append((tr("Remove from library…"), ft.Icons.REMOVE_CIRCLE_OUTLINE_ROUNDED, act("remove")))
+    danger = [(tr("Remove from library…"), ft.Icons.REMOVE_CIRCLE_OUTLINE_ROUNDED, act("remove"))]
 
     out: list = list(top)
     for head, items in ((tr("Artwork"), artwork), (tr("Recipe"), recipe), (tr("Troubleshoot"), trouble)):
         if items:
             out += [None, Header(head), *items]
     return out + [None, *danger]
+
+
+def quick_menu(st: MenuState, act: Callable[[str], Callable]) -> list:
+    """The Library's right-click menu: only the key actions, no section headers. "More actions…" opens the game
+    page's full "…" menu (menu_sections with quick=False)."""
+    opened = (tr("Open game page"), ft.Icons.OPEN_IN_NEW_ROUNDED, act("open"))
+    if st.job:
+        return [(tr("Show progress"), ft.Icons.SYNC_ROUNDED, act("progress")),
+                (tr("Cancel"), ft.Icons.CLOSE_ROUNDED, act("cancel")), opened]
+    out: list = [*st.plays[:1], opened]
+    if st.selectable:
+        out.append((tr("Select"), ft.Icons.CHECKLIST_ROUNDED, act("select")))
+    out += st.installs[:1]
+    if st.settings:
+        out.append((tr("Game settings…"), ft.Icons.TUNE_ROUNDED, act("settings")))
+    out += [None, (tr("More actions…"), ft.Icons.MORE_HORIZ_ROUNDED, act("more")), None]
+    if st.on_frame:
+        out.append((tr("Uninstall from Frame…"), ft.Icons.DELETE_OUTLINE_ROUNDED, act("uninstall_frame")))
+    if st.on_pc:
+        out.append((tr("Uninstall from this PC…"), ft.Icons.DELETE_OUTLINE_ROUNDED, act("uninstall_pc")))
+    return out + [(tr("Remove from library…"), ft.Icons.REMOVE_CIRCLE_OUTLINE_ROUNDED, act("remove"))]
 
 
 def process_menu(p: dict, act: Callable[[str], Callable]) -> list:
