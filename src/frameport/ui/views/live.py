@@ -97,7 +97,7 @@ class LiveView:
             parts = C.transit_parts()
             h = T.px(56)
             self.idle = ft.Container(ft.Column([
-                ft.Row([ft.Image(src=parts["portal"], height=h, width=h * 24 / 50, fit=ft.BoxFit.CONTAIN),
+                ft.Row([C.portal_image(parts["portal"], h),
                         ft.Image(src=parts["headset"], height=h * 0.86, fit=ft.BoxFit.CONTAIN)],
                        spacing=T.S3, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 C.body(tr("Start the live view to watch the headset in your browser"), T.TEXT_2,

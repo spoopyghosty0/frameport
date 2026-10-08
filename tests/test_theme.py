@@ -129,6 +129,30 @@ def test_glyphs_install_and_tint(tmp_path):
     assert glyphs.is_glyph(glyphs.TEST) and not glyphs.is_glyph(ft.Icons.TUNE_ROUNDED)
 
 
+def test_transit_portal_layers(tmp_path):
+    import re
+
+    colors = {"line": "#ffffff", "body": "#0d0e12", "screen": "#3aa8ff", "lens": "#ff8a1f", "near": "#3aa8ff",
+              "far": "#ff8a1f", "hole": "#08080b"}
+    parts = glyphs.transit_parts(tmp_path, colors)
+    assert {"monitor", "headset", "portal", "portal_back", "portal_front"} <= set(parts)
+    svg = {k: parts[k].read_text(encoding="utf-8") for k in ("portal", "portal_back", "portal_front")}
+    boxes = {re.search(r'viewBox="([^"]+)"', s).group(1) for s in svg.values()}
+    assert len(boxes) == 1  # the layers line up exactly
+    assert tuple(map(float, boxes.pop().split()[2:])) == glyphs.TRANSIT_SIZES["portal"]
+    back, front = svg["portal_back"], svg["portal_front"]
+    assert 'fill="#08080B"' in back and 'fill="#08080B"' not in front  # the hole stays under the cover
+    assert 'fill="#000"' in back and "#000\"" not in front  # the shadow too
+    assert "#3AA8FF" in front and "#FF8A1F" in front  # the rim's gradient (it fades across the halves)
+
+    def xs(s):  # x of the rim arcs' points (unrotated ellipse, centre x 32)
+        return [float(x) for d in re.findall(r'<path d="([^"]+)"', s)
+                for x in re.findall(r"(?:M|A[\d.]+ [\d.]+ 0 0 1 )([\d.]+) [\d.]+", d)]
+    assert xs(back) and max(xs(back)) < 32.5  # the near (PC) half, a little past the split
+    assert xs(front) and min(xs(front)) >= 32  # the far (Frame) half
+    assert glyphs.transit_parts(tmp_path, colors) == parts  # cached per colour set
+
+
 def test_wordmark_portal_follows_the_theme(tmp_path):
     a = glyphs.portal_mark(tmp_path, "#ff8a1f", "#3AA8FF", "#0D0E12")
     svg = a.read_text(encoding="utf-8")

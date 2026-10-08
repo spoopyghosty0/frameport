@@ -561,13 +561,19 @@ def callout(text: str | ft.Control, kind: str = "info", icon: str | None = None)
                         border_radius=T.RADIUS_SM, padding=ft.Padding(T.px(14), T.px(12), T.px(14), T.px(12)))
 
 
+def portal_image(src: str, ring_h: float) -> ft.Image:
+    """The whole portal (transit_parts()["portal"]) with its ring `ring_h` tall (the picture adds its shadow)."""
+    w, h = (n * ring_h / glyphs.PORTAL_RING[1] for n in glyphs.TRANSIT_SIZES["portal"])
+    return ft.Image(src=src, width=w, height=h, fit=ft.BoxFit.CONTAIN)
+
+
 def portal_scene(icon: str, height: float | None = None) -> ft.Control:
     """The transit's portal with what the page is about (`icon`) coming out of it, on a faint glow: the empty states'
     illustration (the Live view's idle picture uses the same portal + headset)."""
     h = height or T.px(72)
     portal = transit_parts()["portal"]
     return ft.Container(
-        ft.Row([ft.Image(src=portal, height=h, width=h * 24 / 50, fit=ft.BoxFit.CONTAIN),
+        ft.Row([portal_image(portal, h),
                 as_icon(icon, h * 0.5, T.TEXT_2)],
                spacing=T.S3, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
         # the glow fades out at the box's top and bottom edges (radius = half the shortest side): no visible edge
@@ -956,10 +962,10 @@ def transit_parts() -> dict[str, str]:
 class Transit:
     """Install progress as a transit: the PC's monitor · a track with the portal standing at the PC/Frame boundary
     (transit.PORTAL_AT): the game's cover approaches it while the game is prepared on the PC, passes through it
-    (under the portal's hole) during the upload and rides on to the Frame headset (a monitor again for installs on
-    this PC) while it installs and is tested. Below: "Title → Frame" with what
-    happens now (heading=False: without "Title → Frame"), and the six steps (not when compact). Created once per
-    place; set() changes only properties, so it can follow every progress tick."""
+    (over the rim's PC half, under its Frame half) during the upload and rides on to the Frame headset (a monitor
+    again for installs on this PC) while it installs and is tested. Below: "Title → Frame" with what happens now
+    (heading=False: without "Title → Frame"), and the six steps (not when compact). Created once per place; set()
+    changes only properties, so it can follow every progress tick."""
 
     def __init__(self, compact: bool = False, heading: bool = True):
         from .transit import STEP_WEIGHTS, STEPS
@@ -972,10 +978,10 @@ class Transit:
         self._job_id = None
         self._mono = None
         icon_h = T.px(22 if compact else 30)
-        self.track_h = T.px(26 if compact else 36)
+        self.track_h = T.px(32 if compact else 48)  # = the portal's height: taller than the cover going through it
         self.bar_h = T.px(4 if compact else 6)
-        self.cover_s = T.px(22 if compact else 36)  # fits the track height
-        self.portal_w, self.portal_h = self.track_h * 24 / 50, self.track_h
+        self.cover_s = T.px(22 if compact else 36)
+        self.portal_w = self.track_h * glyphs.PORTAL_RING[0] / glyphs.PORTAL_RING[1]  # the ring's width
         self.parts = transit_parts()
         size = lambda name, h: (h * glyphs.TRANSIT_SIZES[name][0] / glyphs.TRANSIT_SIZES[name][1], h)  # noqa: E731
         mw, mh = size("monitor", icon_h)
@@ -992,12 +998,17 @@ class Transit:
                                   height=self.cover_s, border_radius=T.px(4), bgcolor=T.SURFACE_3,
                                   border=ft.Border.all(1, T.BORDER_STRONG), alignment=ft.Alignment.CENTER,
                                   clip_behavior=ft.ClipBehavior.ANTI_ALIAS, animate_position=anim)
-        self.portal = ft.Image(src=self.parts["portal"], left=0, top=0, width=self.portal_w, height=self.portal_h,
-                               fit=ft.BoxFit.CONTAIN, animate_opacity=anim)
+        # the portal in two layers around the cover, so the cover goes through it: the back (shadow, hole, the rim's
+        # PC/blue half) under the cover, the rim's Frame/orange half over it. Same viewBox: they line up exactly; the
+        # pictures are a bit larger than the ring (its shadow reaches a little below the track)
+        img_w, img_h = (n * self.track_h / glyphs.PORTAL_RING[1] for n in glyphs.TRANSIT_SIZES["portal"])
+        self.portal_layers = [ft.Image(src=self.parts[k], left=0, top=0, width=img_w, height=img_h,
+                                       fit=ft.BoxFit.CONTAIN, animate_opacity=anim)
+                              for k in ("portal_back", "portal_front")]
         base = ft.Container(left=0, right=0, top=top, height=self.bar_h, border_radius=self.bar_h,
                             bgcolor=T.SURFACE_3)
-        # the portal above the cover: its dark hole hides the part of the cover that is "inside" while it crosses
-        self.track = ft.Container(ft.Stack([base, self.fill, self.cover, self.portal], height=self.track_h,
+        back, front = self.portal_layers
+        self.track = ft.Container(ft.Stack([base, self.fill, back, self.cover, front], height=self.track_h,
                                            clip_behavior=ft.ClipBehavior.NONE),
                                   expand=True, height=self.track_h, on_size_change=self._resized)
         row = ft.Row([self.source, self.track, self.dest], spacing=T.px(6 if compact else 10),
@@ -1028,7 +1039,7 @@ class Transit:
 
     def _place(self) -> None:
         """The portal stands at PORTAL_AT; the cover's centre follows transit.position(): from the start to just
-        before the portal (Analyze/Patch/Sign), across under it (Upload), just after it to the end (Install/Test).
+        before the portal (Analyze/Patch/Sign), through it (Upload), just after it to the end (Install/Test).
         The fill reaches the cover's centre."""
         from .transit import CROSSING, PORTAL_AT, position
 
@@ -1036,7 +1047,8 @@ class Transit:
         if w <= 0:
             return
         mid = PORTAL_AT * w
-        self.portal.left = mid - pw / 2
+        for layer in self.portal_layers:  # the ring's box: its left edge is the picture's
+            layer.left = mid - pw / 2
         # pixel anchors of the cover's centre: start · touching the portal's near side · its far side · end
         start, end = cs / 2, w - cs / 2
         near, far = max(start, mid - pw / 2 - gap - cs / 2), min(end, mid + pw / 2 + gap + cs / 2)
@@ -1077,7 +1089,8 @@ class Transit:
         else:
             text, color = (s.detail or tr("Starting…")), T.TEXT_2
         self.detail.value, self.detail.color = text + extra, color
-        self.portal.opacity = 0.35 if s.waiting else 1.0
+        for layer in self.portal_layers:
+            layer.opacity = 0.35 if s.waiting else 1.0
         if s.failed:
             self.fill.gradient, self.fill.bgcolor = None, T.ERROR
         else:
