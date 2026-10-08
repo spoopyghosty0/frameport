@@ -559,10 +559,23 @@ def callout(text: str | ft.Control, kind: str = "info", icon: str | None = None)
                         border_radius=T.RADIUS_SM, padding=ft.Padding(T.px(14), T.px(12), T.px(14), T.px(12)))
 
 
+def portal_scene(icon: str, height: float | None = None) -> ft.Control:
+    """The transit's portal with what the page is about (`icon`) coming out of it, on a faint glow: the empty states'
+    illustration (the Live view's idle picture uses the same portal + headset)."""
+    h = height or T.px(72)
+    portal = transit_parts()["portal"]
+    return ft.Container(
+        ft.Row([ft.Image(src=portal, height=h, width=h * 24 / 50, fit=ft.BoxFit.CONTAIN),
+                as_icon(icon, h * 0.5, T.TEXT_2)],
+               spacing=T.S3, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        # the glow fades out at the box's top and bottom edges (radius = half the shortest side): no visible edge
+        padding=ft.Padding(T.S6, T.S3, T.S6, T.S3),
+        gradient=ft.RadialGradient(colors=[T.soft(T.ACCENT, 0.13), T.soft(T.ACCENT, 0.0)], radius=0.5))
+
+
 def empty_state(icon: str, heading: str, text: str, *actions: ft.Control) -> ft.Container:
     return ft.Container(ft.Column([
-        ft.Container(as_icon(icon, T.px(40), T.ACCENT), width=T.px(84), height=T.px(84),
-                     border_radius=T.px(42), bgcolor=T.ACCENT_SOFT, alignment=ft.Alignment.CENTER),
+        portal_scene(icon),
         ft.Container(height=T.S2),
         title(heading, T.T_DISPLAY),
         ft.Container(body(text, text_align=ft.TextAlign.CENTER), width=T.px(460)),

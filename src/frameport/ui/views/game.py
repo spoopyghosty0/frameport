@@ -93,13 +93,15 @@ class GameView:
         if self.rift and pkg in app.pc_installs():
             chips.append(C.install_badge("on_pc"))
         actions = self.actions()
-        return ft.Container(
+        self._wash = ft.Container(left=0, right=0, top=0, bottom=0, border_radius=T.RADIUS)  # cover tint (_tint)
+        self._hero = ft.Container(
             ft.Stack([
                 C.art_fill(art, radius=T.RADIUS, hero=True, left=0, right=0, top=0, bottom=0,
                            placeholder_icon=C.platform_icon(g)),
                 ft.Container(left=0, right=0, top=0, bottom=0, border_radius=T.RADIUS, gradient=ft.LinearGradient(
                     begin=ft.Alignment.CENTER_LEFT, end=ft.Alignment.CENTER_RIGHT,
                     colors=[T.soft(T.BG, 0.97), T.soft(T.BG, 0.80), T.soft(T.BG, 0.25)], stops=[0.0, 0.45, 1.0])),
+                self._wash,
                 ft.Container(ft.Row([
                     ft.Column([
                         C.ghost(tr("Library"), ft.Icons.ARROW_BACK_ROUNDED, lambda e: app.go("library")),
@@ -114,6 +116,28 @@ class GameView:
                 ]), padding=ft.Padding(T.S4, T.S3, T.S5, T.S5), left=0, right=0, top=0, bottom=0),
             ]),
             height=T.px(330), border_radius=T.RADIUS, border=ft.Border.all(1, T.BORDER))
+        return self._hero
+
+    def _tint(self, tint: str | None) -> None:
+        """The cover's colour (thumbs.compute_tint, already clamped dark): a soft glow around and inside the hero and
+        a very faint wash at the top of the page. Properties only, so it can arrive after the page is on screen."""
+        if not tint:
+            return
+        self._hero.shadow = ft.BoxShadow(blur_radius=T.px(90), spread_radius=0, color=T.soft(tint, 0.18),
+                                         offset=ft.Offset(0, T.px(10)))
+        # from the lower left, behind the title and buttons (dark enough there for the text: ≤ 0.18 on the BG fade)
+        self._wash.gradient = ft.RadialGradient(center=ft.Alignment(-0.7, 1.0), radius=1.3,
+                                                colors=[T.soft(tint, 0.18), T.soft(tint, 0.0)])
+        self._backdrop.gradient = ft.LinearGradient(begin=ft.Alignment.TOP_CENTER, end=ft.Alignment.BOTTOM_CENTER,
+                                                    colors=[T.soft(tint, 0.08), T.soft(tint, 0.0)])
+
+    def _fill_tint(self) -> None:
+        """Background thread: compute a missing tint, then colour this page if it is still the one shown."""
+        tint = thumbs.compute_tint(self.package)
+        app = self.app
+        if tint and app.route[0] == "game" and app.route[1:2] == (self.package,) and app.game_view is self:
+            self._tint(tint)
+            C.update(self._hero, self._backdrop)
 
     def actions(self) -> ft.Control:
         app, g, pkg = self.app, self.g, self.package
@@ -701,6 +725,7 @@ class GameView:
                                  tr("It was removed from the library."),
                                  C.primary(tr("Back to library"), on_click=lambda e: self.app.go("library")))
         about = self.about()
+        self._backdrop = ft.Container(left=0, right=0, top=0, height=T.px(560))  # the cover tint's page wash
         body = [self.hero(), *self.notes(), self.where(), *([about] if about else []), self.tags(),
                 self.recipe_summary()]
         if self.advanced and not self.linux:  # (a Linux app has no patches)
@@ -711,7 +736,13 @@ class GameView:
         def remember(e):
             app.game_scroll = e.pixels
         col = ft.Column([ft.Container(ft.Column(body, spacing=T.S5), padding=ft.Padding(0, 0, T.S3, T.S6))],
-                        scroll=ft.ScrollMode.AUTO, expand=True, on_scroll=remember, scroll_interval=100)
+                        scroll=ft.ScrollMode.AUTO, on_scroll=remember, scroll_interval=100,
+                        left=0, right=0, top=0, bottom=0)
+        app.game_view = self
+        known, tint = thumbs.cached_tint(self.package)
+        self._tint(tint)
+        if not known:
+            app.page.run_thread(self._fill_tint)
         offset = getattr(app, "game_scroll", 0.0)
         if offset > 0:  # back to where the user was, once the new page is on screen
             def restore():
@@ -720,7 +751,7 @@ class GameView:
                 except Exception:  # noqa: BLE001 - the page changed again meanwhile
                     pass
             threading.Timer(0.08, restore).start()
-        return col
+        return ft.Stack([self._backdrop, col], expand=True)
 
 
 def _known(pid: str) -> bool:

@@ -73,8 +73,13 @@ def test_radii_are_tokens():
     """radius=/border_radius= never a bare number in ui/ (T.RADIUS, T.RADIUS_SM, T.RADIUS_XS or T.px(...))."""
     bad = []
     for path in _files():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        # a RadialGradient's radius is a fraction of the box, not pixels
+        fractions = {id(k) for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                     and n.func.attr == "RadialGradient" for k in n.keywords}
+        for node in ast.walk(tree):
             if isinstance(node, ast.keyword) and node.arg in ("radius", "border_radius") and \
+                    id(node) not in fractions and \
                     isinstance(node.value, ast.Constant) and isinstance(node.value.value, (int, float)):
                 bad.append(f"{path.relative_to(UI)}:{node.value.lineno}: {node.arg}={node.value.value}")
     assert not bad, "\n".join(bad)

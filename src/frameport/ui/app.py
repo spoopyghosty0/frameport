@@ -96,6 +96,7 @@ class FramePortApp:
         self.welcome_started = False
         self._pc_cache: tuple[float, dict] | None = None
         self.hero_transit = None  # (package, components.Transit) on the open game page while a job runs for it
+        self.game_view = None  # the game page last built (views/game.GameView: its cover tint arrives later)
         self.library_view = None  # created once (views/library.LibraryView), re-mounted on every visit
         self.files_view = None  # likewise (views/files.FilesView): keeps the location/folder between visits
         self.screenshots_view = None  # likewise (views/screenshots.ScreenshotsView): keeps the game filter

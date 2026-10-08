@@ -110,3 +110,65 @@ def prewarm(package: str) -> None:
         src = pick(package, kinds)
         if src:
             thumb(src, width, src.stem)
+    compute_tint(package)
+
+
+# ------------------------------------------------------------------------------------------ cover tint
+TINT_ART = ("portrait", "square", "cover", "icon")  # the library card's art (the cover people recognise)
+_tints: dict[str, str | None] = {}  # package -> "#rrggbb" (None: no art / no usable colour)
+
+
+def tint_from_rgb(rgb: tuple[int, int, int]) -> str:
+    """A cover's dominant colour made to sit on the dark background: lightness 0.35-0.55, saturation at most 0.55."""
+    import colorsys
+
+    h, lum, s = colorsys.rgb_to_hls(*(max(0, min(255, c)) / 255 for c in rgb))
+    r, g, b = colorsys.hls_to_rgb(h, min(0.55, max(0.35, lum)), min(0.55, s))
+    return "#{:02x}{:02x}{:02x}".format(*(round(c * 255) for c in (r, g, b)))
+
+
+def dominant_rgb(colors: list[tuple[int, tuple[int, int, int]]]) -> tuple[int, int, int] | None:
+    """The most common clearly coloured entry of [(count, rgb)] (saturation ≥ 0.25, neither near black nor near
+    white); else the most common one overall. None for an empty list."""
+    import colorsys
+
+    def colourful(rgb) -> bool:
+        _, lum, s = colorsys.rgb_to_hls(*(c / 255 for c in rgb))
+        return s >= 0.25 and 0.12 <= lum <= 0.88
+    ranked = [rgb for _, rgb in sorted(colors, key=lambda c: -c[0])]
+    return next((rgb for rgb in ranked if colourful(rgb)), ranked[0] if ranked else None)
+
+
+def compute_tint(package: str) -> str | None:
+    """The cover's tint, cached next to the thumbnails (t_tint_<sha8>.json, named after its source like a thumbnail)
+    and in memory. Image work: call from a background thread (render paths use cached_tint)."""
+    import json
+
+    src = pick(package, TINT_ART)
+    value = None
+    if src:
+        out = src.parent / f"t_tint_{_digest(src)}.json"
+        try:
+            value = json.loads(out.read_text(encoding="utf-8")).get("tint")
+        except (OSError, ValueError, AttributeError):
+            try:
+                from PIL import Image
+
+                with Image.open(thumb(src, 400, src.stem)) as im:
+                    small = im.convert("RGB").resize((48, 48))
+                q = small.quantize(colors=8)
+                pal = q.getpalette() or []
+                rgb = dominant_rgb([(n, tuple(pal[i * 3:i * 3 + 3])) for n, i in (q.getcolors() or [])])
+                value = tint_from_rgb(rgb) if rgb else None
+                for old in src.parent.glob("t_tint_*.json"):
+                    old.unlink(missing_ok=True)
+                out.write_text(json.dumps({"tint": value}), encoding="utf-8")
+            except Exception:  # noqa: BLE001  (unreadable image: no tint)
+                value = None
+    _tints[package] = value
+    return value
+
+
+def cached_tint(package: str) -> tuple[bool, str | None]:
+    """(known, tint) from memory only (no I/O, for render paths); known=False: compute_tint hasn't run yet."""
+    return (package in _tints, _tints.get(package))

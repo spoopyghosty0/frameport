@@ -170,6 +170,27 @@ def should_capture(route: str, dialog_open: bool, field_focused: bool, char: str
             and not (char == " " and not query))
 
 
+SHELF_MAX = 8
+
+
+def filters_active(f: dict) -> bool:
+    """A search or any filter other than the defaults (the sort order isn't a filter)."""
+    return bool((f.get("q") or "").strip() or f.get("tags")) or any(
+        f.get(k, DEFAULT_FILTERS[k]) != DEFAULT_FILTERS[k] for k in ("where", "platform", "status"))
+
+
+def shelf_games(games: list[dict], f: dict, frame_info: dict | None, connected: bool, select_mode: bool = False,
+                limit: int = SHELF_MAX) -> list[dict]:
+    """The "On your Frame" shelf: games installed on the connected Frame (outdated ones too), most recently used
+    first, at most `limit`. Empty (the shelf hides) without a connected Frame, while searching or filtering, and in
+    select mode."""
+    if not connected or select_mode or filters_active(f):
+        return []
+    on = [g for g in games if C.install_state(g, frame_info) in ("installed", "outdated")]
+    on.sort(key=lambda g: (-last_used(g), (g.get("title") or g["package"]).lower()))
+    return on[:limit]
+
+
 def load_filters() -> dict:
     saved = library.setting("ui.library") or {}
     return {**DEFAULT_FILTERS, "tags": [], **{k: v for k, v in saved.items() if k in DEFAULT_FILTERS and k != "q"}}
@@ -182,6 +203,7 @@ def save_filters(f: dict) -> None:
 # ------------------------------------------------------------------------------------------ view
 BATCH = 8
 CARD_ART = ("portrait", "square", "cover", "icon")  # store art first; cover = FramePort's own (no store art)
+SHELF_ART = ("landscape", "hero", "banner", "portrait", "square", "cover", "icon")  # wide first
 def card_shadow(hover: bool = False) -> ft.BoxShadow:
     """Library cards float on the dark background; hovering lifts them further."""
     if hover:
@@ -210,6 +232,15 @@ class LibraryView:
         self.resume_bar = ft.Container(visible=False)
         self.update_bar = ft.Container(visible=False)  # "FramePort x.y is available" (ui/updater.py)
         self.games: list[dict] = []
+        self.tw: set[str] = set()
+        # "On your Frame": a row of wide cards above the grid (shelf_games); cards are kept per game and only rebuilt
+        # when what they show changes
+        self.shelf_cards: dict[str, tuple[tuple, ft.Control]] = {}
+        self.shelf_row = ft.Row(spacing=T.S4, scroll=ft.ScrollMode.AUTO)
+        self.shelf = ft.Container(ft.Column([
+            C.h2(tr("On your Frame")),
+            ft.Container(self.shelf_row, padding=ft.Padding(0, 0, 0, T.S2)),
+        ], spacing=T.S3, tight=True), visible=False)
         self._lock = threading.Lock()
         self._search_timer: threading.Timer | None = None
         self._gen = 0
@@ -238,9 +269,10 @@ class LibraryView:
                                  lambda pkg, on: self.toggle_selected(pkg) if (pkg in self.selected) != on else None,
                                  can_select=lambda pkg: pkg in self.cards,
                                  on_start=lambda: None if self.select_mode else self.set_select_mode(True))
-        self.menu = ft.ContextMenu(content=ft.GestureDetector(content=self.grid, expand=True,
-                                                              on_pan_start=self.drag.start, on_pan_end=self.drag.end),
-                                   secondary_trigger=None, tertiary_trigger=None, expand=True)
+        self.menu = ft.ContextMenu(content=ft.Column([
+            self.shelf,
+            ft.GestureDetector(content=self.grid, expand=True, on_pan_start=self.drag.start, on_pan_end=self.drag.end),
+        ], spacing=T.S4, expand=True), secondary_trigger=None, tertiary_trigger=None, expand=True)
         self.body = ft.Container(self.menu, expand=True)
         add = C.primary_menu(tr("Add games"), ft.Icons.ADD_ROUNDED, C.menu_items([
             (tr("Scan a folder…"), ft.Icons.FOLDER_OPEN_ROUNDED, app.pick_folder),
@@ -311,7 +343,7 @@ class LibraryView:
             games = library.games()
             self.games = games
             pc = set(local_installs())
-            tw = twins(games)
+            tw = self.tw = twins(games)
             self._update_header(games, pc)
             self.update_update_bar()
             self.update_resume_bar()  # also after Dismiss / Resume and when installs finish or fail
@@ -361,7 +393,8 @@ class LibraryView:
         for pkg in self.marks:
             self._paint_card(pkg)
         self._update_sel_bar()
-        C.update(self.grid, self.sel_bar, self.select_btn)
+        self._update_shelf()
+        C.update(self.grid, self.sel_bar, self.select_btn, self.shelf)
 
     def toggle_selected(self, pkg: str) -> None:
         self.selected.symmetric_difference_update({pkg})
@@ -504,8 +537,75 @@ class LibraryView:
         self.grid.controls = [self.cards[g["package"]][1] for g in shown if g["package"] in self.cards]
         n = len(self.games)
         self.count.value = tr("Showing {len} of {n}").format(len=len(shown), n=n) if len(shown) != n else ""
+        self._update_shelf()
         if update:
-            C.update(self.grid, self.count)
+            C.update(self.grid, self.count, self.shelf)
+
+    # ---------------------------------------------------------------- "On your Frame" shelf
+    def _update_shelf(self) -> None:
+        """Show the shelf's games (properties + reused cards; a card is rebuilt only when what it shows changed)."""
+        app = self.app
+        games = shelf_games(self.games, self.f, app.frame_info, app.frame_state == "connected", self.select_mode)
+        controls = []
+        for g in games:
+            pkg = g["package"]
+            key = (display_title(g, self.tw), C.install_state(g, app.frame_info), bool(app.jobs.busy_with(pkg)),
+                   thumbs.url(pkg, SHELF_ART, T.px(640), wait=False))
+            old = self.shelf_cards.get(pkg)
+            if not old or old[0] != key:
+                old = self.shelf_cards[pkg] = (key, self.shelf_card(g, *key))
+            controls.append(old[1])
+        for pkg in set(self.shelf_cards) - {g["package"] for g in games}:
+            self.shelf_cards.pop(pkg, None)
+        self.shelf_row.controls = controls
+        self.shelf.visible = bool(controls)
+
+    def shelf_card(self, g: dict, title: str, state: str | None, busy: bool, art: str | None) -> ft.Control:
+        """A wide cover: title, "Update ready" when the Frame runs an older build, Play on hover; click opens the
+        game, right-click shows its menu (the same as the grid's)."""
+        app = self.app
+        pkg = g["package"]
+        w, h = T.px(264), T.px(148)
+        play = ft.Container(
+            ft.Icon(ft.Icons.PLAY_ARROW_ROUNDED, size=T.px(34), color=T.ON_ACCENT),
+            width=T.px(60), height=T.px(60), border_radius=T.px(30), bgcolor=T.ACCENT, alignment=ft.Alignment.CENTER,
+            shadow=ft.BoxShadow(blur_radius=20, spread_radius=1, color=T.soft("#000000", 0.6), offset=ft.Offset(0, 4)),
+            tooltip=ft.Tooltip(message=tr("Play on Frame"), wait_duration=800), ink=True,
+            on_click=lambda e: app.play(pkg, "frame"),
+            scale=0.85, animate_scale=ft.Animation(160, ft.AnimationCurve.EASE_OUT))
+        quick = ft.Container(play, left=0, right=0, top=0, bottom=T.px(36), alignment=ft.Alignment.CENTER, opacity=0,
+                             animate_opacity=ft.Animation(160, ft.AnimationCurve.EASE_OUT), visible=not busy)
+        badges = [C.install_badge("outdated")] if state == "outdated" else []
+        if busy:
+            badges = [C.pill(tr("Working…"), T.ACCENT, ft.Icons.SYNC_ROUNDED, solid=True)]
+        tile = ft.Container(
+            ft.Stack([
+                C.art_fill(art, left=0, right=0, top=0, bottom=0, placeholder_icon=C.platform_icon(g)),
+                ft.Container(C.bottom_fade(None, 0.92), left=0, right=0, bottom=0, top=T.px(48)),
+                *([ft.Container(ft.Row(badges, spacing=T.px(4)), left=T.px(10), top=T.px(10))] if badges else []),
+                quick,
+                ft.Container(ft.Text(title, size=T.px(14), weight=ft.FontWeight.W_700, color=T.TEXT, max_lines=1,
+                                     overflow=ft.TextOverflow.ELLIPSIS),
+                             left=T.px(12), right=T.px(12), bottom=T.px(10)),
+            ]),
+            width=w, height=h, border_radius=T.RADIUS, bgcolor=T.SURFACE, border=ft.Border.all(1, T.BORDER),
+            shadow=card_shadow(), scale=1.0, animate_scale=ft.Animation(140, ft.AnimationCurve.EASE_OUT),
+            tooltip=ft.Tooltip(message=tr("Click to open · right-click for quick actions"), wait_duration=1500),
+            on_click=lambda e: app.open_game(pkg))
+
+        def hover(e):
+            on = e.data in (True, "true")
+            tile.scale = 1.03 if on else 1.0
+            tile.shadow = card_shadow(on)
+            tile.border = ft.Border.all(1, T.ACCENT if on else T.BORDER)
+            quick.opacity = 1 if on else 0
+            play.scale = 1.0 if on else 0.85
+            tile.update()
+        tile.on_hover = hover
+        # (padding: room for the hover lift and shadow inside the scrolling row, which clips)
+        return ft.Container(ft.GestureDetector(content=tile,
+                                               on_secondary_tap_down=lambda e: self.open_menu(pkg, e.global_position)),
+                            padding=ft.Padding(T.px(2), T.px(6), T.px(2), T.px(8)))
 
     # ---------------------------------------------------------------- header / filter bar
     def _update_hint(self):
