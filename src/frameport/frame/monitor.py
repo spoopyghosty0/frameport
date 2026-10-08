@@ -15,6 +15,8 @@ from collections.abc import Callable
 from ..core import applog
 
 MIN_AGENT = 62  # first agent with `_monitor`
+MIN_AGENT_MODULES = 63  # first agent that takes {"modules": [...]} (collects only what's asked for)
+MODULES = ("games", "procs", "cpu", "gpu", "mem", "temps", "power", "battery", "net", "disk")  # agent MON_MODULES
 HISTORY = 120   # points per sparkline (2 min at 1 s)
 REPLY_TIMEOUT = 15.0
 
@@ -100,6 +102,18 @@ class MonitorSession:
 
     def pause(self, paused: bool) -> None:
         self.send({"pause": bool(paused)})
+
+    @property
+    def supports_modules(self) -> bool:
+        return int(self.static.get("agent") or 0) >= MIN_AGENT_MODULES
+
+    def set_modules(self, modules) -> bool:
+        """Ask the agent to collect only these modules (an iterable of MODULES names, or "all"). False (nothing sent)
+        when the agent is older than MIN_AGENT_MODULES: it keeps sending everything."""
+        if not self.supports_modules:
+            return False
+        self.send({"modules": "all" if modules == "all" else sorted(modules)})
+        return True
 
     def _request(self, msg: dict, timeout: float = REPLY_TIMEOUT) -> dict:
         rid = next(self._ids)
@@ -219,7 +233,7 @@ def fmt_duration(s: float | None) -> str:
 
 
 def fmt_pct(v: float | None) -> str:
-    return "–" if v is None else f"{v:.0f} %"
+    return "–" if v is None else f"{v:.0f}%"
 
 
 # (warn, error) thresholds; "low" metrics warn when the value falls below them

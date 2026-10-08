@@ -36,7 +36,7 @@ import time
 import zlib
 from types import SimpleNamespace
 
-AGENT_VERSION = 62
+AGENT_VERSION = 63
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -3838,6 +3838,8 @@ MON_INTERVALS = (0.1, 0.25, 0.5, 1, 2, 5)  # seconds between samples; processes 
 MON_DEFAULT_INTERVAL = 0.5
 SCAN_SECONDS = 2.0
 MON_FILTERS = ("game", "steam", "all")
+# what a client can ask for ({"modules": [...]}, agent v63); without that message every module is collected
+MON_MODULES = ("games", "procs", "cpu", "gpu", "mem", "temps", "power", "battery", "net", "disk")
 MON_PROC_LIMIT = 150
 MON_CONTEXT = 3  # "game" filter: the busiest other processes, shown for context
 # processes never signalled: the session, SSH and system plumbing (killing them logs the user out or drops FramePort)
@@ -3880,6 +3882,20 @@ def _num(text, default=None):
         return int(text.strip())
     except (ValueError, AttributeError):
         return default
+
+
+def monitor_plan(modules=None):
+    """The collectors one tick runs for the requested modules (None, "all" or anything unusable = all of them).
+    mem includes PSI, temps the zone detail and the fan. The process scan ("scan") runs for games and procs and also
+    for gpu: GPU busy is summed from the render fds the scan finds; "gpu_ns" (per-process GPU time) for the same."""
+    if modules is None or modules == "all" or not isinstance(modules, (list, tuple, set, frozenset)):
+        wanted = set(MON_MODULES)
+    else:
+        wanted = {m for m in modules if m in MON_MODULES}
+    plan = set(wanted)
+    if wanted & {"games", "procs", "gpu"}:
+        plan |= {"scan", "gpu_ns"}
+    return frozenset(plan)
 
 
 def read_cpu_times():
@@ -4153,6 +4169,7 @@ class Monitor:
         self.page = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
         self.btime = next((int(x.split()[1]) for x in _rd(f"{PROC}/stat").splitlines() if x.startswith("btime ")), 0)
         self.filter = "game"
+        self.plan = monitor_plan()  # collectors per tick (set_modules)
         self.kthreads = set()
         self.drm = {}       # pid -> (fds, time of the fd scan)
         self.gpu_ns = {}    # pid -> last drm-engine ns
@@ -4184,7 +4201,15 @@ class Monitor:
                 "clusters": [{"cpus": c["cpus"], "max_mhz": c["max_mhz"]} for c in self.clusters],
                 "mem_total": read_meminfo()["total"], "rails": [r[0] for r in self.rails],
                 "temp_groups": sorted({z[0] for z in self.zones}, key=[g for g, _ in TEMP_GROUPS].index),
-                "fan": bool(self.fan), "intervals": list(MON_INTERVALS), "filters": list(MON_FILTERS)}
+                "fan": bool(self.fan), "intervals": list(MON_INTERVALS), "filters": list(MON_FILTERS),
+                "modules": list(MON_MODULES)}
+
+    def set_modules(self, modules):
+        """Collect only these modules from the next tick on (None/"all" = everything)."""
+        plan = monitor_plan(modules)
+        if ("scan" in plan and "scan" not in self.plan) or ("procs" in plan and "procs" not in self.plan):
+            self.scan_at = -1e9  # processes wanted (again): scan at once
+        self.plan = plan
 
     # -------------------------------------------------------------------- games
     def deployments(self, now):
@@ -4391,52 +4416,72 @@ class Monitor:
         dt = now - self.last if self.last is not None else 0.0
         self.last = now
         out = {"t": round(wall, 3), "dt": round(dt, 3)}
-        cur = read_cpu_times()
-        if self.cpu_prev:
-            pct = cpu_percent(self.cpu_prev, cur)
-            out["cpu"] = {"total": pct[0] if pct else 0.0, "cores": pct[1:]}
+        plan = self.plan
+        if "cpu" in plan:
+            cur = read_cpu_times()
+            if self.cpu_prev:
+                pct = cpu_percent(self.cpu_prev, cur)
+                out["cpu"] = {"total": pct[0] if pct else 0.0, "cores": pct[1:]}
+            else:
+                out["cpu"] = {"total": 0.0, "cores": [0.0] * self.ncpu}
+            self.cpu_prev = cur
+            out["cpu"]["mhz"] = [_num(_rd(f"{c['policy']}/scaling_cur_freq"), 0) // 1000 for c in self.clusters]
         else:
-            out["cpu"] = {"total": 0.0, "cores": [0.0] * self.ncpu}
-        self.cpu_prev = cur
-        out["cpu"]["mhz"] = [_num(_rd(f"{c['policy']}/scaling_cur_freq"), 0) // 1000 for c in self.clusters]
-        out["mem"] = read_meminfo()
-        out["psi"] = read_psi()
-        if now - self.temps_at >= 2 or self.temps is None:  # 48 sensor files (~3 ms at idle clocks); heat is slow
-            self.temps, self.zone_detail = read_temps(self.zones)
-            self.temps_at = now
-        temps, detail = self.temps, self.zone_detail
-        out["temps"] = temps
-        if now - self.zone_detail_at >= 5:
-            out["zones"] = detail
-            self.zone_detail_at = now
-        if self.fan:
-            out["fan"] = _num(_rd(self.fan))
-        out["power"] = self.power.read(now)
-        out["battery"] = self.battery.read(now)
-        net = read_net()
-        if self.net_prev and dt > 0:
-            prev = self.net_prev
-            out["net"] = {k: [max(0, int((v[0] - prev[k][0]) / dt)), max(0, int((v[1] - prev[k][1]) / dt))]
-                          for k, v in net.items() if k in prev}
-        self.net_prev = net
-        if now - self.disk_at >= 30:
+            self.cpu_prev = None  # no average over the time it was off
+        if "mem" in plan:
+            out["mem"] = read_meminfo()
+            out["psi"] = read_psi()
+        if "temps" in plan:
+            if now - self.temps_at >= 2 or self.temps is None:  # 48 sensor files (~3 ms at idle clocks); heat is slow
+                self.temps, self.zone_detail = read_temps(self.zones)
+                self.temps_at = now
+            temps, detail = self.temps, self.zone_detail
+            out["temps"] = temps
+            if now - self.zone_detail_at >= 5:
+                out["zones"] = detail
+                self.zone_detail_at = now
+            if self.fan:
+                out["fan"] = _num(_rd(self.fan))
+        if "power" in plan:
+            out["power"] = self.power.read(now)
+        if "battery" in plan:
+            out["battery"] = self.battery.read(now)
+        if "net" in plan:
+            net = read_net()
+            if self.net_prev and dt > 0:
+                prev = self.net_prev
+                out["net"] = {k: [max(0, int((v[0] - prev[k][0]) / dt)), max(0, int((v[1] - prev[k][1]) / dt))]
+                              for k, v in net.items() if k in prev}
+            self.net_prev = net
+        else:
+            self.net_prev = None  # a delta over one tick's dt needs the previous tick's counters
+        if "disk" in plan and now - self.disk_at >= 30:
             try:
                 st = os.statvfs(HOME)
                 out["disk"] = {"free": st.f_bavail * st.f_frsize, "total": st.f_blocks * st.f_frsize}
             except OSError:
                 pass
             self.disk_at = now
-        scan = now - self.scan_at >= SCAN_SECONDS or not self.procs
+        scan = "scan" in plan and (now - self.scan_at >= SCAN_SECONDS or not self.procs)
         if scan:
             self.scan(now, wall)
             self.scan_at = now
-        busy = self.gpu_sample(now, dt)
-        out["gpu"] = {"busy": round(busy, 1) if dt > 0 else None,
-                      "mhz": _num(_rd(f"{self.gpu}/cur_freq"), 0) // 1000000 if self.gpu else None}
-        out["games"] = self.games_sample(now)
-        if scan:
+        if "gpu_ns" in plan:
+            busy = self.gpu_sample(now, dt)
+        else:
+            busy = None
+            self.gpu_ns, self.gpu_pct, self.gpu_acc = {}, {}, {}  # stale counters would spike on the next delta
+        if "gpu" in plan:
+            out["gpu"] = {"busy": round(busy, 1) if dt > 0 and busy is not None else None,
+                          "mhz": _num(_rd(f"{self.gpu}/cur_freq"), 0) // 1000000 if self.gpu else None}
+        if "games" in plan:
+            out["games"] = self.games_sample(now)
+        if scan and "procs" in plan:
             out["procs"] = self.filtered(now)
             out["filter"] = self.filter
+            self.scan_prev = now
+        elif scan:
+            self.gpu_acc = {}
             self.scan_prev = now
         self.tick += 1
         out["self_ms"] = round((time.process_time() - t0) * 1000, 2)
@@ -4524,9 +4569,10 @@ def monitor_end_game(pkg, wait=6.0):
 
 def monitor_session(stdin, stdout, monitor=None, sleep=time.sleep, max_ticks=None):
     """Long-lived: prints {"ready": 1, "static": {...}}, then one sample per tick. Control lines on stdin:
-    {"interval": 1|2|5}, {"procs": "game"|"steam"|"all"}, {"pause": bool}, {"id": n, "kill": pid, "sig": "TERM"|
-    "KILL", "force": bool}, {"id": n, "end_game": package} (each with an id gets {"reply": n, "ok": …}). Ends at EOF
-    or when the SSH session (parent) is gone."""
+    {"interval": 1|2|5}, {"procs": "game"|"steam"|"all"}, {"pause": bool}, {"modules": [...]|"all"} (v63: only those
+    collectors run, see monitor_plan), {"id": n, "kill": pid, "sig": "TERM"|"KILL", "force": bool}, {"id": n,
+    "end_game": package} (each with an id gets {"reply": n, "ok": …}). Ends at EOF or when the SSH session (parent)
+    is gone."""
     import threading
 
     mon = monitor or Monitor()
@@ -4568,6 +4614,8 @@ def monitor_session(stdin, stdout, monitor=None, sleep=time.sleep, max_ticks=Non
                     mon.scan_at = -1e9  # rescan now
                 if "pause" in msg:
                     state["pause"] = bool(msg["pause"])
+                if "modules" in msg and hasattr(mon, "set_modules"):
+                    mon.set_modules(msg["modules"])
                 if "kill" in msg or "end_game" in msg:
                     threading.Thread(target=act, args=(msg,), daemon=True).start()
                     continue
