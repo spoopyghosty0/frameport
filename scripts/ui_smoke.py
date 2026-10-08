@@ -349,6 +349,25 @@ def add_fake_linux_apps() -> None:
     pipeline.add_linux_app(app)
 
 
+def install_fakes(game: str | None, monitor_session=None) -> None:
+    """--fake-frame: never reach a real Frame (start-up auto-connect, discovery, the 30 s poll); Type on Frame and
+    the Monitor stream are fakes. `game` = the Monitor's game card (with its artwork)."""
+    from frameport.frame import keyboard, monitor
+
+    keyboard.KeyboardSession = FakeKeyboardSession
+    monitor.MonitorSession = monitor_session or FakeMonitorSession
+    FakeMonitorSession.GAME = game
+    FramePortApp.connect = lambda self, *a, **k: None
+    FramePortApp.refresh_frame = lambda self, *a, **k: None
+
+
+def attach_fake_frame(app: FramePortApp, monitor_session=None) -> None:
+    """Connect `app` to a FakeTarget (the shared monitor stream, used by the Monitor tab and the Frame card, too)."""
+    app.monitor_hub.session_factory = monitor_session or FakeMonitorSession
+    app.target = FakeTarget()
+    app.frame_info, app.frame_state = app.target.describe(), "connected"
+
+
 PAINT_SECONDS = 3  # after a step, before its screenshot: Flutter paints (and a view's content loads)
 STEP_TIMEOUT = 240  # the longest a step may wait for its screenshot (a crashed browser mustn't hang the run)
 
@@ -675,21 +694,13 @@ def main() -> int:
     ready, shot_done, done = threading.Event(), threading.Event(), []
 
     if args.fake_frame:  # never reach a real Frame (start-up auto-connect, discovery, the 30 s poll)
-        from frameport.frame import keyboard, monitor
-
-        keyboard.KeyboardSession = FakeKeyboardSession
-        monitor.MonitorSession = FakeMonitorSession
-        FakeMonitorSession.GAME = game  # the game card shows --game (with its artwork)
-        FramePortApp.connect = lambda self, *a, **k: None
-        FramePortApp.refresh_frame = lambda self, *a, **k: None
+        install_fakes(game)
 
     def app_main(page: ft.Page):
         try:
             app = FramePortApp(page)
             if args.fake_frame:
-                app.monitor_hub.session_factory = FakeMonitorSession  # the shared stream (Monitor tab, Frame card)
-                app.target = FakeTarget()
-                app.frame_info, app.frame_state = app.target.describe(), "connected"
+                attach_fake_frame(app)
         except Exception:  # noqa: BLE001
             ERRORS.append("startup: " + traceback.format_exc())
             return
