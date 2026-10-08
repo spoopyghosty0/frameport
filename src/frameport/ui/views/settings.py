@@ -95,7 +95,7 @@ class SettingsView:
         launch = C.switch(tr("Launch test after installing on the Frame (starts the game once without the headset "
                              "and checks its log)"), value=bool(library.setting("install.launch_test", True)),
                           on_change=changed)
-        return ft.Column([launch, keep, C.ghost(tr("Remove converted copies now"), ft.Icons.CLEANING_SERVICES_ROUNDED,
+        return ft.Column([launch, keep, C.ghost(tr("Remove converted copies now"), ft.Icons.CLEANING_SERVICES_OUTLINED,
                                                clean, tooltip=tr("Your own game files aren't touched."))],
                          spacing=T.S2, horizontal_alignment=ft.CrossAxisAlignment.START)
 
@@ -310,7 +310,7 @@ class SettingsView:
                             lambda e: (app.copy(T.theme_json(T.THEME)),
                                        app.toast(tr("Copied: save it as a .json file, change the colors and "
                                                     "install it")))),
-                    C.secondary(tr("Install theme file…"), ft.Icons.FILE_OPEN_ROUNDED, install)],
+                    C.secondary(tr("Install theme file…"), ft.Icons.FILE_OPEN_OUTLINED, install)],
                    spacing=T.S2, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Row([card(t) for t in T.THEMES], spacing=T.S3, run_spacing=T.S3, wrap=True,
                    vertical_alignment=ft.CrossAxisAlignment.START),
@@ -395,15 +395,15 @@ class SettingsView:
             C.section(tr("Problems and feedback"), C.card(ft.Column([
                 C.body(tr("Something not working? Collect a diagnostics zip (logs, settings, device info; personal "
                        "data removed) and attach it to a GitHub issue. For one game, use its menu instead.")),
-                ft.Row([C.secondary(tr("Report a problem…"), ft.Icons.BUG_REPORT_ROUNDED,
+                ft.Row([C.secondary(tr("Report a problem…"), ft.Icons.BUG_REPORT_OUTLINED,
                                     lambda e: app.report_problem_dialog()),
-                        C.ghost(tr("Collect app logs"), ft.Icons.FOLDER_ZIP_ROUNDED, lambda e: app.collect_logs())],
+                        C.ghost(tr("Collect app logs"), ft.Icons.FOLDER_ZIP_OUTLINED, lambda e: app.collect_logs())],
                        spacing=T.S3, run_spacing=T.S2, wrap=True),
             ], spacing=T.S3)), help="diag_bundle"),
             C.section(tr("Remove FramePort"), C.card(ft.Column([
                 C.body(tr("Removes everything FramePort created: its data and tools on this PC, the Steam entries it "
                        "added, and (optionally) its games and files on the Frame. Your game dumps aren't touched.")),
-                C.danger(tr("Uninstall FramePort…"), ft.Icons.DELETE_FOREVER_ROUNDED, lambda e: app.uninstall_app(),
+                C.danger(tr("Uninstall FramePort…"), ft.Icons.DELETE_FOREVER_OUTLINED, lambda e: app.uninstall_app(),
                          outline=True),
             ], spacing=T.S3, horizontal_alignment=ft.CrossAxisAlignment.START))),
             C.section(tr("Installing"), C.card(self.installing(), padding=T.S4), help="launch_test"),

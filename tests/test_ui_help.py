@@ -52,15 +52,18 @@ def _app(monkeypatch, game, frame_info=None, busy=None, pc=()):
 
 
 def _labels(actions):
-    return [a[0] if a else "—" for a in actions]
+    """Item labels in order ("—" = divider); group headers are left out."""
+    from frameport.ui.menus import Header
+
+    return [a[0] if a else "—" for a in actions if not isinstance(a, Header)]
 
 
 def test_right_click_menu_follows_install_state(monkeypatch):
     g = {"package": "com.q", "title": "Q", "recipe": {"status": "works"}, "build": {"sha256": "new"}}
     app = _app(monkeypatch, g, {"installed": [{"package": "com.q", "sha256": "old"}]})
     installed = _labels(app.game_actions("com.q"))
-    assert installed[:3] == ["Open", "Play on Frame", "Update on Frame"]
-    expected = {"Launch test on Frame", "Game settings…", "Uninstall from Frame…", "Remove from library…"}
+    assert installed[:3] == ["Play on Frame", "Open game page", "Update on Frame"]
+    expected = {"Run launch test on Frame", "Game settings…", "Uninstall from Frame…", "Remove from library…"}
     assert expected <= set(installed)
 
     missing = _labels(_app(monkeypatch, g, {"installed": []}).game_actions("com.q"))
@@ -71,7 +74,7 @@ def test_right_click_menu_follows_install_state(monkeypatch):
     assert "Game settings…" not in _labels(_app(monkeypatch, flat, {"installed": []}).game_actions("com.q"))
 
     offline = _labels(_app(monkeypatch, g).game_actions("com.q"))
-    assert "Connect your Frame" in offline and "Launch test on Frame" not in offline
+    assert "Connect your Frame" in offline and "Run launch test on Frame" not in offline
 
 
 def test_right_click_menu_while_busy_and_on_game_page(monkeypatch):
@@ -79,7 +82,8 @@ def test_right_click_menu_while_busy_and_on_game_page(monkeypatch):
     busy = _labels(_app(monkeypatch, g, {"installed": []}, busy=object()).game_actions("rift.r"))
     assert "Cancel" in busy and "Install on Frame" not in busy and "Check game files" not in busy
     page = _labels(_app(monkeypatch, g, {"installed": []}).game_actions("rift.r", quick=False))
-    assert page[0] == "Change program…" and "Open" not in page and "Install on Frame" not in page
+    assert "Change program…" in page and "Open game page" not in page and "Install on Frame" not in page
+    assert "Cancel" not in page  # the hero shows progress + Cancel
 
 
 def test_play_is_the_quick_action_when_installed(monkeypatch):
@@ -145,7 +149,7 @@ def test_linux_app_menus_have_no_conversion_actions(monkeypatch):
         assert {"Find artwork…", "Report a problem…", "Collect logs", "Screenshots"} <= set(labels)
         assert labels[-1] == "Remove from library…"
     quick = _labels(_app(monkeypatch, g, on_frame).game_actions("linux.tool"))
-    assert {"Play on Frame", "Reinstall on Frame", "Launch test on Frame", "Uninstall from Frame…"} <= set(quick)
+    assert {"Play on Frame", "Reinstall on Frame", "Run launch test on Frame", "Uninstall from Frame…"} <= set(quick)
     several = _linux_app(candidates=["tool", "tool-helper"])
     assert "Change program…" in _labels(_app(monkeypatch, several, {"installed": []}).game_actions("linux.tool"))
     lone = _linux_app(candidates=["a", "b"], files=["Tool.AppImage"])  # a lone AppImage: nothing to choose

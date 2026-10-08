@@ -118,8 +118,8 @@ def show_files_dialog(app: FramePortApp, package: str, title: str) -> None:
                 return ft.Container(C.meta(tr("… {node} more (use the filter to find them)").format(node=node)),
                                     padding=pad)
             key = f"{root_key}\0{node.path}"
-            icon = (ft.Icons.FOLDER_OPEN_ROUNDED if key in expanded else ft.Icons.FOLDER_ROUNDED) if node.is_dir \
-                else ft.Icons.INSERT_DRIVE_FILE_ROUNDED
+            icon = (ft.Icons.FOLDER_OPEN_ROUNDED if key in expanded else ft.Icons.FOLDER_OUTLINED) if node.is_dir \
+                else ft.Icons.INSERT_DRIVE_FILE_OUTLINED
             chevron = ft.Icon(ft.Icons.EXPAND_MORE_ROUNDED if key in expanded else ft.Icons.CHEVRON_RIGHT_ROUNDED,
                               size=T.px(16), color=T.TEXT_3) if node.is_dir else ft.Container(width=T.px(16))
             info = (tr("{human} · {files} files").format(human=human(node.size), files=node.files) if node.is_dir
@@ -149,7 +149,7 @@ def show_files_dialog(app: FramePortApp, package: str, title: str) -> None:
                 if text:
                     found = matches(r["files"], text)
                     controls += [ft.Container(ft.Row([
-                        ft.Icon(ft.Icons.INSERT_DRIVE_FILE_ROUNDED, size=T.px(16), color=T.TEXT_3),
+                        ft.Icon(ft.Icons.INSERT_DRIVE_FILE_OUTLINED, size=T.px(16), color=T.TEXT_3),
                         C.body(rel, T.TEXT, expand=True, selectable=True), C.meta(human(size))], spacing=T.px(6)),
                         padding=ft.Padding(T.px(8), T.px(3), T.px(8), T.px(3))) for rel, size in found]
                     if not found:

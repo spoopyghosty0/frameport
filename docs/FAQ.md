@@ -24,7 +24,7 @@ Games/                                  ← scan this folder (Add games → Scan
   as alternates.
 - **Scanning:** pick the folder that contains the game folders (`Games/` above) to add them all, or one game's folder
   to add just that game. FramePort looks up to 5 levels deep.
-- **A single game:** Add games → Add an APK file… works with a lone APK too. Its data is found when the data folder sits next
+- **A single game:** Add games → Add an APK… works with a lone APK too. Its data is found when the data folder sits next
   to the APK, named as above.
 
 Not sure of the package name? Look at the OBB file names: `main.<version>.<package name>.obb`. Or add the APK

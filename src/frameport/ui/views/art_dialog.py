@@ -90,7 +90,7 @@ def show_art_dialog(app: FramePortApp, package: str) -> None:
             ft.Row([term, C.secondary(tr("Search"), ft.Icons.SEARCH_ROUNDED, search)], spacing=T.S2),
             status, results,
         ], spacing=T.S3, tight=True),
-        actions=[C.ghost(tr("Use your own images…"), ft.Icons.UPLOAD_FILE_ROUNDED,
+        actions=[C.ghost(tr("Use your own images…"), ft.Icons.UPLOAD_FILE_OUTLINED,
                          lambda e: (app.page.pop_dialog(), show_custom_art_dialog(app, package))),
                  C.ghost(tr("Find automatically"), ft.Icons.AUTO_AWESOME_ROUNDED, auto),
                  C.ghost(tr("Close"), on_click=lambda e: app.page.pop_dialog())]))
@@ -157,7 +157,7 @@ def show_custom_art_dialog(app: FramePortApp, package: str) -> None:
             box = (C.art_fill(art, radius=T.RADIUS_SM, height=T.px(110)) if art else
                    ft.Container(C.meta(tr("None")), height=T.px(110), alignment=ft.Alignment.CENTER,
                                 border_radius=T.RADIUS_SM, bgcolor=T.SURFACE_3))
-        buttons = [C.ghost(tr("Choose…"), ft.Icons.UPLOAD_FILE_ROUNDED,
+        buttons = [C.ghost(tr("Choose…"), ft.Icons.UPLOAD_FILE_OUTLINED,
                            lambda e, k=kind, lb=label: app.page.run_task(choose, k, lb))]
         if art:
             buttons.append(C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Remove"),

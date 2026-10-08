@@ -27,7 +27,7 @@ def _fill_styles() -> None:
                         "running": (ft.Icons.SYNC_ROUNDED, T.ACCENT, tr("Working")),
                         "done": (ft.Icons.CHECK_CIRCLE_ROUNDED, T.OK, tr("Done")),
                         "failed": (ft.Icons.ERROR_ROUNDED, T.ERROR, tr("Failed")),
-                        "cancelled": (ft.Icons.DO_NOT_DISTURB_ON_ROUNDED, T.TEXT_3, tr("Canceled"))})
+                        "cancelled": (ft.Icons.DO_NOT_DISTURB_ON_OUTLINED, T.TEXT_3, tr("Canceled"))})
 
 
 T.on_change(_fill_styles)
@@ -211,7 +211,7 @@ class ActivityPanel:
                 C.ghost(tr("Hide log") if show_log else tr("Show log"), ft.Icons.TERMINAL_ROUNDED,
                         lambda e: self._toggle(self.logs, job.id)),
                 C.ghost(tr("Copy log"), ft.Icons.CONTENT_COPY_ROUNDED, lambda e: self.app.copy(self.job_text(job))),
-                *([C.ghost(tr("Full launch log"), ft.Icons.DESCRIPTION_ROUNDED,
+                *([C.ghost(tr("Full launch log"), ft.Icons.DESCRIPTION_OUTLINED,
                            lambda e: self.app.show_log_file(job.log_path, job.title))] if job.log_path else []),
             ], spacing=0, wrap=True))
             if show_log:

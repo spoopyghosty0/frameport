@@ -284,9 +284,9 @@ def logo(size: float, solid: bool = False) -> ft.Image:
 
 
 def _btn_icon(name, color: str, disabled: bool = False, size: float = 18):
-    """A button's or menu item's icon: Material icons stay as they are (the control colours them), glyphs become
-    tinted images at the size Flutter gives icons there (buttons 18, menu items 24; not scaled with the UI, like
-    the Material icons next to them)."""
+    """A button's icon: Material icons stay as they are (the control colours them), glyphs become tinted images at
+    the size Flutter gives icons in buttons (18; not scaled with the UI, like the Material icons next to them).
+    Menu items size their icons themselves (menu_items)."""
     return as_icon(name, size, T.TEXT_3 if disabled else color) if glyphs.is_glyph(name) else name
 
 
@@ -400,8 +400,7 @@ def primary_menu(label: str, icon: str | None, items: list[ft.PopupMenuItem], to
     btn.style.color = T.ON_ACCENT
     btn.style.icon_color = T.ON_ACCENT
     btn.style.mouse_cursor = ft.MouseCursor.CLICK
-    return ft.PopupMenuButton(content=btn, items=items, bgcolor=T.SURFACE_2, tooltip=tooltip or "",
-                              shape=_shape(T.RADIUS_SM))
+    return menu_button(items, content=btn, tooltip=tooltip or "")
 
 
 # ------------------------------------------------------------------------------------------ inputs
@@ -568,7 +567,7 @@ def status_row(ok: bool | None, heading: str, detail: str = "", action: ft.Contr
     ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S3), padding=ft.Padding(0, T.px(6), 0, T.px(6)))
 
 
-def art_fill(src: str | None, radius: int | None = None, placeholder_icon: str = ft.Icons.VIDEOGAME_ASSET_ROUNDED,
+def art_fill(src: str | None, radius: int | None = None, placeholder_icon: str = ft.Icons.VIDEOGAME_ASSET_OUTLINED,
              hero: bool = False, **kw) -> ft.Container:
     """Artwork that covers its box (cards, heroes), by asset URL (artwork.thumbs.url — never image bytes: those are
     re-sent on every update); an accent gradient with a large faint icon when there's none."""
@@ -636,20 +635,71 @@ def progress_bar(value: float | None = None, color: str | None = None) -> ft.Pro
                           border_radius=T.px(4), bar_height=T.px(6))
 
 
-def menu_items(actions: list[tuple | None]) -> list[ft.PopupMenuItem]:
-    """[(label, icon, handler) | None] → popup menu items; None becomes a divider (never first, last or doubled)."""
-    out: list[ft.PopupMenuItem] = []
-    for a in actions:
-        if a is None:
-            if out and out[-1].content is not None:
-                out.append(ft.PopupMenuItem())
+def _is_header(a) -> bool:
+    from .menus import Header
+
+    return isinstance(a, Header)
+
+
+def menu_entries(actions: list) -> list:
+    """The entries menu_items shows: a header is dropped when nothing follows it before the next divider/header,
+    dividers are never first, last or doubled."""
+    kept = []
+    for i, a in enumerate(actions):
+        if _is_header(a) and (i + 1 >= len(actions) or actions[i + 1] is None or _is_header(actions[i + 1])):
             continue
-        label, icon, handler = a
-        out.append(ft.PopupMenuItem(content=ft.Text(label), icon=_btn_icon(icon, T.TEXT, size=24),
-                                    on_click=handler))
-    while out and out[-1].content is None:
+        kept.append(a)
+    out: list = []
+    for a in kept:
+        if a is None and (not out or out[-1] is None):
+            continue
+        out.append(a)
+    while out and out[-1] is None:
         out.pop()
     return out
+
+
+def menu_items(actions: list) -> list[ft.PopupMenuItem]:
+    """[(label, icon, handler) | menus.Header | None] → compact popup menu items (32 px rows). None becomes a divider
+    (never first, last or doubled), a Header a small caps group heading (dropped when its group is empty); an item
+    without a handler is shown disabled (e.g. "Protected by SteamOS")."""
+    out: list[ft.PopupMenuItem] = []
+    for a in menu_entries(actions):
+        if a is None:
+            out.append(ft.PopupMenuItem())
+        elif _is_header(a):
+            out.append(ft.PopupMenuItem(
+                content=ft.Text(a.label.upper(), size=T.T_SMALL, color=T.TEXT_3, weight=ft.FontWeight.W_600,
+                                font_family="monospace", style=ft.TextStyle(letter_spacing=T.px(1))),
+                height=T.px(24), padding=ft.Padding(T.px(14), T.px(6), T.px(16), 0), disabled=True,
+                mouse_cursor=ft.MouseCursor.BASIC))
+        else:
+            label, icon, handler = a
+            color = T.TEXT if handler else T.TEXT_3
+            out.append(ft.PopupMenuItem(
+                content=ft.Text(label, size=T.T_BODY, color=color),
+                icon=as_icon(icon, T.ICON_S, T.TEXT_2 if handler else T.TEXT_3) if icon else None,
+                height=T.px(32), padding=ft.Padding(T.px(14), 0, T.px(18), 0), on_click=handler,
+                disabled=handler is None))
+    return out
+
+
+def check_item(label: str, checked: bool, on_click: Callable) -> ft.PopupMenuItem:
+    """A compact menu row with a check mark (filter/sort chips)."""
+    return ft.PopupMenuItem(content=ft.Text(label, size=T.T_BODY, color=T.TEXT), checked=checked, on_click=on_click,
+                            height=T.px(32), padding=ft.Padding(T.px(14), 0, T.px(18), 0))
+
+
+def menu_button(items: list[ft.PopupMenuItem], **kw) -> ft.PopupMenuButton:
+    """A PopupMenuButton with the shared menu look (border, shadow, SURFACE_2, small radius; also the theme's
+    popup_menu_theme, which right-click ContextMenus use)."""
+    kw.setdefault("tooltip", "")
+    return ft.PopupMenuButton(items=items, bgcolor=T.SURFACE_2, elevation=8, shadow_color="#000000",
+                              shape=menu_shape(), menu_padding=ft.Padding(0, T.px(4), 0, T.px(4)), **kw)
+
+
+def menu_shape() -> ft.RoundedRectangleBorder:
+    return ft.RoundedRectangleBorder(radius=T.RADIUS_SM, side=ft.BorderSide(1, T.BORDER_STRONG))
 
 
 def menu_targets(clicked, selected) -> list:

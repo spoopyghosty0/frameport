@@ -23,8 +23,8 @@ from .files_dialog import human
 if TYPE_CHECKING:
     from ..app import FramePortApp
 
-SHARED_ICONS = {"videos": ft.Icons.MOVIE_ROUNDED, "downloads": ft.Icons.DOWNLOAD_ROUNDED,
-                "documents": ft.Icons.DESCRIPTION_ROUNDED}
+SHARED_ICONS = {"videos": ft.Icons.MOVIE_OUTLINED, "downloads": ft.Icons.DOWNLOAD_ROUNDED,
+                "documents": ft.Icons.DESCRIPTION_OUTLINED}
 VIDEO_EXT = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".ts"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
 
@@ -47,15 +47,15 @@ def dropzone_available() -> bool:
 
 def file_icon(name: str, is_dir: bool) -> str:
     if is_dir:
-        return ft.Icons.FOLDER_ROUNDED
+        return ft.Icons.FOLDER_OUTLINED
     ext = Path(name).suffix.lower()
     if ext in VIDEO_EXT:
-        return ft.Icons.MOVIE_ROUNDED
+        return ft.Icons.MOVIE_OUTLINED
     if ext in IMAGE_EXT:
-        return ft.Icons.IMAGE_ROUNDED
+        return ft.Icons.IMAGE_OUTLINED
     if ext in (".zip", ".7z", ".rar", ".tar", ".gz"):
-        return ft.Icons.FOLDER_ZIP_ROUNDED
-    return ft.Icons.INSERT_DRIVE_FILE_ROUNDED
+        return ft.Icons.FOLDER_ZIP_OUTLINED
+    return ft.Icons.INSERT_DRIVE_FILE_OUTLINED
 
 
 def crumbs(root: str, path: str, root_label: str) -> list[tuple[str, str]]:
@@ -84,9 +84,9 @@ class FilesView:
         self.listing = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.status = C.meta("")
         self.toolbar = ft.Row([
-            C.primary(tr("Upload files…"), ft.Icons.UPLOAD_FILE_ROUNDED, self.upload_files),
-            C.secondary(tr("Upload folder…"), ft.Icons.DRIVE_FOLDER_UPLOAD_ROUNDED, self.upload_folder),
-            C.ghost(tr("New folder…"), ft.Icons.CREATE_NEW_FOLDER_ROUNDED, lambda e: self.new_folder()),
+            C.primary(tr("Upload files…"), ft.Icons.UPLOAD_FILE_OUTLINED, self.upload_files),
+            C.secondary(tr("Upload folder…"), ft.Icons.DRIVE_FOLDER_UPLOAD_OUTLINED, self.upload_folder),
+            C.ghost(tr("New folder…"), ft.Icons.CREATE_NEW_FOLDER_OUTLINED, lambda e: self.new_folder()),
             C.icon_btn(ft.Icons.REFRESH_ROUNDED, tr("Refresh"), lambda e: self.load()),
         ], spacing=T.S2, wrap=True, run_spacing=T.S2)
         self.hidden_switch = C.switch(tr("Show hidden files"), wrap=False, value=False, on_change=self._toggle_hidden)
@@ -124,7 +124,7 @@ class FilesView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(tr("Files"), tr("Videos, documents, mods and saves on your Steam Frame")),
-                C.empty_state(ft.Icons.FOLDER_OFF_ROUNDED, tr("Connect your Frame first"),
+                C.empty_state(ft.Icons.FOLDER_OFF_OUTLINED, tr("Connect your Frame first"),
                               tr("Files on the Frame can be browsed once FramePort is connected to it."),
                               C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
         if self.root is None:
@@ -185,18 +185,18 @@ class FilesView:
         return box
 
     def _render_locations(self) -> None:
-        rows = [self._location_row(loc_, SHARED_ICONS.get(loc_["id"], ft.Icons.FOLDER_ROUNDED), loc_["android"])
+        rows = [self._location_row(loc_, SHARED_ICONS.get(loc_["id"], ft.Icons.FOLDER_OUTLINED), loc_["android"])
                 for loc_ in self.shared]
         games = self._installed_games()
         if games:
             rows.append(ft.Container(C.meta(tr("Game storage").upper()), padding=ft.Padding(T.S2, T.S3, 0, T.px(2))))
             for pkg, title in games:
                 loc = self.game_locs.get(pkg) or {"id": f"app:{pkg}", "label": title, "package": pkg}
-                rows.append(self._location_row(loc, ft.Icons.SPORTS_ESPORTS_ROUNDED))
+                rows.append(self._location_row(loc, ft.Icons.SPORTS_ESPORTS_OUTLINED))
         rows.append(ft.Container(C.meta(tr("Advanced").upper()), padding=ft.Padding(T.S2, T.S3, 0, T.px(2))))
         home = {"id": "home", "label": tr("Home folder"), "path": self.app.target.frame.home, "android": "",
                 "shared": False}
-        rows.append(self._location_row(home, ft.Icons.HOME_ROUNDED, tr("everything in ~ (not seen by games)")))
+        rows.append(self._location_row(home, ft.Icons.HOME_OUTLINED, tr("everything in ~ (not seen by games)")))
         self.locations.controls = rows
         C.update(self.locations)
 
@@ -317,7 +317,7 @@ class FilesView:
         actions = [C.icon_btn(ft.Icons.DOWNLOAD_ROUNDED, tr("Download to this PC…"),
                               lambda ev, x=e: self._download_later([x]))]
         if not self._protected(e):
-            actions += [C.icon_btn(ft.Icons.DRIVE_FILE_RENAME_OUTLINE_ROUNDED, tr("Rename…"),
+            actions += [C.icon_btn(ft.Icons.DRIVE_FILE_RENAME_OUTLINE_OUTLINED, tr("Rename…"),
                                    lambda ev, x=e: self.rename(x)),
                         C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Delete…"), lambda ev, x=e: self.delete([x]))]
         check = ft.Checkbox(value=e.path in self.selected, active_color=T.ACCENT, check_color=T.ON_ACCENT,
@@ -341,9 +341,9 @@ class FilesView:
         """[(label, icon, handler) | None] for a right-click on entry `e` (None = on the folder's empty space). With
         several entries selected and `e` among them, the actions act on the whole selection."""
         if e is None:
-            return [(tr("Upload files…"), ft.Icons.UPLOAD_FILE_ROUNDED, self.upload_files),
-                    (tr("Upload folder…"), ft.Icons.DRIVE_FOLDER_UPLOAD_ROUNDED, self.upload_folder),
-                    (tr("New folder…"), ft.Icons.CREATE_NEW_FOLDER_ROUNDED, lambda ev: self.new_folder()),
+            return [(tr("Upload files…"), ft.Icons.UPLOAD_FILE_OUTLINED, self.upload_files),
+                    (tr("Upload folder…"), ft.Icons.DRIVE_FOLDER_UPLOAD_OUTLINED, self.upload_folder),
+                    (tr("New folder…"), ft.Icons.CREATE_NEW_FOLDER_OUTLINED, lambda ev: self.new_folder()),
                     None,
                     *([(tr("Select all"), ft.Icons.SELECT_ALL_ROUNDED, lambda ev: self._select_all())]
                       if any(self._selectable(x) for x in self.entries) else []),
@@ -361,7 +361,7 @@ class FilesView:
                     else tr("Download to this PC…"), ft.Icons.DOWNLOAD_ROUNDED,
                     lambda ev: self._download_later(items)))
         if not several and not self._protected(e):
-            out.append((tr("Rename…"), ft.Icons.DRIVE_FILE_RENAME_OUTLINE_ROUNDED, lambda ev: self.rename(e)))
+            out.append((tr("Rename…"), ft.Icons.DRIVE_FILE_RENAME_OUTLINE_OUTLINED, lambda ev: self.rename(e)))
         if not several:
             out.append((tr("Copy path"), ft.Icons.CONTENT_COPY_ROUNDED, lambda ev: self.app.copy(self._shown_path(
                 e.path))))
@@ -371,7 +371,7 @@ class FilesView:
         elif self._selectable(e):
             on = e.path in self.selected
             out.append((tr("Deselect") if on else tr("Select"),
-                        ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED if on else ft.Icons.CHECK_BOX_ROUNDED,
+                        ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED if on else ft.Icons.CHECK_BOX_OUTLINED,
                         lambda ev: self._toggle(e.path, not on)))
         if deletable:
             out += [None, (tr("Delete {n} items…").format(n=len(deletable)) if len(deletable) > 1 else tr("Delete…"),

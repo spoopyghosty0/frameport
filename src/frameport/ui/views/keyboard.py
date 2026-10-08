@@ -61,7 +61,7 @@ class KeyboardView:
                     ft.Row([self.status, self.reconnect], spacing=T.S3,
                            vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     self.listener,
-                    ft.Row([self.paste, C.secondary(tr("Type it"), ft.Icons.SEND_ROUNDED, self._send_text)],
+                    ft.Row([self.paste, C.secondary(tr("Type it"), ft.Icons.SEND_OUTLINED, self._send_text)],
                            spacing=T.S2),
                 ], spacing=T.S3)),
                 C.callout(ft.Row([C.body(tr("In the headset, select a text field, then type here."), T.TEXT,

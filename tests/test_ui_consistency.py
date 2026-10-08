@@ -1,5 +1,6 @@
 """GUI consistency guard: dialogs, spinners and inputs come from the shared helpers in ui/components.py (C.dialog,
-C.viewer, C.spinner, C.field/C.search/C.dropdown), icons are from one family (ROUNDED), and radii are tokens."""
+C.viewer, C.spinner, C.field/C.search/C.dropdown), icons are line icons (ROUNDED, or OUTLINED where ROUNDED is
+filled), and radii are tokens."""
 import ast
 from pathlib import Path
 
@@ -36,16 +37,35 @@ def test_shared_controls_only_from_components():
     assert not bad, "\n".join(bad)
 
 
-def test_rounded_icons_where_flet_has_them():
+# The icon rule is visual weight, not the suffix: every icon is a line icon. Material's ROUNDED family is the line
+# style for most glyphs (tune, delete_outline, folder_open, …) but FILLED for these, so they use their OUTLINED twin
+# (checked side by side in a render: e.g. ROUNDED monitor_heart / bedtime are solid shapes next to line icons).
+# Status marks (check_circle, error, cancel next to them) stay filled on purpose: they're badges, not actions.
+LINE_OUTLINED = {
+    "BEDTIME", "BUG_REPORT", "BUILD_CIRCLE", "CHECK_BOX", "CLEANING_SERVICES", "CREATE_NEW_FOLDER", "DANGEROUS",
+    "DELETE_FOREVER", "DESCRIPTION", "DO_NOT_DISTURB_ON", "DRIVE_FILE_RENAME_OUTLINE", "DRIVE_FOLDER_UPLOAD",
+    "EXTENSION_OFF", "FILE_OPEN", "FILTER_ALT", "FOLDER", "FOLDER_OFF", "FOLDER_SPECIAL", "FOLDER_ZIP", "GRID_VIEW",
+    "HEALING", "HOME", "IMAGE", "INSERT_DRIVE_FILE", "LABEL", "LIBRARY_ADD", "MONITOR_HEART", "MOVIE",
+    "NEW_RELEASES", "PHOTO_CAMERA", "PIN", "SELL", "SEND", "SNIPPET_FOLDER", "SPORTS_ESPORTS", "STOP_CIRCLE",
+    "STOREFRONT", "STORAGE", "THUMB_UP", "UPLOAD_FILE", "VIDEO_LIBRARY", "VIDEOGAME_ASSET", "VOLUNTEER_ACTIVISM",
+}
+
+
+def test_line_style_icons():
+    """ROUNDED where it is the line style; OUTLINED only for the glyphs whose ROUNDED variant is filled."""
     names = {m.name for m in ft.Icons}
     bad = []
     for path in _files():
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Attribute) and \
-                    node.value.attr == "Icons" and node.attr.endswith("_OUTLINED"):
-                twin = node.attr.removesuffix("_OUTLINED") + "_ROUNDED"
-                if twin in names:
-                    bad.append(f"{path.relative_to(UI)}:{node.lineno}: Icons.{node.attr} -> Icons.{twin}")
+            if not (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Attribute) and
+                    node.value.attr == "Icons"):
+                continue
+            if node.attr.endswith("_OUTLINED"):
+                base_ = node.attr.removesuffix("_OUTLINED")
+                if base_ + "_ROUNDED" in names and base_ not in LINE_OUTLINED:
+                    bad.append(f"{path.relative_to(UI)}:{node.lineno}: Icons.{node.attr} -> Icons.{base_}_ROUNDED")
+            elif node.attr.endswith("_ROUNDED") and node.attr.removesuffix("_ROUNDED") in LINE_OUTLINED:
+                bad.append(f"{path.relative_to(UI)}:{node.lineno}: Icons.{node.attr} is filled -> _OUTLINED")
     assert not bad, "\n".join(bad)
 
 

@@ -94,7 +94,7 @@ which would end Desktop Mode). This is new: please report anything odd with **Re
   back/home/recents buttons are hidden by default (patch **Hide Android's navigation bar**). If FramePort guesses
   wrong (a phone app shows nothing in the headset, or a VR app opens as a flat window), choose **VR** or **Flat
   window** under **Show as VR or as a flat window** in the game's **Customize** section, then **Update on Frame**.
-- **Add games → Add a Windows program (.exe)…** adds a single Windows program; the Frame runs it through Proton (as a
+- **Add games → Add a Windows program…** adds a single Windows program; the Frame runs it through Proton (as a
   window unless it is a VR game). A program sitting in Downloads, the home folder or a drive root is copied on its
   own first, so the install doesn't upload everything next to it.
 - In the packaged app you can also **drag files onto the Library**: APKs, Linux apps (AppImage, `.zip`/`.tar.gz`),
@@ -109,7 +109,7 @@ sideloader, documented at framedropvr.com/docs). FramePort understands the same 
   the title, the files, their size and whether a checksum is given, and asks before it downloads anything. Then it
   downloads the build, adds it to your library and starts the usual install on the Frame. If no Frame is connected,
   the game is added now and installs once the Frame is back.
-- **Add games → Install from a link…** takes the button's address (right-click → Copy link), a `framedrop://` or
+- **Add games → Add from a link…** takes the button's address (right-click → Copy link), a `framedrop://` or
   `frameport://` link, a manifest (`.json`) or a direct link to an APK, a Linux build or a Windows program. Use it on
   macOS, where web pages can't hand links to FramePort yet.
 - **Settings → Install links** has one switch for `framedrop://` links (the buttons) and one for FramePort's own
@@ -134,7 +134,7 @@ reality), showing only what matters for that game. Changes are kept with the gam
 
 ## Typing on the Frame
 
-- **Type on Frame** (its own tab in the sidebar; also on the Steam Frame page and in a game's menu): while the tab is
+- **Type on Frame** (its own tab in the sidebar; also on the Steam Frame page): while the tab is
   open, this computer's keyboard works as a keyboard plugged into the Frame. Select a text field in the headset (in
   an app, Steam or the desktop) and type; Esc and shortcuts go to the Frame too. Paste longer text into the box to
   type it in one go (US keyboard layout). Opening another tab disconnects the keyboard.
@@ -185,7 +185,7 @@ Command line: `frameport update` (`--check` only checks, exit code 10 = update a
 ## PC VR games
 
 PC VR games are Windows VR games (OpenXR, SteamVR or Oculus). Scan a folder of them (one folder per game) or use
-**Add games → Add one game folder…**. FramePort finds the game's program and asks when there is more than one
+**Add games → Add a PC VR game folder…**. FramePort finds the game's program and asks when there is more than one
 candidate. **Already patched** on a game page installs a copy unchanged. Oculus-only games need Revive: FramePort uses
 an installed Revive, or downloads a portable copy.
 
@@ -196,7 +196,7 @@ an installed Revive, or downloads a portable copy.
   on the game page.
 - Games that use the Oculus Platform SDK check the licence through the Oculus app, so they run on the PC only.
 
-**Windows games without VR:** **Add games → Add one game folder…** with the game's folder (pick the program that
+**Windows games without VR:** **Add games → Add a PC VR game folder…** with the game's folder (pick the program that
 starts it if asked). FramePort installs it on the Frame and Proton runs it as a window, like Steam's own Windows games;
 it shows up in the Frame's Steam library tagged "Windows game on Frame". Whether a game runs depends on Proton on ARM
 (x86 games run through emulation).

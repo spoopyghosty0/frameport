@@ -136,12 +136,12 @@ class GameView:
                            C.secondary(label, icon, handler, disabled, tip))
         if C.is_media_player(g) and g.get("kind") != "rift" and app.frame_state == "connected" and \
                 C.install_state(g, app.frame_info) in ("installed", "outdated"):
-            buttons.append(C.secondary(tr("Add videos"), ft.Icons.VIDEO_LIBRARY_ROUNDED,
+            buttons.append(C.secondary(tr("Add videos"), ft.Icons.VIDEO_LIBRARY_OUTLINED,
                                        lambda e: app.go("files", pkg), False,
                                        tr("Opens this player's storage on the Frame (Files tab): upload videos "
                                           "into the folder it lists")))
-        more = ft.PopupMenuButton(icon=ft.Icons.MORE_HORIZ_ROUNDED, icon_color=T.TEXT_2, bgcolor=T.SURFACE_2,
-                                  tooltip=tr("More actions"), items=C.menu_items(app.game_actions(pkg, quick=False)))
+        more = C.menu_button(C.menu_items(app.game_actions(pkg, quick=False)), icon=ft.Icons.MORE_HORIZ_ROUNDED,
+                             icon_color=T.TEXT_2, tooltip=tr("More actions"))
         return ft.Row(buttons + [more], spacing=T.S2, wrap=True)
 
     # ---------------------------------------------------------------- sections
@@ -222,7 +222,7 @@ class GameView:
                           "them. Look for a build of the app that includes them, then install that one."),
                        T.TEXT),
                 C.meta(", ".join(missing), T.TEXT_2, selectable=True)], spacing=T.px(4)), "error",
-                ft.Icons.EXTENSION_OFF_ROUNDED))
+                ft.Icons.EXTENSION_OFF_OUTLINED))
         if self.rift and g.get("exe_confirmed") is False:
             out.append(C.callout(ft.Row([
                 C.body(tr("FramePort picked {value} to start this game, but there are other candidates. "
@@ -243,15 +243,15 @@ class GameView:
                 C.body(tr("Tried it in the headset? Tell us how it runs: with your recipe it can join FramePort's "
                           "built-in list, so it works out of the box for everyone."), T.TEXT),
                 ft.Row([
-                    C.secondary(tr("It works: share…"), ft.Icons.THUMB_UP_ROUNDED,
+                    C.secondary(tr("It works: share…"), ft.Icons.THUMB_UP_OUTLINED,
                                 lambda e: self.app.share_config_dialog(pkg, "works")),
-                    C.secondary(tr("It has issues: share…"), ft.Icons.BUILD_CIRCLE_ROUNDED,
+                    C.secondary(tr("It has issues: share…"), ft.Icons.BUILD_CIRCLE_OUTLINED,
                                 lambda e: self.app.share_config_dialog(pkg, "issues")),
-                    C.ghost(tr("It doesn't run: report…"), ft.Icons.BUG_REPORT_ROUNDED,
+                    C.ghost(tr("It doesn't run: report…"), ft.Icons.BUG_REPORT_OUTLINED,
                             lambda e: self.app.report_problem_dialog(pkg)),
                     C.ghost(tr("Not now"), on_click=dismiss),
                 ], spacing=T.S2, run_spacing=T.S2, wrap=True),
-            ], spacing=T.S2), "info", ft.Icons.VOLUNTEER_ACTIVISM_ROUNDED))
+            ], spacing=T.S2), "info", ft.Icons.VOLUNTEER_ACTIVISM_OUTLINED))
         if g.get("catalog_update") and recipe.source == "user":
             def take_update(e):
                 from ... import pipeline
@@ -263,12 +263,12 @@ class GameView:
                 C.body(tr("A newer known-good recipe for this game is available (you changed this game's settings, "
                           "so it wasn't applied by itself)."), T.TEXT, expand=True),
                 C.secondary(tr("Use the new recipe"), ft.Icons.AUTO_FIX_HIGH_ROUNDED, take_update)],
-                vertical_alignment=ft.CrossAxisAlignment.CENTER), "info", ft.Icons.NEW_RELEASES_ROUNDED))
+                vertical_alignment=ft.CrossAxisAlignment.CENTER), "info", ft.Icons.NEW_RELEASES_OUTLINED))
         if g.get("steam_art_stale") and installed:
             out.append(C.callout(ft.Row([
                 C.body(tr("The Frame's Steam library still shows the old artwork."), T.TEXT, expand=True),
-                C.secondary(tr("Update Steam art on Frame"), ft.Icons.IMAGE_ROUNDED,
-                            lambda e: self.app.update_steam_art(pkg))]), "info", ft.Icons.IMAGE_ROUNDED))
+                C.secondary(tr("Update Steam art on Frame"), ft.Icons.IMAGE_OUTLINED,
+                            lambda e: self.app.update_steam_art(pkg))]), "info", ft.Icons.IMAGE_OUTLINED))
         if recipe.status == "unsupported":
             out.append(C.callout(recipe.notes or tr("This game can't run on the Steam Frame."), "error"))
         elif recipe.notes and not (self.rift and extra.get("platform_sdk")):

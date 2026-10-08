@@ -186,7 +186,7 @@ class MonitorView:
         self.game_fps_sub = C.meta(tr("frames per second"))
         self.game_spark = C.Sparkline(T.OK, height=48)
         self.game_stats = C.body("", T.TEXT_2)
-        self.end_btn = C.secondary(tr("End game"), ft.Icons.STOP_CIRCLE_ROUNDED, lambda e: self.ask_end_game())
+        self.end_btn = C.secondary(tr("End game"), ft.Icons.STOP_CIRCLE_OUTLINED, lambda e: self.ask_end_game())
         self.page_btn = C.ghost(tr("Game page"), ft.Icons.OPEN_IN_NEW_ROUNDED,
                                 lambda e: self.game_pkg and self.app.open_game(self.game_pkg))
         self.game_card = C.card(ft.Row([
@@ -205,7 +205,7 @@ class MonitorView:
         # metric tiles
         self.t_cpu = Tile(tr("CPU"), ft.Icons.MEMORY_ROUNDED, T.INFO, hi=100)
         self.t_gpu = Tile(tr("GPU"), ft.Icons.VIEW_IN_AR_ROUNDED, T.ACCENT, hi=100, help_key="monitor_gpu")
-        self.t_mem = Tile(tr("Memory"), ft.Icons.STORAGE_ROUNDED, T.PC, hi=100, help_key="monitor_pressure")
+        self.t_mem = Tile(tr("Memory"), ft.Icons.STORAGE_OUTLINED, T.PC, hi=100, help_key="monitor_pressure")
         self.t_temp = Tile(tr("Temperature"), ft.Icons.THERMOSTAT_ROUNDED, T.WARN)
         self.t_power = Tile(tr("Power"), ft.Icons.BOLT_ROUNDED, T.OK, help_key="monitor_power")
         self.t_bat = Tile(tr("Battery"), ft.Icons.BATTERY_STD_ROUNDED, T.OK, hi=100)
@@ -255,7 +255,8 @@ class MonitorView:
         self.rows = [ProcRow(self) for _ in range(ROWS)]
         self.proc_note = C.meta("")
         self.no_game = C.callout(tr("No FramePort game is running. Start one in the headset or with Play, or switch "
-                                    "the filter to see everything on the Frame."), icon=ft.Icons.SPORTS_ESPORTS_ROUNDED)
+                                    "the filter to see everything on the Frame."),
+                                 icon=ft.Icons.SPORTS_ESPORTS_OUTLINED)
         self.no_game.visible = False
         self.menu = ft.ContextMenu(content=C.card(ft.Column(
             [self.header, ft.Column([r.control for r in self.rows], spacing=0), self.proc_note],
@@ -275,7 +276,7 @@ class MonitorView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(heading, sub),
-                C.empty_state(ft.Icons.MONITOR_HEART_ROUNDED, tr("Connect your Frame first"),
+                C.empty_state(ft.Icons.MONITOR_HEART_OUTLINED, tr("Connect your Frame first"),
                               tr("The monitor shows your Frame's games, load, temperatures and battery live once "
                                  "FramePort is connected to it."),
                               C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
@@ -626,35 +627,13 @@ class MonitorView:
     def open_menu(self, p: dict | None, position=None) -> None:
         if not p:
             return
+        from ..menus import process_menu
+
         name, pid = p.get("name", "?"), p.get("pid")
-        actions: list = []
-        if p.get("kind") == "group":
-            n = p["count"]
-            actions.append((tr("Hide its processes") if p.get("expanded") else tr("Show its processes"),
-                            ft.Icons.UNFOLD_MORE_ROUNDED, lambda e: self.toggle_group(p)))
-            if not p.get("locked"):
-                actions += [None, (tr("End all {n}…").format(n=n), ft.Icons.CLOSE_ROUNDED,
-                                   lambda e: self.ask_kill(p, "TERM")),
-                            (tr("Force quit all {n}…").format(n=n), ft.Icons.DANGEROUS_ROUNDED,
-                             lambda e: self.ask_kill(p, "KILL"))]
-            if p.get("game"):
-                actions += [None, (tr("End game…"), ft.Icons.STOP_CIRCLE_ROUNDED,
-                                   lambda e: self.ask_end_game(p["game"]))]
-            actions += [None, (tr("Copy name"), ft.Icons.CONTENT_COPY_ROUNDED, lambda e: self.app.copy(name))]
-            self.menu.items = C.menu_items(actions)
-            C.update(self.menu)
-            self.app.page.run_task(self.menu.open, global_position=position)
-            return
-        if not p.get("locked"):
-            actions += [(tr("End…"), ft.Icons.CLOSE_ROUNDED, lambda e: self.ask_kill(p, "TERM")),
-                        (tr("Force quit…"), ft.Icons.DANGEROUS_ROUNDED, lambda e: self.ask_kill(p, "KILL"))]
-        if p.get("game"):
-            actions += [None, (tr("End game…"), ft.Icons.STOP_CIRCLE_ROUNDED,
-                               lambda e: self.ask_end_game(p["game"]))]
-        actions += [None, (tr("Copy PID {pid}").format(pid=pid), ft.Icons.CONTENT_COPY_ROUNDED,
-                           lambda e: self.app.copy(str(pid))),
-                    (tr("Copy name"), ft.Icons.CONTENT_COPY_ROUNDED, lambda e: self.app.copy(name))]
-        self.menu.items = C.menu_items(actions)
+        handlers = {"toggle": lambda e: self.toggle_group(p), "copy_name": lambda e: self.app.copy(name),
+                    "copy_pid": lambda e: self.app.copy(str(pid)), "term": lambda e: self.ask_kill(p, "TERM"),
+                    "kill": lambda e: self.ask_kill(p, "KILL"), "end_game": lambda e: self.ask_end_game(p["game"])}
+        self.menu.items = C.menu_items(process_menu(p, handlers.__getitem__))
         C.update(self.menu)
         self.app.page.run_task(self.menu.open, global_position=position)
 

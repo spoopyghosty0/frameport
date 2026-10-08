@@ -162,7 +162,7 @@ class ScreenshotsView:
             self.grid.controls = []
             if not self.shots:
                 empty = C.empty_state(
-                    ft.Icons.PHOTO_CAMERA_ROUNDED, tr("No screenshots yet"),
+                    ft.Icons.PHOTO_CAMERA_OUTLINED, tr("No screenshots yet"),
                     tr("Take one in the headset with Steam's screenshot shortcut; it shows up here. Screenshots "
                        "are matched to the FramePort game that was running."))
                 empty.expand, empty.padding = False, T.px(48)  # (expand inside a scrolling column: invalid layout)
@@ -226,7 +226,7 @@ class ScreenshotsView:
                                                           colors=[ft.Colors.TRANSPARENT, T.soft("#000000", 0.8)]),
                                border_radius=ft.BorderRadius(0, 0, T.RADIUS_SM, T.RADIUS_SM))
         tile = ft.Container(
-            ft.Stack([C.art_fill(self._thumb_url(s), radius=T.RADIUS_SM, placeholder_icon=ft.Icons.IMAGE_ROUNDED,
+            ft.Stack([C.art_fill(self._thumb_url(s), radius=T.RADIUS_SM, placeholder_icon=ft.Icons.IMAGE_OUTLINED,
                                  left=0, right=0, top=0, bottom=0),
                       caption, ft.Container(check, left=0, top=0)]),
             width=T.px(256), height=T.px(144), border_radius=T.RADIUS_SM, ink=True,
@@ -262,14 +262,14 @@ class ScreenshotsView:
         if not several and self.filter == ALL and key in {o.key for o in self.dropdown.options}:
             out.append((tr("Show only this game's screenshots") if s.get("package")
                         else tr("Show only screenshots not from a FramePort game"),
-                        ft.Icons.FILTER_ALT_ROUNDED, lambda e: self._filter_to(key)))
+                        ft.Icons.FILTER_ALT_OUTLINED, lambda e: self._filter_to(key)))
         out.append(None)
         if several:
             out.append((tr("Clear selection"), ft.Icons.CLOSE_ROUNDED, lambda e: self._clear_selection()))
         else:
             on = s["path"] in self.selected
             out.append((tr("Deselect") if on else tr("Select"),
-                        ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED if on else ft.Icons.CHECK_BOX_ROUNDED,
+                        ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED if on else ft.Icons.CHECK_BOX_OUTLINED,
                         lambda e: self._toggle(s["path"], not on)))
         out += [None, (tr("Delete {n} screenshots…").format(n=len(shots)) if several else tr("Delete…"),
                        ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self.delete(shots))]

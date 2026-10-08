@@ -425,6 +425,17 @@ def main() -> int:
         steps.append(("monitor", lambda a: a.go("monitor")))
         steps.append(("power-confirm", lambda a: (a.page.pop_dialog(), a.frame_power("restart"))))
     mouse: dict[str, callable] = {}  # step name -> mouse actions (Playwright page) after its screenshot
+    if not args.docs and args.viewport == "1440x900":  # menus that open from buttons (positions at this size)
+        def open_and_shoot(x, y, name):
+            def run(page):
+                page.mouse.click(x, y)
+                time.sleep(2)
+                page.screenshot(path=str(args.out / f"{name}.png"))
+                page.mouse.click(1420, 880)  # outside the menu (Flutter's popup ignores Escape)
+            return run
+        mouse["library"] = open_and_shoot(1354, 54, "library-add-menu")
+        if game:
+            mouse["game"] = open_and_shoot(491, 306, "game-more-menu")  # the hero's "…"
     if args.gestures:
         STEP_SECONDS = 14  # the mouse actions run after each step's screenshot, before the next step
 

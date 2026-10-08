@@ -29,13 +29,13 @@ from . import theme as T
 from .components import install_state  # noqa: F401  (re-exported: tests and older callers import it from here)
 from .jobs import Job
 
-NAV = [("library", tr("Library"), ft.Icons.GRID_VIEW_ROUNDED),
+NAV = [("library", tr("Library"), ft.Icons.GRID_VIEW_OUTLINED),
        ("frame", tr("Steam Frame"), G.FRAME),
        ("files", tr("Files"), ft.Icons.FOLDER_OPEN_ROUNDED),
        ("screenshots", tr("Screenshots"), G.SHOT),
        ("live", tr("Live view"), G.LIVE),
        ("keyboard", tr("Type on Frame"), G.KEYS),
-       ("monitor", tr("Monitor"), ft.Icons.MONITOR_HEART_ROUNDED),
+       ("monitor", tr("Monitor"), ft.Icons.MONITOR_HEART_OUTLINED),
        ("settings", tr("Settings"), ft.Icons.TUNE_ROUNDED)]
 POLL_SECONDS = 30
 _link_state = {"owner": None, "thread": None, "closing": False}  # install links go to the newest window session
@@ -302,7 +302,7 @@ class FramePortApp:
                 on_click=lambda e: self.frame_power(action))
         divider = ft.Container(width=1, height=T.px(26), bgcolor=T.BORDER)
         self.power_row.content = ft.Container(ft.Row([
-            power_button("sleep", tr("Sleep"), ft.Icons.BEDTIME_ROUNDED, tr("Put the Frame to sleep")),
+            power_button("sleep", tr("Sleep"), ft.Icons.BEDTIME_OUTLINED, tr("Put the Frame to sleep")),
             divider,
             power_button("restart", tr("Restart"), ft.Icons.RESTART_ALT_ROUNDED, tr("Restart the Frame")),
             ft.Container(width=1, height=T.px(26), bgcolor=T.BORDER),
@@ -623,13 +623,13 @@ class FramePortApp:
 
             g = library.game(job.package) or {}
             if should_ask_to_share(g, True):
-                out.append(C.secondary(tr("Works in the headset? Share…"), ft.Icons.VOLUNTEER_ACTIVISM_ROUNDED,
+                out.append(C.secondary(tr("Works in the headset? Share…"), ft.Icons.VOLUNTEER_ACTIVISM_OUTLINED,
                                        lambda e: self.share_config_dialog(job.package)))
         if summary and summary.get("suggestions") and job.package:
             sugg = summary["suggestions"]
             label = (tr("Try Proton Experimental and reinstall") if sugg == [pipeline.PROTON_TOOL]
                      else tr("Apply the suggested patches and reinstall"))
-            out.append(C.primary(label, ft.Icons.HEALING_ROUNDED,
+            out.append(C.primary(label, ft.Icons.HEALING_OUTLINED,
                                  lambda e: (pipeline.apply_suggestions(job.package, sugg),
                                             self.install(job.package, getattr(job, "to", "frame")))))
         if job.package and job.state != "running" and library.game(job.package):
@@ -790,78 +790,59 @@ class FramePortApp:
         if opts:
             opts[0][2](None)
 
-    def game_actions(self, pkg: str, quick: bool = True) -> list[tuple | None]:
-        """A game's menu as [(label, icon, handler)], None = divider. quick=True is the library's right-click menu
-        (open, install, test, uninstall first); False is the game page's "…" menu (those have buttons there)."""
+    def game_actions(self, pkg: str, quick: bool = True) -> list:
+        """A game's menu: [(label, icon, handler) | menus.Header | None (divider)], grouped by menus.menu_sections.
+        quick=True is the library's right-click menu; False is the game page's "…" menu, which leaves out what the
+        page has buttons for (play/install in the hero, launch tests and uninstalls on the "Where it's installed"
+        cards, progress + Cancel while a job runs)."""
+        from .menus import MenuState, menu_sections
+
         g = library.game(pkg)
         if not g:
             return []
-        rift = g.get("kind") == "rift"
-        linux = g.get("kind") == "linux"  # installed as it is: nothing to analyze, convert or share as a recipe
+        rift, linux = g.get("kind") == "rift", g.get("kind") == "linux"
         job = self.jobs.busy_with(pkg)
-        out: list[tuple | None] = []
-        if quick:
-            out.append((tr("Open"), ft.Icons.OPEN_IN_NEW_ROUNDED, lambda e: self.open_game(pkg)))
-            if job:
-                out.append((tr("Show progress"), ft.Icons.SYNC_ROUNDED, lambda e: self.show_activity(True)))
-                out.append((tr("Cancel"), ft.Icons.CLOSE_ROUNDED, lambda e: self.jobs.cancel(job)))
-            else:
-                out += [(label, icon, handler) for label, icon, handler, disabled, _ in
-                        self.play_options(g) + self.install_options(g) if handler and not disabled]
-                on_frame = self.frame_state == "connected" and \
-                    C.install_state(g, self.frame_info) in ("installed", "outdated")
-                on_pc = rift and pkg in self.pc_installs()
-                if on_frame:
-                    out.append((tr("Launch test on Frame"), G.TEST,
-                                lambda e: self.test_game(pkg, "frame")))
-                if on_pc:
-                    out.append((tr("Launch test on this PC"), G.TEST,
-                                lambda e: self.test_game(pkg, "pc")))
-                if self.has_game_settings(g):
-                    out.append((tr("Game settings…"), ft.Icons.TUNE_ROUNDED, lambda e: self.settings_dialog(pkg)))
-                if on_frame and not rift and not linux:
-                    out.append((tr("Add videos and files"), ft.Icons.VIDEO_LIBRARY_ROUNDED,
-                                lambda e: self.go("files", pkg)))
-                if on_frame:
-                    out.append((tr("Type on Frame"), G.KEYS, lambda e: self.type_on_frame()))
-                if not rift and not linux:
-                    out.append((tr("Analyze again"), ft.Icons.MANAGE_SEARCH_ROUNDED, lambda e: self.reanalyze(pkg)))
-                if on_frame:
-                    out.append((tr("Uninstall from Frame…"), ft.Icons.DELETE_OUTLINE_ROUNDED,
-                                lambda e: self.uninstall(pkg, "frame")))
-                if on_pc:
-                    out.append((tr("Uninstall from this PC…"), ft.Icons.DELETE_OUTLINE_ROUNDED,
-                                lambda e: self.uninstall(pkg, "pc")))
-            out.append(None)
-            if self.library_view is not None:
-                lv = self.library_view
-                out.append((tr("Select"), ft.Icons.CHECKLIST_ROUNDED,
-                            lambda e: (lv.selected.add(pkg), lv.set_select_mode(True))))
-        if rift:
-            out.append((tr("Change program…"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.choose_exe(pkg)))
-        if linux and self.linux_programs(g):
-            out.append((tr("Change program…"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.choose_exe(pkg)))
-        if self.frame_state == "connected":
-            out.append((tr("Screenshots"), G.SHOT, lambda e: self.go("screenshots", pkg)))
-        out.append((tr("Find artwork…"), ft.Icons.IMAGE_SEARCH_ROUNDED, lambda e: self.find_artwork(pkg)))
-        out.append((tr("Use your own artwork…"), ft.Icons.UPLOAD_FILE_ROUNDED, lambda e: self.custom_artwork(pkg)))
-        if not job and self.frame_state == "connected" and \
-                C.install_state(g, self.frame_info) in ("installed", "outdated"):
-            out.append((tr("Update Steam art on Frame"), ft.Icons.WALLPAPER_ROUNDED,
-                        lambda e: self.update_steam_art(pkg)))
-        out.append((tr("Refresh store details"), ft.Icons.SYNC_ROUNDED, lambda e: self.refresh_details(pkg)))
-        if not job and not linux:
-            out.append((tr("Rebuild only (no install)") if not rift else tr("Check game files"), G.PORT,
-                        lambda e: self.build_game(pkg)))
-        if not linux:
-            out += [(tr("Reset to suggested recipe…"), ft.Icons.RESTART_ALT_ROUNDED, lambda e: self.reset_recipe(pkg)),
-                    (tr("Save as known-good recipe"), G.RECIPE, lambda e: self.save_known_good(pkg)),
-                    (tr("Share working recipe…"), ft.Icons.SHARE_ROUNDED, lambda e: self.share_config_dialog(pkg))]
-        out += [(tr("Collect logs"), ft.Icons.FOLDER_ZIP_ROUNDED, lambda e: self.collect_logs(pkg)),
-                (tr("Report a problem…"), ft.Icons.BUG_REPORT_ROUNDED, lambda e: self.report_problem_dialog(pkg)),
-                None,
-                (tr("Remove from library…"), ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self.remove_from_library(pkg))]
-        return out
+        connected = self.frame_state == "connected"
+        lv = self.library_view
+        handlers: dict[str, Callable] = {
+            "progress": lambda e: self.show_activity(True),
+            "cancel": lambda e: self.jobs.cancel(job),
+            "open": lambda e: self.open_game(pkg),
+            "select": lambda e: (lv.selected.add(pkg), lv.set_select_mode(True)),
+            "settings": lambda e: self.settings_dialog(pkg),
+            "screenshots": lambda e: self.go("screenshots", pkg),
+            "files": lambda e: self.go("files", pkg),
+            "find_art": lambda e: self.find_artwork(pkg),
+            "custom_art": lambda e: self.custom_artwork(pkg),
+            "steam_art": lambda e: self.update_steam_art(pkg),
+            "reset_recipe": lambda e: self.reset_recipe(pkg),
+            "save_recipe": lambda e: self.save_known_good(pkg),
+            "share": lambda e: self.share_config_dialog(pkg),
+            "test_frame": lambda e: self.test_game(pkg, "frame"),
+            "test_pc": lambda e: self.test_game(pkg, "pc"),
+            "analyze": lambda e: self.reanalyze(pkg),
+            "build": lambda e: self.build_game(pkg),
+            "program": lambda e: self.choose_exe(pkg),
+            "details": lambda e: self.refresh_details(pkg),
+            "logs": lambda e: self.collect_logs(pkg),
+            "report": lambda e: self.report_problem_dialog(pkg),
+            "uninstall_frame": lambda e: self.uninstall(pkg, "frame"),
+            "uninstall_pc": lambda e: self.uninstall(pkg, "pc"),
+            "remove": lambda e: self.remove_from_library(pkg),
+        }
+        enabled = (lambda opts: [(label, icon, handler) for label, icon, handler, disabled, _ in opts
+                                 if handler and not disabled])
+        busy = bool(job)
+        st = MenuState(
+            quick=quick, connected=connected, job=busy,
+            on_frame=connected and C.install_state(g, self.frame_info) in ("installed", "outdated"),
+            on_pc=rift and pkg in self.pc_installs(),
+            plays=[] if busy or not quick else enabled(self.play_options(g)),
+            installs=[] if busy or not quick else enabled(self.install_options(g)),
+            settings=self.has_game_settings(g), programs=rift or (linux and bool(self.linux_programs(g))),
+            selectable=lv is not None,
+            media_button=C.is_media_player(g) and not rift)
+        return menu_sections(g, st, handlers.__getitem__)
 
     @staticmethod
     def linux_programs(g: dict) -> list[str]:
@@ -1070,9 +1051,9 @@ class FramePortApp:
                 buttons.append(C.secondary(tr("Uninstall from this PC…"), ft.Icons.DELETE_OUTLINE_ROUNDED,
                                            lambda e, p=pkg: (self.page.pop_dialog(), self.uninstall(p, "pc"))))
             if job.log_path:
-                buttons.append(C.ghost(tr("Launch log"), ft.Icons.DESCRIPTION_ROUNDED,
+                buttons.append(C.ghost(tr("Launch log"), ft.Icons.DESCRIPTION_OUTLINED,
                                        lambda e, j=job: self.show_log_file(j.log_path, j.title)))
-            buttons.append(C.ghost(tr("Report a problem…"), ft.Icons.BUG_REPORT_ROUNDED,
+            buttons.append(C.ghost(tr("Report a problem…"), ft.Icons.BUG_REPORT_OUTLINED,
                                    lambda e, p=pkg: (self.page.pop_dialog(), self.report_problem_dialog(p))))
             rows.append(C.card(ft.Column([
                 C.body(self._title(pkg) if pkg else job.title, T.TEXT, weight=ft.FontWeight.W_600),
@@ -2158,7 +2139,7 @@ class FramePortApp:
                                  "the same key or their saves are lost on reinstall."))],
                       spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
             actions=[C.ghost(tr("Cancel"), on_click=lambda e: self.page.pop_dialog()),
-                     C.danger(tr("Uninstall"), ft.Icons.DELETE_FOREVER_ROUNDED, go)]))
+                     C.danger(tr("Uninstall"), ft.Icons.DELETE_FOREVER_OUTLINED, go)]))
 
     def _uninstalled(self, out: dict) -> None:
         async def close(e=None):

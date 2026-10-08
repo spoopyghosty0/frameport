@@ -211,13 +211,15 @@ class LibraryView:
         self.body = ft.Container(self.menu, expand=True)
         add = C.primary_menu(tr("Add games"), ft.Icons.ADD_ROUNDED, C.menu_items([
             (tr("Scan a folder…"), ft.Icons.FOLDER_OPEN_ROUNDED, app.pick_folder),
-            (tr("Add one game folder…"), ft.Icons.CREATE_NEW_FOLDER_ROUNDED, app.pick_game_folder),
-            (tr("Add an APK file…"), ft.Icons.ANDROID_ROUNDED, app.pick_apk),
-            (tr("Add a Windows program (.exe)…"), ft.Icons.DESKTOP_WINDOWS_ROUNDED, app.pick_windows_exe),
-            (tr("Install from a link…"), ft.Icons.LINK_ROUNDED, app.pick_link),
+            (tr("Add a PC VR game folder…"), G.PC, app.pick_game_folder),
+            (tr("Add an APK…"), ft.Icons.ANDROID_ROUNDED, app.pick_apk),
+            (tr("Add a Windows program…"), ft.Icons.WEB_ASSET_ROUNDED, app.pick_windows_exe),
+            (tr("Add from a link…"), ft.Icons.LINK_ROUNDED, app.pick_link),
             None,  # native Linux apps (GitHub #31)
             (tr("Add a Linux app…"), ft.Icons.TERMINAL_ROUNDED, app.pick_linux_app),
-            (tr("Add a Linux app folder…"), ft.Icons.FOLDER_ROUNDED, app.pick_linux_folder)]))
+            (tr("Add a Linux app folder…"), ft.Icons.FOLDER_OUTLINED, app.pick_linux_folder),
+            None,
+            (tr("Rescan folders"), ft.Icons.REFRESH_ROUNDED, app.rescan)]))
         self.rescan_btn = C.secondary(tr("Rescan folders"), ft.Icons.REFRESH_ROUNDED, app.rescan,
                                       tooltip=C.tip(HELP["rescan"]))
         self.update_all_btn = C.secondary(tr("Update all"), ft.Icons.SYSTEM_UPDATE_ALT_ROUNDED,
@@ -282,7 +284,7 @@ class LibraryView:
             self.update_resume_bar()  # also after Dismiss / Resume and when installs finish or fail
             if not games:
                 self.body.content = C.empty_state(
-                    ft.Icons.LIBRARY_ADD_ROUNDED, tr("Add your games"),
+                    ft.Icons.LIBRARY_ADD_OUTLINED, tr("Add your games"),
                     tr("Point FramePort at a folder with Quest or Android games (APK + OBB) or PC VR games. It "
                        "finds them, works out what each needs and fetches artwork."),
                     C.primary(tr("Scan a folder…"), ft.Icons.FOLDER_OPEN_ROUNDED, self.app.pick_folder, big=True),
@@ -489,15 +491,14 @@ class LibraryView:
 
     def _menu_chip(self, key: str, label: str, options: list[tuple[str, str]]) -> ft.Control:
         current = dict(options).get(self.f.get(key), options[0][1])
-        return ft.PopupMenuButton(
+        return C.menu_button(
             content=ft.Container(ft.Row([C.meta(label + ":"), C.body(current, T.TEXT, size=T.T_META),
                                          ft.Icon(ft.Icons.EXPAND_MORE_ROUNDED, size=T.px(16), color=T.TEXT_2)],
                                         spacing=T.px(4), tight=True),
                                  padding=ft.Padding(T.px(12), T.px(7), T.px(8), T.px(7)), border_radius=T.px(20),
                                  border=ft.Border.all(1, T.BORDER)),
-            items=[ft.PopupMenuItem(content=ft.Text(text), checked=self.f.get(key) == value,
-                                    on_click=lambda e, v=value: self._set(key, v)) for value, text in options],
-            bgcolor=T.SURFACE_2, tooltip="")
+            items=[C.check_item(text, self.f.get(key) == value, lambda e, v=value: self._set(key, v))
+                   for value, text in options])
 
     def _toggle_tag(self, tag: str):
         tags = list(self.f.get("tags") or [])
@@ -507,13 +508,13 @@ class LibraryView:
     def _tag_menu(self, games: list[dict]) -> ft.Control:
         chosen = self.f.get("tags") or []
         label = ", ".join(chosen) if chosen else tr("Any")
-        items = [ft.PopupMenuItem(content=ft.Text(t), checked=t in chosen, on_click=lambda e, t=t: self._toggle_tag(t))
-                 for t in all_tags(games)]
+        items = [C.check_item(t, t in chosen, lambda e, t=t: self._toggle_tag(t)) for t in all_tags(games)]
         if chosen:
-            items.append(ft.PopupMenuItem(content=ft.Text(tr("Clear tags")), icon=ft.Icons.CLOSE_ROUNDED,
-                                          on_click=lambda e: self._set("tags", [])))
-        return ft.PopupMenuButton(
-            content=ft.Container(ft.Row([ft.Icon(ft.Icons.SELL_ROUNDED, size=T.px(14), color=T.TEXT_2),
+            items += C.menu_items([None, (tr("Clear tags"), ft.Icons.CLOSE_ROUNDED, lambda e: self._set("tags", []))])
+        return C.menu_button(
+            content=ft.Container(ft.Row([ft.Container(ft.Icon(ft.Icons.SELL_OUTLINED, size=T.px(14), color=T.TEXT_2),
+                                                      width=T.px(16), height=T.px(16),
+                                                      alignment=ft.Alignment.CENTER),  # sized: overlapped the label
                                          C.meta(tr("Tags:")),
                                          C.body(label if len(label) < 28
                                                 else tr("{len} selected").format(len=len(chosen)), T.TEXT,
@@ -522,7 +523,7 @@ class LibraryView:
                                         spacing=T.px(4), tight=True),
                                  padding=ft.Padding(T.px(12), T.px(7), T.px(8), T.px(7)), border_radius=T.px(20),
                                  border=ft.Border.all(1, T.ACCENT if chosen else T.BORDER)),
-            items=items, bgcolor=T.SURFACE_2, tooltip=C.tip(HELP["tags"]))
+            items=items, tooltip=C.tip(HELP["tags"]))
 
     # ---------------------------------------------------------------- cards
     def _key(self, g: dict, pc: set[str], tw: set[str]) -> tuple:

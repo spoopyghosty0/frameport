@@ -130,7 +130,7 @@ class FrameView:
         send = C.ghost(tr("Files"), ft.Icons.FOLDER_OPEN_ROUNDED, lambda e: self.app.go("files"),
                        tooltip=C.tip(HELP["files"]))
         return C.section(tr("Installed games ({len})").format(len=len(items)), body,
-                         action=ft.Row([send, C.ghost(tr("Free up space…"), ft.Icons.CLEANING_SERVICES_ROUNDED,
+                         action=ft.Row([send, C.ghost(tr("Free up space…"), ft.Icons.CLEANING_SERVICES_OUTLINED,
                                                       lambda e: self.app.cleanup_frame(),
                                                       tooltip=C.tip(HELP["free_space"]))], spacing=T.S2, tight=True)
                          if items else send)

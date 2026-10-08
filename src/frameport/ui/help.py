@@ -28,8 +28,8 @@ HELP: dict[str, str] = _Translated({
                  "game (or right-click → Change program…) to pick it.",
     "platform_quest": "A Meta Quest game (APK). It's rebuilt for the Frame and runs in Lepton, Valve's Android "
                       "container.",
-    "platform_windows": "A Windows game without VR, added with \"Add one game folder…\". On the Frame, Proton runs it "
-                        "as a window (like Steam's own Windows games); it's in the Frame's Steam library.",
+    "platform_windows": "A Windows game without VR, added with \"Add a PC VR game folder…\". On the Frame, Proton "
+                        "runs it as a window (like Steam's own Windows games); it's in the Frame's Steam library.",
     "platform_pcvr": "A Windows PC VR game (OpenXR, SteamVR or Oculus). It runs on this PC with SteamVR, or on the "
                      "Frame with Proton. Oculus-only games also need Revive (Oculus → OpenXR).",
     "platform_android": "An ordinary Android app or game (no VR). It's installed unchanged and runs in Lepton, Valve's "
@@ -70,7 +70,7 @@ HELP: dict[str, str] = _Translated({
                      "FrameDrop sideloader). FramePort reads the same links: it shows what the link offers, asks, "
                      "downloads it, adds it to your library and installs it on the Frame. Only https links to "
                      "public servers are used. Windows and Linux open these links in FramePort; on macOS, paste the "
-                     "link into Add games → Install from a link….",
+                     "link into Add games → Add from a link….",
     "linux_x86": "The Frame's CPU is arm64. Programs built for x86_64 PCs run through FEX, Valve's x86 translator, "
                  "with the x86 libraries SteamOS ships for it (glibc, Mesa) - the way Steam on the Frame runs x86 "
                  "Linux games. That works for many programs but is slower: use an arm64 build when there is one.",

@@ -298,6 +298,12 @@ def apply(page: ft.Page) -> None:
                          shape=ft.RoundedRectangleBorder(radius=RADIUS), collapsed_shape=ft.RoundedRectangleBorder(
                              radius=RADIUS), icon_color=TEXT_2, collapsed_icon_color=TEXT_3, text_color=TEXT,
                          collapsed_text_color=TEXT),
+                     # menus lift off the dark page: border + shadow (right-click ContextMenus only get this theme)
+                     popup_menu_theme=ft.PopupMenuTheme(
+                         color=SURFACE_2, elevation=8, shadow_color="#000000",
+                         shape=ft.RoundedRectangleBorder(radius=RADIUS_SM, side=ft.BorderSide(1, BORDER_STRONG)),
+                         menu_padding=ft.Padding(0, px(4), 0, px(4)),
+                         label_text_style=ft.TextStyle(size=T_BODY, color=TEXT)),
                      scaffold_bgcolor=BG, card_bgcolor=SURFACE, canvas_color=SURFACE_2)
     page.theme = page.dark_theme = theme
     page.theme_mode = ft.ThemeMode.DARK
