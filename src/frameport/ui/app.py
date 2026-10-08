@@ -538,13 +538,27 @@ class FramePortApp:
     def _on_key(self, e: ft.KeyboardEvent) -> None:
         if self._typing_on_frame:
             return  # Type on Frame is open: Esc and shortcuts belong to the Frame
+        lib = self.library_view if self.route[0] == "library" else None
         if e.key == "Escape" and self.activity.open:
             self.show_activity(False)
+        elif e.key == "Escape" and lib and lib.search_focused and lib.search.value:
+            lib.clear_search()  # Esc in the search clears it
         elif e.key.upper() == "F" and (e.ctrl or e.meta) and self.route[0] == "library" and self.search_field:
             try:
                 self.page.run_task(self.search_field.focus)
             except Exception:  # noqa: BLE001
                 pass
+        elif lib:  # type to search: keys typed anywhere on the Library go to its search
+            from .views.library import should_capture, typed_char
+
+            dialog = C.dialog_open(self.page)
+            if (e.key == "Backspace" and not (e.ctrl or e.alt or e.meta) and not dialog and not lib.search_focused
+                    and lib.search.value):
+                lib.type_key(None, backspace=True)
+                return
+            char = typed_char(e.key, e.shift, e.ctrl, e.alt, e.meta)
+            if should_capture(self.route[0], dialog, lib.search_focused, char, lib.search.value or ""):
+                lib.type_key(char)
 
     # ================================================================== jobs
     def _on_job(self, job: Job | None) -> None:
@@ -1453,7 +1467,7 @@ class FramePortApp:
             self.scan(path)
 
     async def pick_game_folder(self, e=None):
-        path = await ft.FilePicker().get_directory_path(dialog_title=tr("One PC VR game folder"))
+        path = await ft.FilePicker().get_directory_path(dialog_title=tr("One PC game folder"))
         if path:
             self.scan(path, single=True)
 

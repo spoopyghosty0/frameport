@@ -434,6 +434,12 @@ def main() -> int:
                 page.mouse.click(1420, 880)  # outside the menu (Flutter's popup ignores Escape)
             return run
         mouse["library"] = open_and_shoot(1354, 54, "library-add-menu")
+        # type to search: click an empty part of the header, then type (the "-mouse" shot shows "arc" + the matches)
+        # (the actions wait first: the previous step's mouse actions outlast STEP_SECONDS)
+        steps.insert(1, ("library-typed", lambda a: (time.sleep(6), a.library_view.clear_search())))
+        mouse["library-typed"] = lambda page: (page.mouse.click(480, 60), time.sleep(0.5),
+                                               page.keyboard.type("arc", delay=120))
+        steps.insert(2, ("library-cleared", lambda a: (time.sleep(6), a.library_view.clear_search())))
         if game:
             mouse["game"] = open_and_shoot(491, 306, "game-more-menu")  # the hero's "…"
     if args.gestures:

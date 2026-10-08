@@ -141,6 +141,35 @@ def filter_games(games: list[dict], f: dict, frame_info: dict | None = None,
     return sorted(out, key=key)
 
 
+# type to search: Flet sends Flutter's key labels ("A" for a and A, "1", " ", "-", "Arrow Left", "Numpad 1", "F5"),
+# not the typed character, so shifted symbols follow the US layout (what the label alone can tell)
+_SHIFTED = dict(zip("1234567890-=[];'`\\,./", "!@#$%^&*()_+{}:\"~|<>?", strict=True))
+_NAMED_CHARS = {"space": " ", **{f"numpad{d}": d for d in "0123456789"}, "numpadadd": "+",
+                "numpadsubtract": "-", "numpadmultiply": "*", "numpaddivide": "/", "numpaddecimal": "."}
+
+
+def typed_char(key: str, shift: bool = False, ctrl: bool = False, alt: bool = False,
+               meta: bool = False) -> str | None:
+    """The character a key press types (for the Library's type-to-search), None for shortcuts (Ctrl/Alt/Meta held),
+    modifiers, navigation, function and other named keys."""
+    if not key or ctrl or alt or meta:
+        return None
+    if len(key) == 1:
+        if key.isalpha():
+            return key.upper() if shift else key.lower()
+        if shift and key in _SHIFTED:
+            return _SHIFTED[key]
+        return key if key.isprintable() else None
+    return _NAMED_CHARS.get(key.lower().replace(" ", "").replace("_", ""))
+
+
+def should_capture(route: str, dialog_open: bool, field_focused: bool, char: str | None, query: str = "") -> bool:
+    """Whether a typed character goes to the Library's search: only on the Library itself, with no dialog open and
+    the search not already focused (it types there itself); a leading space is ignored (Space on a focused button)."""
+    return (route == "library" and not dialog_open and not field_focused and char is not None
+            and not (char == " " and not query))
+
+
 def load_filters() -> dict:
     saved = library.setting("ui.library") or {}
     return {**DEFAULT_FILTERS, "tags": [], **{k: v for k, v in saved.items() if k in DEFAULT_FILTERS and k != "q"}}
@@ -187,8 +216,11 @@ class LibraryView:
                                 run_spacing=T.S4, padding=ft.Padding(0, T.S2, T.S2, T.S5))
         self.count = C.meta("")
         self.subtitle = C.body("", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-        self.search = C.search(value=self.f["q"], hint_text=tr("Search games and tags"), width=T.px(260),
-                               on_change=self._on_search)
+        # typing anywhere on the Library goes here (app._on_key); search_focused tracks where keys already land
+        self.search_focused = False
+        self.search = C.search(value=self.f["q"], hint_text=tr("Type to search games and tags"), width=T.px(260),
+                               on_change=self._on_search, on_focus=lambda e: self._focus(True),
+                               on_blur=lambda e: self._focus(False))
         # an X that clears the search at once (shown only while there is text)
         # a small clickable icon, not an IconButton: its 40 px minimum size made the field taller and pushed the
         # text off-centre
@@ -211,7 +243,7 @@ class LibraryView:
         self.body = ft.Container(self.menu, expand=True)
         add = C.primary_menu(tr("Add games"), ft.Icons.ADD_ROUNDED, C.menu_items([
             (tr("Scan a folder…"), ft.Icons.FOLDER_OPEN_ROUNDED, app.pick_folder),
-            (tr("Add a PC VR game folder…"), G.PC, app.pick_game_folder),
+            (tr("Add a PC game folder…"), G.PC, app.pick_game_folder),
             (tr("Add an APK…"), ft.Icons.ANDROID_ROUNDED, app.pick_apk),
             (tr("Add a Windows program…"), ft.Icons.WEB_ASSET_ROUNDED, app.pick_windows_exe),
             (tr("Add from a link…"), ft.Icons.LINK_ROUNDED, app.pick_link),
@@ -405,8 +437,36 @@ class LibraryView:
         C.update(self.search)
         self._apply(update=True)
 
+    def _focus(self, on: bool) -> None:
+        self.search_focused = on
+
+    def type_key(self, char: str | None, backspace: bool = False) -> None:
+        """A key typed while the search isn't focused (app._on_key): add it (or remove the last character), filter
+        like typing in the field, and focus the field so the next keys go there directly."""
+        value = self.search.value or ""
+        self.search.value = value[:-1] if backspace else value + (char or "")
+        self.set_query(self.search.value)
+        C.update(self.search)
+        try:
+            self.app.page.run_task(self._focus_at_end)
+        except Exception:  # noqa: BLE001
+            pass
+
+    async def _focus_at_end(self) -> None:
+        await self.search.focus()
+        n = len(self.search.value or "")
+        try:  # Flutter selects nothing on a programmatic focus; put the cursor after the typed text
+            self.search.selection = ft.TextSelection(base_offset=n, extent_offset=n)
+            C.update(self.search)
+        except Exception:  # noqa: BLE001  (older Flet: no selection property; the cursor goes to the end anyway)
+            pass
+
     def _on_search(self, e):
-        self.f["q"] = e.control.value
+        self.set_query(e.control.value)
+
+    def set_query(self, value: str) -> None:
+        """The search text changed: show/hide the clear X, filter after a short pause (debounced)."""
+        self.f["q"] = value
         if self.search.suffix.visible != bool(self.f["q"]):
             self.search.suffix.visible = bool(self.f["q"])
             C.update(self.search)

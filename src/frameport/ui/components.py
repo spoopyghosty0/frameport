@@ -611,6 +611,17 @@ def dialog(title: str | ft.Control | None, content: ft.Control | None, actions: 
                           shape=_shape(T.RADIUS), actions_alignment=ft.MainAxisAlignment.END, **kw)
 
 
+def dialog_open(page: ft.Page | None) -> bool:
+    """Whether a dialog (or viewer/bottom sheet) is open: Flet 1.0's page.show_dialog keeps every shown dialog in
+    page._dialogs until Flutter reports it dismissed, and pop_dialog sets open=False at once. Snack bars (toasts)
+    travel the same way but don't take the keyboard, so they don't count. Without that list: assume none."""
+    try:
+        shown = page._dialogs.controls  # noqa: SLF001  (Flet has no public "is a dialog open")
+    except Exception:  # noqa: BLE001
+        return False
+    return any(d.open and not isinstance(d, ft.SnackBar) for d in shown)
+
+
 def viewer(content: ft.Control, on_dismiss: Callable | None = None, **kw) -> ft.AlertDialog:
     """A full-size image/screenshot viewer: no title, a dark backdrop around the picture."""
     return ft.AlertDialog(content=content, bgcolor=T.BG, content_padding=T.S3, shape=_shape(T.RADIUS),

@@ -185,7 +185,7 @@ Command line: `frameport update` (`--check` only checks, exit code 10 = update a
 ## PC VR games
 
 PC VR games are Windows VR games (OpenXR, SteamVR or Oculus). Scan a folder of them (one folder per game) or use
-**Add games → Add a PC VR game folder…**. FramePort finds the game's program and asks when there is more than one
+**Add games → Add a PC game folder…**. FramePort finds the game's program and asks when there is more than one
 candidate. **Already patched** on a game page installs a copy unchanged. Oculus-only games need Revive: FramePort uses
 an installed Revive, or downloads a portable copy.
 
@@ -196,7 +196,7 @@ an installed Revive, or downloads a portable copy.
   on the game page.
 - Games that use the Oculus Platform SDK check the licence through the Oculus app, so they run on the PC only.
 
-**Windows games without VR:** **Add games → Add a PC VR game folder…** with the game's folder (pick the program that
+**Windows games without VR:** **Add games → Add a PC game folder…** with the game's folder (pick the program that
 starts it if asked). FramePort installs it on the Frame and Proton runs it as a window, like Steam's own Windows games;
 it shows up in the Frame's Steam library tagged "Windows game on Frame". Whether a game runs depends on Proton on ARM
 (x86 games run through emulation).
