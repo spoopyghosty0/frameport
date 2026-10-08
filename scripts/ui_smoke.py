@@ -426,7 +426,8 @@ def main() -> int:
     ap.add_argument("--no-test", action="store_true", help="with --frame: skip the launch-test job")
     ap.add_argument("--scale", type=float, default=1.0, help="UI scale to render at (e.g. 1.5)")
     ap.add_argument("--viewport", default="1280x820", help="browser size, e.g. 2560x1440")
-    ap.add_argument("--update", action="store_true", help="pretend a new FramePort release exists (update UI)")
+    ap.add_argument("--update", action="store_true", help="pretend a new FramePort release exists (update UI: "
+                    "changelog dialog, what's new bar + dialog, Settings changelog)")
     ap.add_argument("--fake-frame", action="store_true", help="pretend a Steam Frame is connected (no device needed)")
     ap.add_argument("--hover", default=None, help="x,y: move the mouse there before the Library screenshot")
     ap.add_argument("--install-questions", nargs="+", metavar="PKG", default=None,
@@ -654,14 +655,48 @@ def main() -> int:
         steps = [("library", lambda a: a.navigate(0)), ("questions", open_questions),
                  ("after-1st-double", double_click), ("after-2nd-double", double_click), ("end", report)]
     if args.update:
-        from frameport import updates
+        from frameport import __version__, updates
 
+        notes = ("FramePort v9.9.9: Windows (x64), macOS (Apple Silicon) and Linux (x64, ARM64).\n\n## What's new\n\n"
+                 "- Self-update test release: the update dialog shows every version since yours\n"
+                 "- **Bold** and `code` in notes, and a [link](https://example.invalid)\n- A third bullet\n\n"
+                 "Already have FramePort? It offers this update itself (Library → **Update now**).\n\n## Install\n\n"
+                 "- footer that the changelog leaves out\n")
         fake = updates.Update(version="9.9.9", tag="v9.9.9", page="https://example.invalid", asset=None, asset_url=None,
-                              sums_url=None, wheel_url=None,
-                              notes="## What's new\n- Self-update test release\n- **Bold** and `code` in notes")
+                              sums_url=None, wheel_url=None, notes=notes, published="2026-10-08T10:00:00Z")
+        major, minor, _patch = updates.parse_version(__version__)[:3]
+        older = f"{major}.{max(minor - 1, 0)}"
+
+        def entry(version, date, body):
+            return updates.ChangelogEntry(version=version, tag=f"v{version}", date=date, title=f"FramePort v{version}",
+                                          body=body, page="https://example.invalid",
+                                          dev=updates.is_dev_version(version))
+        fake_log = [updates.entry_from_update(fake),
+                    entry("9.9.8", "2026-10-06", "- Install links from FrameDrop buttons\n- Faster uploads over USB"),
+                    entry("9.9.7", "2026-10-04", "- Monitor tab with live Frame stats"),
+                    entry(__version__, "2026-10-02", "- The version you have: **Live view** with sound\n"
+                                                     "- Files tab: drag and drop\n- Smaller fixes"),
+                    entry(f"{older}.3", "2026-09-30", "- Proton defaults to the newest stable build"),
+                    entry(f"{older}.2", "2026-09-28", "- Language packs")]
+        updates.fetch_changelog = lambda force=False, need=None: list(fake_log)  # no GitHub in screenshots
+
+        def news(a):
+            a.updater._set(None)
+            a.updater.news = updates.recent_history(fake_log, n=3)
+            a.navigate(0)
+            a.refresh_view()
+
+        def settings_updates(a):
+            a.go("settings")
+            # once the page is mounted: scrolling an unmounted column does nothing
+            threading.Timer(1.0, lambda: a.page.run_task(a.settings_view.show_section, "updates")).start()
         steps += [("update-banner", lambda a: (a.updater._set(fake), a.navigate(0))),
                   ("update-dialog", lambda a: a.updater.show_dialog()),
-                  ("update-settings", lambda a: (a.page.pop_dialog(), a.go("settings")))]
+                  ("update-settings", lambda a: (a.page.pop_dialog(), settings_updates(a))),
+                  ("update-whats-new-bar", lambda a: news(a)),
+                  ("update-whats-new-dialog", lambda a: a.updater.show_news()),
+                  ("update-settings-changelog", lambda a: (a.page.pop_dialog(), settings_updates(a),
+                                                           a.updater.show_history()))]
     if args.frame:
         from frameport.frame.connection import parse_target
 

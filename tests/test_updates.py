@@ -296,3 +296,118 @@ def test_dev_release_is_only_read_on_request():
     up = updates.update_from_release(release, "FramePort-windows-x64.zip", dev=True)
     assert up.version == "0.9.1.dev57" and up.asset_url == "z" and up.sums_url == "s" and up.notes == "try X"
     assert updates.update_from_release({**release, "assets": []}, dev=True) is None  # no wheel: no version
+
+
+# ------------------------------------------------------------------------------------------------- changelog
+FOOTER = (Path(__file__).parents[1] / "packaging" / "release-footer.md").read_text(encoding="utf-8")
+
+
+def ci_notes(tag, bullets):
+    """Release notes as CI writes them (.github/workflows/build.yml)."""
+    return (f"FramePort {tag}: Windows (x64), macOS (Apple Silicon) and Linux (x64, ARM64).\n\n## What's new\n\n"
+            f"{bullets}\n\nAlready have FramePort? It offers this update itself (Library → **Update now**).\n\n"
+            + FOOTER)
+
+
+def rel(tag, bullets="- a change", date="2026-10-01", **kw):
+    return {"tag_name": tag, "name": f"FramePort {tag}", "body": ci_notes(tag, bullets), "draft": False,
+            "prerelease": False, "published_at": f"{date}T12:00:00Z",
+            "html_url": f"https://example.invalid/releases/{tag}", "assets": [], **kw}
+
+
+DEV = {"tag_name": "dev", "name": "FramePort dev build 0.9.3.dev7", "prerelease": True, "draft": False,
+       "published_at": "2026-10-07T00:00:00Z", "html_url": "https://example.invalid/releases/dev",
+       "body": "Dev build **0.9.3.dev7** from commit abc1234 (2026-10-07). For testing fixes before\nthe next release; "
+               "you get that release as a normal update.\n\n## Please test\n\nthe changelog\n\n"
+               "## Changes since v0.9.2\n\n- one commit\n",
+       "assets": [{"name": "frameport-0.9.3.dev7-py3-none-any.whl", "browser_download_url": "w"}]}
+
+RELEASES = [DEV, rel("v0.9.2", "- newest", "2026-10-05"), rel("v0.9.1", "- middle", "2026-10-03"),
+            rel("v0.9.1-rc1", prerelease=True), rel("v0.9.0", "- old", "2026-10-01"), rel("v0.8.9", draft=True),
+            "garbage", {"tag_name": "nightly"}]
+
+
+def test_whats_new_keeps_only_the_changes():
+    body = updates.whats_new(ci_notes("v0.9.2", "- **Bold** change\n- [link](https://x.invalid)"))
+    assert body == "- **Bold** change\n- [link](https://x.invalid)"
+    # notes without a "What's new" heading: CI's intro, the update hint and the install footer go
+    plain = updates.whats_new("FramePort v0.3.1: Windows (x64).\n\nFixed things.\n\nAlready have FramePort? It "
+                              "offers this update itself.\n\n" + FOOTER)
+    assert plain == "Fixed things."
+    dev = updates.whats_new(DEV["body"])
+    assert "Please test" in dev and "one commit" in dev and "Dev build" not in dev
+    assert updates.whats_new("") == "" and updates.whats_new(None) == ""
+
+
+def test_changelog_entries_skip_drafts_prereleases_and_bad_data():
+    entries = updates.changelog_entries(RELEASES)
+    assert [e.version for e in entries] == ["0.9.3.dev7", "0.9.2", "0.9.1", "0.9.0"]
+    newest = entries[1]
+    assert (newest.date, newest.title, newest.body) == ("2026-10-05", "FramePort v0.9.2", "- newest")
+    assert entries[0].dev and not newest.dev
+    assert updates.changelog_entries(None) == [] and updates.changelog_entries({"message": "rate limited"}) == []
+
+
+def test_changelog_ranges_stable_and_dev():
+    entries = updates.changelog_entries(RELEASES)
+
+    def versions(es):
+        return [e.version for e in es]
+    assert versions(updates.between(entries, "0.9.0", "0.9.2")) == ["0.9.2", "0.9.1"]       # newest first
+    assert versions(updates.between(entries, "0.9.2", "0.9.2")) == []
+    assert versions(updates.between(entries, "0.9.1.dev3", "0.9.1")) == ["0.9.1"]           # dev → its release
+    assert versions(updates.between(entries, "0.9.1", "0.9.3.dev7")) == ["0.9.3.dev7", "0.9.2"]  # choosing dev
+    assert versions(updates.between(entries, "0.9.1", "0.9.3")) == ["0.9.2"]               # stable: no dev entry
+    up = updates.update_from_release(rel("v0.9.2", "- newest"), "")
+    assert versions(updates.changelog_for(up, "0.9.0", entries)) == ["0.9.2", "0.9.1"]
+    updates.skip("0.9.1")  # a skipped version's changes still reach whoever updates past it
+    assert versions(updates.changelog_for(up, "0.9.0", entries)) == ["0.9.2", "0.9.1"]
+    # the offered release isn't in the (stale) list yet: its own notes come first
+    new = updates.update_from_release(rel("v0.9.4", "- brand new"), "")
+    out = updates.changelog_for(new, "0.9.1", entries)
+    assert versions(out) == ["0.9.4", "0.9.2"] and out[0].body == "- brand new"
+    assert versions(updates.recent_history(entries, "0.9.2", n=2)) == ["0.9.2", "0.9.1"]
+    assert versions(updates.recent_history(entries, "0.9.3.dev7")) == ["0.9.3.dev7", "0.9.2", "0.9.1", "0.9.0"]
+
+
+def test_fetch_changelog_caches_and_survives_offline(monkeypatch):
+    calls = []
+
+    def online(url, **kw):
+        calls.append(url)
+        return type("R", (), {"text": json.dumps(RELEASES), "raise_for_status": lambda self: None})()
+    monkeypatch.setattr(cache, "http_get", online)
+    assert [e.version for e in updates.fetch_changelog()][:2] == ["0.9.3.dev7", "0.9.2"]
+    assert calls == [updates.RELEASES_API]
+    updates.fetch_changelog(need="0.9.1")  # cached and fresh: no second request
+    assert len(calls) == 1
+    updates.fetch_changelog(need="0.9.5")  # newer than everything cached: asks GitHub again
+    assert len(calls) == 2
+    monkeypatch.setattr(cache, "http_get", lambda url, **kw: (_ for _ in ()).throw(OSError("offline")))
+    assert updates.fetch_changelog(force=True)[1].version == "0.9.2"  # offline: the cached copy
+    (cache.cache_dir() / "app-releases.json").unlink()
+    assert updates.fetch_changelog(force=True) == []                  # offline, nothing cached: empty, no error
+
+
+def test_news_range():
+    assert updates.news_range(None, "0.9.2") == (False, None)                     # first start ever
+    assert updates.news_range(None, "0.9.2", used_before=True) == (True, None)    # from a version without the setting
+    assert updates.news_range("0.9.0", "0.9.2") == (True, "0.9.0")
+    assert updates.news_range("0.9.2", "0.9.2") == (False, None)
+    assert updates.news_range("0.9.3", "0.9.2") == (False, None)                  # went back
+    assert updates.news_range("0.9.1.dev4", "0.9.1") == (True, "0.9.1.dev4")
+
+
+def test_pending_news_shows_once_and_waits_while_offline():
+    entries = updates.changelog_entries(RELEASES)
+    assert updates.pending_news("0.9.2", entries) == []                           # first start: just recorded
+    assert library.setting("update.last_seen_version") == "0.9.2"
+    library.set_setting("update.last_seen_version", "0.9.0")
+    assert updates.pending_news("0.9.2", []) == []                                # offline: try again next start
+    assert library.setting("update.last_seen_version") == "0.9.0"
+    assert [e.version for e in updates.pending_news("0.9.2", entries)] == ["0.9.2", "0.9.1"]
+    assert library.setting("update.last_seen_version") == "0.9.2"
+    assert updates.pending_news("0.9.2", entries) == []                           # only once
+    library.set_setting("update.last_seen_version", None)
+    library.set_setting("update.last_check", 1.0)                                 # updated from an older FramePort
+    assert [e.version for e in updates.pending_news("0.9.2", entries)] == ["0.9.2"]

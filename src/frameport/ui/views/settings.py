@@ -146,6 +146,9 @@ class SettingsView:
                     C.secondary(tr("Check for updates"), ft.Icons.REFRESH_ROUNDED, lambda e: app.updater.check_now())],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             status,
+            ft.Row([C.meta(tr("What changed in this version and the ones before it."), expand=True),
+                    C.ghost(tr("What's new…"), ft.Icons.NEW_RELEASES_OUTLINED, lambda e: app.updater.show_history())],
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
             C.switch(tr("Check for new versions automatically"), value=bool(library.setting("update.auto_check", True)),
                       on_change=auto_check),
             C.switch(tr("Install updates automatically (downloads in the background, installs when FramePort "

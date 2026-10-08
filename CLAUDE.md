@@ -211,9 +211,15 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
     signed, `ready.json`); `apply()` writes + starts detached `apply.ps1`/`apply.sh` (wait for pid → Windows: copy over,
     replaced files kept in `updates/<ver>/previous` because the zip has no top folder; macOS/Linux: mv to `.old` + swap,
     rollback, `xattr -dr` quarantine → relaunch; `<data>/logs/update.log`). `ui/updater.py`: background check (10 s,
-    then 6 h), sidebar card (hidden control, toggled), Library bar (`library_bar`), notes dialog (`ft.Markdown`), job
+    then 6 h), sidebar card (hidden control, toggled), Library bar (`library_bar`), changelog dialog, job
     `app-update` that restarts only when no other job is active, `apply_pending_at_start()` in `main()` for
-    "Install updates automatically"; Settings → Updates. CLI: `--version`, `frameport update [--check (exit 10)]
+    "Install updates automatically"; Settings → Updates. Changelog: `updates.fetch_changelog` (releases list,
+    `app-releases.json`, same 6 h cache, offline → cached / []) → `ChangelogEntry` (`whats_new()` keeps only the tag
+    message's "What's new" part: CI's intro, update hint and release-footer.md stripped); `between`/`changelog_for`
+    (installed < v ≤ offered, dev entry only when on/choosing dev, skipped versions included), `recent_history`;
+    the update/dev dialogs show one collapsible section per version (`_changes_column`, newest open); after an update
+    `pending_news` (setting `update.last_seen_version`; first start only records it; offline → retried next start)
+    → Library "was updated" bar → "See what's new…"; Settings → Updates "What's new…" = recent history. CLI: `--version`, `frameport update [--check (exit 10)]
     [--yes]`, once-a-day stderr hint read from the cache only (`refresh_cache()` in a daemon thread writes no
     settings, to avoid read-modify-write races). `scripts/update_smoke.py <archive>` runs the real extract + swap script
     (no relaunch) — CI runs it on all three OS with the archive it just built.

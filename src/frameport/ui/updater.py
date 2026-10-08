@@ -1,5 +1,6 @@
 """The GUI side of self-update: finds new releases in the background, shows them (sidebar card, Library bar, a dialog
-with the release notes) and updates in one click. frameport.updates does the work."""
+with the changelog of every version since the installed one) and updates in one click; after an update, a Library bar
+offers "What's new" once. frameport.updates does the work."""
 from __future__ import annotations
 
 import subprocess
@@ -10,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import flet as ft
 
-from .. import __version__, updates
+from .. import REPO_URL, __version__, updates
 from ..core import applog, library
 from ..errors import explain
 from ..i18n import tr
@@ -28,6 +29,8 @@ class Updater:
     def __init__(self, app: FramePortApp):
         self.app = app
         self.found: updates.Update | None = None
+        self.changes: list[updates.ChangelogEntry] = []  # the found update's changelog (fetched with it)
+        self.news: list[updates.ChangelogEntry] = []     # changes since the last start (after an update), shown once
         self.restart = None          # callable: what to do once the job queue is idle (install + quit)
         self.preparing = False
         self.build_card()
@@ -46,6 +49,23 @@ class Updater:
     # ---------------------------------------------------------------- checking
     def start(self) -> None:
         threading.Thread(target=self._loop, daemon=True).start()
+        threading.Thread(target=self._load_news, daemon=True).start()
+
+    def _load_news(self) -> None:
+        """First start of a newer version (also after "Install updates automatically"): the Library offers its
+        changes once. Offline: nothing now, tried again at the next start."""
+        try:
+            news = updates.pending_news()
+        except Exception:  # noqa: BLE001
+            applog.log.exception("loading what's new failed")
+            return
+        if news:
+            self.news = news
+            self.app.refresh_view()
+
+    def dismiss_news(self) -> None:
+        self.news = []
+        self.app.refresh_view()
 
     def _loop(self) -> None:
         time.sleep(FIRST_CHECK_DELAY)
@@ -69,6 +89,8 @@ class Updater:
         self.app.run_bg(work)
 
     def _set(self, up: updates.Update | None) -> None:
+        """Called from background threads (it may fetch the releases list for the changelog)."""
+        self.changes = updates.changelog_for(up) if up else []
         self.found = up
         self.card.visible = bool(up)
         self._version.value = tr("FramePort {version} · click to install").format(version=up.version) if up else ""
@@ -103,7 +125,8 @@ class Updater:
                             "games, settings and Frame connection stay as they are."),
                "source": tr("Updates this source checkout (git pull + uv sync), then restarts FramePort."),
                "wheel": tr("Reinstalls FramePort from the release, then restarts it.")}[kind]
-        notes = up.notes.strip() or tr("No release notes.")
+        changes = self.changes if self.changes and self.changes[0].version == up.version \
+            else [updates.entry_from_update(up)]
 
         def skip(e):
             updates.skip(up.version)
@@ -113,20 +136,37 @@ class Updater:
         def go(e):
             page.pop_dialog()
             self.install()
+        intro = C.body(tr("You have {version}. {how}").format(version=__version__, how=how), T.TEXT_2)
+        if len(changes) > 1:
+            intro = ft.Column([intro, C.meta(tr("What changed in the {n} versions since yours:")
+                                             .format(n=len(changes)))], spacing=T.S2, tight=True)
         page.show_dialog(C.dialog(
             tr("FramePort {version} is available").format(version=up.version),
-            ft.Column([
-                C.body(tr("You have {version}. {how}").format(version=__version__, how=how), T.TEXT_2),
-                ft.Container(ft.Markdown(notes, selectable=True, extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
-                                         md_style_sheet=_notes_style(),
-                                         on_tap_link=lambda e: page.launch_url(e.data)),
-                             padding=T.S3, border_radius=T.RADIUS_SM, bgcolor=T.SURFACE,
-                             border=ft.Border.all(1, T.BORDER)),
-            ], spacing=T.S3, scroll=ft.ScrollMode.AUTO, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-            height=T.px(min(420, 130 + 26 * len(notes.splitlines()))),
+            _changes_column(page, changes, intro), size="l", height=_changes_height(changes, 100),
             actions=[C.ghost(tr("Skip this version"), on_click=skip),
                      C.ghost(tr("Release page"), ft.Icons.OPEN_IN_NEW_ROUNDED, lambda e: page.launch_url(up.page)),
                      C.primary(tr("Update now"), ft.Icons.SYSTEM_UPDATE_ROUNDED, go)]))
+
+    def show_news(self) -> None:
+        """The Library's "See what's new…" after an update: the changes since the version that ran before."""
+        news, page = self.news, self.app.page
+        self.dismiss_news()
+        if news:
+            page.show_dialog(_changes_dialog(page, tr("What's new in FramePort {version}").format(version=__version__),
+                                             news))
+
+    def show_history(self) -> None:
+        """Settings → Updates → "What's new…": the installed version and a few before it."""
+        def work():
+            entries = updates.recent_history(updates.fetch_changelog(need=__version__))
+            page = self.app.page
+            if not entries:
+                self.app.toast(tr("The changelog couldn't be loaded (no internet connection?)"), error=True,
+                               action=tr("Releases"), on_action=lambda e: page.launch_url(f"{REPO_URL}/releases"))
+                return
+            self.app.page.run_thread(lambda: page.show_dialog(_changes_dialog(page, tr("FramePort changelog"),
+                                                                              entries, current=__version__)))
+        self.app.run_bg(work)
 
     # ---------------------------------------------------------------- dev builds
     def install_dev(self) -> None:
@@ -140,30 +180,25 @@ class Updater:
             if up.version == __version__:
                 self.app.toast(tr("You already have the latest dev build ({version})").format(version=up.version))
                 return
-            self.app.page.run_thread(lambda: self._confirm_dev(up))
+            changes = updates.changelog_for(up)  # the dev build + releases since the installed version
+            self.app.page.run_thread(lambda: self._confirm_dev(up, changes))
         self.app.run_bg(work)
 
-    def _confirm_dev(self, up: updates.Update) -> None:
+    def _confirm_dev(self, up: updates.Update, changes: list[updates.ChangelogEntry] | None = None) -> None:
         page = self.app.page
-        notes = up.notes.strip() or tr("No notes.")
+        changes = changes or [updates.entry_from_update(up)]
 
         def go(e):
             page.pop_dialog()
             self.found = up
+            self.changes = changes
             self.install()
+        warn = C.callout(C.body(tr("Dev builds let you test fixes before they're released. They're less tested "
+                                   "than releases and may have bugs. You get the next release as a normal update "
+                                   "(you have {version}).").format(version=__version__), T.TEXT), "warn")
         page.show_dialog(C.dialog(
             tr("Install dev build {version}?").format(version=up.version),
-            ft.Column([
-                C.callout(C.body(tr("Dev builds let you test fixes before they're released. They're less tested "
-                                    "than releases and may have bugs. You get the next release as a normal update "
-                                    "(you have {version}).").format(version=__version__), T.TEXT), "warn"),
-                ft.Container(ft.Markdown(notes, selectable=True, extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
-                                         md_style_sheet=_notes_style(),
-                                         on_tap_link=lambda e: page.launch_url(e.data)),
-                             padding=T.S3, border_radius=T.RADIUS_SM, bgcolor=T.SURFACE,
-                             border=ft.Border.all(1, T.BORDER)),
-            ], spacing=T.S3, scroll=ft.ScrollMode.AUTO, tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-            height=T.px(min(440, 190 + 26 * len(notes.splitlines()))),
+            _changes_column(page, changes, warn), size="l", height=_changes_height(changes, 160),
             actions=[C.ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog()),
                      C.ghost(tr("Build page"), ft.Icons.OPEN_IN_NEW_ROUNDED, lambda e: page.launch_url(up.page)),
                      C.primary(tr("Install dev build"), G.TEST, go)]))
@@ -261,9 +296,69 @@ def _notes_style() -> ft.MarkdownStyleSheet:
         h3_text_style=text(size=15, weight=ft.FontWeight.W_600), blockquote_text_style=text(T.TEXT_2))
 
 
+def _entry_section(page: ft.Page, entry: updates.ChangelogEntry, expanded: bool,
+                   current: str | None = None) -> ft.Container:
+    """One version of a changelog: a header (version, tags, date) that opens and closes its notes."""
+    notes = ft.Container(
+        ft.Markdown(entry.body.strip() or tr("No release notes."), selectable=True,
+                    extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, md_style_sheet=_notes_style(),
+                    on_tap_link=lambda e: page.launch_url(e.data)),
+        padding=ft.Padding(T.S4, 0, T.S4, T.S3), visible=expanded)
+    chevron = ft.Icon(ft.Icons.EXPAND_MORE_ROUNDED if expanded else ft.Icons.CHEVRON_RIGHT_ROUNDED, size=T.px(18),
+                      color=T.TEXT_3)
+    tags = ([C.pill(tr("dev build"), T.WARN)] if entry.dev else []) + \
+        ([C.pill(tr("installed"), T.OK)] if current and entry.version == current else [])
+    box = ft.Container(bgcolor=T.SURFACE, border=ft.Border.all(1, T.BORDER), border_radius=T.RADIUS_SM)
+
+    def toggle(e):
+        notes.visible = not notes.visible
+        chevron.icon = ft.Icons.EXPAND_MORE_ROUNDED if notes.visible else ft.Icons.CHEVRON_RIGHT_ROUNDED
+        C.update(box)
+    head = ft.Container(
+        ft.Row([chevron, ft.Text(tr("FramePort {version}").format(version=entry.version), size=T.px(15),
+                                 weight=ft.FontWeight.W_600, color=T.TEXT), *tags, ft.Container(expand=True),
+                C.meta(entry.date)], spacing=T.S2, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        padding=ft.Padding(T.S3, T.S2, T.S3, T.S2), border_radius=T.RADIUS_SM, ink=True, on_click=toggle)
+    box.content = ft.Column([head, notes], spacing=0, tight=True,
+                            horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
+    return box
+
+
+def _changes_column(page: ft.Page, entries: list[updates.ChangelogEntry], intro: ft.Control | None = None,
+                    current: str | None = None) -> ft.Column:
+    """A scrollable changelog, newest first: the newest version open, older ones as one-line headers."""
+    return ft.Column(([intro] if intro is not None else [])
+                     + [_entry_section(page, e, i == 0, current) for i, e in enumerate(entries)],
+                     spacing=T.S2, scroll=ft.ScrollMode.AUTO, tight=True,
+                     horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
+
+
+def _changes_height(entries: list[updates.ChangelogEntry], extra: int) -> float:
+    """Tall enough for the newest version's notes and the other headers, at most 480 (then it scrolls)."""
+    lines = len(entries[0].body.splitlines()) if entries else 1
+    return T.px(min(480, extra + 26 * lines + 50 * len(entries)))
+
+
+def _changes_dialog(page: ft.Page, title: str, entries: list[updates.ChangelogEntry],
+                    current: str | None = None) -> ft.AlertDialog:
+    return C.dialog(title, _changes_column(page, entries, None, current), size="l",
+                    height=_changes_height(entries, 20),
+                    actions=[C.ghost(tr("All releases"), ft.Icons.OPEN_IN_NEW_ROUNDED,
+                                     lambda e: page.launch_url(f"{REPO_URL}/releases")),
+                             C.primary(tr("Close"), on_click=lambda e: page.pop_dialog())])
+
+
 def library_bar(app: FramePortApp) -> ft.Control | None:
-    """The Library's "update available" bar (None when there's nothing to show)."""
-    up = app.updater.found if getattr(app, "updater", None) else None
+    """The Library's "update available" bar, else the "what's new" bar after an update (None: nothing to show)."""
+    updater = getattr(app, "updater", None)
+    up = updater.found if updater else None
+    if not up and updater and updater.news:
+        return C.callout(ft.Row([
+            C.body(tr("FramePort was updated to {version}.").format(version=__version__), T.TEXT,
+                   expand=True),
+            C.primary(tr("See what's new…"), ft.Icons.NEW_RELEASES_OUTLINED, lambda e: updater.show_news()),
+            C.ghost(tr("Dismiss"), on_click=lambda e: updater.dismiss_news()),
+        ], spacing=T.S3), "ok", ft.Icons.NEW_RELEASES_OUTLINED)
     if not up:
         return None
     return C.callout(ft.Row([
