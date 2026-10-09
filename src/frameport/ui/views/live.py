@@ -67,6 +67,9 @@ def live_features() -> list[tuple[str, str, str]]:
              tr("The Frame's own video encoder does the work where it can."))]
 
 
+VIDEO_START_S = 12  # the in-window player must show a moving picture within this, else the next player takes over
+
+
 def player_label(mode: str) -> str:
     return {"auto": tr("Automatic"), "app": tr("In this window"), "mpv": tr("mpv window"),
             "browser": tr("Web browser")}[mode]
@@ -113,6 +116,7 @@ class LiveView:
         self.mode: str | None = None  # "app" | "mpv" | "browser" while streaming
         self.mpv = None  # live_players.MpvWindow
         self.video = None  # the flet-video control while it plays in the window
+        self.video_error = ""  # its last error message (logged; the watchdog decides about falling back)
         self.muted = False
         self.screen = ft.Container(expand=True, visible=False, bgcolor="#000000", border_radius=T.RADIUS,
                                    clip_behavior=ft.ClipBehavior.ANTI_ALIAS, border=ft.Border.all(1, T.BORDER))
@@ -311,9 +315,45 @@ class LiveView:
         return {"app": tr("in this window"), "mpv": tr("in an mpv window"), "browser": tr("in your browser")}[mode]
 
     def _show_in_window(self, live) -> None:
-        self.video = LP.video_control(LP.stream_url(live.url), on_error=self._video_failed,
-                                      on_complete=self._video_failed, muted=self.muted)
+        self.video_error = ""
+        self.video = LP.video_control(LP.stream_url(live.url), on_error=self._video_error,
+                                      on_complete=self._video_complete, muted=self.muted)
         self.screen.content = self.video
+        self.app.page.run_task(self._watch_video, self.video)
+
+    def _video_error(self, e) -> None:
+        """mpv's error messages: some don't stop playback, so they are only logged (the watchdog decides)."""
+        self.video_error = str(getattr(e, "data", "") or "")
+        applog.log.info("live view: in-window player said: %s", self.video_error)
+
+    def _video_complete(self, e) -> None:
+        """media_kit reports `completed` changes, starting with false: only true means the stream ended."""
+        if getattr(e, "data", None) in (True, "true"):
+            self._video_failed(e)
+
+    async def _watch_video(self, video) -> None:
+        """The in-window player must show progress (its position moving) within VIDEO_START_S, else the next player
+        takes over. Once it plays, the watch ends (stream ends come as `complete`)."""
+        import asyncio
+
+        start, first = time.time(), None
+        while self.video is video:
+            await asyncio.sleep(2)
+            try:
+                ms = (await video.get_current_position()).in_milliseconds
+            except Exception:  # noqa: BLE001 - not mounted yet / player not ready
+                ms = None
+            if ms is not None:
+                if first is None:
+                    first = ms
+                elif ms > first:
+                    applog.log.info("live view: playing in the window (%.1f s in)", time.time() - start)
+                    return
+            if time.time() - start > VIDEO_START_S:
+                applog.log.warning("live view: the in-window player showed no picture in %d s (%s)",
+                                   VIDEO_START_S, self.video_error or "no error reported")
+                self._video_failed()
+                return
 
     def _video_failed(self, e=None) -> None:
         """The in-window player reported an error or stopped while the stream still runs: next player."""
