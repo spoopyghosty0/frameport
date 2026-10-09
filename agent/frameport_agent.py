@@ -38,7 +38,7 @@ import time
 import zlib
 from types import SimpleNamespace
 
-AGENT_VERSION = 65
+AGENT_VERSION = 66
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -2089,6 +2089,89 @@ def cmd_delete_screenshots(args):
             except FileNotFoundError:
                 pass
     return {"deleted": deleted}
+
+
+# SteamVR's web mailbox (what its dashboard uses, found in /opt/steamvr/resources/webinterface/dashboard): a websocket
+# to 127.0.0.1:27062 (?secret= from Steam's SteamClient.OpenVR.GetWebSecret()), text frames "mailbox_open <name>" and
+# "mailbox_send <mailbox> <json>". The compositor's debug command screenshot_request (vrcompositor_mailbox) is the
+# dashboard's screenshot: Steam saves it under SteamVR (250820) like a shot taken in the headset.
+VR_MAILBOX_PORT = 27062
+HMD_STATE = re.compile(r"\[CCVTrackedHmdDriver\] in State(\w+)")
+
+
+def _ws_open(port, path, timeout=5):
+    import base64
+    import socket
+
+    sock = socket.create_connection(("127.0.0.1", port), timeout=timeout)
+    key = base64.b64encode(os.urandom(16)).decode()
+    sock.sendall((f"GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                  f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+    head = b""
+    while b"\r\n\r\n" not in head:
+        chunk = sock.recv(1)
+        if not chunk:
+            sock.close()
+            raise AgentError("the websocket closed during its handshake")
+        head += chunk
+    status = head.split(b"\r\n", 1)[0].decode(errors="replace")
+    if " 101 " not in status:
+        sock.close()
+        raise AgentError(f"websocket refused: {status}")
+    return sock
+
+
+def _ws_send_text(sock, text):
+    data = text.encode()
+    mask, n = os.urandom(4), len(data)
+    size = (bytes([0x80 | n]) if n < 126 else bytes([0x80 | 126]) + struct.pack(">H", n) if n < 65536
+            else bytes([0x80 | 127]) + struct.pack(">Q", n))
+    sock.sendall(b"\x81" + size + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+
+
+def vr_mailbox_send(mailbox, message):
+    """Send one message to a SteamVR web mailbox (no answer awaited)."""
+    secret = steam_js("SteamClient.OpenVR.GetWebSecret()") or ""
+    sock = _ws_open(VR_MAILBOX_PORT, "/" + (f"?secret={secret}" if secret else ""))
+    try:
+        _ws_send_text(sock, f"mailbox_open frameport_{os.getpid()}")
+        _ws_send_text(sock, f"mailbox_send {mailbox} {json.dumps(message)}")
+        time.sleep(0.3)  # let it arrive before the socket closes
+        _ws_send_text(sock, "websocket_close")
+    finally:
+        sock.close()
+
+
+def hmd_state():
+    """The headset's state from SteamVR's driver log ("Active", "Standby", ... ; None = unknown)."""
+    try:
+        with open(os.path.join(STEAM, "logs", "vrserver.txt"), "rb") as f:
+            f.seek(max(0, os.path.getsize(f.name) - 400_000))
+            text = f.read().decode(errors="replace")
+    except OSError:
+        return None
+    found = HMD_STATE.findall(text)
+    return found[-1] if found else None
+
+
+def steamvr_shot_files():
+    return set(glob.glob(os.path.join(STEAM, "userdata", "*", "760", "remote", STEAMVR_APPID, "screenshots", "*")))
+
+
+def cmd_take_screenshot(args):
+    """Take a headset screenshot (SteamVR's own, see vr_mailbox_send) and wait up to `wait` s for Steam to save it:
+    {taken, path, hmd}. The compositor skips it while the headset is in standby (not worn): taken false, hmd
+    "Standby"."""
+    wait = float(args.get("wait") or 8)
+    before = steamvr_shot_files()
+    vr_mailbox_send("vrcompositor_mailbox", {"type": "screenshot_request"})
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        new = [p for p in steamvr_shot_files() - before if SHOT_NAME.match(os.path.basename(p))]
+        if new:
+            return {"taken": True, "path": max(new, key=os.path.getmtime), "hmd": hmd_state()}
+        time.sleep(0.4)
+    return {"taken": False, "path": None, "hmd": hmd_state()}
 
 
 def cmd_prepare(args):

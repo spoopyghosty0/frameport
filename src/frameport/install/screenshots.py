@@ -149,3 +149,9 @@ def delete(frame, shots: list[dict]) -> int:
         for kind in ("thumb", "full"):
             (cache_dir(frame) / _cache_name(s, kind)).unlink(missing_ok=True)
     return len(r.get("deleted") or [])
+
+
+def take(frame, wait: float = 8) -> dict:
+    """Take a headset screenshot on the Frame (agent v66 `take_screenshot`: SteamVR's own screenshot, saved by Steam
+    under SteamVR like one taken in the headset): {taken, path, hmd}. Not taken while the headset is in standby."""
+    return frame.agent("take_screenshot", wait=wait)

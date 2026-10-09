@@ -1493,3 +1493,32 @@ def test_linux_x86_apps_run_through_fex(monkeypatch, tmp_path):
     data = os.path.join(prep["base"], "compatdata")
     assert f"export STEAM_COMPAT_DATA_PATH={data}" in text and f"mkdir -p {data}" in text  # FEX exits without it
     assert text.index("STEAM_COMPAT_DATA_PATH") < text.index("fex-compat-tool")
+
+
+def test_hmd_state_from_vrserver_log(monkeypatch, tmp_path):
+    a = load_agent(monkeypatch, tmp_path)
+    logs = Path(a.STEAM) / "logs"
+    logs.mkdir(parents=True)
+    assert a.hmd_state() is None
+    (logs / "vrserver.txt").write_text("x cv: [CCVTrackedHmdDriver] in StateActive\n"
+                                       "y cv:  [CCVTrackedHmdDriver] in StateStandby \n")
+    assert a.hmd_state() == "Standby"
+
+
+def test_take_screenshot_waits_for_steams_file(monkeypatch, tmp_path):
+    """take_screenshot sends SteamVR's screenshot_request and reports the shot Steam saved (or that none came)."""
+    a = load_agent(monkeypatch, tmp_path)
+    shots = Path(a.STEAM) / "userdata" / "123" / "760" / "remote" / a.STEAMVR_APPID / "screenshots"
+    shots.mkdir(parents=True)
+    (shots / "20261008120000_1.jpg").write_bytes(b"old")
+    sent = []
+
+    def fake_send(mailbox, message):
+        sent.append((mailbox, message))
+        (shots / "20261008221500_1.jpg").write_bytes(b"new")  # Steam saves it
+    monkeypatch.setattr(a, "vr_mailbox_send", fake_send)
+    r = a.cmd_take_screenshot({"wait": 2})
+    assert sent == [("vrcompositor_mailbox", {"type": "screenshot_request"})]
+    assert r["taken"] and r["path"].endswith("20261008221500_1.jpg")
+    monkeypatch.setattr(a, "vr_mailbox_send", lambda mailbox, message: None)  # standby: nothing saved
+    assert a.cmd_take_screenshot({"wait": 0.5})["taken"] is False

@@ -81,8 +81,11 @@ class ScreenshotsView:
         self.select_all = ft.Checkbox(value=False, active_color=T.ACCENT, check_color=T.ON_ACCENT,
                                       label=tr("Select all"), label_style=ft.TextStyle(color=T.TEXT_2, size=T.T_BODY),
                                       on_change=self._toggle_all)
+        # a headset screenshot now (SteamVR's own, like the dashboard's button): appears in the grid when Steam saved it
+        self.take_btn = C.primary(tr("Take screenshot"), G.SHOT, self._take)
         self.toolbar = ft.Row([
             self.dropdown, self.select_all, ft.Container(expand=True),
+            self.take_btn,
             C.secondary(tr("Download all…"), ft.Icons.DOWNLOAD_ROUNDED, self._download_all),
             C.icon_btn(ft.Icons.REFRESH_ROUNDED, tr("Refresh"), lambda e: self.load()),
         ], spacing=T.S2, vertical_alignment=ft.CrossAxisAlignment.CENTER)
@@ -420,6 +423,33 @@ class ScreenshotsView:
     async def _download_selected(self, e=None):
         if self.selected:
             await self.download(self._chosen())
+
+    def _take(self, e=None) -> None:
+        """Take screenshot: the button waits while the Frame saves it (a few seconds), then the grid reloads."""
+        if self.take_btn.disabled:
+            return
+        self.take_btn.disabled = True
+        C.update(self.take_btn)
+        self.app.run_bg(self._take_bg)
+
+    def _take_bg(self) -> None:
+        from ...install import screenshots
+
+        app = self.app
+        try:
+            r = screenshots.take(app.target.frame)
+            if r.get("taken"):
+                app.toast(tr("Screenshot taken"))
+                self.load()
+            elif r.get("hmd") == "Standby":
+                app.toast(tr("The headset is asleep: put it on, then take the screenshot."), error=True)
+            else:
+                app.toast(tr("The Frame didn't save a screenshot. Put the headset on and try again."), error=True)
+        except Exception as exc:  # noqa: BLE001
+            app.toast(tr("Couldn't take a screenshot: {error}").format(error=explain(exc)), error=True)
+        finally:
+            self.take_btn.disabled = False
+            C.update(self.take_btn)
 
     async def _download_all(self, e=None):
         if self.shots:
