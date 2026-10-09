@@ -29,7 +29,9 @@ uv run python scripts/showcase/record_tour.py --draft       # quick 720p check o
 uv run python scripts/showcase/record_tour.py               # the real thing → docs/media + the teaser
 ```
 
-A screenshot is rewritten only when it visibly changed (`render_docs.changed`: anti-aliasing noise doesn't count),
+Every screenshot is rendered twice, each in a fresh window, and kept only when both agree (the headless GPU now and
+then draws a glyph wrong); a third render settles a disagreement, and `--fast` renders once for trying out an edit.
+A shot whose steps fail is tried again and never written. A screenshot is rewritten only when it visibly changed (`render_docs.changed`: anti-aliasing noise doesn't count),
 so running it twice changes nothing. `--check` writes nothing and exits 1 when a docs image is out of date.
 `record_tour.py --names` prints what can be clicked after each scene, which helps when writing steps. The video is
 encoded at the best quality that fits 12 MB, the teaser at 4 MB.
