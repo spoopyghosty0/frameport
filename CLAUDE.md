@@ -485,6 +485,12 @@ intermittent handshake hang was **OVRLibrarian.exe** (.NET, Wine Mono): under FE
 its AppTracker entry stays, and the runtime then tracks no later client (Meta app, game), so the game waits forever
 for the reply event the runtime only sets after identifying it (found with wineserver `+server` traces PC vs Frame).
 Ending OVRLibrarian before the game → game tracked, "Missing entitlement" exactly as on the PC (needs a login).
+Logged in (2026-10-09, owner's own account, browser sign-in; the `oculus://` answer had to be forwarded into the Wine
+app's `\\.\pipe\oculus`), the runtime also needed a WinRT `Windows.Devices.WiFi.WiFiAdapter` stand-in (Air Link code
+fail-fasts without it), Wine's DeviceWatcher add/remove_Updated/Removed implemented, and the C: volume name
+(`\\?\Volume{...0043}`) linked in dosdevices. Copying the logged-in `sessions/` + CoreData to the Frame prefix kept the
+login. **Oculus First Contact then ran in VR on the Frame** (Revive in OpenVR mode; `/openxr` failed in wineopenxr):
+scene app at 72 Hz target, but 92 % of frames "timed out" (game CPU-bound under FEX) → stutter/flicker/lag.
 Uninstall (Quest, saves kept) used to leave `deployment.json` → still "installed"; fixed (agent v16).
 
 **Discovery/network:** Developer-Mode SteamOS devices announce `_steamos-devkit._tcp` (TXT `login=steamos`) — use it;
