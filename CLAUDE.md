@@ -38,7 +38,8 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     launch.sh logs `start/end <unix>` to `<anchor>/plays.log` (upgrade_launchers adds it; Proton launchers exec → start
     only) and shots are matched by time; thumbnails cached in `<data>/screenshots-cache/<frame>/`, shown by asset URL;
     delete leaves screenshots.vdf alone (Steam rewrites it at exit); game menu → "Screenshots" = `go("screenshots",
-    pkg)`); live view (`views/live.py` + `install/livestream.py`: the Frame's built-in SteamVR "headset view" webcam
+    pkg)`; Copy image (card hover button, right-click, viewer) = `core/clipboard.copy_image` (Windows/WSL: PowerShell
+    bitmap + file via %TEMP%, macOS osascript PNG, Linux wl-copy/xclip; Flet's set_image only in web mode)); live view (`views/live.py` + `install/livestream.py`: the Frame's built-in SteamVR "headset view" webcam
     (`steamvr-v4l2cam.service` → v4l2loopback "SteamVR" /dev/video99, see docs/FRAME_RUNTIME.md) + the default
     output's pulse monitor (sound) → `fp_venc` (`native/venc`, own clean-room V4L2 driver of the Frame's iris
     hardware encoder: RGB24→NV12 box downscale with NEON, H.264 CBR, one frame per slot of an even fraction of the
@@ -77,16 +78,18 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     Easter eggs (`ui/easter.py`, owner's wish; never mentioned in the UI or docs): seven quick clicks on the sidebar
     logo (the *wordmark's* portal glows + rings, a cover is tossed out of it and falls across the window on a random
     arc: `toss_path`, `page.overlay` at the computed window position `_wordmark_portal`; the logo's portal in
-    themes without one), the Monitor's fps number has a mood tooltip (above the number, clear of the pointer) and a
-    minute within 0.5 fps of target makes the game card glow and pulse blue/orange, the number grow in the portal
-    gradient, a "Perfect pacing" pill and the sparkline in the gradient (`PerfectPacing`, `_show_perfect`,
-    `Sparkline.portal`), holiday badges on the logo that dance on hover (`holiday`/`HOLIDAY_MOTION`: Valentine's
+    themes without one), the Monitor's fps number has a mood tooltip (above the number, clear of the pointer) and
+    2.5 minutes within 0.5 fps of target (`PERFECT_SECONDS`) make the game card glow and pulse blue/orange for 5 s,
+    the number grow in the portal gradient and the sparkline take it; the "Perfect pacing" pill + line stay until the
+    rate slips (`PerfectPacing.done`, `_show_perfect`, `Sparkline.portal`), holiday badges on the logo that dance on
+    hover and shower the window on click (`HOLIDAY_MOTION`; `SHOWERS`/`shower_plan`: New Year confetti, winter snow,
+    Valentine hearts, Pi digits, clovers, hopping eggs, bouncing pumpkins; `holiday`: Valentine's
     heart, Pi Day, St Patrick's clover, Easter Sat-Mon egg (computus), April 1 = the logo upside down until hovered,
     Halloween pumpkin, Dec 31-Jan 1 party popper, else Dec 20-Jan 2 snowflake; on those days the logo's box grows to
     hold the badge: Flutter only hit-tests inside a control's bounds; `FRAMEPORT_TODAY` pretends a date),
     Library search "frameport" (logo spins, "That's me!"), Type on Frame "hello" (keys still go to the Frame; a
-    headset peeks up from the window's corner and waves), the battery ring pulses on reaching 100 % plugged
-    (`charged_now`, `ring_pulse`), a long upload (>2.5 min, `HOP_AFTER`) makes the transit cover hop, the Live view
+    headset peeks up from the window's corner and waves), the battery ring (only the ring, with a glow behind
+    it; not the percentage) pulses on reaching 100 % plugged (`charged_now`, `ring_pulse`, `ring_glow`), a long upload (>2.5 min, `HOP_AFTER`) makes the transit cover hop, the Live view
     tab shows a blinking ON AIR sign while streaming
     (`app.sync_on_air`), install milestones (confetti +
     message at the 1st/10th/100th *different* game: settings `fun.installed` = game ids, `fun.milestones` = shown;

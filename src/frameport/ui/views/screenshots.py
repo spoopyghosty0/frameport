@@ -71,6 +71,7 @@ class ScreenshotsView:
         self.selected: set[str] = set()  # paths
         self.checks: dict[str, ft.Checkbox] = {}
         self.tiles: dict[str, tuple] = {}  # path → (tile, quiet checkbox, selection overlay)
+        self.copy_btns: dict[str, ft.Control] = {}  # path → the card's "Copy image" button (shown on hover)
         self.hot: set[str] = set()  # tiles under the mouse or with keyboard focus
         self._gen = 0
         self._loaded = False
@@ -243,11 +244,18 @@ class ScreenshotsView:
         check.on_blur = lambda e, p=s["path"]: self._set_hot(p, False)
         quiet_check = C.quiet(check)
         quiet_check.left, quiet_check.top = 0, 0
+        # (hidden, not just transparent, off hover: a click on that corner then opens the viewer as everywhere else)
+        copy_btn = ft.Container(
+            ft.Icon(ft.Icons.CONTENT_COPY_ROUNDED, size=T.px(16), color=T.TEXT), width=T.px(30), height=T.px(30),
+            alignment=ft.Alignment.CENTER, border_radius=T.px(15), bgcolor=T.soft("#000000", 0.55), ink=True,
+            tooltip=tr("Copy image"), visible=False, on_click=lambda e, s=s: self.copy(s))
+        copy_btn.right, copy_btn.top = T.px(6), T.px(6)
+        self.copy_btns[s["path"]] = copy_btn
         overlay = ft.Container(left=0, right=0, top=0, bottom=0, border_radius=T.RADIUS_SM)
         tile = ft.Container(
             ft.Stack([C.art_fill(self._thumb_url(s), radius=T.RADIUS_SM, placeholder_icon=ft.Icons.IMAGE_OUTLINED,
                                  left=0, right=0, top=0, bottom=0),
-                      overlay, caption, quiet_check]),
+                      overlay, caption, quiet_check, copy_btn]),
             width=T.px(256), height=T.px(144), border_radius=T.RADIUS_SM, ink=True,
             border=ft.Border.all(2, ft.Colors.TRANSPARENT),
             tooltip=f"{s.get('title') or ''} · {day_label(s.get('time'))} {when}",
@@ -278,6 +286,7 @@ class ScreenshotsView:
         out: list[tuple | None] = []
         if not several:
             out.append((tr("View"), ft.Icons.OPEN_IN_FULL_ROUNDED, lambda e: self.viewer(self.shots.index(s))))
+            out.append((tr("Copy image"), ft.Icons.CONTENT_COPY_ROUNDED, lambda e: self.copy(s)))
         out.append((tr("Download {n} screenshots…").format(n=len(shots)) if several else tr("Download…"),
                     ft.Icons.DOWNLOAD_ROUNDED, lambda e: self._later(self.download, shots)))
         key = filter_key(s.get("package") or "")
@@ -344,12 +353,17 @@ class ScreenshotsView:
         tile, quiet_check, overlay = self.tiles[path]
         on = path in self.selected
         check = self.checks[path]
-        before = (check.value, quiet_check.opacity, overlay.bgcolor, overlay.gradient is not None)
+        copy_btn = self.copy_btns.get(path)
+        before = (check.value, quiet_check.opacity, overlay.bgcolor, overlay.gradient is not None,
+                  copy_btn.visible if copy_btn else None)
         check.value = on
         C.reveal(quiet_check, on or path in self.hot or bool(self.selected))
+        if copy_btn is not None:
+            copy_btn.visible = path in self.hot
         C.selected_style(overlay, on, subtle=True)
         tile.border = ft.Border.all(2, T.ACCENT if on else ft.Colors.TRANSPARENT)
-        return before != (check.value, quiet_check.opacity, overlay.bgcolor, overlay.gradient is not None)
+        return before != (check.value, quiet_check.opacity, overlay.bgcolor, overlay.gradient is not None,
+                          copy_btn.visible if copy_btn else None)
 
     def _update_selection(self, render: bool = True) -> None:
         n = len(self.selected)
@@ -413,6 +427,7 @@ class ScreenshotsView:
                 C.icon_btn(ft.Icons.CHEVRON_LEFT_ROUNDED, tr("Previous"), lambda e: show(-1)),
                 ft.Column([caption, details], spacing=0, expand=True),
                 C.icon_btn(ft.Icons.CHEVRON_RIGHT_ROUNDED, tr("Next"), lambda e: show(1)),
+                C.secondary(tr("Copy"), ft.Icons.CONTENT_COPY_ROUNDED, lambda e: self.copy(shots[state["i"]])),
                 C.secondary(tr("Download…"), ft.Icons.DOWNLOAD_ROUNDED, download),
                 C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Delete…"), delete),
                 C.ghost(tr("Close"), on_click=lambda e: page.pop_dialog())], spacing=T.S2,
@@ -454,6 +469,34 @@ class ScreenshotsView:
         finally:
             self.take_btn.disabled = False
             C.update(self.take_btn)
+
+    def copy(self, shot: dict) -> None:
+        """The full-size screenshot onto this PC's clipboard, to paste it anywhere (no download needed)."""
+        app = self.app
+
+        def work():
+            from ...core import clipboard
+            from ...install import screenshots
+
+            try:
+                path = screenshots.image_path(app.target.frame, shot)
+                if app.page.web:  # (a browser session: the browser's clipboard, through Flet)
+                    app.page.run_task(self._copy_web, path)
+                    return
+                clipboard.copy_image(path)
+            except Exception as exc:  # noqa: BLE001
+                app.toast(tr("Couldn't copy the screenshot: {error}").format(error=explain(exc)), error=True)
+                return
+            app.toast(tr("Screenshot copied: paste it anywhere"))
+        app.run_bg(work)
+
+    async def _copy_web(self, path: Path) -> None:
+        try:
+            await ft.Clipboard().set_image(path.read_bytes())
+        except Exception as exc:  # noqa: BLE001
+            self.app.toast(tr("Couldn't copy the screenshot: {error}").format(error=explain(exc)), error=True)
+            return
+        self.app.toast(tr("Screenshot copied: paste it anywhere"))
 
     async def _download_all(self, e=None):
         if self.shots:

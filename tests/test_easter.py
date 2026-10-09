@@ -130,14 +130,16 @@ def test_every_badge_has_a_dance_that_ends_where_it_started():
         assert last.get("scale", 1.0) == 1.0 and tuple(last.get("offset", (0, 0))) == (0, 0), motion
 
 
-def test_perfect_pacing_needs_a_full_minute_once_per_streak():
+def test_perfect_pacing_needs_the_full_time_once_per_streak():
+    need = easter.PERFECT_SECONDS
+    assert 120 <= need <= 180  # (owner: two to three minutes)
     p = easter.PerfectPacing()
-    assert not any(p.feed(72.0, 72, t) for t in range(0, 60))
-    assert p.feed(71.8, 72, 60.0)  # a whole minute within half a frame
-    assert not p.feed(72.0, 72, 61.0)  # once per streak
-    assert not p.feed(68.0, 72, 62.0)  # it slips ...
-    assert not any(p.feed(72.0, 72, 63.0 + t) for t in range(59))
-    assert p.feed(72.0, 72, 123.0)  # ... and a new minute counts again
+    assert not any(p.feed(72.0, 72, t) for t in range(0, int(need)))
+    assert p.feed(71.8, 72, need)  # the whole time within half a frame
+    assert p.done and not p.feed(72.0, 72, need + 1)  # once per streak; .done stays while it holds (the pill)
+    assert not p.feed(68.0, 72, need + 2) and not p.done  # it slips ...
+    assert not any(p.feed(72.0, 72, need + 3 + t) for t in range(int(need) - 1))
+    assert p.feed(72.0, 72, 2 * need + 3)  # ... and a new streak counts again
     assert not easter.PerfectPacing().feed(None, 72, 0)
 
 
@@ -172,3 +174,33 @@ def test_charged_now():
     assert not easter.charged_now(None, {"percent": 100, "plugged": True})  # a first reading isn't "reaching" it
     assert not easter.charged_now({"percent": 100}, {"percent": 100, "plugged": True})
     assert not easter.charged_now({"percent": 99}, {"percent": 100, "plugged": False})
+
+
+@pytest.mark.parametrize("which", sorted(easter.SHOWERS))
+def test_holiday_showers(which):
+    import random
+
+    kind, n = easter.SHOWERS[which]
+    assert which in easter.HOLIDAY_ICON  # (a badge to click)
+    if kind == "confetti":
+        return
+    plan = easter.shower_plan(kind, n, 1440, 900, random.Random(5))
+    assert len(plan) == n
+    for p in plan:
+        assert 0 <= p["start"]["left"] <= 1440
+        assert p["phases"] and all(secs > 0 for _, secs, _ in p["phases"])
+        end = dict(p["start"])
+        for props, _, curve in p["phases"]:
+            assert curve in easter._CURVES
+            end.update(props)
+        assert end["top"] > 900 or end["top"] < 0 or end.get("opacity") == 0 or kind == "pumpkins"  # gone at the end
+        if kind == "pumpkins":
+            assert end["opacity"] == 0
+
+
+def test_ring_pulse_leaves_the_percentage_alone():
+    import inspect
+
+    assert "scale" in inspect.getsource(easter.ring_pulse)
+    assert "ring_pulse(self._conn_ring, self._conn_glow)" in \
+        __import__("pathlib").Path(easter.__file__).with_name("app.py").read_text()

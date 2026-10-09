@@ -423,8 +423,10 @@ class Server:
         # a browser of its own per window: windows sharing one browser (its GPU process) sometimes drew text with
         # glyphs from the wrong place ("/sdcard/ʍvies")
         browser = self.playwright.chromium.launch(args=CHROMIUM_ARGS)
+        # (clipboard: the Screenshots tab's Copy image writes an image to the browser's clipboard in web mode)
         ctx = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]},
-                                  device_scale_factor=device_scale, **kw)
+                                  device_scale_factor=device_scale, permissions=["clipboard-read", "clipboard-write"],
+                                  **kw)
         if cursor:
             ctx.add_init_script(CURSOR_JS)
         page = ctx.new_page()

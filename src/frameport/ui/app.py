@@ -327,13 +327,18 @@ class FramePortApp:
         self._conn_ring = C.gauge(0, 40)
         self._conn_bat_text = ft.Text("", size=T.px(12), weight=ft.FontWeight.W_700, color=T.TEXT)
         self._conn_icon = C.as_icon(G.FRAME, T.px(20), T.TEXT_2)
+        from . import easter
+
+        # (easter egg: at 100 % on the charger the ring alone pulses, with a glow behind it)
+        self._conn_glow = easter.ring_glow(ring, T.OK)
+        self._conn_ring.scale = 1.0
+        self._conn_ring.animate_scale = ft.Animation(300, ft.AnimationCurve.EASE_OUT_BACK)
         self._conn_bat = ft.Container(ft.Stack([
-            self._conn_ring,
+            self._conn_glow, self._conn_ring,
             ft.Container(ft.Stack([self._conn_icon, self._conn_bat_text], alignment=ft.Alignment.CENTER),
-                         alignment=ft.Alignment.CENTER, width=ring, height=ring)], width=ring, height=ring),
-            width=ring, height=ring, shape=ft.BoxShape.CIRCLE, scale=1.0,  # (easter egg: pulses at 100 % plugged)
-            animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT_BACK),
-            animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT))
+                         alignment=ft.Alignment.CENTER, width=ring, height=ring)], width=ring, height=ring,
+            clip_behavior=ft.ClipBehavior.NONE),
+            width=ring, height=ring)
         self._conn_extra = ft.Container(C.meta(""), visible=False, tooltip=C.tip(C.HELP["frame_summary"]))
         art = T.px(36)
         self._np_art = ft.Container(width=art, height=art, border_radius=T.RADIUS_XS, bgcolor=T.SURFACE_2,
@@ -531,7 +536,7 @@ class FramePortApp:
         if bat is not getattr(self, "_bat_seen", None):  # (a new reading: did it just reach 100 % on the charger?)
             if easter.charged_now(getattr(self, "_bat_seen", None), bat) and not self.reduce_motion \
                     and easter.enabled():
-                easter.ring_pulse(self._conn_bat, T.OK)
+                easter.ring_pulse(self._conn_ring, self._conn_glow)
             self._bat_seen = bat
         self._conn_icon.visible = ring is None
         self._conn_bat_text.visible = ring is not None

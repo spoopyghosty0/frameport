@@ -80,7 +80,8 @@ def test_screenshots_menu():
     v.games = [{"package": "com.x", "title": "X", "count": 2}, {"package": "", "count": 1}]
     v._fill_dropdown()
     one = labels(v.menu_actions(v.shots[0]))
-    assert one[:3] == ["View", "Download…", "Show only this game's screenshots"] and one[-1] == "Delete…"
+    assert one[:4] == ["View", "Copy image", "Download…", "Show only this game's screenshots"]
+    assert one[-1] == "Delete…"
     assert "Show only screenshots not from a FramePort game" in labels(v.menu_actions(v.shots[2]))
     v.filter = "com.x"
     assert not any("Show only" in x for x in labels(v.menu_actions(v.shots[0])))
@@ -88,6 +89,7 @@ def test_screenshots_menu():
     v.selected = {v.shots[0]["path"], v.shots[1]["path"]}
     multi = labels(v.menu_actions(v.shots[1]))
     assert "Download 2 screenshots…" in multi and "Delete 2 screenshots…" in multi and "View" not in multi
+    assert "Copy image" not in multi  # (the clipboard holds one picture)
     assert labels(v.menu_actions(None))[:2] == ["Download all (3)…", "Select all"]
 
 

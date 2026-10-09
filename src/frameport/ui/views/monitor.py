@@ -555,14 +555,16 @@ class MonitorView:
             # above the number, clear of the pointer resting on it
             self.game_fps.tooltip = ft.Tooltip(message=mood, wait_duration=1200, prefer_below=False,
                                                vertical_offset=T.px(34)) if mood else None
-        # a full minute right on target: the chart glows in the portal's colours for a moment (once per streak)
+        # easter egg: 2.5 minutes right on target = a moment's celebration in the portal's colours (once per streak),
+        # then the "Perfect pacing" pill and line stay until the frame rate slips
         if easter.enabled() and self._perfect.feed(fps, target, s.get("t") or time.time()):
             self._perfect_until = time.monotonic() + easter.PERFECT_SHOW
-        perfect = time.monotonic() < self._perfect_until
-        self.game_spark.portal(perfect)
-        self._show_perfect(perfect)
-        if perfect:
-            self.game_fps_sub.value = tr("fps · perfect pacing for a whole minute")
+        steady = easter.enabled() and self._perfect.done
+        party = steady and time.monotonic() < self._perfect_until
+        self.game_spark.portal(party)
+        self._show_perfect(party, steady)
+        if steady:
+            self.game_fps_sub.value = tr("fps · perfect pacing")
         elif game.get("kind") in ("pcvr", "linux"):
             self.game_fps_sub.value = tr("fps isn't reported for PC VR and Linux games")
         elif fps is None:
@@ -575,10 +577,12 @@ class MonitorView:
         self.game_spark.set(series, target=target, hi=(target or 72) * 1.15)
         return [self.game_card, self.no_game]
 
-    def _show_perfect(self, on: bool) -> None:
-        """Perfect pacing (an easter egg): the card glows and pulses between the portal's blue and orange, the number
-        grows and takes the portal gradient, a "Perfect pacing" pill shows; all back to normal afterwards."""
+    def _show_perfect(self, on: bool, steady: bool) -> None:
+        """Perfect pacing (an easter egg). on: the celebration (the card glows and pulses between the portal's blue
+        and orange, the number grows and takes the portal gradient); steady: the "Perfect pacing" pill, which stays
+        after the celebration until the frame rate slips."""
         card, fps = self.game_card, self.game_fps
+        self.perfect_pill.visible = steady
         if on:
             self._perfect_beat = not self._perfect_beat
             color = T.SECONDARY if self._perfect_beat else T.ACCENT
@@ -589,11 +593,9 @@ class MonitorView:
             fps.color = None
             fps.style = ft.TextStyle(foreground=ft.Paint(gradient=ft.PaintLinearGradient(
                 begin=ft.Offset(0, 0), end=ft.Offset(T.px(52), 0), colors=[T.SECONDARY, T.ACCENT])))
-            self.perfect_pill.visible = True
         elif self._perfect_on:
             card.border, card.shadow, card.bgcolor = self._card_look
             fps.scale, fps.style = 1.0, None
-            self.perfect_pill.visible = False
         self._perfect_on = on
 
     def _apply_details(self, s: dict) -> list:

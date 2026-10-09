@@ -3,12 +3,15 @@ gets in the way:
 
 - Click the sidebar logo seven times quickly: its portal lights up and tosses a random game's cover out, which
   tumbles down across the window on its own random arc.
-- Rest the pointer on the Monitor's frame rate: it says how the game is doing ("Smooth as butter"); a full minute
-  right on target turns its chart into the portal's blue-to-orange for a moment ("Perfect pacing").
+- Rest the pointer on the Monitor's frame rate: it says how the game is doing ("Smooth as butter"); two and a half
+  minutes right on target make the game card celebrate in the portal's colours, and a "Perfect pacing" pill stays
+  until the frame rate slips.
 - Install milestones (the 1st, 10th and 100th game on the Frame): confetti in the portal's two colours and a
   thank-you.
 - Holidays: the logo wears a little badge (a heart, a clover, a pumpkin, …) that does a small dance when the
-  pointer touches it; on April 1st the logo stands on its head until you look at it.
+  pointer touches it and fills the window with the holiday's weather when clicked (confetti at New Year, snow in
+  winter, hearts, digits of pi, clovers, hopping eggs, bouncing pumpkins); on April 1st the logo stands on its head
+  until you look at it.
 - Searching the Library for "frameport": the logo spins round and says it's there.
 - Typing "hello" on the Type on Frame tab (the keys still go to the Frame): a little headset peeks up from
   the window's corner and waves back.
@@ -44,9 +47,9 @@ INSTALLS = "fun.installed"  # the ids of the different games ever installed on a
 SHOWN = "fun.milestones"  # the milestones already celebrated (each one shows once, ever)
 CLICKS, CLICK_WINDOW = 7, 3.0  # the logo: this many clicks within this many seconds
 MILESTONES = (1, 10, 100)
-PERFECT_SECONDS = 60.0  # the Monitor: this long right on target = perfect pacing
+PERFECT_SECONDS = 150.0  # the Monitor: this long right on target = perfect pacing
 PERFECT_TOLERANCE = 0.5  # fps
-PERFECT_SHOW = 5.0  # seconds the chart stays in the portal's colours
+PERFECT_SHOW = 5.0  # seconds the card's celebration lasts (the "Perfect pacing" pill stays while it lasts)
 HOP_AFTER = 150.0  # an upload running longer than this: the transit's cover hops ...
 HOP_EVERY = 9.0  # ... every this many seconds
 HELLO = "hello"
@@ -324,7 +327,8 @@ class Logo:
                                       animate_scale=ft.Animation(140, ft.AnimationCurve.EASE_OUT),
                                       animate_offset=ft.Animation(180, ft.AnimationCurve.EASE_OUT))
             layers.append(ft.Container(self.badge, left=s - b * 0.7, top=s - b * 0.75,
-                                       tooltip=holiday_tip(self.which), on_hover=self._badge_hover))
+                                       tooltip=holiday_tip(self.which), on_hover=self._badge_hover,
+                                       on_click=self._badge_click))
         if self.which == "april":  # upside down all day; looking at it puts it right for a moment
             self.image.rotate = math.pi
         box = self.box
@@ -339,6 +343,11 @@ class Logo:
             return
         self.image.rotate = 0 if e.data in (True, "true") else math.pi
         C.update(self.image)
+
+    def _badge_click(self, e=None) -> None:
+        """A click on the badge: the holiday's weather over the window (confetti, snow, hearts, …)."""
+        if self.which and not self.app.reduce_motion:
+            holiday_shower(self.app, self.which)
 
     def _badge_hover(self, e) -> None:
         if e.data not in (True, "true") or self._dancing or self.app.reduce_motion or self.badge is None:
@@ -584,9 +593,16 @@ async def _wave_hello(app: FramePortApp) -> None:
 
 # ------------------------------------------------------------------ the battery ring: fully charged
 
-def ring_pulse(ring: ft.Container, color: str) -> None:
-    """The sidebar's battery ring pulses three times (grows with a glow, settles): the Frame just reached 100 % on
-    the charger. `ring` needs animate_scale + animate (for its shadow)."""
+def ring_glow(size: float, color: str) -> ft.Container:
+    """The soft glow behind the battery ring while it pulses (hidden otherwise; goes under the ring in its Stack)."""
+    return ft.Container(width=size, height=size, shape=ft.BoxShape.CIRCLE, opacity=0,
+                        shadow=ft.BoxShadow(blur_radius=T.px(18), spread_radius=T.px(2), color=T.soft(color, 0.7)),
+                        animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT))
+
+
+def ring_pulse(ring: ft.Control, glow: ft.Container) -> None:
+    """The sidebar's battery ring pulses three times (the ring alone grows, with a glow behind it; the percentage
+    inside stays put): the Frame just reached 100 % on the charger. `ring` needs animate_scale."""
     if getattr(ring, "_pulsing", False):
         return
     ring._pulsing = True
@@ -594,12 +610,11 @@ def ring_pulse(ring: ft.Container, color: str) -> None:
     def run():
         try:
             for _ in range(3):
-                ring.scale = 1.22
-                ring.shadow = ft.BoxShadow(blur_radius=T.px(18), spread_radius=T.px(2), color=T.soft(color, 0.7))
-                C.update(ring)
+                ring.scale, glow.opacity = 1.2, 1
+                C.update(ring, glow)
                 time.sleep(0.32)
-                ring.scale, ring.shadow = 1.0, None
-                C.update(ring)
+                ring.scale, glow.opacity = 1.0, 0
+                C.update(ring, glow)
                 time.sleep(0.32)
         finally:
             ring._pulsing = False
@@ -612,6 +627,140 @@ def charged_now(before: dict | None, now: dict | None) -> bool:
     if not before or not now or before.get("percent") is None or now.get("percent") is None:
         return False
     return int(before["percent"]) < 100 <= int(now["percent"]) and bool(now.get("plugged"))
+
+
+# ------------------------------------------------------------------ holiday showers
+
+# holiday → (kind of shower, number of pieces)
+SHOWERS = {"newyear": ("confetti", 0), "winter": ("snow", 70), "valentine": ("hearts", 36), "pi": ("digits", 44),
+           "clover": ("clovers", 30), "easter": ("eggs", 22), "halloween": ("pumpkins", 18)}
+PI_DIGITS = "3.14159265358979323846π"
+
+
+def shower_plan(kind: str, n: int, width: float, height: float, rnd: random.Random) -> list[dict]:
+    """The pieces of a shower (no Flet: tested): for each, "piece" (a size and a colour/glyph/icon index), "start"
+    ({left, top, rotate, opacity}) and "phases" [(props, seconds, curve name)]. Phase k of every piece starts at the
+    same moment (one page update per phase, as the confetti does); pieces arrive one after another because they
+    start at different distances outside the window. Every piece ends off screen or faded."""
+    out = []
+    for i in range(n):
+        size = rnd.uniform(*{"snow": (16, 40), "hearts": (22, 46), "digits": (24, 44), "clovers": (28, 50),
+                              "eggs": (32, 54), "pumpkins": (34, 56)}[kind])
+        x = rnd.uniform(0.02, 0.96) * width
+        piece = {"size": size, "index": i}
+        if kind == "snow":  # drifts down slowly, swaying; a deep stack above the window so it keeps snowing
+            top = -size - rnd.uniform(0, 1.2) * height
+            start = {"left": x, "top": top, "rotate": 0, "opacity": 0.95}
+            phases = [({"left": x + rnd.uniform(-90, 90), "top": height + 30, "rotate": rnd.uniform(-2, 2)},
+                       rnd.uniform(5.5, 7.0), "linear")]
+        elif kind == "hearts":  # float up from below the window and fade near the top
+            start = {"left": x, "top": height + 10 + rnd.uniform(0, 0.6) * height, "rotate": rnd.uniform(-0.3, 0.3),
+                     "opacity": 1}
+            phases = [({"left": x + rnd.uniform(-60, 60), "top": rnd.uniform(-0.1, 0.25) * height, "opacity": 0},
+                       rnd.uniform(3.4, 4.4), "ease_out")]
+        elif kind in ("digits", "clovers"):  # tumble down
+            start = {"left": x, "top": -size - rnd.uniform(0, 0.8) * height, "rotate": rnd.uniform(-1, 1),
+                     "opacity": 1}
+            phases = [({"left": x + rnd.uniform(-50, 50), "top": height + 40, "rotate": rnd.uniform(-6, 6)},
+                       rnd.uniform(3.4, 4.4), "ease_in")]
+        elif kind == "eggs":  # hop up from below the window and drop back
+            start = {"left": x, "top": height + 20, "rotate": 0, "opacity": 1}
+            phases = [({"top": rnd.uniform(0.25, 0.6) * height, "rotate": rnd.uniform(-0.6, 0.6)},
+                       rnd.uniform(0.6, 0.8), "ease_out"),
+                      ({"top": height + 40, "rotate": rnd.uniform(-1.2, 1.2)}, rnd.uniform(0.6, 0.8), "ease_in")]
+        else:  # pumpkins: drop in, bounce on the window's floor, fade
+            start = {"left": x, "top": -size - rnd.uniform(0, 0.4) * height, "rotate": rnd.uniform(-0.4, 0.4),
+                     "opacity": 1}
+            phases = [({"top": height - size - rnd.uniform(4, 30), "rotate": 0}, rnd.uniform(1.4, 1.9),
+                       "bounce_out"),
+                      ({"opacity": 0}, 0.6, "ease_in")]
+        out.append({"piece": piece, "start": start, "phases": phases})
+    return out
+
+
+_CURVES = {"linear": ft.AnimationCurve.LINEAR, "ease_in": ft.AnimationCurve.EASE_IN,
+           "ease_out": ft.AnimationCurve.EASE_OUT, "bounce_out": ft.AnimationCurve.BOUNCE_OUT}
+
+
+def _shower_piece(kind: str, piece: dict) -> ft.Control:
+    size, i = piece["size"], piece["index"]
+    if kind == "snow":
+        return ft.Icon(ft.Icons.AC_UNIT, size=size, color=T.soft("#FFFFFF", 0.9))
+    if kind == "hearts":
+        return ft.Icon(ft.Icons.FAVORITE, size=size, color=("#FF4D7E", "#FF9DBB", T.ACCENT)[i % 3])
+    if kind == "digits":
+        return ft.Text(PI_DIGITS[i % len(PI_DIGITS)], size=size, weight=ft.FontWeight.W_800,
+                       color=(T.SECONDARY, T.ACCENT)[i % 2])
+    icon = {"clovers": "holiday-clover", "eggs": "holiday-egg", "pumpkins": "holiday-pumpkin"}[kind]
+    return ft.Image(src=C._asset_src(icon), width=size, height=size, fit=ft.BoxFit.CONTAIN)
+
+
+_shower_busy = threading.Lock()
+
+
+def holiday_shower(app: FramePortApp, which: str) -> None:
+    """The holiday's weather over the window for a few seconds (clicking the logo's badge). One at a time."""
+    kind, n = SHOWERS.get(which, (None, 0))
+    if kind is None:
+        return
+    if kind == "confetti":
+        app.page.run_task(_confetti, app)
+        return
+    if not _shower_busy.acquire(blocking=False):
+        return
+    try:
+        app.page.run_task(_shower, app, kind, n)
+    except Exception:  # noqa: BLE001 - no event loop (tests, closing)
+        _shower_busy.release()
+
+
+async def _shower(app: FramePortApp, kind: str, n: int) -> None:
+    """Like the confetti: every piece gets its animation when it's made, then each phase moves all pieces in one
+    page update (moving pieces one by one, each with its own page update, didn't show up in the window)."""
+    import asyncio
+
+    page = app.page
+    try:
+        width = float(getattr(page, "width", None) or 1440)
+        height = float(getattr(page, "height", None) or 900)
+        plan = shower_plan(kind, n, width, height, random.Random())
+
+        def anim(phase) -> ft.Animation:
+            return ft.Animation(int(phase[1] * 1000), _CURVES[phase[2]])
+        pieces = []
+        for p in plan:
+            st, first = p["start"], p["phases"][0]
+            pieces.append(ft.Container(_shower_piece(kind, p["piece"]), left=st["left"], top=st["top"],
+                                       rotate=st["rotate"], opacity=st["opacity"],
+                                       animate_position=anim(first), animate_rotation=anim(first),
+                                       animate_opacity=anim(first)))
+        layer = ft.TransparentPointer(ft.Stack(pieces, width=width, height=height), expand=True)
+        page.overlay.append(layer)
+        page.update()
+        await asyncio.sleep(0.05)
+        for k in range(max(len(p["phases"]) for p in plan)):
+            longest = 0.0
+            for ctl, p in zip(pieces, plan, strict=True):
+                if k >= len(p["phases"]):
+                    continue
+                phase = p["phases"][k]
+                if k:  # (later phases: their own timing)
+                    ctl.animate_position, ctl.animate_rotation, ctl.animate_opacity = anim(phase), anim(phase), \
+                        anim(phase)
+                for key, value in phase[0].items():
+                    setattr(ctl, key, value)
+                longest = max(longest, phase[1])
+            page.update()
+            await asyncio.sleep(longest)
+        if layer in page.overlay:
+            page.overlay.remove(layer)
+            page.update()
+    except Exception:  # noqa: BLE001 - decoration only, but say why (run_task would swallow it)
+        from ..core import applog
+
+        applog.log.exception("holiday shower %s failed", kind)
+    finally:
+        _shower_busy.release()
 
 
 # ------------------------------------------------------------------ confetti

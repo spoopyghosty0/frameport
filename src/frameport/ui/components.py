@@ -1218,8 +1218,8 @@ class Transit:
                                   border=ft.Border.all(1, T.BORDER_STRONG), alignment=ft.Alignment.CENTER,
                                   clip_behavior=ft.ClipBehavior.ANTI_ALIAS, animate_position=anim,
                                   offset=ft.Offset(0, 0), rotate=0,
-                                  animate_offset=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
-                                  animate_rotation=ft.Animation(200, ft.AnimationCurve.EASE_OUT))
+                                  animate_offset=ft.Animation(240, ft.AnimationCurve.EASE_OUT),
+                                  animate_rotation=ft.Animation(240, ft.AnimationCurve.EASE_OUT))
         self._upload_since: float | None = None  # (easter egg: on long uploads the cover hops now and then)
         self._last_hop = 0.0
         # the portal in two layers around the cover, so the cover goes through it: the back (shadow, hole, the rim's
@@ -1356,7 +1356,7 @@ class Transit:
         cover = self.cover
 
         def hop():
-            for dy, turn, hold in ((-0.6, -0.17, 0.17), (0, 0.06, 0.17), (-0.22, 0.0, 0.14), (0, 0, 0.17)):
+            for dy, turn, hold in ((-0.6, -0.17, 0.21), (0, 0.06, 0.21), (-0.22, 0.0, 0.17), (0, 0, 0.21)):
                 cover.offset, cover.rotate = ft.Offset(0, dy), turn
                 update(cover)
                 time.sleep(hold)
