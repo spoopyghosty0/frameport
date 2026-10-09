@@ -280,11 +280,17 @@ Repo is on an NTFS drive (`core.fileMode=false`); line endings are LF (`.gitattr
   artwork, frames.json, the app's SSH key which the dev Frame authorizes).
 - Device checks: `frameport test <pkg>` / `frameport parity-device --results <parity.json> --baseline <launch.txt>
   [--test-only]`; the pre-FramePort baseline is `PATCHED/_known-good-2026-09-28/_frame-state/baseline-launch.txt`.
-- Docs screenshots (`docs/images/`): `python scripts/scrub_library.py ~/.local/share/frameport <dir> --status works,issues` (copies
-  library + artwork only; titles replace folder names, local paths → `D:/Games/...`, sort by size) then
-  `FRAMEPORT_HOME=<dir> python scripts/ui_smoke.py --out <shots> --docs --fake-frame --game <pkg>` (set
-  FRAMEPORT_JAVA/_OVERPORT_JAR/_APKSIGNER_JAR so no tool download toast appears; `--viewport 1280x2600` + crop for the
-  patch list). Check every PNG for paths, IPs, user names and repack/scene names before committing.
+- Docs screenshots + demo video (docs/SHOWCASE.md): never by hand. `uv run python scripts/showcase/render_docs.py`
+  renders `docs/showcase/shots.yaml` into `docs/images/` (only visibly changed files are rewritten; `--check` for CI)
+  and `scripts/showcase/record_tour.py [--draft]` records `docs/showcase/tour.yaml` into
+  `docs/media/frameport-tour.mp4` + `docs/images/tour-teaser.webp`. Both build the demo library first
+  (`demo_home.py`: catalog games from `demo-library.yaml` + `demo-analyses.json`, art/details cached in
+  ~/.cache/frameport-showcase, a pretend Frame from `showcase-frame.json`) in a temp FRAMEPORT_HOME: no personal data,
+  refuses the real data dir and placeholder art. Steps find elements by name through Flutter's semantics tree
+  (`scripts/showcase/web.py`: text, tooltip; the innermost match wins) — give new icon-only controls a tooltip. The
+  `showcase` workflow renders on UI pushes to main (+ the tour when its files change, or on dispatch) and opens PR
+  `showcase/update`; releases attach `FramePort-tour.mp4`. `scripts/scrub_library.py` (the owner's own library) is
+  only for private screenshots now.
   README rules (owner): states the project is a proof of concept, provides no piracy tools, credits the wrapped
   projects (most functionality is theirs); neutral technical wording; no Quest2Frame mentions anywhere.
 - GUI smoke test: `uv pip install flet-web playwright && playwright install chromium`, then

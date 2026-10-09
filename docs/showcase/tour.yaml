@@ -65,7 +65,7 @@ scenes:
 
   - name: play
     caption: ["Play from your PC", "Starts the game in the headset through Steam"]
-    teaser: [0.4, 2.8]
+    teaser: [4.3, 3.2]
     steps:
       - click: "Library"
       - call: library_view.clear_search

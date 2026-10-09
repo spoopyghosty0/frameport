@@ -9,7 +9,9 @@
 
 Install games that target the Meta Quest, Android, or general PCVR onto your **Valve Steam Frame**. FramePort handles everything from uploading game files, setting up your Frame, injecting compatibility patches, and adding shortcuts to your Steam library. FramePort aims to be as simple as possible by taking advantage of the fact that the Steam Frame runs on Linux.
 
-![Library](docs/images/library.png)
+[![FramePort: library, one-click install, play, monitor](docs/images/tour-teaser.webp)](docs/media/frameport-tour.mp4)
+
+▶ [Watch the full tour](docs/media/frameport-tour.mp4) (about 90 seconds, MP4; also attached to every release)
 
 > **Notice:** FramePort explicitly does NOT download, share, or unlock games. You must provide legally obtained game
 > executables. Core features of FramePort simply download and wrap other published tools (see [Built on](#built-on))
@@ -17,6 +19,8 @@ Install games that target the Meta Quest, Android, or general PCVR onto your **V
 > purchased on sites like [SideQuest](https://sidequestvr.com/). 
 
 ## Features
+
+![Library](docs/images/library.png)
 
 - **Painless setup:** one short command on the Frame. No root, no `sudo`, no password.
   [What it changes](docs/FRAME_SETUP.md).

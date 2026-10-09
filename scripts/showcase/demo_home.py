@@ -27,13 +27,17 @@ FETCHED = 1790000000.0  # the "fetched" time stored with cached details (fixed: 
 
 
 def real_data_dir() -> Path:
-    """The user's own FramePort data dir (never written by the showcase)."""
-    saved = os.environ.pop("FRAMEPORT_HOME", None)
-    try:
-        from frameport.core.paths import user_data_dir
+    """The user's own FramePort data dir (never written by the showcase; not even created by asking)."""
+    from frameport.core import paths
 
-        return user_data_dir().resolve()
+    saved = os.environ.pop("FRAMEPORT_HOME", None)
+    removed = paths._removed.is_set()
+    paths._removed.set()  # (user_data_dir creates the folder unless FramePort is being removed)
+    try:
+        return paths.user_data_dir().resolve()
     finally:
+        if not removed:
+            paths._removed.clear()
         if saved is not None:
             os.environ["FRAMEPORT_HOME"] = saved
 
@@ -227,6 +231,16 @@ def build(home: Path, offline: bool = False, refresh: bool = False, log=print) -
     if sources.get("none"):
         log(f"  without art (placeholders): {', '.join(sources['none'])}")
     return {"home": str(home), "games": len(fixture["games"]), "art": sources}
+
+
+def build_for_render(home: Path, offline: bool = False, allow_missing_art: bool = False) -> dict:
+    """build(), but a render must not go on with placeholder art (a store that didn't answer would otherwise put
+    placeholders into the docs and the video): exits 4 unless allowed."""
+    result = build(home, offline=offline)
+    if result["art"].get("none") and not allow_missing_art:
+        raise SystemExit(f"no art for {', '.join(result['art']['none'])} (a store didn't answer?): not rendering. "
+                         "Try again later, or pass --allow-missing-art")
+    return result
 
 
 def tool_env(home: Path) -> dict:

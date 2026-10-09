@@ -156,6 +156,7 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="only report out-of-date images (exit 1 if any)")
     ap.add_argument("--home", type=Path, default=None, help="demo data dir (default: a temp folder)")
     ap.add_argument("--offline", action="store_true", help="use only cached art")
+    ap.add_argument("--allow-missing-art", action="store_true", help="render even when a game got no art")
     ap.add_argument("--keep", type=Path, default=None, help="also keep every raw render in this folder")
     args = ap.parse_args()
 
@@ -169,7 +170,7 @@ def main() -> int:
             return 2
         shots = [s for s in shots if s["name"] in want]
     home = args.home or Path(tempfile.mkdtemp(prefix="fp-showcase-home-"))
-    demo_home.build(home, offline=args.offline)
+    demo_home.build_for_render(home, offline=args.offline, allow_missing_art=args.allow_missing_art)
     problems = privacy_problems(home)
     if problems:
         print("refusing to render, the demo data contains personal-looking data:\n  " + "\n  ".join(problems),

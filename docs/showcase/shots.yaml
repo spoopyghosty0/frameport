@@ -23,7 +23,7 @@ shots:
       - settle: true
 
   - name: game
-    docs: [docs/INSTALL.md]
+    docs: [docs/INSTALL.md, docs/SHOWCASE.md]
     viewport: [1280, 1100]
     steps:
       - open_game: ${game}
@@ -79,16 +79,19 @@ shots:
     steps:
       - go: monitor
 
-  # newer screens (shown in docs/SHOWCASE.md's gallery; the README picks what it needs)
+  # newer screens (docs/SHOWCASE.md's gallery; the README picks what it needs)
   - name: live-view        # idle: a running stream shows its relay's random port and the data rate (no stable picture)
+    docs: [docs/SHOWCASE.md]
     steps:
       - go: live
 
   - name: install-progress
+    docs: [docs/SHOWCASE.md]
     steps:
       - hook: {name: held_install, args: ["${new_game}"]}
       - open_game: ${new_game}
 
   - name: appearance
+    docs: [docs/SHOWCASE.md]
     steps:
       - go: settings

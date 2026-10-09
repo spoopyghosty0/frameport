@@ -1,0 +1,110 @@
+name: showcase
+# Docs screenshots and the demo tour, rendered from the demo library (docs/showcase/, scripts/showcase/; see
+# docs/SHOWCASE.md). Opens or updates one pull request (branch showcase/update) when a picture really changed; the
+# renders are also kept as a workflow artifact either way.
+on:
+  workflow_dispatch:
+    inputs:
+      video:
+        description: "Also record the demo tour (docs/media/frameport-tour.mp4 + the README teaser)"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "src/frameport/ui/**"
+      - "src/frameport/locales/**"
+      - "docs/showcase/**"
+      - "scripts/showcase/**"
+
+concurrency:
+  group: showcase-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  render:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # the push's changed files decide whether the video is recorded again
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: ffmpeg and fonts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-roboto fonts-noto-color-emoji
+      - run: uv sync --extra dev
+      - name: Chromium for Playwright
+        run: uv run playwright install --with-deps chromium
+      - name: Store art cache (fetched once from the stores the app uses)
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/frameport-showcase
+          key: showcase-art-${{ hashFiles('docs/showcase/demo-library.yaml') }}
+          restore-keys: showcase-art-
+
+      - name: Docs screenshots
+        run: uv run python scripts/showcase/render_docs.py --keep showcase-out/screenshots
+
+      - name: Record the tour this time?
+        id: video
+        env:
+          INPUT_VIDEO: ${{ inputs.video }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          record=false
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            [ "$INPUT_VIDEO" = true ] && record=true
+          elif git diff --name-only "$BEFORE" "$GITHUB_SHA" 2>/dev/null \
+               | grep -qE '^(docs/showcase/tour\.yaml|scripts/showcase/)'; then
+            record=true  # the storyboard or the recorder changed (UI tweaks alone don't re-record ~10 MB)
+          fi
+          echo "record=$record" >> "$GITHUB_OUTPUT"
+          echo "record the tour: $record"
+      - name: Demo tour
+        if: steps.video.outputs.record == 'true'
+        run: uv run python scripts/showcase/record_tour.py --work showcase-out/tour
+
+      - name: Keep the renders
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: showcase
+          path: |
+            showcase-out/screenshots
+            showcase-out/tour/tour.json
+            docs/media
+            docs/images/tour-teaser.webp
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: What changed
+        id: diff
+        run: |
+          git status --short -- docs/images docs/media
+          if [ -n "$(git status --porcelain -- docs/images docs/media)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Pull request
+        if: steps.diff.outputs.changed == 'true' && github.ref == 'refs/heads/main'
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          branch: showcase/update
+          delete-branch: true
+          add-paths: |
+            docs/images/*
+            docs/media/*
+          commit-message: "Docs: update screenshots${{ steps.video.outputs.record == 'true' && ' and the demo tour' || '' }}"
+          title: "Update docs screenshots${{ steps.video.outputs.record == 'true' && ' and the demo tour' || '' }}"
+          body: |
+            Rendered by the `showcase` workflow from the demo library (docs/showcase/demo-library.yaml) with a
+            pretend Frame: only pictures that visibly changed are included. Look them over before merging (the
+            run's `showcase` artifact has every render).
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

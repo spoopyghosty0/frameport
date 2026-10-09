@@ -101,6 +101,7 @@ def main() -> int:
     ap.add_argument("--work", type=Path, default=None, help="folder for frames and clips (default: temp)")
     ap.add_argument("--home", type=Path, default=None, help="demo data dir (default: temp)")
     ap.add_argument("--offline", action="store_true", help="use only cached art")
+    ap.add_argument("--allow-missing-art", action="store_true", help="render even when a game got no art")
     ap.add_argument("--out", type=Path, default=MEDIA, help="where frameport-tour.mp4 goes")
     ap.add_argument("--teaser", type=Path, default=TEASER, help="where the teaser WebP goes")
     args = ap.parse_args()
@@ -113,7 +114,7 @@ def main() -> int:
     work = args.work or Path(tempfile.mkdtemp(prefix="fp-tour-"))
     work.mkdir(parents=True, exist_ok=True)
     home = args.home or Path(tempfile.mkdtemp(prefix="fp-tour-home-"))
-    demo_home.build(home, offline=args.offline)
+    demo_home.build_for_render(home, offline=args.offline, allow_missing_art=args.allow_missing_art)
 
     from showcase import postprod, steps
     from showcase.fakes import LiveMonitorSession
