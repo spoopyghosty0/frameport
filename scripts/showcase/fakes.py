@@ -271,6 +271,7 @@ class FakeMonitorSession:
     at once first, so the charts are full in screenshots. GAME = --game (else the library's first game)."""
 
     GAME: str | None = None
+    DIP: tuple[float, float] | None = None  # (until, fps): steps hook fps_dip
     BACKFILL = 120
     # (name, group, CPU %, GPU %, memory); "GAME" = the game's package
     PROCS = [("GAME", "game", 9.8, 44.0, 1_350_000_000), ("vrcompositor", "steamvr", 1.4, 9.0, 80_000_000),
@@ -609,6 +610,8 @@ class LiveMonitorSession(FakeMonitorSession):
         fps = 72 - abs(rnd.gauss(0, 0.6))
         if t % 45 in (20, 21, 22):  # a short, shallow dip now and then
             fps = 66 + 2 * abs(t % 45 - 21) + rnd.uniform(-0.8, 0.8)
+        if self.DIP and time.time() < self.DIP[0]:  # (the step hook fps_dip: a stutter on cue)
+            fps = self.DIP[1] + rnd.uniform(-0.8, 0.8)
         for g in s["games"]:
             g["fps"] = round(fps, 1)
         return s

@@ -457,8 +457,7 @@ class SettingsView:
             "about": C.section(tr("About"), C.card(ft.Column([
                 C.kv(tr("Version"), ver),
                 C.kv(tr("Frame agent"), self.agent_text(), "frame_agent"),
-                C.kv(tr("Source"), C.ghost(REPO_URL.removeprefix("https://"), ft.Icons.OPEN_IN_NEW_ROUNDED,
-                                           color=T.ACCENT, url=REPO_URL)),
+                C.kv(tr("Source"), C.link(REPO_URL.removeprefix("https://"), REPO_URL)),
                 C.meta(tr("Uses OVRPort, Revive (LibreVR), Valve's Lepton and Proton. "
                           "Not affiliated with Valve or Meta.")),
             ], spacing=T.S2))),

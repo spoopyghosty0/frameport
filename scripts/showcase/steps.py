@@ -12,6 +12,7 @@ mouse to things found by name (see web.Session.find); hooks run the pretend Fram
     - hover: "Batman"                  # pointer: a name, {name, nth, dx, dy, exact} or [x, y]
     - click: "Monitor"                 # also right_click, double_click
     - drag: ["Videos", "Documents"]    # press on the first target, move through the others, release
+    - clicks: {at: [37, 42], times: 7, gap: 0.22}   # quick clicks in one place
     - type: "arc"                      # keyboard; press: Escape
     - scroll: {dy: 600, at: "Patches"}
     - wait: 1.5                        # seconds
@@ -32,8 +33,8 @@ import time
 from showcase import fakes
 
 POINTER = {"hover", "move", "click", "right_click", "double_click"}
-ACTIONS = POINTER | {"nav", "go", "open_game", "call", "pop_dialog", "theme", "drag", "type", "press", "scroll", "wait",
-                     "wait_for", "settle", "park", "hook"}
+ACTIONS = POINTER | {"clicks", "nav", "go", "open_game", "call", "pop_dialog", "theme", "drag", "type", "press",
+                     "scroll", "wait", "wait_for", "settle", "park", "hook"}
 
 
 class StepError(ValueError):
@@ -132,6 +133,13 @@ def run(session, steps: list, variables: dict | None = None, log=None) -> None:
                 session.click(v)
                 session.sleep(0.08)
                 session.page.mouse.down()
+                session.page.mouse.up()
+        elif action == "clicks":  # quick clicks in one place (each shows the click ring)
+            session.move(v["at"])
+            for _ in range(int(v.get("times", 2))):
+                session.sleep(float(v.get("gap", 0.22)))
+                session.page.mouse.down()
+                session.sleep(0.05)
                 session.page.mouse.up()
         elif action == "drag":
             session.drag(v)
@@ -296,7 +304,33 @@ def _pairing_done(session, delay: float = 1.5) -> None:
     _connect(session, delay)
 
 
+def _easter_eggs(session, on: bool = True, today: str = "", installs: int | None = None) -> None:
+    """The app's easter eggs (ui/easter.py) on or off (the demo library has them off). today: pretend this date
+    (YYYY-MM-DD: the holiday badges); installs: the install count so far (the next install may be a milestone).
+    The window's shell is rebuilt, so the sidebar logo picks it up."""
+    import os
+
+    from frameport.core import library
+    from frameport.ui import easter
+    from frameport.ui import theme as T
+
+    library.set_setting(easter.SETTING, bool(on))
+    if today:
+        os.environ["FRAMEPORT_TODAY"] = today
+    if installs is not None:
+        before = [f"demo.installed.{i}" for i in range(int(installs))]  # that many different games so far
+        library.set_setting(easter.INSTALLS, before)
+        library.set_setting(easter.SHOWN, [m for m in easter.MILESTONES if m <= len(before)])
+    session.app.restyle(T.THEME)
+
+
+def _fps_dip(session, fps: float = 58.0, seconds: float = 6.0) -> None:
+    """The pretend game stutters: the stream reports `fps` for `seconds` (the Monitor's frame-rate moods)."""
+    fakes.FakeMonitorSession.DIP = (time.time() + seconds, fps)
+
+
 HOOKS = {"fake_install": _fake_install, "wait_jobs": _wait_jobs, "held_install": _held_install,
          "live_stream": _live_stream, "stop_live": _stop_live, "monitor_details": _monitor_details,
          "type_tab": _type_tab, "select_files": _select_files, "disconnect": _disconnect, "connect": _connect,
-         "settings_section": _settings_section, "first_run": _first_run, "pairing_done": _pairing_done}
+         "settings_section": _settings_section, "first_run": _first_run, "pairing_done": _pairing_done,
+         "easter_eggs": _easter_eggs, "fps_dip": _fps_dip}

@@ -7,6 +7,8 @@ and end cards added and everything joined with crossfades.
     python scripts/showcase/record_video.py                    # every video
     python scripts/showcase/record_video.py tour install       # some
     python scripts/showcase/record_video.py install --draft    # quick 720p check of a storyboard edit (work dir only)
+    python scripts/showcase/record_video.py /tmp/my-demo.yaml       # a storyboard file anywhere (its output may
+                                                                         # be any .mp4 path: demos, not docs)
     python scripts/showcase/record_video.py --changed-since <git rev>   # the ones whose storyboard (or this code)
                                                                          # changed since then (CI)
 
@@ -50,8 +52,8 @@ def load_video(name: str) -> dict:
 
     from showcase import steps
 
-    path = VIDEOS / f"{name}.yaml"
-    where = f"videos/{name}.yaml"
+    path = Path(name) if name.endswith(".yaml") else VIDEOS / f"{name}.yaml"  # (or a storyboard file anywhere)
+    where = path.name if name.endswith(".yaml") else f"videos/{name}.yaml"
     data = yaml.safe_load(path.read_text())
     unknown = set(data) - VIDEO_KEYS
     if unknown:
@@ -156,9 +158,10 @@ def record(name: str, args) -> int:
     if args.scenes:
         want = args.scenes.split(",")
         scenes = [s for s in scenes if s["name"] in want]
-    work = (args.work / name) if args.work else Path(tempfile.mkdtemp(prefix=f"fp-video-{name}-"))
+    stem = Path(name).stem
+    work = (args.work / stem) if args.work else Path(tempfile.mkdtemp(prefix=f"fp-video-{stem}-"))
     work.mkdir(parents=True, exist_ok=True)
-    home = (args.home / name) if args.home else Path(tempfile.mkdtemp(prefix="fp-video-home-"))
+    home = (args.home / stem) if args.home else Path(tempfile.mkdtemp(prefix="fp-video-home-"))
     demo_home.build_for_render(home, offline=args.offline, allow_missing_art=args.allow_missing_art,
                                profile=start.get("profile", "demo"))
 
@@ -252,7 +255,7 @@ def record(name: str, args) -> int:
         durations.append(secs)
         transition = 0.25 if args.draft else 0.5
         if args.draft:
-            out = work / f"{name}-draft.mp4"
+            out = work / f"{stem}-draft.mp4"
             postprod.join(clips, durations, out, transition=transition, crf=28, size=size)
             crf = 28
         else:
@@ -304,7 +307,7 @@ def main() -> int:
     ap.add_argument("--allow-missing-art", action="store_true", help="render even when a game got no art")
     args = ap.parse_args()
     names = args.videos or (changed_videos(args.changed_since) if args.changed_since else video_names())
-    unknown = set(names) - set(video_names())
+    unknown = {n for n in names if not (n.endswith(".yaml") and Path(n).is_file())} - set(video_names())
     if unknown:
         print(f"unknown video(s): {sorted(unknown)} (known: {', '.join(video_names())})", file=sys.stderr)
         return 2

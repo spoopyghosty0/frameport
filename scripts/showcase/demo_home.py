@@ -208,7 +208,9 @@ def build(home: Path, offline: bool = False, refresh: bool = False, log=print, p
 
     with library.edit() as data:
         s = data.setdefault("settings", {})
+        # (ui.easter_eggs off: no holiday badge or milestone confetti in the docs; the hook easter_eggs turns them on)
         s.update({"ui.theme": "portal", "ui.scale": 1.0, "ui.reduce_motion": False, "ui.welcome_done": True,
+                  "ui.easter_eggs": False,
                   "ui.language": "en",
                   "catalog.auto_update": False, "update.auto_check": False, "recipes.app_version": __version__,
                   "update.last_seen_version": __version__})

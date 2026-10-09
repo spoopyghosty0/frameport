@@ -654,9 +654,19 @@ def empty_state(icon: str, heading: str, text: str, *actions: ft.Control,
 
 
 def kv(label: str, value: str | ft.Control, help: str | None = None) -> ft.Row:
+    """A label and its value; a control as the value (a link, a button) sits on the left like text does."""
     return ft.Row([ft.Container(with_help(meta(label), help), width=T.px(130)),
                    ft.Container(value if isinstance(value, ft.Control) else body(value, T.TEXT, selectable=True),
-                                expand=True)], vertical_alignment=ft.CrossAxisAlignment.START)
+                                expand=True, alignment=ft.Alignment.CENTER_LEFT)],
+                  vertical_alignment=ft.CrossAxisAlignment.START)
+
+
+def link(label: str, url: str) -> ft.TextButton:
+    """A web link in running content: the accent colour, an "opens outside" icon, no indent on the left (it lines
+    up with the text around it)."""
+    return ft.TextButton(label, icon=ft.Icons.OPEN_IN_NEW_ROUNDED, icon_color=T.ACCENT, url=url,
+                         style=ft.ButtonStyle(shape=_shape(), color=T.ACCENT,
+                                              padding=ft.Padding(0, T.px(4), T.px(8), T.px(4))))
 
 
 class Check(NamedTuple):

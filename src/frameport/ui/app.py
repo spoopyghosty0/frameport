@@ -201,9 +201,12 @@ class FramePortApp:
         self.activity = ActivityPanel(self)
         wordmark = C.wordmark(T.px(17))
         self._portal_mark = wordmark.data  # the wordmark's portal (dual themes): pulses once on connect
+        from . import easter
+
+        self.logo_egg = easter.Logo(self, T.px(34))  # (ui/easter.py: a holiday badge, seven quick clicks)
         sidebar = ft.Container(ft.Column([
             ft.Container(ft.Row([
-                C.logo(T.px(34)),
+                self.logo_egg.control,
                 wordmark], spacing=T.S3),
                 padding=ft.Padding(T.S1, T.S2, 0, T.S5)),
             self.nav_col,
@@ -614,6 +617,19 @@ class FramePortApp:
         self.reduce_motion = bool(on)
         library.set_setting(REDUCE_MOTION, self.reduce_motion)
 
+    def _install_milestone(self, package: str | None) -> None:
+        """A game installed on the Frame: the 1st, 10th and 100th different game get a little celebration, once ever
+        (ui/easter.record_install: updates and reinstalls don't count; recorded even with easter eggs off, so turning
+        them on later can't bring an old milestone back), after the install's own toast has been read."""
+        from . import easter
+
+        message = easter.record_install(package)
+        if message and easter.enabled():
+            def later():
+                time.sleep(2.5)
+                easter.celebrate(self, message)
+            self.page.run_thread(later)
+
     def _pulse_portal(self) -> None:
         """The wordmark's portal grows and settles once (the Frame just connected)."""
         mark = self._portal_mark
@@ -768,6 +784,8 @@ class FramePortApp:
                 self.toast(msg, action=tr("Open") if pkg and self.route[:2] != ("game", pkg) else tr("Details"),
                            on_action=(lambda e: self.open_game(pkg)) if pkg and self.route[:2] != ("game", pkg)
                            else (lambda e: self.show_activity(True)))
+                if job.kind == "install" and job.to == "frame" and summary.get("verdict") != "fail":
+                    self._install_milestone(job.package)
             elif job.state == "failed":
                 msg = tr("{title} failed: {error}").format(title=job.title, error=job.error)
                 pkg = job.package

@@ -74,6 +74,13 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     `ui.live_frame_card` (Settings → Appearance, default on) is on; else the battery comes from the 30 s poll).
     ui_smoke injects `FakeMonitorSession` as the hub's `session_factory`.
     User tags live in library entries (`tags`), filters in library setting `ui.library`.
+    Easter eggs (`ui/easter.py`, owner's wish; never mentioned in the UI or docs): seven quick clicks on the sidebar
+    logo (a cover flies out of its portal), the Monitor's fps number has a mood tooltip, holiday badges on the logo
+    (Oct 24-31 pumpkin, Dec 20-Jan 2 snowflake; `FRAMEPORT_TODAY` pretends a date), install milestones (confetti +
+    message at the 1st/10th/100th *different* game: settings `fun.installed` = game ids, `fun.milestones` = shown;
+    each milestone shows once ever, recorded before it's shown; updates/reinstalls never count; the first use seeds
+    from games already on a Frame and marks passed milestones shown). Setting `ui.easter_eggs` (no UI) turns them
+    off; the showcase demo library has them off (steps hook `easter_eggs` for egg demos). Reduce motion: no animation.
     **Performance rules** (the app froze before): never put image bytes in controls — artwork is served by URL from the
     GUI assets dir (= user data dir; `ft.run(assets_dir=…)`), as thumbnails (`artwork/thumbs.py`, Pillow); the
     library view is persistent, streams cards in batches from a background thread and filters by toggling visibility;

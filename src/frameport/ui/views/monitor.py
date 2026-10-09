@@ -16,6 +16,7 @@ from ...errors import explain
 from ...frame import monitor as M
 from ...i18n import tr
 from .. import components as C
+from .. import easter
 from .. import theme as T
 
 if TYPE_CHECKING:
@@ -535,6 +536,10 @@ class MonitorView:
         lvl = M.level("fps_ratio", ratio)
         self.game_fps.value = f"{fps:.0f}" if fps is not None else "–"
         self.game_fps.color = LEVEL_COLOR[lvl] if fps is not None else T.TEXT_3
+        mood = easter.fps_mood(fps, target) if easter.enabled() else None  # (rest the pointer on the number)
+        if mood != getattr(self, "_fps_mood", None):
+            self._fps_mood = mood
+            self.game_fps.tooltip = ft.Tooltip(message=mood, wait_duration=1200) if mood else None
         if game.get("kind") in ("pcvr", "linux"):
             self.game_fps_sub.value = tr("fps isn't reported for PC VR and Linux games")
         elif fps is None:
