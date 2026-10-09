@@ -68,6 +68,7 @@ def live_features() -> list[tuple[str, str, str]]:
 
 
 VIDEO_START_S = 12  # the in-window player must show a moving picture within this, else the next player takes over
+VIDEO_REOPENS = 3  # times a minute the in-window player reconnects after an unexpected end of the stream
 
 
 def player_label(mode: str) -> str:
@@ -117,6 +118,7 @@ class LiveView:
         self.mpv = None  # live_players.MpvWindow
         self.video = None  # the flet-video control while it plays in the window
         self.video_error = ""  # its last error message (logged; the watchdog decides about falling back)
+        self._video_reopens: list[float] = []  # when it reconnected (VIDEO_REOPENS a minute)
         self.muted = False
         self.screen = ft.Container(expand=True, visible=False, bgcolor="#000000", border_radius=T.RADIUS,
                                    clip_behavior=ft.ClipBehavior.ANTI_ALIAS, border=ft.Border.all(1, T.BORDER))
@@ -342,9 +344,24 @@ class LiveView:
         applog.log.info("live view: in-window player said: %s", self.video_error)
 
     def _video_complete(self, e) -> None:
-        """media_kit reports `completed` changes, starting with false: only true means the stream ended."""
-        if getattr(e, "data", None) in (True, "true"):
-            self._video_failed(e)
+        """media_kit reports `completed` changes, starting with false: only true means the stream ended. While the
+        stream still runs, the player reconnects (a new viewer starts at a keyframe, as the browser page does), at
+        most VIDEO_REOPENS times a minute; after that the next player takes over."""
+        if getattr(e, "data", None) not in (True, "true"):
+            return
+        live = self.live
+        if self.mode != "app" or not (live and live.running):
+            return
+        now = time.time()
+        self._video_reopens = [t for t in self._video_reopens if now - t < 60]
+        if len(self._video_reopens) < VIDEO_REOPENS:
+            self._video_reopens.append(now)
+            applog.log.info("live view: the in-window player reached the stream's end while it runs: reconnecting "
+                            "(%d in the last minute)", len(self._video_reopens))
+            self._show_in_window(live)
+            self._refresh()
+            return
+        self._video_failed(e)
 
     async def _watch_video(self, video) -> None:
         """The in-window player must show progress (its position moving) within VIDEO_START_S, else the next player

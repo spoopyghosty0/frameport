@@ -318,6 +318,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(503, relay.ended.encode(), "text/plain")
             return
         init, gop, q = relay.subscribe()
+        sent, why, t0 = 0, "the stream ended", time.time()
         try:
             deadline = time.time() + 30
             while init is None:  # the source hasn't sent its init segment yet
@@ -335,6 +336,9 @@ class _Handler(BaseHTTPRequestHandler):
             self._chunk(init)
             for f in gop:
                 self._chunk(f)
+            sent = len(gop)
+            agent = self.headers.get("User-Agent", "?")[:60]
+            log.info("live view: viewer joined (%s)", agent)
             while True:
                 try:
                     f = q.get(timeout=5)
@@ -342,14 +346,18 @@ class _Handler(BaseHTTPRequestHandler):
                     if relay.ended:
                         break
                     continue
-                if f is None:
+                if f is None:  # finish() or dropped for lagging CLIENT_QUEUE fragments behind
+                    why = "the stream ended" if relay.ended else "it fell too far behind"
                     break
                 self._chunk(f)
+                sent += 1
             self.wfile.write(b"0\r\n\r\n")
-        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
-            pass
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError) as exc:
+            why = f"it disconnected ({type(exc).__name__})"
         finally:
             relay.unsubscribe(q)
+        if init is not None:
+            log.info("live view: viewer left after %.1f s, %d fragments: %s", time.time() - t0, sent, why)
 
     def _chunk(self, data: bytes) -> None:
         self.wfile.write(f"{len(data):x}\r\n".encode() + data + b"\r\n")
@@ -614,6 +622,13 @@ class FrameSource:
 
 def start(frame, quality: str = DEFAULT_QUALITY) -> LiveStream:
     """Start streaming the Frame's headset view; open `.url` in a browser to watch."""
+    client = getattr(frame, "client", None)
+    transport = client.get_transport() if client is not None else None
+    if transport is None or not transport.is_active():
+        # (e.g. the Frame slept: without this, the helper upload failed with "'NoneType' object has no attribute
+        # 'exec_command'" and the start went on with the software encoder)
+        raise ConnectionError("The Frame isn't connected (it may be asleep): connect it again on the Steam Frame "
+                              "page, then start the live view")
     src = FrameSource(frame, quality)
     live = LiveStream(src.open, src.close)
     live.relay.on_join = src.request_keyframe
