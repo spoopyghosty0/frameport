@@ -326,7 +326,7 @@ class Session:
         self.mouse_at = self.park_at
 
     # ------------------------------------------------------------ pictures
-    def settle(self, timeout: float = 6.0, interval: float = 0.15, quiet: int = 2, mask: list[Box] = ()) -> bool:
+    def settle(self, timeout: float = 8.0, interval: float = 0.15, quiet: int = 4, mask: list[Box] = ()) -> bool:
         """Wait until the page stops changing: `quiet` screenshots in a row (interval apart) are identical (masked
         boxes, e.g. a live chart, ignored). False when it was still changing at `timeout`."""
         deadline, last, same = time.monotonic() + timeout, None, 0

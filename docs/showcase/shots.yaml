@@ -20,6 +20,7 @@ shots:
     docs: [README.md]
     steps:
       - go: library
+      - wait_for: "On your Frame"
       - settle: true
 
   - name: game
@@ -27,6 +28,7 @@ shots:
     viewport: [1280, 1100]
     steps:
       - open_game: ${game}
+      - wait_for: "Where it's installed"
 
   - name: game-settings
     docs: [docs/INSTALL.md]
@@ -48,50 +50,60 @@ shots:
     docs: [docs/COMPATIBILITY.md]
     steps:
       - go: frame
+      - wait_for: "Ready to play"
 
   - name: files
     docs: [docs/COMPATIBILITY.md]
     steps:
       - go: files
-      - wait: 1.5
+      - wait_for: "Upload files…"
+      - wait: 1.0
       - hook: {name: select_files, args: [1, 2]}
 
   - name: screenshots
     docs: [README.md]
     steps:
       - go: screenshots
+      - wait_for: "Take screenshot"
 
   - name: screenshot-viewer
     docs: [README.md]
     steps:
       - go: screenshots
-      - wait: 2
+      - wait_for: "Take screenshot"
+      - wait: 1.5
       - call: {fn: screenshots_view.viewer, args: [0]}
+      - wait_for: "Close"
 
   - name: type-on-frame
     docs: [README.md]
     steps:
       - hook: type_tab
+      - wait_for: "Keyboard connected"
 
   - name: monitor
     docs: [README.md]
     viewport: [1280, 1150]
     steps:
       - go: monitor
+      - wait_for: "Processes"
 
   # newer screens (docs/SHOWCASE.md's gallery; the README picks what it needs)
   - name: live-view        # idle: a running stream shows its relay's random port and the data rate (no stable picture)
     docs: [docs/SHOWCASE.md]
     steps:
       - go: live
+      - wait_for: "What the player sees"
 
   - name: install-progress
     docs: [docs/SHOWCASE.md]
     steps:
       - hook: {name: held_install, args: ["${new_game}"]}
       - open_game: ${new_game}
+      - wait_for: "Cancel"
 
   - name: appearance
     docs: [docs/SHOWCASE.md]
     steps:
       - go: settings
+      - wait_for: "Portal (OLED)"
