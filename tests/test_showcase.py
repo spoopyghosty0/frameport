@@ -19,8 +19,9 @@ TOOL_VARS = ("FRAMEPORT_NO_UPDATE_CHECK", "FRAMEPORT_NO_CATALOG_UPDATE", "FRAMEP
 @pytest.fixture
 def demo(tmp_path, monkeypatch):
     """The demo library built offline with an empty art cache (every game falls back to placeholders)."""
-    for var in TOOL_VARS:
-        monkeypatch.delenv(var, raising=False)
+    for var in TOOL_VARS:  # build() sets these: set + delete first, so monkeypatch removes them again afterwards
+        monkeypatch.setenv(var, "")
+        monkeypatch.delenv(var)
     monkeypatch.setattr(demo_home, "CACHE", tmp_path / "cache")
     home = tmp_path / "demo"
     result = demo_home.build(home, offline=True, log=lambda *_: None)
