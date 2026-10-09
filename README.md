@@ -11,7 +11,8 @@ Install games that target the Meta Quest, Android, or general PCVR onto your **V
 
 [![FramePort: library, one-click install, play, monitor](docs/images/tour-teaser.webp)](docs/media/frameport-tour.mp4)
 
-▶ [Watch the full tour](docs/media/frameport-tour.mp4) (about 90 seconds, MP4; also attached to every release)
+▶ [Watch the full tour](docs/media/frameport-tour.mp4) · New to FramePort? [Watch the install tutorial](docs/media/frameport-install.mp4)
+(about 90 seconds each, MP4; also attached to every release)
 
 > **Notice:** FramePort explicitly does NOT download, share, or unlock games. You must provide legally obtained game
 > executables. Core features of FramePort simply download and wrap other published tools (see [Built on](#built-on))

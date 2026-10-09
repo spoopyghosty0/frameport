@@ -1,5 +1,5 @@
 """The showcase (scripts/showcase): demo library, manifests, step language, element finding, the image diff and the
-video graph builders. No browser and no ffmpeg run here (render_docs / record_tour do that)."""
+video graph builders. No browser and no ffmpeg run here (render_docs / record_video do that)."""
 import json
 import re
 import sys
@@ -10,7 +10,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
-from showcase import demo_home, postprod, record_tour, render_docs, steps, web  # noqa: E402
+from showcase import demo_home, postprod, record_video, render_docs, steps, web  # noqa: E402
 
 TOOL_VARS = ("FRAMEPORT_NO_UPDATE_CHECK", "FRAMEPORT_NO_CATALOG_UPDATE", "FRAMEPORT_NO_LINK_HANDLER",
              "FRAMEPORT_JAVA", "FRAMEPORT_OVERPORT_JAR", "FRAMEPORT_APKSIGNER_JAR")
@@ -151,15 +151,104 @@ def test_image_change_threshold(tmp_path):
 def test_manifests_are_valid():
     shots = render_docs.load_manifest()
     names = {s["name"] for s in shots["shots"]}
-    tour = record_tour.load_tour()
-    assert len(tour["scenes"]) >= 5 and all(sc.get("caption") for sc in tour["scenes"])
-    assert any(sc.get("teaser") for sc in tour["scenes"])
-    # every vars reference resolves
-    for shot in shots["shots"]:
+    for shot in shots["shots"]:  # every vars reference resolves
         steps.substitute(shot["steps"], shots["vars"])
-    for sc in tour["scenes"]:
-        steps.substitute(sc["steps"], tour["vars"])
     assert "library" in names
+    assert set(record_video.video_names()) >= {"tour", "install"}
+    outputs = set()
+    for name in record_video.video_names():
+        video = record_video.load_video(name)
+        assert video["output"] not in outputs  # one file per video
+        outputs.add(video["output"])
+        assert video["output"].startswith("docs/media/frameport-")  # (build.yml names release assets from it)
+        filmed = [sc for sc in video["scenes"] if "card" not in sc]
+        assert filmed and all(sc.get("caption") for sc in filmed)
+        for sc in filmed:
+            steps.substitute(sc["steps"], video.get("vars") or {})
+        steps.substitute(video.get("setup") or [], video.get("vars") or {})
+    tour = record_video.load_video("tour")
+    assert any(sc.get("teaser") for sc in tour["scenes"]) and tour["teaser"] == "docs/images/tour-teaser.webp"
+    install = record_video.load_video("install")
+    assert install["start"]["profile"] == "fresh" and any("card" in sc for sc in install["scenes"])
+
+
+@pytest.mark.parametrize("change, message", [
+    ({"scenes": [{"name": "a", "card": {"heading": "H"}, "steps": [{"wait": 1}]}]}, "no steps, caption or teaser"),
+    ({"scenes": [{"name": "a", "card": {"line": "no heading"}}]}, "card needs a heading"),
+    ({"scenes": [{"name": "a", "card": {"heading": "H", "colour": "red"}}]}, "card needs a heading"),
+    ({"start": {"profile": "empty"}}, "start.profile"),
+    ({"start": {"frame": "maybe"}}, "start.frame"),
+    ({"output": "docs/media/x.gif"}, "output must be an .mp4"),
+    ({"scenes": []}, "no scenes"),
+    ({"extra": 1}, "unknown key"),
+])
+def test_bad_storyboards_are_refused(tmp_path, monkeypatch, change, message):
+    import yaml
+
+    good = {"output": "docs/media/frameport-x.mp4", "title": {"heading": "T"}, "end": {"heading": "E"},
+            "scenes": [{"name": "s", "caption": ["c"], "steps": [{"go": "library"}]}]}
+    (tmp_path / "x.yaml").write_text(yaml.safe_dump({**good, **change}))
+    monkeypatch.setattr(record_video, "VIDEOS", tmp_path)
+    with pytest.raises(steps.StepError, match=message):
+        record_video.load_video("x")
+
+
+def test_changed_videos(monkeypatch):
+    import subprocess
+
+    def fake_diff(files, code=0):
+        return lambda *a, **k: subprocess.CompletedProcess(a, code, "\n".join(files), "")
+    monkeypatch.setattr(subprocess, "run", fake_diff(["docs/showcase/videos/install.yaml", "README.md"]))
+    assert record_video.changed_videos("abc") == ["install"]
+    monkeypatch.setattr(subprocess, "run", fake_diff(["scripts/showcase/web.py"]))
+    assert record_video.changed_videos("abc") == record_video.video_names()  # the recorder changed: all
+    monkeypatch.setattr(subprocess, "run", fake_diff(["src/frameport/ui/app.py"]))
+    assert record_video.changed_videos("abc") == []
+    monkeypatch.setattr(subprocess, "run", fake_diff([], code=128))
+    assert record_video.changed_videos("unknown") == record_video.video_names()
+
+
+def test_fresh_profile_is_a_first_start(tmp_path, monkeypatch):
+    for var in TOOL_VARS:
+        monkeypatch.setenv(var, "")
+        monkeypatch.delenv(var)
+    monkeypatch.setattr(demo_home, "CACHE", tmp_path / "cache")
+    home = tmp_path / "fresh"
+    demo_home.build(home, offline=True, log=lambda *_: None, profile="fresh")
+    from frameport.core import library
+
+    assert library.games() == [] and library.setting("ui.welcome_done") is False
+    found = json.loads((home / demo_home.SCAN_FILE).read_text())
+    assert len(found) == len(demo_home.load_fixture()["games"])
+    assert not any(k in g for g in found for k in ("installs", "last_played", "last_test", "build"))
+    state = json.loads((home / "showcase-frame.json").read_text())
+    assert state["installed"] == [] and state["running"] is None
+
+
+def test_first_run_fakes_never_show_this_pcs_address(monkeypatch):
+    from showcase import fakes
+
+    from frameport.frame import discovery, pairing
+    from frameport.tools import toolchain
+
+    for module, attr in ((discovery, "browse"), (pairing, "PairingServer"), (pairing, "ensure_reachable"),
+                         (toolchain, "status")):  # (restored after the test: the fakes patch modules)
+        monkeypatch.setattr(module, attr, getattr(module, attr))
+    fakes.install_first_run_fakes()
+    server = pairing.PairingServer(on_paired=None).start()
+    assert server.one_liner == "curl -fsS 192.168.1.20:8765/1a2b3c4d | bash"  # the docs' example
+    assert server.requests and server.running  # (no firewall hint, nothing listening)
+    assert discovery.browse(4) == []  # no real Frame on this network shows up in a recording
+    assert pairing.ensure_reachable(server) == "ok"
+
+
+def test_step_cards():
+    colors = {k: "#123456" for k in ("BG", "SURFACE", "SURFACE_2", "BORDER", "TEXT", "TEXT_2", "TEXT_3", "ACCENT",
+                                     "SECONDARY")}
+    html = postprod.step_card_html({"eyebrow": "Step 1", "heading": "Run <it>", "steps": ["Open **Konsole** & type"],
+                                    "code": "curl x | bash", "note": "No **password**"}, colors)
+    assert "Run &lt;it&gt;" in html and "<b>Konsole</b> &amp; type" in html
+    assert "curl x | bash" in html and "<b>password</b>" in html and ">1<" in html
 
 
 def test_every_docs_image_has_a_shot():

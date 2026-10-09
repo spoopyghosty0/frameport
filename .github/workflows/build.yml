@@ -159,8 +159,12 @@ jobs:
           merge-multiple: true
       - name: Wheel (CLI install via uv tool / pipx / pip, and its self-update)
         run: uv build --wheel -o out && ls out
-      - name: Demo tour (docs/media, rendered by the showcase workflow)
-        run: if [ -f docs/media/frameport-tour.mp4 ]; then cp docs/media/frameport-tour.mp4 out/FramePort-tour.mp4; fi
+      - name: Videos (docs/media, rendered by the showcase workflow; frameport-<name>.mp4 → FramePort-<name>.mp4)
+        run: |
+          for f in docs/media/frameport-*.mp4; do
+            [ -f "$f" ] || continue
+            n=$(basename "$f" .mp4); cp "$f" "out/FramePort-${n#frameport-}.mp4"
+          done
       - name: Checksums
         run: cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: Publish release

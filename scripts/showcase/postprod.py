@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -217,6 +218,51 @@ p{{margin:18px 0 0;font-size:38px;color:{c['TEXT_2']};font-weight:400}}
 .foot{{position:absolute;bottom:64px;left:0;right:0;text-align:center;font-size:26px;color:{c['TEXT_3']}}}
 </style></head><body><div class="glow"></div><div class="wrap"><div class="logo">{logo_svg}</div>
 <h1>{word}</h1><p>{e(subtitle)}</p></div><div class="foot">{e(footer)}</div></body></html>"""
+
+
+def step_card_html(card: dict, c: dict) -> str:
+    """An instruction card for what happens outside FramePort (a download, a command on the Frame): an eyebrow
+    (where you are), a heading, numbered steps, an optional command in a terminal box and a note. Steps and the note
+    may mark words **bold** (a button or menu name)."""
+    e = html.escape
+
+    def rich(text: str) -> str:
+        return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", e(text))
+    steps = "".join(f'<li><span class="n">{i}</span><span>{rich(s)}</span></li>'
+                    for i, s in enumerate(card.get("steps") or [], 1))
+    code = (f'<div class="code"><span class="prompt">$</span>{e(card["code"])}</div>' if card.get("code") else "")
+    return f"""<!doctype html><html><head><meta charset="utf-8">{FONT_CSS}<style>
+html,body{{margin:0;width:{SIZE[0]}px;height:{SIZE[1]}px;background:{c['BG']};font-family:{FONT};overflow:hidden}}
+.glow{{position:absolute;inset:0;
+background:radial-gradient(ellipse 40% 55% at 12% 30%,{c['SECONDARY']}26,transparent 70%),
+radial-gradient(ellipse 45% 55% at 92% 80%,{c['ACCENT']}22,transparent 70%)}}
+.wrap{{position:absolute;left:180px;right:180px;top:0;bottom:0;display:flex;flex-direction:column;
+justify-content:center;gap:30px}}
+.eyebrow{{font:600 26px/1 'Roboto Mono','Consolas',monospace;letter-spacing:3px;text-transform:uppercase;
+color:{c['ACCENT']}}}
+h1{{margin:0;font-size:76px;font-weight:700;letter-spacing:-1px;color:{c['TEXT']};line-height:1.08}}
+.line{{margin:0;font-size:34px;color:{c['TEXT_2']};max-width:1400px;line-height:1.35}}
+ol{{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:22px}}
+li{{display:flex;gap:26px;align-items:baseline;font-size:36px;color:{c['TEXT']};line-height:1.35}}
+li b{{color:{c['ACCENT']};font-weight:700}}
+.n{{flex:none;width:56px;height:56px;border-radius:50%;display:inline-flex;align-items:center;
+justify-content:center;font-weight:700;font-size:28px;color:{c['TEXT']};position:relative;top:-4px;
+background:linear-gradient(135deg,{c['SECONDARY']}66,{c['ACCENT']}88)}}
+.code{{margin-top:6px;align-self:flex-start;max-width:100%;padding:26px 36px;border-radius:18px;
+background:#05060A;border:2px solid {c['BORDER']};font:500 40px/1.3 'Roboto Mono','Consolas',monospace;
+color:#E8F1FF;box-shadow:0 20px 60px rgba(0,0,0,.5)}}
+.prompt{{color:{c['SECONDARY']};margin-right:22px}}
+.note{{margin:0;font-size:26px;color:{c['TEXT_3']};max-width:1400px}}
+.note b{{color:{c['TEXT_2']}}}
+.brand{{position:absolute;left:180px;bottom:54px;font-size:26px;font-weight:900;letter-spacing:-.3px}}
+</style></head><body><div class="glow"></div><div class="wrap">
+{f'<div class="eyebrow">{e(card["eyebrow"])}</div>' if card.get("eyebrow") else ''}
+<h1>{e(card["heading"])}</h1>
+{f'<p class="line">{rich(card["line"])}</p>' if card.get("line") else ''}
+{f'<ol>{steps}</ol>' if steps else ''}{code}
+{f'<p class="note">{rich(card["note"])}</p>' if card.get("note") else ''}
+</div><div class="brand"><span style="color:{c['ACCENT']}">Frame</span><span style="color:{c['SECONDARY']}">Port</span>
+</div></body></html>"""
 
 
 def render_card(playwright, page_html: str, out: Path, transparent: bool = False) -> Path:

@@ -280,17 +280,19 @@ Repo is on an NTFS drive (`core.fileMode=false`); line endings are LF (`.gitattr
   artwork, frames.json, the app's SSH key which the dev Frame authorizes).
 - Device checks: `frameport test <pkg>` / `frameport parity-device --results <parity.json> --baseline <launch.txt>
   [--test-only]`; the pre-FramePort baseline is `PATCHED/_known-good-2026-09-28/_frame-state/baseline-launch.txt`.
-- Docs screenshots + demo video (docs/SHOWCASE.md): never by hand. `uv run python scripts/showcase/render_docs.py`
-  renders `docs/showcase/shots.yaml` into `docs/images/` (only visibly changed files are rewritten; `--check` for CI)
-  and `scripts/showcase/record_tour.py [--draft]` records `docs/showcase/tour.yaml` into
-  `docs/media/frameport-tour.mp4` + `docs/images/tour-teaser.webp`. Both build the demo library first
-  (`demo_home.py`: catalog games from `demo-library.yaml` + `demo-analyses.json`, art/details cached in
-  ~/.cache/frameport-showcase, a pretend Frame from `showcase-frame.json`) in a temp FRAMEPORT_HOME: no personal data,
-  refuses the real data dir and placeholder art. Steps find elements by name through Flutter's semantics tree
-  (`scripts/showcase/web.py`: text, tooltip; the innermost match wins) — give new icon-only controls a tooltip. The
-  `showcase` workflow renders on UI pushes to main (+ the tour when its files change, or on dispatch) and opens PR
-  `showcase/update`; releases attach `FramePort-tour.mp4`. `scripts/scrub_library.py` (the owner's own library) is
-  only for private screenshots now.
+- Docs screenshots + videos (docs/SHOWCASE.md): never by hand. `uv run python scripts/showcase/render_docs.py`
+  renders `docs/showcase/shots.yaml` into `docs/images/` (every shot twice, kept when both agree; only visibly changed
+  files are rewritten; `--check` for CI) and `scripts/showcase/record_video.py [names] [--draft]` records the
+  storyboards `docs/showcase/videos/<name>.yaml` (tour = FramePort in use + README teaser; install = the install
+  tutorial: instruction cards for the download / the command on the Frame, the rest filmed from a first start) into
+  `docs/media/frameport-<name>.mp4`. Both build the demo library first (`demo_home.py`, profile `demo` or `fresh`:
+  catalog games from `demo-library.yaml` + `demo-analyses.json`, art/details cached in ~/.cache/frameport-showcase, a
+  pretend Frame from `showcase-frame.json`) in a temp FRAMEPORT_HOME: no personal data, refuses the real data dir
+  and placeholder art; discovery is off and the setup command shows the docs' example address. Steps find elements
+  by name through Flutter's semantics tree (`scripts/showcase/web.py`: text, tooltip; the innermost match wins) —
+  give new icon-only controls a tooltip. The `showcase` workflow renders on UI pushes to main (+ the videos whose
+  storyboard changed, or the ones named on dispatch) and opens PR `showcase/update`; releases attach every video as
+  `FramePort-<name>.mp4`. `scripts/scrub_library.py` (the owner's own library) is only for private screenshots now.
   README rules (owner): states the project is a proof of concept, provides no piracy tools, credits the wrapped
   projects (most functionality is theirs); neutral technical wording; no Quest2Frame mentions anywhere.
 - GUI smoke test: `uv pip install flet-web playwright && playwright install chromium`, then

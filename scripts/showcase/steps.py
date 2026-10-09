@@ -269,7 +269,34 @@ def _settings_section(session, key: str) -> None:
     app.page.run_task(app.settings_view.show_section, key)
 
 
+def _first_run(session, folder: str = "D:/Games", pace: float = 1.0, tools_missing: bool = True,
+               tools_delay: float = 4.0) -> None:
+    """FramePort's first start (the "fresh" demo profile): the welcome screen's tool download is the pretend one
+    (fakes.tools_job; it waits `tools_delay` s so filming catches it from the start), and "Scan a folder…" scans
+    `folder` at once instead of opening the native folder picker (a script can't drive it): the demo games appear
+    one by one."""
+    import json
+
+    from frameport.core.paths import user_data_dir
+
+    app = session.app
+    fakes.TOOLS["ready"] = not tools_missing
+    app.update_tools = lambda update=False, quiet=False: fakes.tools_job(app, pace, tools_delay)
+    entries = json.loads((user_data_dir() / "showcase-scan.json").read_text())
+    app.pick_folder = lambda e=None: fakes.scan_job(app, folder, entries, pace)
+    app.welcome_started = False
+    app.library_view = None  # (a Library built already would keep the real folder picker)
+
+
+def _pairing_done(session, delay: float = 1.5) -> None:
+    """The Frame ran the setup command: FramePort hears from it and connects (the pretend Frame)."""
+    app = session.app
+    if app.pairing is not None:
+        app.pairing.stop()
+    _connect(session, delay)
+
+
 HOOKS = {"fake_install": _fake_install, "wait_jobs": _wait_jobs, "held_install": _held_install,
          "live_stream": _live_stream, "stop_live": _stop_live, "monitor_details": _monitor_details,
          "type_tab": _type_tab, "select_files": _select_files, "disconnect": _disconnect, "connect": _connect,
-         "settings_section": _settings_section}
+         "settings_section": _settings_section, "first_run": _first_run, "pairing_done": _pairing_done}

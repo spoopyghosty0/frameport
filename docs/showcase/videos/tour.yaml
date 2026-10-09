@@ -1,11 +1,12 @@
-# The demo tour: scripts/showcase/record_tour.py plays these scenes in one window on the demo library (with a
-# pretend Frame), records them, captions each one and joins them with crossfades into docs/media/frameport-tour.mp4
-# (+ docs/images/tour-teaser.webp from the `teaser` parts). Steps: scripts/showcase/steps.py; the pointer moves like
-# a hand (eased, slightly curved) and is drawn into the picture.
-#
-#   caption: [title, line]   the lower third shown at the start of the scene
-#   teaser:  [from, seconds] the part of this scene that goes into the README's teaser
-#   hold:    seconds to keep filming after the last step (default 0.6)
+# The demo tour: FramePort in use (README teaser, docs/media, every release as FramePort-tour.mp4).
+# Recorded by scripts/showcase/record_video.py; the storyboard format is in docs/SHOWCASE.md ("Videos").
+
+output: docs/media/frameport-tour.mp4
+teaser: docs/images/tour-teaser.webp
+budget_mb: 12
+start:
+  profile: demo           # the library in use: games installed on the pretend Frame, BONELAB running
+  frame: connected
 
 vars:
   game: com.camouflaj.manta        # installed on the pretend Frame
@@ -43,7 +44,7 @@ scenes:
   - name: game
     caption: ["Every game gets its own recipe", "Known-good fixes from the catalog, or suggested from the game itself"]
     steps:
-      - click: "Riven"
+      - click: {name: "Riven", dy: 0.35}   # (the title: the card's middle is its Install button)
       - wait: 1.8
       - hover: "Works"
       - wait: 0.7

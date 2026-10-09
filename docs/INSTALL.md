@@ -1,5 +1,10 @@
 # Installing FramePort
 
+▶ **[Watch the install tutorial](media/frameport-install.mp4)** (about 90 seconds, MP4; also attached to every
+release as `FramePort-install.mp4`): from the download to the first game on the Frame.
+
+[![The install tutorial](media/frameport-install.jpg)](media/frameport-install.mp4)
+
 Download the archive for your computer from the [latest release](https://github.com/spoopyghosty0/frameport/releases/latest)
 and extract it anywhere. No installer or admin rights are needed. On first start FramePort downloads its Java
 runtime, the OVRPort CLI and apksigner into its data folder (Settings → Tools shows them).

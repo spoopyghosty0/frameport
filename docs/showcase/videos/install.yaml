@@ -1,0 +1,125 @@
+# The install tutorial: from the download to the first game on the Steam Frame (docs/INSTALL.md links it; every
+# release attaches it as FramePort-install.mp4). FramePort starts as on a new computer (the "fresh" demo profile:
+# empty library, welcome screen, no Frame set up); what happens outside FramePort (the download, a command typed
+# on the Frame) is told on instruction cards. Recorded by scripts/showcase/record_video.py; the format is in
+# docs/SHOWCASE.md ("Videos").
+
+output: docs/media/frameport-install.mp4
+budget_mb: 12
+poster_at: 9
+start:
+  profile: fresh           # FramePort's first start
+  frame: disconnected      # the Frame isn't set up yet
+  route: welcome
+setup:
+  - hook: {name: first_run, args: ["D:/Games", 1.4]}   # the tool download and the folder scan, at a watchable pace
+
+vars:
+  game: com.playful.LuckysTale
+
+title:
+  heading: Installing FramePort
+  line: From the download to your first game on the Steam Frame
+  seconds: 3.4
+end:
+  heading: You're set
+  line: Your game is in the Frame's Steam library. More help in docs/INSTALL.md
+  footer: github.com/spoopyghosty0/frameport
+  seconds: 4.0
+
+scenes:
+  - name: download
+    seconds: 7.5
+    card:
+      eyebrow: "Step 1 · On your computer"
+      heading: Download FramePort
+      steps:
+        - "Open **github.com/spoopyghosty0/frameport** → **Releases** → the latest one"
+        - "Download the archive for your computer: **FramePort-windows-x64.zip**, **FramePort-macos-arm64.zip** or **FramePort-linux-x64.tar.gz**"
+        - "Extract it anywhere. There's no installer and no admin rights are needed"
+
+  - name: first-start
+    seconds: 7.5
+    card:
+      eyebrow: "Step 2 · First start"
+      heading: Start FramePort
+      steps:
+        - "**Windows:** open **FramePort.exe**. At “Windows protected your PC” choose **More info** → **Run anyway**"
+        - "**macOS:** right-click **FramePort.app** → **Open** → **Open**"
+        - "**Linux:** run **FramePort/FramePort**"
+      note: "FramePort is signed with a free certificate, so your system asks once."
+
+  - name: welcome
+    caption: ["FramePort gets itself ready", "It downloads the tools it uses (Java, OVRPort, apksigner) by itself"]
+    hold: 1.0
+    steps:
+      - wait: 1.0
+      - hook: {name: wait_jobs, args: [40]}
+      - wait_for: "Java, OVRPort and apksigner are ready."
+      - wait: 1.0
+
+  - name: connect
+    caption: ["Connect your Steam Frame", "Once: FramePort shows a command to run on the Frame"]
+    hold: 1.5
+    steps:
+      - click: "Set up the Frame"
+      - wait: 1.6
+      - click: "Show setup command"
+      - wait_for: "Waiting for your Frame"
+      - wait: 1.0
+      - hover: "Copy"
+      - wait: 1.4
+
+  - name: on-the-frame
+    seconds: 10
+    card:
+      eyebrow: "Step 3 · On the Frame, first time only"
+      heading: Run the setup command
+      steps:
+        - "In the SteamVR dashboard: **Launch a program** → **Desktop**"
+        - "Open the app menu (bottom left) → **System** → **Konsole**"
+        - "Type the command FramePort shows and press **Enter**"
+      code: "curl -fsS 192.168.1.20:8765/1a2b3c4d | bash"
+      note: "Your address and code differ. The desktop closes by itself after a few seconds (Steam restarts once); if Steam asks to install **Lepton**, confirm it. No password is needed."
+
+  - name: connected
+    caption: ["Your Frame is connected", "From now on FramePort finds it by itself"]
+    hold: 1.2
+    steps:
+      - hook: {name: pairing_done, args: [1.6]}
+      - wait_for: "Ready to play"
+      - wait: 1.2
+      - hover: "Quest games (Lepton)"
+      - wait: 1.6
+
+  - name: add-games
+    caption: ["Add your games", "Point FramePort at the folder with your games"]
+    hold: 1.0
+    steps:
+      - nav: "Library"
+      - wait: 1.2
+      - click: "Scan a folder…"
+      - hook: {name: wait_jobs, args: [40]}
+      - wait: 1.2
+      - hover: {name: "Lucky's Tale", dy: 0.3}
+      - wait: 1.0
+
+  - name: install
+    caption: ["Install a game", "FramePort patches it, installs it and adds it to the Frame's Steam library"]
+    hold: 1.2
+    steps:
+      - click: {name: "Lucky's Tale", dy: 0.35}   # (the title: the card's middle is its Install button)
+      - wait_for: "Where it's installed"           # (the game page: a click that missed fails here)
+      - wait: 1.2
+      - click: "Install on Frame"
+      - wait: 0.6
+      - move: [860, 640]
+      - hook: {name: wait_jobs, args: [45]}
+      - wait: 1.0
+
+  - name: play
+    caption: ["Play", "Start it from FramePort, or from Steam in the headset"]
+    steps:
+      - click: "Play on Frame"
+      - wait: 2.6
+      - park: true

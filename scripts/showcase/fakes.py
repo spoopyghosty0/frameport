@@ -299,7 +299,9 @@ class FakeMonitorSession:
     def _sample(self) -> dict:
         m, t = self.math, self.t
         wave = lambda a, p, o=0: a * (1 + m.sin(t / p + o)) / 2  # noqa: E731
-        running = self.GAME or frame_state().get("running")
+        state = frame_state()
+        idle = not self.GAME and "running" in state and state["running"] is None  # (a fresh Frame: no game)
+        running = self.GAME or state.get("running")
         g = library.game(running) if running else (library.games() or [None])[0]
         game = g or {"package": "com.example.game", "title": "Example Game"}
         pkg = game["package"]
@@ -308,7 +310,7 @@ class FakeMonitorSession:
                   "cpu": round(c * (0.85 + wave(0.3, 3, i)), 1), "gpu": round(gp * (0.9 + wave(0.2, 5, i)), 1),
                   "rss": r, "age": 1500 + t, "uid": 1000, "critical": grp in ("steamvr", "steam"), "locked": False,
                   "context": grp != "game"}
-                 for i, (n, grp, c, gp, r) in enumerate(self.PROCS)]
+                 for i, (n, grp, c, gp, r) in enumerate(self.PROCS) if not (idle and grp == "game")]
         return {
             "t": time.time() - max(0, self.BACKFILL - t), "dt": 1.0, "self_ms": 11.5,
             "cpu": {"total": round(15 + wave(4, 4), 1), "cores": [round(4 + wave(30, 3 + i, i), 1) for i in range(8)],
@@ -329,7 +331,7 @@ class FakeMonitorSession:
             "games": [{"package": pkg, "title": game.get("title") or pkg, "kind": "quest", "appid": 1,
                        "elapsed": 1500 + t, "cpu": 9.4, "gpu": round(44 + wave(6, 5), 1), "mem": 3_390_000_000,
                        "processes": 87, "fps": round(71.6 + wave(0.6, 2) - (9 if t % 41 == 30 else 0), 1),
-                       "frame_ms": 0.0}],
+                       "frame_ms": 0.0}] if not idle else [],
             "procs": procs, "filter": "game"}
 
     def _run(self) -> None:
@@ -464,6 +466,114 @@ def install_fakes(game: str | None, monitor_session=None) -> None:
     FakeMonitorSession.GAME = game
     FramePortApp.connect = lambda self, *a, **k: None
     FramePortApp.refresh_frame = lambda self, *a, **k: None
+    install_first_run_fakes()
+
+
+# ------------------------------------------------------------------ first run (the install tutorial)
+# The setup command shows the docs' example address and code (never this PC's real address in a recording).
+PAIR_HOST, PAIR_PORT, PAIR_CODE = "192.168.1.20", 8765, "1a2b3c4d"
+TOOLS = {"ready": True}  # False: the managed tools look missing until the (pretend) download finishes
+
+
+class FakePairingServer:
+    """The Frame page's setup command without a server: nothing listens and no firewall rule is touched. The
+    `pairing_done` step hook plays the Frame running the command (on_paired → the pretend Frame connects)."""
+
+    def __init__(self, on_paired=None, host: str = "", **_kw):
+        # host stays as given ("" = over the network; the Frame page words a set host as the USB-cable setup)
+        self.on_paired, self.host = on_paired, host
+        self.port, self.code = PAIR_PORT, PAIR_CODE
+        self.requests, self.failures, self.paired, self.hint = 1, 0, [], ""  # (requests: no firewall hint)
+        self.running = False
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host or PAIR_HOST}:{self.port}"
+
+    @property
+    def one_liner(self) -> str:
+        return f"curl -fsS {self.host or PAIR_HOST}:{self.port}/{self.code} | bash"
+
+    def start(self):
+        self.running = True
+        return self
+
+    def stop_soon(self) -> None:
+        self.running = False
+
+    def stop(self) -> None:
+        self.running = False
+
+
+def install_first_run_fakes() -> None:
+    """Fakes for a first start: no Frame discovery on the real network (a recording must not show a real device),
+    the pretend setup command, and the managed tools' state (TOOLS)."""
+    from frameport.frame import discovery, pairing
+    from frameport.tools import toolchain
+
+    discovery.browse = lambda *a, **k: []
+    pairing.PairingServer = FakePairingServer
+    pairing.ensure_reachable = lambda server: "ok"
+    if not getattr(toolchain.status, "_showcase", False):
+        real_status = toolchain.status
+
+        def status(*a, **k):
+            out = real_status(*a, **k)
+            if not TOOLS["ready"]:
+                for s in out:
+                    s.installed, s.version = False, None
+            return out
+        status._showcase = True
+        toolchain.status = status
+
+
+def tools_job(app, pace: float = 1.0, delay: float = 0.0):
+    """The welcome screen's "Getting FramePort ready": a pretend download of Java, OVRPort and apksigner through the
+    real job queue (app.update_tools while TOOLS["ready"] is False). `delay`: seconds at 0 % first."""
+    from frameport.ui.jobs import Job
+
+    def run(job):
+        rep = job.reporter
+        rep.stage("Downloading tools")
+        time.sleep(delay)
+        parts = [("Java runtime (Temurin 21)", 48.0), ("OVRPort CLI", 21.0), ("apksigner", 1.6)]
+        total = sum(mb for _n, mb in parts)
+        done = 0.0
+        for name, mb in parts:
+            rep.stage(f"Downloading {name}")
+            steps = max(3, int(mb / 4))
+            for i in range(1, steps + 1):
+                got = done + mb * i / steps
+                rep.progress(got / total, f"{name}: {mb * i / steps:.1f} of {mb:.1f} MB")
+                time.sleep(0.12 * pace)
+            done += mb
+        TOOLS["ready"] = True
+        return "FramePort is ready"
+    job = app.jobs.submit(Job("Download tools", run, None, "tools"))
+    return job
+
+
+def scan_job(app, folder: str, entries: list[dict], pace: float = 1.0):
+    """Scan a folder: the demo games appear one by one through the real job queue (the folder picker is a native
+    dialog a script can't drive; `entries` = the demo library saved aside by demo_home's "fresh" profile)."""
+    from frameport.artwork import thumbs
+
+    def run(job):
+        rep = job.reporter
+        rep.stage("Looking for games")
+        for i, e in enumerate(entries, 1):
+            rep.progress(i / len(entries), e.get("title") or e["package"])
+            library.upsert_game(e["package"], **{k: v for k, v in e.items() if k != "package"})
+            try:
+                thumbs.prewarm(e["package"])
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(0.12 * pace)
+        library.set_setting("scan.roots", [folder])
+        if app.route[0] == "welcome":
+            library.set_setting("ui.welcome_done", True)
+        return f"{len(entries)} games found in {folder}"
+    return app.submit(f"Scan {folder.rstrip('/').rsplit('/', 1)[-1]}", run, None, "scan")
 
 
 def attach_fake_frame(app: FramePortApp, monitor_session=None) -> None:

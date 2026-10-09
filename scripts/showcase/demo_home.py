@@ -170,8 +170,19 @@ def _art(pkg: str, refresh: bool, offline: bool, log, pick: bool = False) -> str
     return "fetched"
 
 
-def build(home: Path, offline: bool = False, refresh: bool = False, log=print) -> dict:
-    """Write the demo library into `home` (emptied first). Sets FRAMEPORT_HOME for this process."""
+PROFILES = ("demo", "fresh")
+SCAN_FILE = "showcase-scan.json"  # the fresh profile's games, found by the pretend folder scan (fakes.scan_job)
+
+
+def build(home: Path, offline: bool = False, refresh: bool = False, log=print, profile: str = "demo") -> dict:
+    """Write the demo library into `home` (emptied first). Sets FRAMEPORT_HOME for this process.
+
+    profile "demo": the library in use (games installed on the pretend Frame, one running). "fresh": FramePort's
+    first start (the install tutorial): an empty library, the welcome screen, a Frame with nothing installed and no
+    game running; the demo games (art and store details already in place) wait in showcase-scan.json for the
+    pretend folder scan, as a scan would find them (no install or play history)."""
+    if profile not in PROFILES:
+        raise ValueError(f"unknown profile {profile!r} ({', '.join(PROFILES)})")
     home = Path(home).resolve()
     if home == real_data_dir() or real_data_dir() in home.parents:
         raise SystemExit(f"refusing to build the demo library in FramePort's own data dir ({home})")
@@ -226,17 +237,27 @@ def build(home: Path, offline: bool = False, refresh: bool = False, log=print) -
                       ("FRAMEPORT_APKSIGNER_JAR", "apksigner.jar")):
         (tools / name).write_bytes(b"")
         os.environ[var] = str(tools / name)
-    log(f"demo library: {len(fixture['games'])} games in {home} (art: "
+    if profile == "fresh":
+        history = ("installs", "last_test", "last_played", "tags", "build")
+        found = [{k: v for k, v in g.items() if k not in history} for g in library.games()]
+        (home / SCAN_FILE).write_text(json.dumps(found))
+        with library.edit() as data:
+            data["games"] = {}
+            data["settings"]["ui.welcome_done"] = False
+        (home / "showcase-frame.json").write_text(json.dumps({"installed": [], "running": None,
+                                                              "battery": state.get("battery", 95)}, indent=1))
+    log(f"demo library ({profile}): {len(fixture['games'])} games in {home} (art: "
         + ", ".join(f"{k} {len(v)}" for k, v in sorted(sources.items())) + ")")
     if sources.get("none"):
         log(f"  without art (placeholders): {', '.join(sources['none'])}")
     return {"home": str(home), "games": len(fixture["games"]), "art": sources}
 
 
-def build_for_render(home: Path, offline: bool = False, allow_missing_art: bool = False) -> dict:
+def build_for_render(home: Path, offline: bool = False, allow_missing_art: bool = False,
+                     profile: str = "demo") -> dict:
     """build(), but a render must not go on with placeholder art (a store that didn't answer would otherwise put
     placeholders into the docs and the video): exits 4 unless allowed."""
-    result = build(home, offline=offline)
+    result = build(home, offline=offline, profile=profile)
     if result["art"].get("none") and not allow_missing_art:
         raise SystemExit(f"no art for {', '.join(result['art']['none'])} (a store didn't answer?): not rendering. "
                          "Try again later, or pass --allow-missing-art")
@@ -260,8 +281,9 @@ def main() -> int:
     b.add_argument("home", type=Path)
     b.add_argument("--offline", action="store_true", help="only cached art (no network)")
     b.add_argument("--refresh", action="store_true", help="fetch art + details again (updates the cache)")
+    b.add_argument("--profile", choices=PROFILES, default="demo", help="demo (in use) or fresh (first start)")
     args = ap.parse_args()
-    build(args.home, offline=args.offline, refresh=args.refresh)
+    build(args.home, offline=args.offline, refresh=args.refresh, profile=args.profile)
     return 0
 
 

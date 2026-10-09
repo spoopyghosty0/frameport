@@ -1,14 +1,14 @@
 name: showcase
-# Docs screenshots and the demo tour, rendered from the demo library (docs/showcase/, scripts/showcase/; see
-# docs/SHOWCASE.md). Opens or updates one pull request (branch showcase/update) when a picture really changed; the
-# renders are also kept as a workflow artifact either way.
+# Docs screenshots and the videos (the demo tour, the install tutorial, …), rendered from the demo library
+# (docs/showcase/, scripts/showcase/; see docs/SHOWCASE.md). Opens or updates one pull request (branch
+# showcase/update) when a picture really changed; the renders are also kept as a workflow artifact either way.
 on:
   workflow_dispatch:
     inputs:
-      video:
-        description: "Also record the demo tour (docs/media/frameport-tour.mp4 + the README teaser)"
-        type: boolean
-        default: false
+      videos:
+        description: "Videos to record too: names from docs/showcase/videos (e.g. tour install), all, or empty"
+        type: string
+        default: ""
   push:
     branches: [main]
     paths:
@@ -53,24 +53,21 @@ jobs:
       - name: Docs screenshots
         run: uv run python scripts/showcase/render_docs.py --keep showcase-out/screenshots
 
-      - name: Record the tour this time?
-        id: video
+      - name: Videos
+        # a push records the videos whose storyboard (docs/showcase/videos/<name>.yaml) changed, or all of them when
+        # the recorder changed (UI tweaks alone don't re-record ~10 MB files); Run workflow records what it's asked
         env:
-          INPUT_VIDEO: ${{ inputs.video }}
+          INPUT_VIDEOS: ${{ inputs.videos }}
           BEFORE: ${{ github.event.before }}
         run: |
-          record=false
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            [ "$INPUT_VIDEO" = true ] && record=true
-          elif git diff --name-only "$BEFORE" "$GITHUB_SHA" 2>/dev/null \
-               | grep -qE '^(docs/showcase/tour\.yaml|scripts/showcase/)'; then
-            record=true  # the storyboard or the recorder changed (UI tweaks alone don't re-record ~10 MB)
+            read -ra names <<< "$INPUT_VIDEOS"
+            if [ ${#names[@]} -eq 0 ]; then echo "no videos asked for"; exit 0; fi
+            [ "${names[0]}" = all ] && names=()
+            uv run python scripts/showcase/record_video.py "${names[@]}" --work showcase-out/videos
+          else
+            uv run python scripts/showcase/record_video.py --changed-since "$BEFORE" --work showcase-out/videos
           fi
-          echo "record=$record" >> "$GITHUB_OUTPUT"
-          echo "record the tour: $record"
-      - name: Demo tour
-        if: steps.video.outputs.record == 'true'
-        run: uv run python scripts/showcase/record_tour.py --work showcase-out/tour
 
       - name: Keep the renders
         if: always()
@@ -79,7 +76,7 @@ jobs:
           name: showcase
           path: |
             showcase-out/screenshots
-            showcase-out/tour/tour.json
+            showcase-out/videos/*/video.json
             docs/media
             docs/images/tour-teaser.webp
           if-no-files-found: ignore
@@ -100,8 +97,8 @@ jobs:
           add-paths: |
             docs/images/*
             docs/media/*
-          commit-message: "Docs: update screenshots${{ steps.video.outputs.record == 'true' && ' and the demo tour' || '' }}"
-          title: "Update docs screenshots${{ steps.video.outputs.record == 'true' && ' and the demo tour' || '' }}"
+          commit-message: "Docs: update screenshots and videos"
+          title: "Update docs screenshots and videos"
           body: |
             Rendered by the `showcase` workflow from the demo library (docs/showcase/demo-library.yaml) with a
             pretend Frame: only pictures that visibly changed are included. Look them over before merging (the
