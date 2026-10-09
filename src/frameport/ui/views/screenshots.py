@@ -441,10 +441,14 @@ class ScreenshotsView:
             if r.get("taken"):
                 app.toast(tr("Screenshot taken"))
                 self.load()
-            elif r.get("hmd") == "Standby":
+            elif r.get("reason") == "steamvr":
+                app.toast(tr("SteamVR isn't running on the Frame: put the headset on, then take the screenshot."),
+                          error=True)
+            elif r.get("reason") == "capture" or r.get("hmd") == "Standby":
                 app.toast(tr("The headset is asleep: put it on, then take the screenshot."), error=True)
             else:
-                app.toast(tr("The Frame didn't save a screenshot. Put the headset on and try again."), error=True)
+                app.toast(tr("The Frame didn't save a screenshot ({why}). Try again.").format(
+                    why=r.get("reason") or tr("no reason given")), error=True)
         except Exception as exc:  # noqa: BLE001
             app.toast(tr("Couldn't take a screenshot: {error}").format(error=explain(exc)), error=True)
         finally:

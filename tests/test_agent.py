@@ -1506,19 +1506,24 @@ def test_hmd_state_from_vrserver_log(monkeypatch, tmp_path):
 
 
 def test_take_screenshot_waits_for_steams_file(monkeypatch, tmp_path):
-    """take_screenshot sends SteamVR's screenshot_request and reports the shot Steam saved (or that none came)."""
+    """take_screenshot asks SteamVR (vr_screenshot) and reports the shot Steam saved, or why none came."""
     a = load_agent(monkeypatch, tmp_path)
     shots = Path(a.STEAM) / "userdata" / "123" / "760" / "remote" / a.STEAMVR_APPID / "screenshots"
     shots.mkdir(parents=True)
     (shots / "20261008120000_1.jpg").write_bytes(b"old")
-    sent = []
 
-    def fake_send(mailbox, message):
-        sent.append((mailbox, message))
-        (shots / "20261008221500_1.jpg").write_bytes(b"new")  # Steam saves it
-    monkeypatch.setattr(a, "vr_mailbox_send", fake_send)
+    def submitted():
+        (shots / "20261008221922_1.jpg").write_bytes(b"new")  # Steam saves the flat shot...
+        (shots / "20261008221922_1_vr.jpg").write_bytes(b"stereo")  # ...and the stereo one (not listed)
+    monkeypatch.setattr(a, "vr_screenshot", submitted)
     r = a.cmd_take_screenshot({"wait": 2})
-    assert sent == [("vrcompositor_mailbox", {"type": "screenshot_request"})]
-    assert r["taken"] and r["path"].endswith("20261008221500_1.jpg")
-    monkeypatch.setattr(a, "vr_mailbox_send", lambda mailbox, message: None)  # standby: nothing saved
-    assert a.cmd_take_screenshot({"wait": 0.5})["taken"] is False
+    assert r["taken"] and r["path"].endswith("20261008221922_1.jpg") and r["reason"] is None
+    monkeypatch.setattr(a, "vr_screenshot", lambda: "capture")  # the headset sleeps: nothing captured
+    r = a.cmd_take_screenshot({"wait": 0.5})
+    assert r["taken"] is False and r["reason"] == "capture"
+
+
+def test_vr_screenshot_without_steamvr(monkeypatch, tmp_path):
+    a = load_agent(monkeypatch, tmp_path)
+    monkeypatch.setattr(a, "OPENVR_LIBS", (str(tmp_path / "missing.so"),))
+    assert a.vr_screenshot() == "steamvr"
