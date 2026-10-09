@@ -1,0 +1,94 @@
+# The docs screenshots: scripts/showcase/render_docs.py renders each into docs/images/<name>.png from the demo
+# library (demo-library.yaml) with a pretend Frame, and rewrites a file only when the picture really changed.
+# Steps: see scripts/showcase/steps.py. Each shot starts in a fresh window (its own app session).
+#
+#   viewport: [w, h]   browser size in px (default below); scale: UI scale (1.0)
+#   crop:     {dialog: true, pad}: the open dialog; {anchor: <name>, left, top, width, height}: a box placed
+#             relative to the top-left corner of the element called <name> (left/top may be negative);
+#             or {x, y, width, height} in page px
+#   docs:     where the image is used (checked by the tests: every image a doc shows has an entry here)
+
+vars:
+  game: com.camouflaj.manta          # installed, running on the pretend Frame
+  new_game: com.CyanWorlds.Riven     # in the library, not installed yet
+
+defaults:
+  viewport: [1280, 820]
+
+shots:
+  - name: library
+    docs: [README.md]
+    steps:
+      - go: library
+      - settle: true
+
+  - name: game
+    docs: [docs/INSTALL.md]
+    viewport: [1280, 1100]
+    steps:
+      - open_game: ${game}
+
+  - name: game-settings
+    docs: [docs/INSTALL.md]
+    steps:
+      - open_game: ${game}
+      - call: {fn: settings_dialog, args: ["${game}"]}
+      - wait_for: "Game settings"
+    crop: {dialog: true}
+
+  - name: patches
+    docs: [docs/COMPATIBILITY.md]
+    viewport: [1280, 2600]
+    steps:
+      - open_game: {package: "${game}", advanced: true}
+      - wait_for: "What FramePort will do"
+    crop: {anchor: "What FramePort will do", left: -32, top: -12, width: 1044, height: 820}
+
+  - name: frame
+    docs: [docs/COMPATIBILITY.md]
+    steps:
+      - go: frame
+
+  - name: files
+    docs: [docs/COMPATIBILITY.md]
+    steps:
+      - go: files
+      - wait: 1.5
+      - hook: {name: select_files, args: [1, 2]}
+
+  - name: screenshots
+    docs: [README.md]
+    steps:
+      - go: screenshots
+
+  - name: screenshot-viewer
+    docs: [README.md]
+    steps:
+      - go: screenshots
+      - wait: 2
+      - call: {fn: screenshots_view.viewer, args: [0]}
+
+  - name: type-on-frame
+    docs: [README.md]
+    steps:
+      - hook: type_tab
+
+  - name: monitor
+    docs: [README.md]
+    viewport: [1280, 1150]
+    steps:
+      - go: monitor
+
+  # newer screens (shown in docs/SHOWCASE.md's gallery; the README picks what it needs)
+  - name: live-view        # idle: a running stream shows its relay's random port and the data rate (no stable picture)
+    steps:
+      - go: live
+
+  - name: install-progress
+    steps:
+      - hook: {name: held_install, args: ["${new_game}"]}
+      - open_game: ${new_game}
+
+  - name: appearance
+    steps:
+      - go: settings

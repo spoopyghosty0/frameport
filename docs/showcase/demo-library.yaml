@@ -1,0 +1,63 @@
+# The demo library for the docs screenshots and the demo tour (built by scripts/showcase/demo_home.py into an
+# isolated FRAMEPORT_HOME; see docs/SHOWCASE.md). Real catalog games, so recipes, patches and store art are the
+# ones FramePort really uses; the technical analysis of each (engine, XR API, libraries, sizes) is in
+# demo-analyses.json, exported from real APK analyses without any paths. Nothing here is anyone's own data.
+#
+# Per game:
+#   frame:   on the pretend Frame: internal | sd | outdated (internal, but an older build: "Update on Frame");
+#            left out = not installed
+#   played:  last played, days before the render (the Library sorts the "On your Frame" shelf by it)
+#   added:   added to the library, days before the render (default 30)
+#   tested:  the last launch test passed (default: when installed)
+#   tags:    user tags (store genres become tags by themselves)
+#   title:   overrides the catalog/store title
+#   art:     pick = the art a user gets from Find artwork's Meta result (when the store's own art is a placeholder)
+
+frame:
+  battery: 82                       # %
+  running: com.camouflaj.manta      # the game the Monitor tab and the sidebar's live card show
+
+games:
+  - package: com.camouflaj.manta
+    frame: internal
+    played: 0.05
+    tags: [Favorites]
+  - package: com.Sanzaru.Wrath2
+    art: pick       # the store's image service has a placeholder cover for it: use the picker's Meta result
+    frame: sd
+    played: 1.2
+    tags: [Favorites]
+  - package: com.twistedpixelgames.PILO
+    frame: internal
+    played: 2.4
+  - package: com.StressLevelZero.BONELAB
+    frame: internal
+    played: 3.1
+  - package: com.vertigogames.ImpactDevelopment
+    frame: outdated
+    played: 4.5
+  - package: com.CyanWorlds.Myst
+    frame: sd
+    played: 6
+  - package: com.playful.LuckysTale
+    frame: internal
+    played: 9
+    tags: [Favorites]
+  - package: com.FuturLab.PowerWashSimulator
+    frame: internal
+    played: 12
+  - package: com.CyanWorlds.Riven
+    added: 2
+  - package: com.FireproofStudios.TheRoomVR
+  - package: com.NewFolderGames.IAmCat
+  - package: com.BithellGames.Arcsmith
+  - package: com.zenstudios.PFXVRQuest
+  - package: com.Ubisoft.ACNexusVR
+  - package: com.Solfar.InDeath
+  - package: com.survios.Creed
+  - package: com.crytek.climb2
+  - package: com.thunderful.legobricktales
+  - package: com.GhostlyBirdGames.BattleGlide
+  - package: cn.vr4p.oculus4xvrplayerov
+  - package: rift.rick_and_morty_virtual_rick_ality
+    added: 5
