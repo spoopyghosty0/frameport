@@ -8,6 +8,7 @@ Built once and updated in place (CLAUDE.md performance rules): a tick changes va
 the process table is a fixed pool of rows re-bound to the newest data, so clicks and menus keep working."""
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 import flet as ft
@@ -182,6 +183,8 @@ class MonitorView:
         self.game_fps = ft.Text("–", size=T.px(40), weight=ft.FontWeight.W_700, color=T.TEXT)
         self.game_fps_sub = C.meta(tr("frames per second"))
         self.game_spark = C.Sparkline(T.OK, height=48)
+        self._perfect = easter.PerfectPacing()  # (easter egg: a minute right on target)
+        self._perfect_until = 0.0
         self.game_stats = C.body("", T.TEXT_2)
         self.end_btn = C.secondary(tr("End game"), ft.Icons.STOP_CIRCLE_OUTLINED, lambda e: self.ask_end_game())
         self.page_btn = C.ghost(tr("Game page"), ft.Icons.OPEN_IN_NEW_ROUNDED,
@@ -540,7 +543,14 @@ class MonitorView:
         if mood != getattr(self, "_fps_mood", None):
             self._fps_mood = mood
             self.game_fps.tooltip = ft.Tooltip(message=mood, wait_duration=1200) if mood else None
-        if game.get("kind") in ("pcvr", "linux"):
+        # a full minute right on target: the chart glows in the portal's colours for a moment (once per streak)
+        if easter.enabled() and self._perfect.feed(fps, target, s.get("t") or time.time()):
+            self._perfect_until = time.monotonic() + easter.PERFECT_SHOW
+        perfect = time.monotonic() < self._perfect_until
+        self.game_spark.portal(perfect)
+        if perfect:
+            self.game_fps_sub.value = tr("fps · perfect pacing for a whole minute")
+        elif game.get("kind") in ("pcvr", "linux"):
             self.game_fps_sub.value = tr("fps isn't reported for PC VR and Linux games")
         elif fps is None:
             self.game_fps_sub.value = tr("fps: waiting for the game's first frames")

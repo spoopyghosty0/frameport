@@ -272,6 +272,8 @@ class FakeMonitorSession:
 
     GAME: str | None = None
     DIP: tuple[float, float] | None = None  # (until, fps): steps hook fps_dip
+    PERFECT = 0.0  # until (time.time()): right on 72 fps (steps hook perfect_pacing)
+    BATTERY: dict | None = None  # the battery from now on (steps hook battery)
     BACKFILL = 120
     # (name, group, CPU %, GPU %, memory); "GAME" = the game's package
     PROCS = [("GAME", "game", 9.8, 44.0, 1_350_000_000), ("vrcompositor", "steamvr", 1.4, 9.0, 80_000_000),
@@ -612,8 +614,12 @@ class LiveMonitorSession(FakeMonitorSession):
             fps = 66 + 2 * abs(t % 45 - 21) + rnd.uniform(-0.8, 0.8)
         if self.DIP and time.time() < self.DIP[0]:  # (the step hook fps_dip: a stutter on cue)
             fps = self.DIP[1] + rnd.uniform(-0.8, 0.8)
+        if time.time() < self.PERFECT:  # (the step hook perfect_pacing: right on target)
+            fps = 72 - rnd.uniform(0, 0.2)
         for g in s["games"]:
             g["fps"] = round(fps, 1)
+        if self.BATTERY:
+            s["battery"] = dict(self.BATTERY)
         return s
 
     def _run(self) -> None:

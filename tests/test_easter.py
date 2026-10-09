@@ -9,8 +9,11 @@ from frameport.ui import easter
 
 @pytest.mark.parametrize("day, expected", [
     ("2026-10-23", None), ("2026-10-24", "halloween"), ("2026-10-31", "halloween"), ("2026-11-01", None),
-    ("2026-12-19", None), ("2026-12-20", "winter"), ("2026-12-31", "winter"), ("2027-01-02", "winter"),
-    ("2027-01-03", None), ("2026-07-04", None),
+    ("2026-12-19", None), ("2026-12-20", "winter"), ("2026-12-30", "winter"), ("2026-12-31", "newyear"),
+    ("2027-01-01", "newyear"), ("2027-01-02", "winter"), ("2027-01-03", None), ("2026-07-04", None),
+    ("2027-02-13", "valentine"), ("2027-02-14", "valentine"), ("2027-02-15", None), ("2027-03-14", "pi"),
+    ("2027-03-17", "clover"), ("2027-04-01", "april"), ("2027-03-27", "easter"), ("2027-03-28", "easter"),
+    ("2027-03-29", "easter"), ("2027-03-30", None),
 ])
 def test_holidays(day, expected):
     assert easter.holiday(dt.date.fromisoformat(day)) == expected
@@ -100,3 +103,72 @@ def test_holiday_badges_exist():
     icons = Path(easter.__file__).parent / "icons"
     for name in easter.HOLIDAY_ICON.values():
         assert (icons / f"{name}.svg").is_file()
+
+
+@pytest.mark.parametrize("year, day", [(2026, "2026-04-05"), (2027, "2027-03-28"), (2029, "2029-04-01"),
+                                       (2038, "2038-04-25"), (2285, "2285-03-22")])
+def test_easter_sunday(year, day):
+    assert easter.easter_sunday(year) == dt.date.fromisoformat(day)
+
+
+def test_easter_beats_april_fools():
+    assert easter.holiday(dt.date(2029, 4, 1)) == "easter"  # (Easter Sunday that year)
+
+
+def test_every_badge_has_a_dance_that_ends_where_it_started():
+    import math
+
+    for which, motion in easter.HOLIDAY_MOTION.items():
+        assert which in easter.HOLIDAY_ICON
+        frames = easter.hover_frames(motion)
+        assert frames, motion
+        turn = sum(p.get("turn", 0) for p, _ in frames)
+        assert abs(turn / (2 * math.pi) - round(turn / (2 * math.pi))) < 1e-9, motion  # whole turns
+        last = {}
+        for props, _ in frames:
+            last.update(props)
+        assert last.get("scale", 1.0) == 1.0 and tuple(last.get("offset", (0, 0))) == (0, 0), motion
+
+
+def test_perfect_pacing_needs_a_full_minute_once_per_streak():
+    p = easter.PerfectPacing()
+    assert not any(p.feed(72.0, 72, t) for t in range(0, 60))
+    assert p.feed(71.8, 72, 60.0)  # a whole minute within half a frame
+    assert not p.feed(72.0, 72, 61.0)  # once per streak
+    assert not p.feed(68.0, 72, 62.0)  # it slips ...
+    assert not any(p.feed(72.0, 72, 63.0 + t) for t in range(59))
+    assert p.feed(72.0, 72, 123.0)  # ... and a new minute counts again
+    assert not easter.PerfectPacing().feed(None, 72, 0)
+
+
+def test_self_search():
+    assert easter.is_self_search("FramePort") and easter.is_self_search(" frame port ")
+    assert not easter.is_self_search("frame") and not easter.is_self_search(None)
+
+
+def test_hello_is_noticed_wherever_it_is_typed():
+    typed = easter.Typed()
+    said = [typed.key(k) for k in ("H", "E", "L", "L", "O")]
+    assert said == [False] * 4 + [True]
+    typed = easter.Typed()
+    assert not any(typed.key(k) for k in ("H", "E", "L", "Shift", "L", "P", "Backspace"))
+    assert typed.key("O")  # (Shift doesn't count, Backspace takes the P back)
+    assert easter.says_hello("Hello Frame!") and not easter.says_hello("help")
+
+
+def test_toss_path_falls_out_of_the_window():
+    import random
+
+    path = easter.toss_path(40, 40, 1440, 900, random.Random(3))
+    xs, ys = [p[0] for p in path], [p[1] for p in path]
+    assert xs == sorted(xs) and xs[0] > 40  # always into the window, never back
+    assert min(ys) < 40  # thrown upwards first ...
+    assert ys[-1] > 900 or xs[-1] > 1440  # ... then it falls out of the window
+    assert len(path) < 70
+
+
+def test_charged_now():
+    assert easter.charged_now({"percent": 99}, {"percent": 100, "plugged": True})
+    assert not easter.charged_now(None, {"percent": 100, "plugged": True})  # a first reading isn't "reaching" it
+    assert not easter.charged_now({"percent": 100}, {"percent": 100, "plugged": True})
+    assert not easter.charged_now({"percent": 99}, {"percent": 100, "plugged": False})

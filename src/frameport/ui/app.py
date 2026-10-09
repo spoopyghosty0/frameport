@@ -286,7 +286,16 @@ class FramePortApp:
             tx = ft.Text(label, size=T.px(14), weight=ft.FontWeight.W_500, color=T.TEXT_2, expand=True)
             badge = C.dot(T.OK, 7)
             badge.visible = False
-            box = ft.Container(ft.Row([ic, tx, badge], spacing=T.S3),
+            row = [ic, tx, badge]
+            if key == "live":  # (easter egg: a little studio sign blinks while the live view streams)
+                self._on_air = ft.Container(
+                    ft.Text(tr("ON AIR"), size=T.px(8.5), weight=ft.FontWeight.W_800, color="#FFFFFF", no_wrap=True),
+                    padding=ft.Padding(T.px(5), T.px(1), T.px(5), T.px(1)), border_radius=T.px(3), bgcolor=T.ERROR,
+                    shadow=ft.BoxShadow(blur_radius=8, color=T.soft(T.ERROR, 0.6)), visible=False, opacity=1,
+                    animate_opacity=ft.Animation(420, ft.AnimationCurve.EASE_IN_OUT),
+                    tooltip=tr("On air: the live view is streaming"))
+                row.append(self._on_air)
+            box = ft.Container(ft.Row(row, spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                                padding=ft.Padding(T.S3, T.px(10), T.S3, T.px(10)), border_radius=T.RADIUS_SM, ink=True,
                                on_click=lambda e, k=key: self.go(k))
             nav[key] = (box, ic, tx, badge)
@@ -317,10 +326,14 @@ class FramePortApp:
         self._conn_ring = C.gauge(0, 40)
         self._conn_bat_text = ft.Text("", size=T.px(12), weight=ft.FontWeight.W_700, color=T.TEXT)
         self._conn_icon = C.as_icon(G.FRAME, T.px(20), T.TEXT_2)
+        from . import easter
+
+        stars, self._sparkle = easter.sparkle_layer(ring)  # (easter egg: the ring sparkles at 100 % on the charger)
         self._conn_bat = ft.Container(ft.Stack([
             self._conn_ring,
             ft.Container(ft.Stack([self._conn_icon, self._conn_bat_text], alignment=ft.Alignment.CENTER),
-                         alignment=ft.Alignment.CENTER, width=ring, height=ring)], width=ring, height=ring),
+                         alignment=ft.Alignment.CENTER, width=ring, height=ring), *stars],
+            width=ring, height=ring, clip_behavior=ft.ClipBehavior.NONE),
             width=ring, height=ring)
         self._conn_extra = ft.Container(C.meta(""), visible=False, tooltip=C.tip(C.HELP["frame_summary"]))
         art = T.px(36)
@@ -416,6 +429,7 @@ class FramePortApp:
             st, "Not set up")
         self._conn_line.color = color
         self.power_row.visible = st == "connected"
+        self.sync_on_air(update=False)
         self._sync_card()
         self._apply_card()
         if st == "connected" and self.frame_info:
@@ -428,6 +442,29 @@ class FramePortApp:
             self._conn_extra.visible = False
         if update:
             C.update(self.nav_col, self.activity_card, self.power_row, self.conn_card)
+
+    def sync_on_air(self, update: bool = True) -> None:
+        """The Live view tab's "ON AIR" sign: shown and blinking while a live view streams (an easter egg)."""
+        from . import easter
+
+        sign = getattr(self, "_on_air", None)
+        live = self.live_view.live if self.live_view is not None else None
+        on = bool(live and live.running) and easter.enabled()
+        if sign is None or sign.visible == on:
+            return
+        sign.visible, sign.opacity = on, 1
+        if update:
+            C.update(sign)
+        if on and not self.reduce_motion:
+            threading.Thread(target=self._blink_on_air, args=(sign,), daemon=True).start()
+
+    def _blink_on_air(self, sign: ft.Container) -> None:
+        bright = True
+        while sign.visible and sign is getattr(self, "_on_air", None):
+            time.sleep(0.9)
+            bright = not bright
+            sign.opacity = 1 if bright or not sign.visible else 0.3
+            C.update(sign)
 
     # ------------------------------------------------------------------ live Frame card
     def _sync_card(self) -> None:
@@ -490,6 +527,13 @@ class FramePortApp:
         bat = s.get("battery") if s and s.get("battery") else (self.frame_info or {}).get("battery") \
             if connected else None
         ring = FC.battery_ring(bat)
+        from . import easter
+
+        if bat is not getattr(self, "_bat_seen", None):  # (a new reading: did it just reach 100 % on the charger?)
+            if easter.charged_now(getattr(self, "_bat_seen", None), bat) and not self.reduce_motion \
+                    and easter.enabled():
+                self._sparkle()
+            self._bat_seen = bat
         self._conn_icon.visible = ring is None
         self._conn_bat_text.visible = ring is not None
         if ring is None:

@@ -193,6 +193,7 @@ class LiveView:
         return self.root
 
     def _refresh(self, update: bool = True) -> None:
+        self.app.sync_on_air()  # the sidebar's "ON AIR" sign (easter egg)
         if self.root is None:  # not built yet (e.g. stop() on a disconnect before the tab was opened)
             return
         live = self.live

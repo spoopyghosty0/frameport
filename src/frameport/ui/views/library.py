@@ -574,6 +574,11 @@ class LibraryView:
 
     def set_query(self, value: str) -> None:
         """The search text changed: show/hide the clear X, filter after a short pause (debounced)."""
+        from .. import easter
+
+        egg = getattr(self.app, "logo_egg", None)
+        if egg and easter.is_self_search(value) and not easter.is_self_search(self.f.get("q")):
+            egg.hello_search()  # (easter egg: searching for FramePort itself; the search goes on as usual)
         self.f["q"] = value
         if self.search.suffix.visible != bool(self.f["q"]):
             self.search.suffix.visible = bool(self.f["q"])

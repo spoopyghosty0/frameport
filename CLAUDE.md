@@ -75,8 +75,16 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     ui_smoke injects `FakeMonitorSession` as the hub's `session_factory`.
     User tags live in library entries (`tags`), filters in library setting `ui.library`.
     Easter eggs (`ui/easter.py`, owner's wish; never mentioned in the UI or docs): seven quick clicks on the sidebar
-    logo (a cover flies out of its portal), the Monitor's fps number has a mood tooltip, holiday badges on the logo
-    (Oct 24-31 pumpkin, Dec 20-Jan 2 snowflake; `FRAMEPORT_TODAY` pretends a date), install milestones (confetti +
+    logo (the portal glows + rings, a cover is tossed out and falls across the window on a random arc: `toss_path`,
+    `page.overlay` at the logo's window position `_logo_origin`), the Monitor's fps number has a mood tooltip and a
+    minute within 0.5 fps of target turns its sparkline into the portal gradient (`PerfectPacing`,
+    `Sparkline.portal`), holiday badges on the logo that dance on hover (`holiday`/`HOLIDAY_MOTION`: Valentine's
+    heart, Pi Day, St Patrick's clover, Easter Sat-Mon egg (computus), April 1 = the logo upside down until hovered,
+    Halloween pumpkin, Dec 31-Jan 1 party popper, else Dec 20-Jan 2 snowflake; `FRAMEPORT_TODAY` pretends a date),
+    Library search "frameport" (logo spins, "That's me!"), Type on Frame "hello" (keys still go to the Frame; a
+    headset waves), the battery ring sparkles on reaching 100 % plugged (`charged_now`), a long upload (>5 min,
+    `HOP_AFTER`) makes the transit cover hop, the Live view tab shows a blinking ON AIR sign while streaming
+    (`app.sync_on_air`), install milestones (confetti +
     message at the 1st/10th/100th *different* game: settings `fun.installed` = game ids, `fun.milestones` = shown;
     each milestone shows once ever, recorded before it's shown; updates/reinstalls never count; the first use seeds
     from games already on a Frame and marks passed milestones shown). Setting `ui.easter_eggs` (no UI) turns them

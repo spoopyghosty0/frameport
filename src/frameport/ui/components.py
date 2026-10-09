@@ -1106,6 +1106,25 @@ class Sparkline:
         self.line.paint.color = color
         self.area.paint.color = T.soft(color, 0.16)
 
+    def portal(self, on: bool) -> None:
+        """The line and its fill in the portal's blue → orange, or back to set_color's colour (the Monitor's
+        perfect-pacing easter egg)."""
+        if on == getattr(self, "_portal", False):
+            return
+        self._portal = on
+        self.line.paint.stroke_width = T.px(2.4 if on else 1.6)
+        self._paint_portal()
+
+    def _paint_portal(self) -> None:
+        if getattr(self, "_portal", False) and self.width > 0:
+            x0, x1 = getattr(self, "_span", (0.0, self.width))  # the drawn line's extent: blue at its start
+            grad = lambda o: ft.PaintLinearGradient(  # noqa: E731
+                begin=ft.Offset(x0, 0), end=ft.Offset(max(x1, x0 + 1), 0),
+                colors=[T.soft(T.SECONDARY, o), T.soft(T.ACCENT, o)])
+            self.line.paint.gradient, self.area.paint.gradient = grad(1.0), grad(0.38)
+        else:
+            self.line.paint.gradient = self.area.paint.gradient = None
+
     def set(self, values: list, hi: float | None = None, target: float | None = None) -> None:
         """New values (oldest first); hi overrides the top of the scale; target draws a dashed guide (e.g. 72 fps)."""
         self.values, self.target = list(values)[-self.slots:], target
@@ -1132,11 +1151,15 @@ class Sparkline:
             area += [cv.Path.MoveTo(run[0][0], h), *[cv.Path.LineTo(x, y) for x, y in run],
                      cv.Path.LineTo(run[-1][0], h), cv.Path.Close()]
         self.line.elements, self.area.elements = line, area
+        if runs:
+            self._span = (runs[0][0][0], runs[-1][-1][0])
         guide = []
         if self.target is not None and w > 0:
             y = spark_points([self.target, self.target], w, h, lo, hi)[0][0][1]
             guide = [cv.Path.MoveTo(0, y), cv.Path.LineTo(w, y)]
         self.guide.elements = guide
+        if getattr(self, "_portal", False):
+            self._paint_portal()  # (the gradient spans the chart's current width)
 
 
 def _darker(color: str, factor: float = 0.6) -> str:
@@ -1193,7 +1216,12 @@ class Transit:
         self.cover = ft.Container(left=0, top=(self.track_h - self.cover_s) / 2, width=self.cover_s,
                                   height=self.cover_s, border_radius=T.px(4), bgcolor=T.SURFACE_3,
                                   border=ft.Border.all(1, T.BORDER_STRONG), alignment=ft.Alignment.CENTER,
-                                  clip_behavior=ft.ClipBehavior.ANTI_ALIAS, animate_position=anim)
+                                  clip_behavior=ft.ClipBehavior.ANTI_ALIAS, animate_position=anim,
+                                  offset=ft.Offset(0, 0), rotate=0,
+                                  animate_offset=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+                                  animate_rotation=ft.Animation(200, ft.AnimationCurve.EASE_OUT))
+        self._upload_since: float | None = None  # (easter egg: on long uploads the cover hops now and then)
+        self._last_hop = 0.0
         # the portal in two layers around the cover, so the cover goes through it: the back (shadow, hole, the rim's
         # PC/blue half) under the cover, the rim's Frame/orange half over it. Same viewBox: they line up exactly; the
         # pictures are a bit larger than the ring (its shadow reaches a little below the track)
@@ -1302,6 +1330,39 @@ class Transit:
                 2, (T.ERROR if s.failed else T.WARN if s.waiting else T.ACCENT) if current
                 else (T.SECONDARY if T.DUAL else T.ACCENT) if finished else T.SURFACE_3))
         self._place()
+        self._maybe_hop(s.label == "upload" and not s.waiting and not s.failed)
+
+    def _maybe_hop(self, uploading: bool) -> None:
+        """An upload running longer than easter.HOP_AFTER: the cover does a little hop every easter.HOP_EVERY
+        seconds (an easter egg; the settings are read only when a hop is due)."""
+        import time
+
+        if not uploading:
+            self._upload_since = None
+            return
+        now = time.monotonic()
+        if self._upload_since is None:
+            self._upload_since = self._last_hop = now
+            return
+        from . import easter
+
+        if now - self._upload_since < easter.HOP_AFTER or now - self._last_hop < easter.HOP_EVERY:
+            return
+        self._last_hop = now
+        from ..core import library
+
+        if not easter.enabled() or library.setting("ui.reduce_motion", False):
+            return
+        cover = self.cover
+
+        def hop():
+            for dy, turn, hold in ((-0.75, -0.2, 0.2), (0, 0.08, 0.2), (-0.3, 0.0, 0.16), (0, 0, 0.2)):
+                cover.offset, cover.rotate = ft.Offset(0, dy), turn
+                update(cover)
+                time.sleep(hold)
+        import threading
+
+        threading.Thread(target=hop, daemon=True).start()
 
 
 class MeterBar:

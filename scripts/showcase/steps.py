@@ -329,8 +329,62 @@ def _fps_dip(session, fps: float = 58.0, seconds: float = 6.0) -> None:
     fakes.FakeMonitorSession.DIP = (time.time() + seconds, fps)
 
 
+def _perfect_pacing(session, needed: float = 6.0, seconds: float = 60.0) -> None:
+    """The pretend game runs right on target for `seconds`, and `needed` seconds of that count as the Monitor's
+    "full minute" (the perfect-pacing easter egg on film)."""
+    from frameport.ui import easter
+
+    easter.PERFECT_SECONDS = float(needed)
+    fakes.FakeMonitorSession.PERFECT = time.time() + seconds
+
+
+def _battery(session, percent: int = 99, plugged: bool = True) -> None:
+    """The pretend Frame's battery from now on (the card's fully-charged sparkle: 99 then 100 on the charger)."""
+    fakes.FakeMonitorSession.BATTERY = {"percent": int(percent), "status": "Charging" if plugged else "Discharging",
+                                        "plugged": bool(plugged), "draining": not plugged,
+                                        "watts": 6.5 if plugged else -1.96}
+
+
+def _long_upload(session, package: str, seconds: float = 30.0, after: float = 2.0, every: float = 3.5) -> None:
+    """An install whose upload runs `seconds` (progress ticking 4x a second); the transit's long-upload hop starts
+    after `after` seconds instead of five minutes, every `every` seconds. It finishes like a real install."""
+    from frameport.ui import easter
+    from frameport.ui.jobs import Job
+
+    easter.HOP_AFTER, easter.HOP_EVERY = float(after), float(every)
+    app = session.app
+
+    def run(job):
+        rep = job.reporter
+        for stage in fakes.FAKE_INSTALL_STAGES[:-1]:
+            rep.stage(stage)
+            time.sleep(0.15)
+        rep.stage("Upload data (3 files)")
+        steps = max(1, int(seconds * 4))
+        for i in range(1, steps + 1):
+            rep.check_cancel()
+            f = i / steps
+            left = (1 - f) * seconds * 60
+            rep.progress(f, f"main.1.{package}.obb", speed=f"11.2 MB/s · ~{left / 60:.0f} min left")
+            time.sleep(0.25)
+        rep.stage("Finalize install")
+        time.sleep(0.6)
+        return "done"
+
+    app.jobs.submit(Job(f"Install {app._title(package)} on Frame", run, package, "install"))
+
+
+def _press_keys(session, text: str, gap: float = 0.28) -> None:
+    """Keys typed on the Type on Frame tab (the pretend keyboard), one by one."""
+    view = session.app.keyboard_view
+    for ch in text:
+        view.press("Space" if ch == " " else ch.upper())
+        session.sleep(gap)
+
+
 HOOKS = {"fake_install": _fake_install, "wait_jobs": _wait_jobs, "held_install": _held_install,
          "live_stream": _live_stream, "stop_live": _stop_live, "monitor_details": _monitor_details,
          "type_tab": _type_tab, "select_files": _select_files, "disconnect": _disconnect, "connect": _connect,
          "settings_section": _settings_section, "first_run": _first_run, "pairing_done": _pairing_done,
-         "easter_eggs": _easter_eggs, "fps_dip": _fps_dip}
+         "easter_eggs": _easter_eggs, "fps_dip": _fps_dip, "perfect_pacing": _perfect_pacing,
+         "battery": _battery, "long_upload": _long_upload, "press_keys": _press_keys}

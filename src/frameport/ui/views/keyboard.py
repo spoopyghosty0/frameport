@@ -41,9 +41,15 @@ class KeyboardView:
         self.root = None
         self.status = C.meta("")
         self.last = ft.Text("", size=T.px(28), weight=ft.FontWeight.W_600, color=T.ACCENT)
+        from .. import easter
+
+        self._typed = easter.Typed()  # (easter egg: type "hello" and a little headset waves back)
+        self.wave_box, self._wave = easter.wave_control()
         hint = C.body(tr("Click here, then type. Everything you type goes to the Frame (Esc and shortcuts too)."),
                       T.TEXT)
-        self.pad = ft.Container(ft.Column([hint, self.last], spacing=T.S2,
+        self.pad = ft.Container(ft.Column([hint, ft.Row([self.last, self.wave_box], spacing=T.S3, tight=True,
+                                                         vertical_alignment=ft.CrossAxisAlignment.CENTER)],
+                                          spacing=T.S2,
                                           horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                                 padding=T.S5, border_radius=T.RADIUS, bgcolor=T.BG, border=ft.Border.all(1, T.BORDER),
                                 alignment=ft.Alignment.CENTER, height=T.px(180), ink=True,
@@ -145,9 +151,17 @@ class KeyboardView:
                 if s.key(e.key, action) and action == "down":
                     self.last.value = e.key if len(e.key) > 1 else e.key.upper()
                     C.update(self.last)
+                    self._hello(self._typed.key(e.key))
             except Exception as exc:  # noqa: BLE001 - the connection dropped
                 self._fail(exc)
         return handler
+
+    def _hello(self, said: bool) -> None:
+        """The text that just went to the Frame said hello: wave back (it went to the Frame all the same)."""
+        from .. import easter
+
+        if said and easter.enabled():
+            self._wave(self.app.reduce_motion)
 
     def press(self, key: str) -> None:
         """Simulate a key press (ui_smoke screenshots)."""
@@ -160,12 +174,15 @@ class KeyboardView:
             pass
 
     def _send_text(self, e=None) -> None:
+        from .. import easter
+
         s, text = self.session, self.paste.value or ""
         if s is None or not text:
             return
 
         def work():
             skipped = s.text(text)
+            self._hello(easter.says_hello(text))
             self.paste.value = ""
             C.update(self.paste)
             self.focus_keys()
