@@ -44,12 +44,9 @@ class KeyboardView:
         from .. import easter
 
         self._typed = easter.Typed()  # (easter egg: type "hello" and a little headset waves back)
-        self.wave_box, self._wave = easter.wave_control()
         hint = C.body(tr("Click here, then type. Everything you type goes to the Frame (Esc and shortcuts too)."),
                       T.TEXT)
-        self.pad = ft.Container(ft.Column([hint, ft.Row([self.last, self.wave_box], spacing=T.S3, tight=True,
-                                                         vertical_alignment=ft.CrossAxisAlignment.CENTER)],
-                                          spacing=T.S2,
+        self.pad = ft.Container(ft.Column([hint, self.last], spacing=T.S2,
                                           horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                                 padding=T.S5, border_radius=T.RADIUS, bgcolor=T.BG, border=ft.Border.all(1, T.BORDER),
                                 alignment=ft.Alignment.CENTER, height=T.px(180), ink=True,
@@ -161,7 +158,7 @@ class KeyboardView:
         from .. import easter
 
         if said and easter.enabled():
-            self._wave(self.app.reduce_motion)
+            easter.wave_hello(self.app)
 
     def press(self, key: str) -> None:
         """Simulate a key press (ui_smoke screenshots)."""

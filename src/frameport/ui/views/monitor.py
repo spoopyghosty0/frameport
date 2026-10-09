@@ -185,13 +185,20 @@ class MonitorView:
         self.game_spark = C.Sparkline(T.OK, height=48)
         self._perfect = easter.PerfectPacing()  # (easter egg: a minute right on target)
         self._perfect_until = 0.0
+        self._perfect_on = False
+        self._perfect_beat = False
+        self.perfect_pill = C.pill(tr("Perfect pacing"), T.ACCENT, ft.Icons.AUTO_AWESOME, solid=True)
+        self.perfect_pill.visible = False
+        self.game_fps.scale = 1.0
+        self.game_fps.animate_scale = ft.Animation(380, ft.AnimationCurve.EASE_OUT_BACK)
         self.game_stats = C.body("", T.TEXT_2)
         self.end_btn = C.secondary(tr("End game"), ft.Icons.STOP_CIRCLE_OUTLINED, lambda e: self.ask_end_game())
         self.page_btn = C.ghost(tr("Game page"), ft.Icons.OPEN_IN_NEW_ROUNDED,
                                 lambda e: self.game_pkg and self.app.open_game(self.game_pkg))
         self.game_card = C.card(ft.Row([
             self.game_art,
-            ft.Column([C.pill(tr("Running now"), T.OK, ft.Icons.PLAY_ARROW_ROUNDED), self.game_title, self.game_sub,
+            ft.Column([ft.Row([C.pill(tr("Running now"), T.OK, ft.Icons.PLAY_ARROW_ROUNDED), self.perfect_pill],
+                              spacing=T.S2), self.game_title, self.game_sub,
                        self.game_stats, ft.Row([self.end_btn, self.page_btn], spacing=T.S2)],
                       spacing=T.px(6), expand=3),
             ft.Column([ft.Row([self.game_fps, self.game_fps_sub], spacing=T.S2,
@@ -201,6 +208,9 @@ class MonitorView:
         ], spacing=T.S4, vertical_alignment=ft.CrossAxisAlignment.CENTER), padding=T.S4, visible=False,
             bgcolor=T.soft(T.ACCENT, 0.06))
         self.game_card.border = ft.Border.all(1, T.soft(T.ACCENT, 0.35))
+        # (perfect pacing puts these back; its glow needs an opaque card, else it shows through the tint)
+        self._card_look = (self.game_card.border, self.game_card.shadow, self.game_card.bgcolor)
+        self.game_card.animate = ft.Animation(450, ft.AnimationCurve.EASE_IN_OUT)
 
         # metric tiles
         self.t_cpu = Tile(tr("CPU"), ft.Icons.MEMORY_ROUNDED, T.INFO, hi=100)
@@ -542,12 +552,15 @@ class MonitorView:
         mood = easter.fps_mood(fps, target) if easter.enabled() else None  # (rest the pointer on the number)
         if mood != getattr(self, "_fps_mood", None):
             self._fps_mood = mood
-            self.game_fps.tooltip = ft.Tooltip(message=mood, wait_duration=1200) if mood else None
+            # above the number, clear of the pointer resting on it
+            self.game_fps.tooltip = ft.Tooltip(message=mood, wait_duration=1200, prefer_below=False,
+                                               vertical_offset=T.px(34)) if mood else None
         # a full minute right on target: the chart glows in the portal's colours for a moment (once per streak)
         if easter.enabled() and self._perfect.feed(fps, target, s.get("t") or time.time()):
             self._perfect_until = time.monotonic() + easter.PERFECT_SHOW
         perfect = time.monotonic() < self._perfect_until
         self.game_spark.portal(perfect)
+        self._show_perfect(perfect)
         if perfect:
             self.game_fps_sub.value = tr("fps · perfect pacing for a whole minute")
         elif game.get("kind") in ("pcvr", "linux"):
@@ -561,6 +574,27 @@ class MonitorView:
         self.game_spark.set_color(T.OK if lvl == "ok" else LEVEL_COLOR[lvl])
         self.game_spark.set(series, target=target, hi=(target or 72) * 1.15)
         return [self.game_card, self.no_game]
+
+    def _show_perfect(self, on: bool) -> None:
+        """Perfect pacing (an easter egg): the card glows and pulses between the portal's blue and orange, the number
+        grows and takes the portal gradient, a "Perfect pacing" pill shows; all back to normal afterwards."""
+        card, fps = self.game_card, self.game_fps
+        if on:
+            self._perfect_beat = not self._perfect_beat
+            color = T.SECONDARY if self._perfect_beat else T.ACCENT
+            card.border = ft.Border.all(T.px(2), color)
+            card.shadow = ft.BoxShadow(blur_radius=T.px(34), spread_radius=T.px(3), color=T.soft(color, 0.55))
+            card.bgcolor = T.SURFACE
+            fps.scale = 1.22
+            fps.color = None
+            fps.style = ft.TextStyle(foreground=ft.Paint(gradient=ft.PaintLinearGradient(
+                begin=ft.Offset(0, 0), end=ft.Offset(T.px(52), 0), colors=[T.SECONDARY, T.ACCENT])))
+            self.perfect_pill.visible = True
+        elif self._perfect_on:
+            card.border, card.shadow, card.bgcolor = self._card_look
+            fps.scale, fps.style = 1.0, None
+            self.perfect_pill.visible = False
+        self._perfect_on = on
 
     def _apply_details(self, s: dict) -> list:
         if not self.details.visible:

@@ -199,9 +199,10 @@ class FramePortApp:
         self.power_row = ft.Container(visible=False)  # the Frame's power button (sleep / restart / shut down)
         self.activity_card = ft.Container()
         self.activity = ActivityPanel(self)
-        wordmark = C.wordmark(T.px(17))
-        self._portal_mark = wordmark.data  # the wordmark's portal (dual themes): pulses once on connect
         from . import easter
+
+        wordmark = C.wordmark(T.px(easter.WORDMARK_PX))
+        self._portal_mark = wordmark.data  # the wordmark's portal (dual themes): pulses once on connect; easter eggs
 
         self.logo_egg = easter.Logo(self, T.px(34))  # (ui/easter.py: a holiday badge, seven quick clicks)
         sidebar = ft.Container(ft.Column([
@@ -326,15 +327,13 @@ class FramePortApp:
         self._conn_ring = C.gauge(0, 40)
         self._conn_bat_text = ft.Text("", size=T.px(12), weight=ft.FontWeight.W_700, color=T.TEXT)
         self._conn_icon = C.as_icon(G.FRAME, T.px(20), T.TEXT_2)
-        from . import easter
-
-        stars, self._sparkle = easter.sparkle_layer(ring)  # (easter egg: the ring sparkles at 100 % on the charger)
         self._conn_bat = ft.Container(ft.Stack([
             self._conn_ring,
             ft.Container(ft.Stack([self._conn_icon, self._conn_bat_text], alignment=ft.Alignment.CENTER),
-                         alignment=ft.Alignment.CENTER, width=ring, height=ring), *stars],
-            width=ring, height=ring, clip_behavior=ft.ClipBehavior.NONE),
-            width=ring, height=ring)
+                         alignment=ft.Alignment.CENTER, width=ring, height=ring)], width=ring, height=ring),
+            width=ring, height=ring, shape=ft.BoxShape.CIRCLE, scale=1.0,  # (easter egg: pulses at 100 % plugged)
+            animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT_BACK),
+            animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT))
         self._conn_extra = ft.Container(C.meta(""), visible=False, tooltip=C.tip(C.HELP["frame_summary"]))
         art = T.px(36)
         self._np_art = ft.Container(width=art, height=art, border_radius=T.RADIUS_XS, bgcolor=T.SURFACE_2,
@@ -532,7 +531,7 @@ class FramePortApp:
         if bat is not getattr(self, "_bat_seen", None):  # (a new reading: did it just reach 100 % on the charger?)
             if easter.charged_now(getattr(self, "_bat_seen", None), bat) and not self.reduce_motion \
                     and easter.enabled():
-                self._sparkle()
+                easter.ring_pulse(self._conn_bat, T.OK)
             self._bat_seen = bat
         self._conn_icon.visible = ring is None
         self._conn_bat_text.visible = ring is not None

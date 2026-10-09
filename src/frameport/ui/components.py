@@ -1356,7 +1356,7 @@ class Transit:
         cover = self.cover
 
         def hop():
-            for dy, turn, hold in ((-0.75, -0.2, 0.2), (0, 0.08, 0.2), (-0.3, 0.0, 0.16), (0, 0, 0.2)):
+            for dy, turn, hold in ((-0.6, -0.17, 0.17), (0, 0.06, 0.17), (-0.22, 0.0, 0.14), (0, 0, 0.17)):
                 cover.offset, cover.rotate = ft.Offset(0, dy), turn
                 update(cover)
                 time.sleep(hold)

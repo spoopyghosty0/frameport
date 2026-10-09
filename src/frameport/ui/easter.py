@@ -10,9 +10,10 @@ gets in the way:
 - Holidays: the logo wears a little badge (a heart, a clover, a pumpkin, …) that does a small dance when the
   pointer touches it; on April 1st the logo stands on its head until you look at it.
 - Searching the Library for "frameport": the logo spins round and says it's there.
-- Typing "hello" on the Type on Frame tab (the keys still go to the Frame): a little headset waves back.
-- The Frame reaching 100 % on the charger: its battery ring sparkles once.
-- Long uploads (over five minutes): the cover riding the progress bar does a hop now and then.
+- Typing "hello" on the Type on Frame tab (the keys still go to the Frame): a little headset peeks up from
+  the window's corner and waves back.
+- The Frame reaching 100 % on the charger: its battery ring pulses.
+- Long uploads (over two and a half minutes): the cover riding the progress bar does a hop now and then.
 
 Off with library setting `ui.easter_eggs` = False (the docs screenshots and videos turn them off; there's no
 switch in Settings). Animations respect Reduce motion (the words stay, the motion goes). `FRAMEPORT_TODAY`
@@ -46,7 +47,7 @@ MILESTONES = (1, 10, 100)
 PERFECT_SECONDS = 60.0  # the Monitor: this long right on target = perfect pacing
 PERFECT_TOLERANCE = 0.5  # fps
 PERFECT_SHOW = 5.0  # seconds the chart stays in the portal's colours
-HOP_AFTER = 300.0  # an upload running longer than this: the transit's cover hops ...
+HOP_AFTER = 150.0  # an upload running longer than this: the transit's cover hops ...
 HOP_EVERY = 9.0  # ... every this many seconds
 HELLO = "hello"
 
@@ -125,12 +126,13 @@ def hover_frames(motion: str) -> list[tuple[dict, float]]:
     tau = 2 * math.pi
     return {
         "beat": [({"scale": 1.35}, 0.14), ({"scale": 1.0}, 0.14), ({"scale": 1.35}, 0.14), ({"scale": 1.0}, 0.2)],
-        "spin": [({"turn": tau}, 0.9)],
-        "roll": [({"turn": tau, "offset": (0.35, 0)}, 0.45), ({"offset": (0, 0)}, 0.45)],
-        "hop": [({"offset": (0, -0.45), "turn": -0.25}, 0.18), ({"offset": (0, 0), "turn": 0.5}, 0.18),
-                ({"offset": (0, -0.25), "turn": -0.25}, 0.16), ({"offset": (0, 0)}, 0.2)],
-        "wobble": [({"turn": 0.35}, 0.12), ({"turn": -0.6}, 0.12), ({"turn": 0.45}, 0.12), ({"turn": -0.3}, 0.12),
-                   ({"turn": 0.1}, 0.16)],
+        # (a symmetric badge turning a whole circle looks the same: spins grow while they turn)
+        "spin": [({"turn": tau, "scale": 1.5}, 0.75), ({"scale": 1.0}, 0.25)],
+        "roll": [({"turn": tau, "offset": (0.45, 0), "scale": 1.2}, 0.45), ({"offset": (0, 0), "scale": 1.0}, 0.45)],
+        "hop": [({"offset": (0, -0.8), "turn": -0.3, "scale": 1.2}, 0.2), ({"offset": (0, 0), "turn": 0.6}, 0.18),
+                ({"offset": (0, -0.4), "turn": -0.3}, 0.16), ({"offset": (0, 0), "scale": 1.0}, 0.2)],
+        "wobble": [({"turn": 0.5, "scale": 1.35}, 0.13), ({"turn": -0.9}, 0.13), ({"turn": 0.7}, 0.13),
+                   ({"turn": -0.45}, 0.13), ({"turn": 0.15, "scale": 1.0}, 0.18)],
         "pop": [({"scale": 1.6, "turn": -0.35}, 0.16), ({"scale": 0.9, "turn": 0.5}, 0.16),
                 ({"scale": 1.0, "turn": -0.15}, 0.2)],
     }.get(motion, [])
@@ -275,9 +277,21 @@ def toss_path(x0: float, y0: float, width: float, height: float, rnd: random.Ran
 
 # ------------------------------------------------------------------ the sidebar logo
 
+WORDMARK_PX = 17  # the sidebar wordmark's font size (app._build_shell: C.wordmark(T.px(WORDMARK_PX)))
+FRAME_EM = 2.74  # the width of "Frame" in the wordmark's font, in font sizes (measured in a render)
+
+
 def _logo_origin(size: float) -> tuple[float, float]:
     """The logo's top-left corner in the window (app._build_shell: the sidebar's padding, then the logo row's)."""
     return T.S4 + T.S1, T.S4 + T.S2
+
+
+def _wordmark_portal(logo: float) -> tuple[float, float]:
+    """The centre of the wordmark's portal ("Frame" ( ) "Port", components.wordmark) in the window: after the logo,
+    the row's gap, "Frame" and the word gap."""
+    ox, oy = _logo_origin(logo)
+    w = T.px(WORDMARK_PX)
+    return ox + logo + T.S3 + w * FRAME_EM + w * 0.08 + w * 0.4, oy + logo / 2
 
 
 class Logo:
@@ -294,11 +308,14 @@ class Logo:
         s = size
         self.image = C.logo(s)
         self.image.rotate = 0
-        self.image.animate_rotation = ft.Animation(700, ft.AnimationCurve.EASE_IN_OUT)
+        self.image.animate_rotation = ft.Animation(1100, ft.AnimationCurve.EASE_IN_OUT)
         self.image.animate_scale = ft.Animation(220, ft.AnimationCurve.EASE_OUT)
         layers: list[ft.Control] = [self.image]
         self.which = holiday(today()) if enabled() else None
         self.badge = None
+        # the box the logo takes in the sidebar: a holiday badge hangs over the logo's corner, and Flutter only
+        # delivers the pointer inside a control's own bounds, so the box grows to hold it (else it never dances)
+        self.box = s + (s * 0.58 * 0.3 if self.which in HOLIDAY_ICON else 0)
         if self.which in HOLIDAY_ICON:
             b = s * 0.58
             pic = ft.Image(src=C._asset_src(HOLIDAY_ICON[self.which]), width=b, height=b, fit=ft.BoxFit.CONTAIN)
@@ -310,8 +327,9 @@ class Logo:
                                        tooltip=holiday_tip(self.which), on_hover=self._badge_hover))
         if self.which == "april":  # upside down all day; looking at it puts it right for a moment
             self.image.rotate = math.pi
-        self.control = ft.Container(ft.Stack(layers, width=s, height=s, clip_behavior=ft.ClipBehavior.NONE),
-                                    width=s, height=s, on_click=self._click,
+        box = self.box
+        self.control = ft.Container(ft.Stack(layers, width=box, height=box, clip_behavior=ft.ClipBehavior.NONE),
+                                    width=box, height=box, on_click=self._click,
                                     tooltip=holiday_tip("april") if self.which == "april" else None,
                                     on_hover=self._logo_hover if self.which == "april" else None)
 
@@ -357,11 +375,13 @@ class Logo:
         self.app.page.run_task(self._toss)
 
     async def _toss(self) -> None:
-        """The portal lights up (a blue-and-orange glow swells around the logo), then a game's cover comes out of
-        it small, grows to full size and falls down across the window on a random arc, tumbling; the glow fades."""
+        """The wordmark's portal (between "Frame" and "Port") lights up: a blue-and-orange glow swells around it and
+        two rings run out of it; then a game's cover comes out of it small, grows to full size and falls down across
+        the window on a random arc, tumbling; the glow fades. Themes without the wordmark's portal use the logo's."""
         import asyncio
 
         page = self.app.page
+        mark = getattr(self.app, "_portal_mark", None)  # the wordmark's portal (dual themes)
         try:
             cover_url = await asyncio.to_thread(_a_cover)  # (may make a thumbnail: not on the event loop)
             if cover_url is None:
@@ -369,8 +389,13 @@ class Logo:
             width = float(getattr(page, "width", None) or 1440)
             height = float(getattr(page, "height", None) or 900)
             s = self.size
-            ox, oy = _logo_origin(s)
-            cx, cy = ox + s / 2, oy + s / 2
+            if mark is not None:
+                cx, cy = _wordmark_portal(self.box)
+                pulse = mark
+            else:
+                ox, oy = _logo_origin(s)
+                cx, cy = ox + s / 2, oy + s / 2
+                pulse = self.image
             g = s * 4.2
             glow = ft.Container(width=g, height=g, left=cx - g / 2, top=cy - g / 2, shape=ft.BoxShape.CIRCLE,
                                 gradient=ft.RadialGradient(colors=[T.soft("#FFFFFF", 0.85), T.soft(T.SECONDARY, 0.75),
@@ -405,8 +430,8 @@ class Logo:
             await asyncio.sleep(0.05)
             # the portal lights up and sends out two rings (blue, then orange)
             glow.opacity, glow.scale = 1, 1.0
-            self.image.scale = 1.15
-            C.update(glow, self.image)
+            pulse.scale = 1.45 if pulse is mark else 1.15
+            C.update(glow, pulse)
             for r in rings:
                 r.visible = True
                 C.update(r)
@@ -423,8 +448,8 @@ class Logo:
                 if i == 6:  # the glow dies down once the cover is clear of the portal
                     glow.opacity, glow.scale = 0, 0.6
                     glow.animate_opacity = ft.Animation(700, ft.AnimationCurve.EASE_IN)
-                    self.image.scale = 1.0
-                    C.update(glow, self.image)
+                    pulse.scale = 1.0
+                    C.update(glow, pulse)
                 C.update(cover)
                 await asyncio.sleep(dt)
             await asyncio.sleep(0.3)
@@ -494,86 +519,91 @@ def _a_cover() -> str | None:
 
 # ------------------------------------------------------------------ Type on Frame: hello
 
-def wave_control() -> tuple[ft.Control, callable]:
-    """A little headset with a hand that waves (hidden until wave() is called; Type on Frame shows it next to the
-    last key). Returns (control, wave)."""
-    parts = C.transit_parts()
-    h = T.px(46)
+_hello_busy = threading.Lock()
+
+
+def wave_hello(app: FramePortApp) -> None:
+    """Hello back: a little Frame headset peeks up from the window's bottom-right corner (outside the Type on Frame
+    box, so the typed text stays in view), says "Hi there!", waves and slides back down."""
+    if not _hello_busy.acquire(blocking=False):
+        return
+    try:
+        app.page.run_task(_wave_hello, app)
+    except Exception:  # noqa: BLE001 - no event loop (tests, closing)
+        _hello_busy.release()
+
+
+async def _wave_hello(app: FramePortApp) -> None:
+    import asyncio
+
     from . import glyphs
 
-    w = h * glyphs.TRANSIT_SIZES["headset"][0] / glyphs.TRANSIT_SIZES["headset"][1]
-    headset = ft.Image(src=parts["headset"], width=w, height=h, fit=ft.BoxFit.CONTAIN)
-    hand = ft.Container(ft.Icon(ft.Icons.WAVING_HAND_ROUNDED, size=T.px(34), color=T.ACCENT), rotate=0,
-                        animate_rotation=ft.Animation(160, ft.AnimationCurve.EASE_IN_OUT))
-    box = ft.Container(ft.Row([headset, hand], spacing=T.px(4), tight=True,
-                              vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                       opacity=0, scale=0.5, animate_opacity=ft.Animation(200),
-                       animate_scale=ft.Animation(280, ft.AnimationCurve.EASE_OUT_BACK),
-                       tooltip=tr("Hello to you too!"))
-    state = {"busy": False}
-
-    def wave(reduce: bool = False) -> None:
-        if state["busy"]:
-            return
-        state["busy"] = True
-
-        def run():
-            try:
-                box.opacity, box.scale = 1, 1.0
-                C.update(box)
-                time.sleep(0.3)
-                for turn in ([] if reduce else [0.5, -0.3, 0.5, -0.3, 0.5, -0.3, 0.0]):
-                    hand.rotate = turn
-                    C.update(hand)
-                    time.sleep(0.17)
-                time.sleep(1.6)
-                box.opacity, box.scale = 0, 0.7
-                C.update(box)
-                time.sleep(0.3)
-            finally:
-                state["busy"] = False
-        threading.Thread(target=run, daemon=True).start()
-    return box, wave
+    page = app.page
+    try:
+        h = T.px(64)
+        w = h * glyphs.TRANSIT_SIZES["headset"][0] / glyphs.TRANSIT_SIZES["headset"][1]
+        headset = ft.Image(src=C.transit_parts()["headset"], width=w, height=h, fit=ft.BoxFit.CONTAIN)
+        hand = ft.Container(ft.Icon(ft.Icons.WAVING_HAND_ROUNDED, size=T.px(40), color=T.ACCENT), rotate=0,
+                            animate_rotation=ft.Animation(170, ft.AnimationCurve.EASE_IN_OUT))
+        bubble = ft.Container(
+            ft.Text(tr("Hi there!"), size=T.T_H2, weight=ft.FontWeight.W_700, color=T.BG),
+            padding=ft.Padding(T.S3, T.px(6), T.S3, T.px(6)), bgcolor=T.ACCENT,
+            border_radius=ft.BorderRadius(T.px(12), T.px(12), T.px(12), T.px(3)), opacity=0, scale=0.4,
+            animate_opacity=ft.Animation(180), animate_scale=ft.Animation(260, ft.AnimationCurve.EASE_OUT_BACK))
+        buddy = ft.Container(
+            ft.Column([bubble, ft.Row([headset, hand], spacing=T.px(4), tight=True,
+                                      vertical_alignment=ft.CrossAxisAlignment.END)],
+                      spacing=T.S2, tight=True, horizontal_alignment=ft.CrossAxisAlignment.START),
+            right=T.S6, bottom=-T.px(6), offset=ft.Offset(0, 1.3),
+            animate_offset=ft.Animation(420, ft.AnimationCurve.EASE_OUT_BACK))
+        layer = ft.TransparentPointer(ft.Stack([buddy], expand=True), expand=True)
+        page.overlay.append(layer)
+        page.update()
+        await asyncio.sleep(0.05)
+        buddy.offset = ft.Offset(0, 0)  # peeks up
+        C.update(buddy)
+        await asyncio.sleep(0.45)
+        bubble.opacity, bubble.scale = 1, 1.0
+        C.update(bubble)
+        for turn in ([] if app.reduce_motion else [0.5, -0.3, 0.5, -0.3, 0.5, -0.3, 0.0]):
+            hand.rotate = turn
+            C.update(hand)
+            await asyncio.sleep(0.18)
+        await asyncio.sleep(1.4)
+        bubble.opacity = 0
+        buddy.animate_offset = ft.Animation(380, ft.AnimationCurve.EASE_IN)
+        buddy.offset = ft.Offset(0, 1.3)  # and ducks back down
+        C.update(bubble, buddy)
+        await asyncio.sleep(0.45)
+        if layer in page.overlay:
+            page.overlay.remove(layer)
+            page.update()
+    finally:
+        _hello_busy.release()
 
 
 # ------------------------------------------------------------------ the battery ring: fully charged
 
-def sparkle_layer(ring: float) -> tuple[list[ft.Control], callable]:
-    """Little stars around the sidebar's battery ring (for its Stack, which must not clip) and sparkle(), which
-    lets them twinkle once (the Frame just reached 100 % on the charger)."""
-    spots = [(-0.12, 0.05, 0.42), (0.78, -0.12, 0.34), (0.95, 0.62, 0.4), (0.1, 0.86, 0.3), (0.42, -0.2, 0.26),
-             (-0.18, 0.55, 0.26)]
-    stars = []
-    for x, y, k in spots:
-        size = ring * k
-        stars.append(ft.Container(ft.Icon(ft.Icons.AUTO_AWESOME, size=size, color="#FFE7A8"), left=ring * x,
-                                  top=ring * y, scale=0, opacity=0, rotate=0,
-                                  animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_OUT_BACK),
-                                  animate_opacity=ft.Animation(250),
-                                  animate_rotation=ft.Animation(600, ft.AnimationCurve.EASE_OUT)))
-    state = {"busy": False}
+def ring_pulse(ring: ft.Container, color: str) -> None:
+    """The sidebar's battery ring pulses three times (grows with a glow, settles): the Frame just reached 100 % on
+    the charger. `ring` needs animate_scale + animate (for its shadow)."""
+    if getattr(ring, "_pulsing", False):
+        return
+    ring._pulsing = True
 
-    def sparkle() -> None:
-        if state["busy"]:
-            return
-        state["busy"] = True
-
-        def run():
-            try:
-                for _ in range(2):  # the stars twinkle on one after another, twice
-                    for star in stars:
-                        star.scale, star.opacity, star.rotate = 1.0, 1, (star.rotate or 0) + 0.8
-                        C.update(star)
-                        time.sleep(0.08)
-                    time.sleep(0.35)
-                    for star in stars:
-                        star.scale, star.opacity = 0, 0
-                    C.update(*stars)
-                    time.sleep(0.3)
-            finally:
-                state["busy"] = False
-        threading.Thread(target=run, daemon=True).start()
-    return stars, sparkle
+    def run():
+        try:
+            for _ in range(3):
+                ring.scale = 1.22
+                ring.shadow = ft.BoxShadow(blur_radius=T.px(18), spread_radius=T.px(2), color=T.soft(color, 0.7))
+                C.update(ring)
+                time.sleep(0.32)
+                ring.scale, ring.shadow = 1.0, None
+                C.update(ring)
+                time.sleep(0.32)
+        finally:
+            ring._pulsing = False
+    threading.Thread(target=run, daemon=True).start()
 
 
 def charged_now(before: dict | None, now: dict | None) -> bool:
