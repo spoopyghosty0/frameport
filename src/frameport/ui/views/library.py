@@ -392,7 +392,15 @@ class LibraryView:
                     tr("Point FramePort at a folder with Quest or Android games (APK + OBB) or PC VR games. It "
                        "finds them, works out what each needs and fetches artwork."),
                     C.primary(tr("Scan a folder…"), ft.Icons.FOLDER_OPEN_ROUNDED, self.app.pick_folder, big=True),
-                    C.secondary(tr("Add an APK file…"), ft.Icons.ANDROID_ROUNDED, self.app.pick_apk))
+                    C.secondary(tr("Add an APK file…"), ft.Icons.ANDROID_ROUNDED, self.app.pick_apk),
+                    features=[
+                        (G.FRAME, tr("Quest games"),
+                         tr("Converted for the Steam Frame, then installed over Wi-Fi or USB.")),
+                        (G.PC, tr("PC VR games"),
+                         tr("Rift games on the Frame through Proton, or on this PC.")),
+                        (ft.Icons.APPS_ROUNDED, tr("Android and Linux apps"),
+                         tr("Ordinary Android apps and Linux programs run there too.")),
+                    ])
                 self.cards.clear()
                 C.update(self.root)
                 return

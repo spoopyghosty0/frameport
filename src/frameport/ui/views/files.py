@@ -127,9 +127,18 @@ class FilesView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(tr("Files"), tr("Videos, documents, mods and saves on your Steam Frame")),
-                C.empty_state(ft.Icons.FOLDER_OFF_OUTLINED, tr("Connect your Frame first"),
-                              tr("Files on the Frame can be browsed once FramePort is connected to it."),
-                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
+                C.empty_state(ft.Icons.FOLDER_OPEN_ROUNDED, tr("Your Frame's files, from this PC"),
+                              tr("Connect to your Steam Frame to browse its videos, downloads and each game's "
+                                 "storage."),
+                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")),
+                              features=[
+                                  (ft.Icons.VIDEO_LIBRARY_OUTLINED, tr("Videos for your players"),
+                                   tr("Upload movies straight into a player's own folder.")),
+                                  (ft.Icons.SAVE_ROUNDED, tr("Game storage and saves"),
+                                   tr("Browse each installed game's files and download your saves.")),
+                                  (ft.Icons.DRIVE_FOLDER_UPLOAD_OUTLINED, tr("Files and whole folders"),
+                                   tr("Upload from this PC, download, rename and tidy up.")),
+                              ])], expand=True)
         if self.root is None:
             self.root = ft.Column([
                 app.top_bar(tr("Files"), tr("Videos, documents, mods and saves on your Steam Frame")),

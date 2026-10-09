@@ -603,16 +603,54 @@ def portal_scene(icon: str, height: float | None = None) -> ft.Control:
         gradient=ft.RadialGradient(colors=[T.soft(T.ACCENT, 0.13), T.soft(T.ACCENT, 0.0)], radius=0.5))
 
 
-def empty_state(icon: str, heading: str, text: str, *actions: ft.Control) -> ft.Container:
+def feature_card(icon: str, heading: str, text: str) -> ft.Container:
+    """One thing a screen does, for empty states and tips: a tinted round icon, a short heading, one sentence."""
+    tint = T.SECONDARY if T.DUAL else T.ACCENT
     return ft.Container(ft.Column([
-        portal_scene(icon),
+        ft.Container(as_icon(icon, T.px(20), tint), width=T.px(40), height=T.px(40), border_radius=T.px(20),
+                     bgcolor=T.soft(tint, 0.13), alignment=ft.Alignment.CENTER),
+        ft.Text(heading, size=T.px(14), weight=ft.FontWeight.W_600, color=T.TEXT),
+        body(text, T.TEXT_2),
+    ], spacing=T.S2, tight=True), width=T.px(236), padding=T.S4, bgcolor=T.soft(T.SURFACE, 0.75),
+        border=ft.Border.all(1, T.BORDER), border_radius=T.RADIUS)
+
+
+def feature_row(features: list[tuple[str, str, str]]) -> ft.Row:
+    """feature_card()s side by side, wrapping on narrow windows."""
+    return ft.Row([feature_card(*f) for f in features], wrap=True, spacing=T.S3, run_spacing=T.S3,
+                  alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.START)
+
+
+def portal_glow() -> ft.RadialGradient:
+    """The faint light behind an empty state: the portal's blue and orange (the accent alone in single themes)."""
+    if T.DUAL:
+        colors, stops = [T.soft(T.SECONDARY, 0.10), T.soft(T.ACCENT, 0.05), T.soft(T.BG, 0.0)], [0.0, 0.45, 1.0]
+    else:
+        colors, stops = [T.soft(T.ACCENT, 0.09), T.soft(T.BG, 0.0)], [0.0, 1.0]
+    return ft.RadialGradient(colors=colors, stops=stops, center=ft.Alignment(0, -0.25), radius=0.85)
+
+
+def empty_state(icon: str, heading: str, text: str, *actions: ft.Control,
+                features: list[tuple[str, str, str]] | None = None) -> ft.Container:
+    """A screen with nothing to show yet: the portal with what the screen is about coming out of it, a heading, one
+    sentence and the action that fills it. `features` (icon, heading, sentence) say what the screen will show, so a
+    first look isn't an empty page; with them the portal is bigger and a soft portal light fills the background."""
+    rich = bool(features)
+    return ft.Container(ft.Column([
+        portal_scene(icon, T.px(104) if rich else None),
         ft.Container(height=T.S2),
         title(heading, T.T_DISPLAY),
-        ft.Container(body(text, text_align=ft.TextAlign.CENTER), width=T.px(460)),
+        ft.Container(body(text, text_align=ft.TextAlign.CENTER), width=T.px(500)),
         ft.Container(height=T.S2),
         ft.Row(list(actions), alignment=ft.MainAxisAlignment.CENTER, spacing=T.S3),
-    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S2, tight=True),
-        alignment=ft.Alignment.CENTER, expand=True)
+        *([ft.Container(height=T.S6), ft.Container(feature_row(features), width=T.px(780))] if rich else []),
+    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S2, tight=not rich,
+        # rich: scrolls in small windows, centred otherwise (a scrolling Column takes the full height, so the
+        # Container's alignment no longer centres it)
+        scroll=ft.ScrollMode.AUTO if rich else None, expand=rich,
+        alignment=ft.MainAxisAlignment.CENTER if rich else ft.MainAxisAlignment.START),
+        alignment=ft.Alignment.CENTER, expand=True, gradient=portal_glow() if rich else None,
+        border_radius=T.RADIUS)
 
 
 def kv(label: str, value: str | ft.Control, help: str | None = None) -> ft.Row:

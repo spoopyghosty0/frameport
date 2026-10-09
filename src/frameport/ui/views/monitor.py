@@ -272,10 +272,18 @@ class MonitorView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(heading, sub),
-                C.empty_state(ft.Icons.MONITOR_HEART_OUTLINED, tr("Connect your Frame first"),
-                              tr("The monitor shows your Frame's games, load, temperatures and battery live once "
-                                 "FramePort is connected to it."),
-                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
+                C.empty_state(ft.Icons.MONITOR_HEART_OUTLINED, tr("Your Frame at a glance"),
+                              tr("Connect to your Steam Frame to watch its games, load, temperatures and battery "
+                                 "live."),
+                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")),
+                              features=[
+                                  (ft.Icons.SPEED_ROUNDED, tr("Frame rate"),
+                                   tr("The running game's frames per second, as it plays.")),
+                                  (ft.Icons.THERMOSTAT_ROUNDED, tr("Load and temperatures"),
+                                   tr("CPU, GPU, memory, temperatures, power and battery.")),
+                                  (ft.Icons.LIST_ALT_ROUNDED, tr("Processes"),
+                                   tr("What's running, and a way to end what's stuck.")),
+                              ])], expand=True)
         if self.root is None:
             self.root = ft.Column([
                 app.top_bar(heading, sub, [self.overhead, self.live, self.reconnect, self.interval, self.pause_btn]),

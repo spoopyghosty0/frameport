@@ -114,9 +114,17 @@ class ScreenshotsView:
             self._loaded = False  # load again once connected
             return ft.Column([
                 app.top_bar(heading, sub),
-                C.empty_state(G.SHOT, tr("Connect your Frame first"),
-                              tr("Screenshots on the Frame can be shown once FramePort is connected to it."),
-                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
+                C.empty_state(G.SHOT, tr("Every shot you take in the headset"),
+                              tr("Connect to your Steam Frame to see its screenshots here."),
+                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")),
+                              features=[
+                                  (G.SHOT, tr("Sorted by day"),
+                                   tr("All of Steam's headset screenshots, newest first.")),
+                                  (ft.Icons.VIDEOGAME_ASSET_OUTLINED, tr("Matched to your games"),
+                                   tr("Each shot is labelled with the game you were playing.")),
+                                  (ft.Icons.DOWNLOAD_ROUNDED, tr("Save them to this PC"),
+                                   tr("Download one, a selection or all of them.")),
+                              ])], expand=True)
         if self.root is None:
             # the selection bar below the grid (as in the Library): above it, it pushed the cards down mid-drag
             self.root = ft.Column([app.top_bar(heading, sub), self.toolbar, self.menu, self.sel_bar, self.status],

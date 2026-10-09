@@ -56,6 +56,15 @@ def health_text(st: dict) -> str:
                 "Choose a lower quality for a smoother picture.", st.get("dropped") or 0)
 
 
+def live_features() -> list[tuple[str, str, str]]:
+    """What the live view does (its empty states)."""
+    return [(G.LIVE, tr("What the player sees"),
+             tr("The headset's view on this PC, for watching along or recording.")),
+            (ft.Icons.VOLUME_UP_ROUNDED, tr("With sound"), tr("The game's audio streams along with the picture.")),
+            (ft.Icons.MEMORY_ROUNDED, tr("Light on the game"),
+             tr("The Frame's own video encoder does the work where it can."))]
+
+
 def default_quality() -> str:
     from ...install.livestream import DEFAULT_QUALITY
 
@@ -90,20 +99,30 @@ class LiveView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(heading, sub),
-                C.empty_state(G.LIVE, tr("Connect your Frame first"),
-                              tr("The live view can start once FramePort is connected to the Frame."),
-                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
+                C.empty_state(G.LIVE, tr("See what the headset sees"),
+                              tr("Connect to your Steam Frame to stream its view and sound to this PC."),
+                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")),
+                              features=live_features())], expand=True)
         if self.root is None:
             parts = C.transit_parts()
-            h = T.px(56)
-            self.idle = ft.Container(ft.Column([
+            h = T.px(88)
+            self.idle_start = C.primary(tr("Start live view"), ft.Icons.PLAY_ARROW_ROUNDED, self._start, big=True)
+            # the "screen" the stream would fill: the portal and the headset on the portal's light
+            stage = ft.Container(ft.Column([
                 ft.Row([C.portal_image(parts["portal"], h),
                         ft.Image(src=parts["headset"], height=h * 0.86, fit=ft.BoxFit.CONTAIN)],
-                       spacing=T.S3, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                C.body(tr("Start the live view to watch the headset in your browser"), T.TEXT_2,
+                       spacing=T.S4, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ft.Container(height=T.S2),
+                C.title(tr("Ready when you are"), T.T_DISPLAY),
+                C.body(tr("Start the live view to watch the headset in your browser."), T.TEXT_2,
                        text_align=ft.TextAlign.CENTER),
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S4, tight=True),
-                alignment=ft.Alignment.CENTER, expand=True, padding=T.S6)
+                ft.Container(height=T.S2),
+                self.idle_start,
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S2, tight=True),
+                alignment=ft.Alignment.CENTER, expand=True, padding=T.S6, gradient=C.portal_glow(),
+                bgcolor=T.soft("#000000", 0.25), border=ft.Border.all(1, T.BORDER), border_radius=T.RADIUS)
+            self.idle = ft.Column([stage, C.feature_row(live_features())], spacing=T.S4, expand=True,
+                                  horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
             self.root = ft.Column([
                 app.top_bar(heading, sub),
                 ft.Row([C.meta(tr("The headset's view and sound open in your web browser. Stop the stream when "
@@ -137,7 +156,7 @@ class LiveView:
             self.detail.value = (warning if ok else "" if st.get("ended")
                                  else tr("The first picture takes a few seconds."))
         self.start_btn.visible = not running
-        self.start_btn.disabled = self._busy
+        self.start_btn.disabled = self.idle_start.disabled = self._busy
         self.open_btn.visible = self.stop_btn.visible = running
         self.quality_dd.disabled = running or self._busy
         self.url.value = (tr("Viewer address on this PC: {url}").format(url=live.url) if running else "")
@@ -147,7 +166,7 @@ class LiveView:
             if self._push is None:
                 self._push = C.LoopUpdater(self.app.page)
             self._push(self.dot, self.state, self.detail, self.start_btn, self.open_btn, self.stop_btn,
-                       self.quality_dd, self.url, self.idle)
+                       self.quality_dd, self.url, self.idle, self.idle_start)
 
     def _ensure_ticker(self) -> None:
         if self._ticker and self._ticker.is_alive():

@@ -21,6 +21,16 @@ if TYPE_CHECKING:
     from ..app import FramePortApp
 
 
+def keyboard_tips() -> list[tuple[str, str, str]]:
+    """How typing on the Frame works (its empty state, and tips under the typing box)."""
+    return [(ft.Icons.TOUCH_APP_ROUNDED, tr("Pick the field in the headset"),
+             tr("Select a text field in the game first: typing goes where it has focus.")),
+            (G.KEYS, tr("Every key goes through"),
+             tr("Letters, Enter, Backspace, arrows, Esc and shortcuts reach the headset.")),
+            (ft.Icons.CONTENT_PASTE_ROUNDED, tr("Paste long text"),
+             tr("Put a password, link or note in the box and press Type it."))]
+
+
 class KeyboardView:
     def __init__(self, app: FramePortApp):
         self.app = app
@@ -51,9 +61,10 @@ class KeyboardView:
         if not (app.target and app.frame_state == "connected"):
             return ft.Column([
                 app.top_bar(heading, sub),
-                C.empty_state(G.KEYS, tr("Connect your Frame first"),
-                              tr("Typing on the Frame works once FramePort is connected to it."),
-                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")))], expand=True)
+                C.empty_state(G.KEYS, tr("Type in VR with your PC's keyboard"),
+                              tr("Connect to your Steam Frame to type into the headset from here."),
+                              C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")),
+                              features=keyboard_tips())], expand=True)
         if self.root is None:
             self.root = ft.Column([
                 app.top_bar(heading, sub),
@@ -67,6 +78,8 @@ class KeyboardView:
                             C.help_icon("type_on_frame", 16)], spacing=T.px(2), tight=True,
                            vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ], spacing=T.S3)),
+                ft.Row([C.feature_card(*tip) for tip in keyboard_tips()], wrap=True, spacing=T.S3,
+                       run_spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.START),
             ], spacing=T.S4, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
         self.start()
         return self.root

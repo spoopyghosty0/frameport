@@ -87,6 +87,10 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     the button in the Stack, else it takes the clicks); the game page's Play turns into "Starting on …" with a spinner
     (`GameView._starting`). Reduce motion: no lift/zoom/rings. Filled buttons use a glyph's `-solid` variant
     (`glyphs.solid`, e.g. `frame-solid.svg`: the outline glyph faded into the orange).
+    Empty states (`C.empty_state(..., features=[(icon, heading, sentence)])`): with features the portal is bigger, a
+    soft portal light (`C.portal_glow`) fills the screen and `C.feature_row` says what the screen will show (the
+    not-connected Files/Screenshots/Live/Type/Monitor tabs and the empty Library); the idle Live view is a framed
+    "screen" with its own Start button + `live_features()`, Type on Frame shows `keyboard_tips()` under the box.
     Setup checklists (Frame → Ready to play, Settings → Tools / This PC) = `C.checklist([C.Check(ok, title, detail,
     help, fix=(label, icon, handler), extra=control)])`: ok True/False/"warn"/None (= spinner); the fix button shows
     inline only while an item isn't ready — wire existing actions only. Motion: `app.body` holds an
