@@ -600,16 +600,15 @@ def ring_glow(size: float, color: str) -> ft.Container:
                         animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT))
 
 
-def ring_fill_steps(drain: float = 0.5, fill: float = 0.3, dt: float = 0.025) -> list[float]:
-    """The ring's values while it spins: full → empty (easing in) → full again, quicker (easing out); dt apart."""
-    down = [1 - (i / round(drain / dt)) ** 2 for i in range(1, round(drain / dt) + 1)]
-    up = [1 - (1 - i / round(fill / dt)) ** 2 for i in range(1, round(fill / dt) + 1)]
-    return down + up
+def ring_fill_steps(fill: float = 0.4, dt: float = 0.025) -> list[float]:
+    """The ring's values while it spins: empty at once, then full again quickly (easing out); dt apart."""
+    n = round(fill / dt)
+    return [0.0] + [1 - (1 - i / n) ** 2 for i in range(1, n + 1)]
 
 
 def ring_pulse(ring: ft.Control, glow: ft.Container) -> None:
-    """The Frame just reached 100 % on the charger: the sidebar's battery ring spins once while its bar drains to
-    empty and quickly fills up again, then pulses three times (the ring alone grows, with a glow behind it; the
+    """The Frame just reached 100 % on the charger: the sidebar's battery ring empties at once and spins once while
+    its bar quickly fills up again, then pulses three times (the ring alone grows, with a glow behind it; the
     percentage inside stays put). `ring` (a ProgressRing) needs animate_scale; app._apply_card leaves its value
     alone while `ring._pulsing`."""
     if getattr(ring, "_pulsing", False):
@@ -621,7 +620,7 @@ def ring_pulse(ring: ft.Control, glow: ft.Container) -> None:
         try:
             steps = ring_fill_steps(dt=dt)
             ring.animate_rotation = ft.Animation(int(len(steps) * dt * 1000), ft.AnimationCurve.EASE_IN_OUT)
-            ring.rotate = (ring.rotate or 0) + 2 * math.pi  # one turn while it drains and refills
+            ring.rotate = (ring.rotate or 0) + 2 * math.pi  # one turn while it refills
             for value in steps:  # (a ProgressRing doesn't animate its value: step it)
                 ring.value = value
                 C.update(ring)
