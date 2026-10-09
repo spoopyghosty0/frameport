@@ -162,6 +162,10 @@ class FakeTarget:
             g["drive"] = sd if i == 1 else {"internal": True, "path": "/home/steamos", "label": "Internal storage"}
             g["drive_missing"] = False
 
+    def launch(self, pkg: str) -> dict:
+        """Play: Steam on the pretend Frame starts the game (the "Starting … put the headset on" toast)."""
+        return {"via": "shortcut", "steam": {"result": "started", "lines": []}}
+
     def drives(self) -> list[dict]:
         sd_games = sum(1 for g in self.games if not g["drive"]["internal"])
         return [{"id": "internal", "path": "/home/steamos", "install_dir": "/home/steamos/Applications/quest-frame",

@@ -30,6 +30,7 @@ import ui_smoke  # noqa: E402
 from ui_smoke import FakeMonitorSession, attach_fake_frame, install_fakes  # noqa: E402
 
 from frameport.core import library  # noqa: E402
+from frameport.ui import components as C  # noqa: E402
 from frameport.ui.app import FramePortApp  # noqa: E402
 
 PORT = ui_smoke.PORT
@@ -198,6 +199,49 @@ def navigation_play(app, page):
     time.sleep(1.0)
 
 
+def cards_setup(app):
+    app.go("library")
+
+
+def cards_play(game):
+    """Library cards: the shelf, a few grid cards under the pointer, a Play button lit and pressed (portal rings,
+    "Starting on Frame…"), then a game page: Play → "Starting on Frame…", and another's Install on Frame."""
+    def play(app, page):
+        m = page.mouse
+        time.sleep(0.6)
+        m.move(403, 268, steps=14)  # the shelf's first card
+        time.sleep(1.2)
+        m.move(403, 252, steps=6)  # onto its button
+        time.sleep(1.0)
+        for x in (357, 550, 742, 550):  # across the grid's first row
+            m.move(x, 430, steps=14)
+            time.sleep(0.9)
+        m.move(357, 440, steps=12)
+        time.sleep(0.8)
+        m.move(357, 497, steps=8)  # the first card's Play button
+        time.sleep(1.0)
+        m.click(357, 497)
+        time.sleep(3.0)
+        m.move(*NOWHERE, steps=10)
+        time.sleep(1.0)
+        installed = next((g["package"] for g in library.games() if g["package"] != game
+                          and C.install_state(g, app.frame_info) == "installed"), None)
+        if installed:
+            ui(app, app.open_game, installed)
+            time.sleep(1.6)
+            m.move(375, 306, steps=12)  # the hero's Play on Frame
+            time.sleep(0.8)
+            m.click(375, 306)
+            time.sleep(2.6)
+        ui(app, app.open_game, game)  # not installed: Install on Frame (the filled Frame glyph)
+        time.sleep(1.6)
+        m.move(375, 306, steps=12)
+        time.sleep(1.8)
+        m.move(*NOWHERE, steps=10)
+        time.sleep(0.6)
+    return play
+
+
 def selection_setup(app):
     app.go("files")
 
@@ -280,6 +324,7 @@ def main() -> int:
     # sidebar's activity card of the clips after it
     scenarios = [("live-card", live_setup, live_play, 4.0),
                  ("navigation", navigation_setup, navigation_play, 0.5),
+                 ("cards", cards_setup, cards_play(game), 11.0),
                  ("selection", selection_setup, selection_play, 3.5),
                  ("themes", themes_setup, themes_play, 3.0),
                  ("transit", transit_setup(game), transit_play(game), 9.0)]
