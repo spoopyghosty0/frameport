@@ -147,6 +147,9 @@ class LiveView:
                                         on_select=self._set_player)
             self.where = C.meta("", T.TEXT_2)
             self.idle_text = C.body("", T.TEXT_2, text_align=ft.TextAlign.CENTER)
+            self.idle_title = C.title(tr("Ready when you are"), T.T_DISPLAY)
+            # while it plays in the browser or an mpv window, the stage says so (the page isn't left empty)
+            self.idle_open = C.primary(tr("Open in browser"), ft.Icons.OPEN_IN_NEW_ROUNDED, self._open, big=True)
             parts = C.transit_parts()
             h = T.px(88)
             self.idle_start = C.primary(tr("Start live view"), ft.Icons.PLAY_ARROW_ROUNDED, self._start, big=True)
@@ -156,10 +159,11 @@ class LiveView:
                         ft.Image(src=parts["headset"], height=h * 0.86, fit=ft.BoxFit.CONTAIN)],
                        spacing=T.S4, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ft.Container(height=T.S2),
-                C.title(tr("Ready when you are"), T.T_DISPLAY),
+                self.idle_title,
                 self.idle_text,
                 ft.Container(height=T.S2),
                 self.idle_start,
+                self.idle_open,
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S2, tight=True),
                 alignment=ft.Alignment.CENTER, expand=True, padding=T.S6, gradient=C.portal_glow(),
                 bgcolor=T.soft("#000000", 0.25), border=ft.Border.all(1, T.BORDER), border_radius=T.RADIUS)
@@ -169,16 +173,18 @@ class LiveView:
                 app.top_bar(heading, sub),
                 ft.Row([self.where, C.help_icon("live_view", 16)],
                        spacing=T.px(2), tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                # status, Start/Stop, where it plays and Quality in one bar
+                # two rows: the status with the actions; where it plays, Quality and the viewer address (one row
+                # squeezed the status into a column of single words while streaming)
                 C.card(ft.Column([
                     ft.Row([self.dot, ft.Column([self.state, self.detail], spacing=T.px(2), expand=True),
-                            self.player_dd, self.quality_dd, self.start_btn, self.sound_btn, self.window_btn,
-                            self.open_btn, self.stop_btn],
+                            self.start_btn, self.sound_btn, self.window_btn, self.open_btn, self.stop_btn],
                            spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                    self.url,
-                ], spacing=T.S2)),
+                    ft.Row([self.player_dd, self.quality_dd, ft.Container(self.url, expand=True)],
+                           spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ], spacing=T.S3)),
                 self.idle,
                 self.screen,  # the stream, when it plays in this window
+                ft.Container(height=T.S2),  # the body has no bottom padding: keep the screen off the window's edge
             ], spacing=T.S4, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, expand=True)
         self._refresh(update=False)
         self._ensure_ticker()
@@ -218,17 +224,26 @@ class LiveView:
         self.sound_btn.content = tr("Sound on") if self.muted else tr("Sound off")
         self.sound_btn.icon = ft.Icons.VOLUME_UP_ROUNDED if self.muted else ft.Icons.VOLUME_OFF_ROUNDED
         self.window_btn.visible = running and self.mode == "mpv" and not (self.mpv and self.mpv.alive)
-        self.quality_dd.disabled = running or self._busy
+        self.quality_dd.disabled = self._busy  # (while streaming: applies at the next start; disabled looked outlined)
         self.url.value = (tr("Viewer address on this PC: {url}").format(url=live.url) if running else "")
         self.url.visible = running
-        self.idle.visible = live is None
+        elsewhere = running and self.mode in ("browser", "mpv")
+        self.idle.visible = live is None or elsewhere
+        self.idle_start.visible = live is None
+        self.idle_open.visible = elsewhere
+        self.idle_title.value = (tr("Streaming to an mpv window") if elsewhere and self.mode == "mpv" else
+                                 tr("Streaming to your browser") if elsewhere else tr("Ready when you are"))
+        if elsewhere:
+            self.idle_text.value = (tr("The headset's view is open in an mpv window. You can also watch it in your "
+                                       "browser.") if self.mode == "mpv" else
+                                    tr("The headset's view is open in your browser. Closed the tab? Open it again."))
         self.screen.visible = running and self.mode == "app"
         if update:  # called from the ticker / start / stream-end threads: send through Flet's event loop
             if self._push is None:
                 self._push = C.LoopUpdater(self.app.page)
             self._push(self.dot, self.state, self.detail, self.where, self.start_btn, self.open_btn, self.stop_btn,
                        self.sound_btn, self.window_btn, self.quality_dd, self.url, self.idle, self.idle_text,
-                       self.idle_start, self.screen)
+                       self.idle_start, self.idle_open, self.idle_title, self.screen)
 
     def _ensure_ticker(self) -> None:
         if self._ticker and self._ticker.is_alive():

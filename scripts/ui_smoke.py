@@ -349,6 +349,32 @@ def open_type_tab(app: FramePortApp) -> None:
     app.keyboard_view.press("Enter")
 
 
+def fake_live_stream(app: FramePortApp) -> None:
+    """The Live view while streaming: a local ffmpeg test picture through the real relay (no Frame needed). Web mode
+    has no in-window player, so it's shown as playing in the browser (the bar's streaming layout)."""
+    import shutil
+    import subprocess
+
+    from frameport.install.livestream import LiveStream
+
+    view = app.live_view
+    if view is None or shutil.which("ffmpeg") is None:
+        return
+    src = ["ffmpeg", "-loglevel", "error", "-re", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30",
+           "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-c:v", "libx264", "-preset", "ultrafast",
+           "-g", "30", "-pix_fmt", "yuv420p", "-c:a", "aac", "-f", "mp4",
+           "-movflags", "empty_moov+default_base_moof+frag_keyframe", "-frag_duration", "100000", "-"]
+    proc = subprocess.Popen(src, stdout=subprocess.PIPE)
+    view.live = LiveStream(lambda: proc.stdout, proc.terminate).start()
+    view.mode = "browser"
+    view._refresh()
+
+
+def stop_fake_live(app: FramePortApp) -> None:
+    if app.live_view is not None and app.live_view.live is not None:
+        app.live_view.stop()
+
+
 def open_monitor_details(app: FramePortApp) -> None:
     """The Monitor with its details row open."""
     app.go("monitor")
@@ -495,7 +521,8 @@ def main() -> int:
     game = args.game or (library.games()[0]["package"] if library.games() else None)
     steps = [("library", lambda a: a.navigate(0)), ("frame", lambda a: a.navigate(1)),
              ("files", lambda a: a.go("files")), ("screenshots", lambda a: a.go("screenshots")),
-             ("live", lambda a: a.go("live")), ("keyboard", lambda a: a.go("keyboard")),
+             ("live", lambda a: a.go("live")), ("live-streaming", fake_live_stream),
+             ("keyboard", lambda a: (stop_fake_live(a), a.go("keyboard"))),
              ("monitor", lambda a: a.go("monitor")), ("monitor-details", open_monitor_details),
              ("tools", lambda a: a.go("settings")),
              # the index on the left: "This PC" scrolls the page there

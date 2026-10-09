@@ -1246,6 +1246,8 @@
   ""
  ],
  "Store details: {title}": "",
+ "Streaming to an mpv window": "",
+ "Streaming to your browser": "",
  "Streams a small sample from the Frame every 5 seconds (game, frame rate, battery). Turn off to save the Frame's processor.": "",
  "Strip depth layers": "",
  "Stub missing Meta platform functions": "",
@@ -1311,6 +1313,8 @@
  "The headset's view and sound open in an mpv window. Open it in your browser any time.": "",
  "The headset's view and sound open in your web browser. Stop the stream when you're done.": "",
  "The headset's view and sound play right here. Open it in your browser any time.": "",
+ "The headset's view is open in an mpv window. You can also watch it in your browser.": "",
+ "The headset's view is open in your browser. Closed the tab? Open it again.": "",
  "The headset's view on this PC, for watching along or recording.": "",
  "the installed game (APK and its data)": "",
  "The launch settings changed since it was installed: update the Steam shortcut": "",
