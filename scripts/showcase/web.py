@@ -9,6 +9,7 @@ still go to Flutter's canvas, so hover effects and gestures behave as with a rea
 """
 from __future__ import annotations
 
+import json
 import math
 import os
 import queue
@@ -103,8 +104,21 @@ def names_of(node: dict) -> list[str]:
     """What a semantics node is called: its label (tooltip), its own text and each line of its children's text
     (a card reads "Click to open…\\nQuest\\nBatman: Arkham Shadow\\nWorks")."""
     out = [node.get("label") or "", node.get("text") or ""]
-    out += (node.get("all") or "").splitlines()
+    for key in ("label", "text", "all"):
+        out += (node.get(key) or "").splitlines()
     return [s.strip().casefold() for s in out if s and s.strip()]
+
+
+def _contains(outer: dict, inner: dict) -> bool:
+    """outer's box holds inner's centre and is bigger: a container of inner (a list around its row)."""
+    cx, cy = inner["x"] + inner["w"] / 2, inner["y"] + inner["h"] / 2
+    return (outer["x"] <= cx <= outer["x"] + outer["w"] and outer["y"] <= cy <= outer["y"] + outer["h"]
+            and outer["w"] * outer["h"] > inner["w"] * inner["h"] * 1.2)
+
+
+def innermost(nodes: list[dict]) -> list[dict]:
+    """The nodes that don't contain another one of them (a list's text includes its rows': the row wins)."""
+    return [n for n in nodes if not any(m is not n and _contains(n, m) for m in nodes)]
 
 
 def pick(nodes: list[dict], name: str, nth: int = 0, exact: bool | None = None) -> dict | None:
@@ -117,7 +131,7 @@ def pick(nodes: list[dict], name: str, nth: int = 0, exact: bool | None = None) 
         tests += [lambda s: s.startswith(want), lambda s: want in s]
     for test in tests:
         hits = [n for n in nodes if any(test(s) for s in names_of(n))]
-        tappable = [n for n in hits if n.get("tappable")]
+        tappable = innermost([n for n in hits if n.get("tappable")])
         if tappable:
             tappable.sort(key=lambda n: (round(n["y"]), round(n["x"]), n["w"] * n["h"]))
             return tappable[nth] if nth < len(tappable) else None
@@ -168,11 +182,16 @@ class Session:
         self.browser = None
         self.park_at: tuple[float, float] | None = None
 
+    def sleep(self, seconds: float) -> None:
+        """Wait while the browser keeps going (Playwright's event loop runs, so a screencast keeps its frames)."""
+        if seconds > 0:
+            self.page.wait_for_timeout(seconds * 1000)
+
     # ------------------------------------------------------------ finding things
     def enable_semantics(self) -> None:
         if not self.semantics:
             self.semantics = bool(self.page.evaluate(_ENABLE_SEMANTICS))
-            time.sleep(0.5)
+            self.sleep(0.5)
 
     def nodes(self) -> list[dict]:
         self.enable_semantics()
@@ -195,7 +214,7 @@ class Session:
                 return Box(hit["x"], hit["y"], hit["w"], hit["h"])
             if time.monotonic() > deadline:
                 raise NotFound(f"no element named {name!r} on screen")
-            time.sleep(0.3)
+            self.sleep(0.3)
 
     def dialog(self, timeout: float = 8.0) -> Box:
         """The box of the topmost open dialog (Flutter labels a dialog's surface "Alert")."""
@@ -207,7 +226,7 @@ class Session:
                 return Box(n["x"], n["y"], n["w"], n["h"])
             if time.monotonic() > deadline:
                 raise NotFound("no dialog open")
-            time.sleep(0.3)
+            self.sleep(0.3)
 
     def exists(self, name: str, timeout: float = 0.0) -> bool:
         try:
@@ -253,24 +272,28 @@ class Session:
                 self.page.mouse.move(px, py)
                 wait = t0 + duration * (i + 1) / steps - time.monotonic()
                 if wait > 0:
-                    time.sleep(wait)
+                    self.sleep(wait)
         self.mouse_at = (x, y)
         return x, y
 
     def click(self, target, button: str = "left", smooth: bool = True, pause: float = 0.15) -> None:
         self.move(target, smooth=smooth)
-        time.sleep(pause)
+        if isinstance(target, (str, dict)):  # the layout moved while the pointer travelled (a list reloaded): follow
+            x, y = self.point(target)
+            if math.hypot(x - self.mouse_at[0], y - self.mouse_at[1]) > 6:
+                self.move((x, y), duration=0.25)
+        self.sleep(pause)
         self.page.mouse.down(button=button)
-        time.sleep(0.07)
+        self.sleep(0.07)
         self.page.mouse.up(button=button)
 
     def drag(self, points: list, smooth: bool = True) -> None:
         self.move(points[0], smooth=smooth)
-        time.sleep(0.2)
+        self.sleep(0.2)
         self.page.mouse.down()
         for p in points[1:]:
             self.move(p, smooth=smooth, duration=0.6)
-            time.sleep(0.2)
+            self.sleep(0.2)
         self.page.mouse.up()
 
     def type(self, text: str, delay: float = 0.11) -> None:
@@ -284,7 +307,7 @@ class Session:
             self.move(at)
         for _ in range(max(1, int(abs(dy) // 100))):
             self.page.mouse.wheel(0, 100 if dy > 0 else -100)
-            time.sleep(0.05)
+            self.sleep(0.05)
 
     def park(self, away: bool = False) -> None:
         """The pointer somewhere it hovers nothing: the sidebar's empty part (videos: the drawn cursor stays in the
@@ -313,7 +336,7 @@ class Session:
             if same >= quiet:
                 return True
             last = png
-            time.sleep(interval)
+            self.sleep(interval)
         return False
 
     def _raw(self, mask: list[Box] = ()) -> bytes:
@@ -349,7 +372,7 @@ class Session:
                     app.jobs.cancel(job)
             deadline = time.monotonic() + 5
             while any(j.active for j in app.jobs.jobs) and time.monotonic() < deadline:
-                time.sleep(0.1)
+                self.sleep(0.1)
             app.jobs.clear_finished()
             fakes.stop_fake_live(app)
             app.stop_monitor()
@@ -411,9 +434,9 @@ class Server:
         s.browser = browser
         # web fonts: text measured before they load wraps or overlaps ("Q / uest"): a text-heavy first screen (the
         # Settings page) takes them before the steps start
-        time.sleep(1.0)
+        s.sleep(1.0)
         app.go("settings")
-        time.sleep(2.0)
+        s.sleep(2.0)
         s.enable_semantics()
         s.park()
         return s
@@ -449,6 +472,53 @@ class Server:
         threading.Thread(target=runner, daemon=True).start()
         ft.run(self._app_main, view=ft.AppView.WEB_BROWSER, port=self.port, assets_dir=assets_dir())
         return 1
+
+
+class Screencast:
+    """The page's frames as Chrome paints them (CDP Page.startScreencast: JPEGs with timestamps), written to a folder.
+    Sharper than Playwright's own recorder (VP8 at a low bit rate). Chrome sends a frame only when the page changed,
+    so the frames come with their times and are turned into a constant frame rate later (postprod.frames_to_video).
+    Frames only arrive while Playwright runs (Session.sleep, mouse moves), never during time.sleep."""
+
+    def __init__(self, session: Session, folder: Path, quality: int = 92):
+        import base64
+
+        self._b64 = base64.b64decode
+        self.session, self.folder, self.quality = session, Path(folder), quality
+        self.folder.mkdir(parents=True, exist_ok=True)
+        self.frames: list[tuple[float, str]] = []  # (wall-clock time, file name)
+        self.cdp = session.ctx.new_cdp_session(session.page)
+        self.cdp.on("Page.screencastFrame", self._frame)
+        self.running = False
+
+    def _frame(self, params: dict) -> None:
+        name = f"{len(self.frames):06d}.jpg"
+        (self.folder / name).write_bytes(self._b64(params["data"]))
+        self.frames.append((float(params["metadata"].get("timestamp") or time.time()), name))
+        try:
+            self.cdp.send("Page.screencastFrameAck", {"sessionId": params["sessionId"]})
+        except Exception:  # noqa: BLE001  (stopping)
+            pass
+
+    def start(self) -> None:
+        vw, vh = self.session.viewport
+        scale = self.session.page.evaluate("window.devicePixelRatio") or 1
+        self.cdp.send("Page.startScreencast", {"format": "jpeg", "quality": self.quality,
+                                               "maxWidth": int(vw * scale), "maxHeight": int(vh * scale),
+                                               "everyNthFrame": 1})
+        self.running = True
+
+    def stop(self) -> None:
+        if self.running:
+            self.session.sleep(0.3)
+            self.cdp.send("Page.stopScreencast")
+            self.running = False
+
+    def write_index(self) -> Path:
+        """frames.json: [[time, file], …] for postprod."""
+        path = self.folder / "frames.json"
+        path.write_text(json.dumps(self.frames))
+        return path
 
 
 def call(session: Session, fn, *args, **kwargs):

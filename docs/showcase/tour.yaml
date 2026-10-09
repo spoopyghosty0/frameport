@@ -1,0 +1,133 @@
+# The demo tour: scripts/showcase/record_tour.py plays these scenes in one window on the demo library (with a
+# pretend Frame), records them, captions each one and joins them with crossfades into docs/media/frameport-tour.mp4
+# (+ docs/images/tour-teaser.webp from the `teaser` parts). Steps: scripts/showcase/steps.py; the pointer moves like
+# a hand (eased, slightly curved) and is drawn into the picture.
+#
+#   caption: [title, line]   the lower third shown at the start of the scene
+#   teaser:  [from, seconds] the part of this scene that goes into the README's teaser
+#   hold:    seconds to keep filming after the last step (default 0.6)
+
+vars:
+  game: com.camouflaj.manta        # installed and running on the pretend Frame
+  new_game: com.CyanWorlds.Riven   # installed during the tour
+
+title:
+  heading: FramePort
+  line: Quest, Android and PC VR games on the Steam Frame
+  seconds: 3.2
+end:
+  heading: FramePort
+  line: Open source · bring your own games
+  footer: github.com/spoopyghosty0/frameport
+  seconds: 3.6
+
+scenes:
+  - name: library
+    caption: ["Your library, ready for the Frame", "Quest, Android and PC VR games from your own folders"]
+    teaser: [0.8, 3.2]
+    steps:
+      - go: library
+      - wait: 1.2
+      - hover: {name: "Batman: Arkham Shadow", dy: 0.3}
+      - wait: 1.0
+      - hover: {name: "Marvel's Deadpool VR", dy: 0.3}
+      - wait: 0.8
+      - hover: "Assassin's Creed Nexus"
+      - wait: 0.8
+      - hover: "Lucky's Tale"
+      - wait: 0.8
+      - park: true
+      - type: "ri"
+      - wait: 1.6
+
+  - name: game
+    caption: ["Every game gets its own recipe", "Known-good fixes from the catalog, or suggested from the game itself"]
+    steps:
+      - click: "Riven"
+      - wait: 1.8
+      - hover: "Works"
+      - wait: 0.7
+      - scroll: {dy: 420, at: [860, 560]}
+      - wait: 1.2
+      - scroll: {dy: -420, at: [860, 560]}
+      - wait: 0.5
+
+  - name: install
+    caption: ["One click to install", "Patched, signed, uploaded, added to Steam and launch-tested"]
+    teaser: [0.6, 4.0]
+    hold: 1.2
+    steps:
+      - click: "Install on Frame"
+      - wait: 0.6
+      - move: [860, 640]
+      - hook: {name: wait_jobs, args: [45]}
+      - wait: 1.0
+
+  - name: play
+    caption: ["Play from your PC", "Starts the game in the headset through Steam"]
+    teaser: [0.4, 2.8]
+    steps:
+      - click: "Library"
+      - call: library_view.clear_search
+      - wait: 1.4
+      - hover: {name: "Asgard's Wrath 2", dy: 0.3}
+      - wait: 0.6
+      - hover: {name: "Batman: Arkham Shadow", dy: 0.3}
+      - wait: 0.6
+      - click: {name: "Play on Frame", nth: 0}
+      - wait: 2.6
+      - park: true
+      - wait: 0.4
+
+  - name: monitor
+    caption: ["See what the Frame is doing", "Frame rate, CPU, GPU, temperatures and every process, live"]
+    teaser: [0.5, 2.6]
+    steps:
+      - click: "Monitor"
+      - wait: 2.4
+      - hover: "GPU"
+      - wait: 1.0
+      - hover: "Battery"
+      - wait: 1.0
+      - click: "Show details"
+      - wait: 1.8
+      - park: true
+
+  - name: screenshots
+    caption: ["Screenshots from the headset", "Take one from the PC, then view or download them"]
+    steps:
+      - click: "Screenshots"
+      - wait: 1.6
+      - click: "Take screenshot"
+      - wait_for: "Batman: Arkham Shadow · 2026-10-04 21:50"
+      - wait: 0.8
+      - click: "Batman: Arkham Shadow · 2026-10-04 21:50"
+      - wait: 2.0
+      - click: "Close"
+      - wait: 0.4
+
+  - name: files
+    caption: ["Files on the Frame", "Videos, mods and saves: upload, download, select with a drag"]
+    steps:
+      - click: "Files"
+      - wait: 1.6
+      - drag: ["Concert 8K 3D.mp4", "Mars landing (VR180).mkv"]
+      - wait: 1.0
+      - right_click: "Earth from orbit (360).mp4"
+      - wait: 1.4
+      - press: Escape
+      - wait: 0.6
+
+  - name: themes
+    caption: ["Make it yours", "Dark themes, including true black for OLED screens"]
+    steps:
+      - click: "Settings"
+      - wait: 1.4
+      - click: "Portal (OLED)"
+      - wait: 1.4
+      - click: "Original"
+      - wait: 1.4
+      - click: "Portal"
+      - wait: 1.0
+      - click: "Library"
+      - wait: 1.4

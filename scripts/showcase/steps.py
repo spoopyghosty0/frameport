@@ -127,7 +127,7 @@ def run(session, steps: list, variables: dict | None = None, log=None) -> None:
                 session.click(v, button="right")
             else:
                 session.click(v)
-                time.sleep(0.08)
+                session.sleep(0.08)
                 session.page.mouse.down()
                 session.page.mouse.up()
         elif action == "drag":
@@ -139,7 +139,7 @@ def run(session, steps: list, variables: dict | None = None, log=None) -> None:
         elif action == "scroll":
             session.scroll(v.get("dy", 300), v.get("at"))
         elif action == "wait":
-            time.sleep(float(v))
+            session.sleep(float(v))
         elif action == "wait_for":
             session.find(v, timeout=15)
         elif action == "settle":
@@ -165,9 +165,9 @@ def _fake_install(session, package: str, pace: float = 1.0, wait: bool = False) 
 
 def _wait_jobs(session, timeout: float = 60) -> None:
     deadline = time.time() + timeout
-    time.sleep(0.5)
+    session.sleep(0.5)
     while time.time() < deadline and any(j.active for j in session.app.jobs.jobs):
-        time.sleep(0.3)
+        session.sleep(0.3)
 
 
 def _held_install(session, package: str, fraction: float = 0.62) -> None:
@@ -227,7 +227,7 @@ def _connect(session, delay: float = 1.0) -> None:
     app = session.app
     app.frame_state = "connecting"
     app._refresh_sidebar()
-    time.sleep(delay)
+    session.sleep(delay)
     fakes.attach_fake_frame(app, session.server.monitor_session)
     app.refresh_view()
     app._refresh_sidebar()
@@ -237,7 +237,7 @@ def _settings_section(session, key: str) -> None:
     """Settings, scrolled to one section (its index entry)."""
     app = session.app
     app.go("settings")
-    time.sleep(1.0)  # mounted first: scrolling an unmounted column does nothing
+    session.sleep(1.0)  # mounted first: scrolling an unmounted column does nothing
     app.page.run_task(app.settings_view.show_section, key)
 
 
