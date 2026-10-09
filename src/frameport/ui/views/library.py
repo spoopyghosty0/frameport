@@ -235,6 +235,13 @@ def hover_motion(tile: ft.Container, art: ft.Control) -> None:
     art.animate_scale = ft.Animation(600, ft.AnimationCurve.EASE_OUT)
 
 
+def art_frame(cover: ft.Control) -> ft.Container:
+    """The cover in its own rounded clip, filling the card: the hover zoom (card_hover) stays inside the frame. The
+    card's own clip didn't hold the scaled art, and a strip of it showed below the bottom fade."""
+    return ft.Container(cover, left=0, right=0, top=0, bottom=0, border_radius=T.RADIUS,
+                        clip_behavior=ft.ClipBehavior.ANTI_ALIAS)
+
+
 def scrim() -> ft.Container:
     """The darkening behind a card's round button while hovered (a soft radial dim, strongest in the middle)."""
     return ft.Container(left=0, right=0, top=0, bottom=0, opacity=0,
@@ -605,11 +612,11 @@ class LibraryView:
         badges = [C.install_badge("outdated")] if state == "outdated" else []
         if busy:
             badges = [C.pill(tr("Working…"), T.ACCENT, ft.Icons.SYNC_ROUNDED, solid=True)]
-        cover = C.art_fill(art, left=0, right=0, top=0, bottom=0, placeholder_icon=C.platform_icon(g))
+        cover = C.art_fill(art, placeholder_icon=C.platform_icon(g))
         shade = scrim()
         tile = ft.Container(
             ft.Stack([
-                cover,
+                art_frame(cover),
                 shade,
                 ft.Container(C.bottom_fade(None, 0.92), left=0, right=0, bottom=0, top=T.px(48)),
                 *([ft.Container(ft.Row(badges, spacing=T.px(4)), left=T.px(10), top=T.px(10))] if badges else []),
@@ -782,12 +789,12 @@ class LibraryView:
                              opacity=0, animate_opacity=ft.Animation(180, ft.AnimationCurve.EASE_OUT)) \
             if button else None
         dim = state == "missing" and not on_pc
-        cover = C.art_fill(art, left=0, right=0, top=0, bottom=0, opacity=0.5 if dim else 1.0,
+        cover = C.art_fill(art, opacity=0.5 if dim else 1.0,
                            placeholder_icon=C.platform_icon(g))
         shade = scrim() if button else None
         tile = ft.Container(
             ft.Stack([
-                cover,
+                art_frame(cover),
                 *([shade] if shade else []),
                 ft.Container(C.bottom_fade(None, 0.92), left=0, right=0, bottom=0, top=T.px(90)),
                 # platform + state badges in one row that wraps: on a narrow card "On Frame" covered "Android"
