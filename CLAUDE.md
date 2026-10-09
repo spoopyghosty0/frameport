@@ -81,6 +81,12 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     **Never recreate clickable controls on progress ticks** (sidebar, activity tiles): update their properties —
     replacing them 5×/s swallowed clicks (couldn't leave the Library during an upload).
     Labelled switches: `C.switch(label, …)` (Material's default label colour is dark on our dark theme).
+    Cover cards (Library grid + shelf): `library.card_hover`/`hover_motion` (lift, art zoom inside the clipped frame,
+    radial `scrim`, accent-tinted shadow) and `C.CoverButton` (frosted round button, accent under the pointer; Play =
+    blue then orange ring ripple + "Starting on Frame…" pill for STARTING_S; its `.status` layer must sit *below*
+    the button in the Stack, else it takes the clicks); the game page's Play turns into "Starting on …" with a spinner
+    (`GameView._starting`). Reduce motion: no lift/zoom/rings. Filled buttons use a glyph's `-solid` variant
+    (`glyphs.solid`, e.g. `frame-solid.svg`: the outline glyph faded into the orange).
     Setup checklists (Frame → Ready to play, Settings → Tools / This PC) = `C.checklist([C.Check(ok, title, detail,
     help, fix=(label, icon, handler), extra=control)])`: ok True/False/"warn"/None (= spinner); the fix button shows
     inline only while an item isn't ready — wire existing actions only. Motion: `app.body` holds an

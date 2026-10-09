@@ -348,7 +348,8 @@ def primary(label: str, icon: str | None = None, on_click: Callable | None = Non
             tooltip: str | None = None, big: bool = False) -> ft.FilledButton:
     padding = (ft.Padding(T.px(22), T.px(18), T.px(22), T.px(18)) if big
                else ft.Padding(T.px(16), T.px(12), T.px(16), T.px(12)))
-    return ft.FilledButton(label, icon=_btn_icon(icon, T.ON_ACCENT, disabled), on_click=on_click, disabled=disabled,
+    return ft.FilledButton(label, icon=_btn_icon(glyphs.solid(icon), T.ON_ACCENT, disabled), on_click=on_click,
+                           disabled=disabled,
                            tooltip=tooltip,
                            style=ft.ButtonStyle(shape=_shape(), bgcolor={ft.ControlState.DEFAULT: T.ACCENT,
                                                                         ft.ControlState.DISABLED: T.SURFACE_3},
@@ -689,6 +690,132 @@ def bottom_fade(height: int | None = None, strength: float = 0.85) -> ft.Contain
     return ft.Container(height=height, border_radius=T.RADIUS,
                         gradient=ft.LinearGradient(begin=ft.Alignment.TOP_CENTER, end=ft.Alignment.BOTTOM_CENTER,
                                                    colors=[ft.Colors.TRANSPARENT, T.soft("#000000", strength)]))
+
+
+class CoverButton:
+    """The round button on a cover (Library cards, the On your Frame shelf): frosted glass with a thin light ring that
+    springs in while the card is hovered (`show`) and fills with the accent under the pointer. A Play button
+    (`launch` = the "Starting on …" text) launches with two portal rings rippling out of it, blue then orange, and
+    swaps itself for a "Starting on Frame…" pill for STARTING_S seconds. `.control` goes where the button sits (in the
+    card's hover layer); `.status` (the pill) goes in the card's Stack outside that layer, so it stays when the pointer
+    leaves. Only properties change (no controls are created after construction)."""
+
+    STARTING_S = 8
+
+    def __init__(self, icon: str, tooltip: str, on_click: Callable, size: float, launch: str | None = None,
+                 reduce_motion: bool = False):
+        self.on_click, self.launch, self.reduce = on_click, launch, reduce_motion
+        self.hovered = self.starting = False
+        motion = (lambda ms, curve=ft.AnimationCurve.EASE_OUT: None if reduce_motion else ft.Animation(ms, curve))
+        play = icon == ft.Icons.PLAY_ARROW_ROUNDED
+        self.icon = ft.Icon(icon, size=size * 0.52, color="#FFFFFF")
+        self.circle = ft.Container(
+            # the play triangle's weight sits left of its box: nudged right so it looks centred
+            ft.Container(self.icon, padding=ft.Padding(size * 0.07 if play else 0, 0, 0, 0)),
+            width=size, height=size, border_radius=size / 2, alignment=ft.Alignment.CENTER,
+            bgcolor=T.soft("#0B0C10", 0.45), border=ft.Border.all(1.5, T.soft("#FFFFFF", 0.6)),
+            blur=ft.Blur(10, 10), shadow=self._shadow(False),
+            animate=motion(180), scale=0.72, animate_scale=motion(320, ft.AnimationCurve.EASE_OUT_BACK),
+            tooltip=ft.Tooltip(message=tooltip, wait_duration=800), on_hover=self._hover_button, on_click=self._click)
+        self.rings = [ft.Container(width=size, height=size, border_radius=size / 2,
+                                   border=ft.Border.all(2.5, color), opacity=0, scale=1,
+                                   animate_opacity=ft.Animation(90), animate_scale=ft.Animation(1))
+                      for color in (T.SECONDARY if T.DUAL else T.ACCENT, T.ACCENT)]
+        self.control = ft.Stack([*self.rings, self.circle], width=size, height=size, alignment=ft.Alignment.CENTER,
+                                clip_behavior=ft.ClipBehavior.NONE)
+        self.label = ft.Text(launch or "", size=T.px(12), weight=ft.FontWeight.W_600, color="#FFFFFF")
+        self.status = ft.Container(
+            ft.Container(ft.Row([spinner("s", "#FFFFFF"), self.label], spacing=T.S2, tight=True),
+                         bgcolor=T.soft("#0B0C10", 0.6), border=ft.Border.all(1, T.soft(T.ACCENT, 0.7)),
+                         border_radius=T.px(999), blur=ft.Blur(10, 10),
+                         padding=ft.Padding(T.px(12), T.px(7), T.px(14), T.px(7))),
+            alignment=ft.Alignment.CENTER, opacity=0, animate_opacity=motion(220), visible=False)
+
+    @staticmethod
+    def _shadow(hot: bool):
+        if hot:  # the accent glows under the pointer
+            return [ft.BoxShadow(blur_radius=26, spread_radius=1, color=T.soft(T.ACCENT, 0.55)),
+                    ft.BoxShadow(blur_radius=18, color=T.soft("#000000", 0.5), offset=ft.Offset(0, 6))]
+        return ft.BoxShadow(blur_radius=22, color=T.soft("#000000", 0.55), offset=ft.Offset(0, 6))
+
+    def _paint(self, hot: bool) -> None:
+        c = self.circle
+        c.bgcolor = T.ACCENT if hot else T.soft("#0B0C10", 0.45)
+        c.border = ft.Border.all(1.5, T.ACCENT if hot else T.soft("#FFFFFF", 0.6))
+        c.shadow = self._shadow(hot)
+        self.icon.color = T.ON_ACCENT if hot else "#FFFFFF"
+
+    def show(self, on: bool) -> None:
+        """The card is (not) hovered: spring in / shrink back (the card fades its hover layer itself)."""
+        self.hovered = on
+        self.circle.scale = 0 if self.starting else (1.0 if on else 0.72)
+        if not on:
+            self._paint(False)
+
+    def _hover_button(self, e) -> None:
+        hot = e.data in (True, "true") and not self.starting
+        self._paint(hot)
+        self.circle.scale = 0 if self.starting else (1.08 if hot else 1.0)
+        update(self.circle)
+
+    def _click(self, e) -> None:
+        if self.starting:
+            return
+        self.on_click(e)
+        try:
+            page = e.control.page
+        except Exception:  # noqa: BLE001 - unmounted meanwhile (Flet 1.0 raises): no animation then
+            page = None
+        if page is not None:
+            page.run_task(self._launch if self.launch else self._pop)
+
+    async def _pop(self) -> None:
+        import asyncio
+
+        self.circle.scale = 0.9
+        update(self.circle)
+        await asyncio.sleep(0.12)
+        self.circle.scale = 1.0 if self.hovered else 0.72
+        update(self.circle)
+
+    async def _launch(self) -> None:
+        """Rings out (blue, then orange), the button shrinks away, "Starting on …" for STARTING_S seconds."""
+        import asyncio
+
+        self.starting = True
+        self._paint(False)
+        self.circle.scale = 0
+        self.status.visible = True
+        if self.reduce:
+            self.status.opacity = 1
+        else:
+            for r in self.rings:
+                r.opacity = 0.9
+        update(self.control, self.status)
+        if not self.reduce:
+            await asyncio.sleep(0.09)
+            for i, r in enumerate(self.rings):
+                r.animate_scale = ft.Animation(720, ft.AnimationCurve.EASE_OUT)
+                r.animate_opacity = ft.Animation(720, ft.AnimationCurve.EASE_IN)
+                r.scale, r.opacity = 2.5, 0
+                update(r)
+                if i == 0:
+                    await asyncio.sleep(0.16)
+            await asyncio.sleep(0.2)  # the button is gone, the rings are out: then the pill
+            self.status.opacity = 1
+            update(self.status)
+            await asyncio.sleep(0.6)
+            for r in self.rings:  # back in place, unseen
+                r.animate_scale, r.animate_opacity, r.scale = ft.Animation(1), ft.Animation(90), 1
+            update(*self.rings)
+        await asyncio.sleep(self.STARTING_S)
+        self.starting = False
+        self.status.opacity = 0
+        self.circle.scale = 1.0 if self.hovered else 0.72
+        update(self.status, self.circle)
+        await asyncio.sleep(0.25)
+        self.status.visible = False
+        update(self.status)
 
 
 DIALOG_TITLE_SIZE = 20  # px at 100 %

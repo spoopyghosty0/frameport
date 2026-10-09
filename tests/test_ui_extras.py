@@ -68,3 +68,25 @@ def test_callout_icon_alignment():
     assert bar.content.vertical_alignment == ft.CrossAxisAlignment.CENTER
     text = C.callout("A long note that wraps over several lines.", "warn")
     assert text.content.vertical_alignment == ft.CrossAxisAlignment.START
+
+
+def test_solid_glyph_for_filled_buttons():
+    """Filled (accent) buttons use a glyph's filled variant: the thin outline faded into the orange."""
+    from frameport.ui import glyphs
+
+    assert glyphs.solid(glyphs.FRAME) == "fp:frame-solid"
+    assert glyphs.solid(glyphs.PATCH) == glyphs.PATCH  # no filled variant: unchanged
+    assert glyphs.solid(ft.Icons.PLAY_ARROW_ROUNDED) == ft.Icons.PLAY_ARROW_ROUNDED
+
+
+def test_cover_button_states():
+    """The cover button springs in on hover, hides while a game starts and only Play buttons launch."""
+    play = C.CoverButton(ft.Icons.PLAY_ARROW_ROUNDED, "Play on Frame", lambda e: None, 72, launch="Starting…")
+    assert play.circle.scale < 1 and play.status.visible is False and len(play.rings) == 2
+    play.show(True)
+    assert play.circle.scale == 1.0
+    play.starting = True
+    play.show(True)
+    assert play.circle.scale == 0  # the "Starting…" pill stands in for it
+    install = C.CoverButton(ft.Icons.DOWNLOAD_ROUNDED, "Install", lambda e: None, 72)
+    assert install.launch is None

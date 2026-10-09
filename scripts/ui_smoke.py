@@ -548,6 +548,25 @@ def main() -> int:
         if args.fake_frame:  # the "On your Frame" shelf's first card, hovered: its Play button shows
             steps.insert(3, ("library-shelf-hover", lambda a: None))
             hover["library-shelf-hover"] = (403, 268)
+            # the grid's first card: hovered (lift, zoom, the glass button), the pointer on its button, then Play:
+            # the portal rings mid-ripple and the "Starting on Frame…" pill
+            steps.insert(4, ("library-card-hover", lambda a: None))
+            hover["library-card-hover"] = (357, 420)
+            steps.insert(5, ("library-card-button", lambda a: None))
+            hover["library-card-button"] = (357, 497)
+
+            def launch(page):
+                page.mouse.move(357, 497)
+                time.sleep(1.2)
+                page.mouse.click(357, 497)
+                for i in range(6):  # the launch, frame by frame (rings, then the pill)
+                    time.sleep(0.15)
+                    page.screenshot(path=str(args.out / f"library-play-launch-{i}.png"))
+                time.sleep(1.0)
+                page.screenshot(path=str(args.out / "library-play-starting.png"))
+                page.mouse.move(130, 520)
+                return True
+            mouse["library-card-button"] = launch
         if game:
             mouse["game"] = open_and_shoot(491, 306, "game-more-menu")  # the hero's "…"
     if args.gestures:  # the mouse actions run after each step's screenshot, before the next step

@@ -157,7 +157,11 @@ class GameView:
             ], spacing=T.S2, vertical_alignment=ft.CrossAxisAlignment.END)
         app.hero_transit = None
         buttons: list[ft.Control] = []
-        for i, (label, icon, handler, disabled, tip) in enumerate(app.play_options(g) + app.install_options(g)):
+        plays = app.play_options(g)
+        for i, (label, icon, handler, disabled, tip) in enumerate(plays + app.install_options(g)):
+            if i < len(plays) and not disabled:
+                handler = self._starting(i, handler, tr("Starting on Frame…") if label == tr("Play on Frame")
+                                         else tr("Starting on this PC…"))
             buttons.append(C.primary(label, icon, handler, disabled, tip, big=True) if i == 0 else
                            C.secondary(label, icon, handler, disabled, tip))
         if C.is_media_player(g) and g.get("kind") != "rift" and app.frame_state == "connected" and \
@@ -172,7 +176,33 @@ class GameView:
         # PopupMenuButton can't be opened programmatically, a ContextMenu can (no mouse triggers of its own)
         self.more_menu = ft.ContextMenu(content=more, items=C.menu_items(app.game_actions(pkg, quick=False)),
                                         secondary_trigger=None, tertiary_trigger=None)
-        return ft.Row(buttons + [self.more_menu], spacing=T.S2, wrap=True)
+        self.hero_buttons = ft.Row(buttons + [self.more_menu], spacing=T.S2, wrap=True)
+        return self.hero_buttons
+
+    def _starting(self, i: int, handler, text: str):
+        """A Play button that starts the game, then says "Starting on Frame…" with a spinner for as long as a card's
+        Play shows it (CoverButton.STARTING_S) — the click visibly did something while Steam brings the game up."""
+        def go(e):
+            handler(e)
+            row = self.hero_buttons
+            old = row.controls[i]
+            busy = (C.primary(text, C.spinner("s", T.ON_ACCENT), lambda e: None, big=True) if i == 0 else
+                    C.secondary(text, C.spinner("s"), lambda e: None))
+            row.controls[i] = busy
+            C.update(row)
+
+            async def restore():
+                import asyncio
+
+                await asyncio.sleep(C.CoverButton.STARTING_S)
+                if row.controls[i] is busy:
+                    row.controls[i] = old
+                    C.update(row)
+            try:
+                e.control.page.run_task(restore)
+            except Exception:  # noqa: BLE001 - the page went away meanwhile
+                pass
+        return go
 
     # ---------------------------------------------------------------- sections
     def where(self) -> ft.Control:

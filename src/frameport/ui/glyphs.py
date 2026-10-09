@@ -161,6 +161,16 @@ def transit_parts(assets: Path, colors: dict) -> dict[str, Path]:
     return out
 
 
+def solid(name: str) -> str:
+    """The filled variant of a glyph for solid (accent-filled) buttons, where a thin outline in the dark ON_ACCENT
+    colour faded into the fill: "fp:frame" → "fp:frame-solid" (lenses cut out, so the accent shows through as in the
+    logo). Glyphs without one stay as they are."""
+    if not is_glyph(name):
+        return name
+    filled = f"{name}-solid"
+    return filled if (SOURCE / "glyphs" / f"{filled.removeprefix(PREFIX)}.svg").is_file() else name
+
+
 def path(name: str, assets: Path) -> Path:
     """The installed file for a glyph ("fp:frame") or a logo file name ("logo")."""
     return assets / FOLDER / f"{name.removeprefix(PREFIX)}.svg"

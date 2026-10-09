@@ -205,11 +205,42 @@ def save_filters(f: dict) -> None:
 BATCH = 8
 CARD_ART = ("portrait", "square", "cover", "icon")  # store art first; cover = FramePort's own (no store art)
 SHELF_ART = ("landscape", "hero", "banner", "portrait", "square", "cover", "icon")  # wide first
-def card_shadow(hover: bool = False) -> ft.BoxShadow:
-    """Library cards float on the dark background; hovering lifts them further."""
+def card_shadow(hover: bool = False) -> ft.BoxShadow | list[ft.BoxShadow]:
+    """Library cards float on the dark background; hovering lifts them further, with a faint accent glow."""
     if hover:
-        return ft.BoxShadow(blur_radius=36, spread_radius=2, color=T.soft("#000000", 0.75), offset=ft.Offset(0, 14))
+        return [ft.BoxShadow(blur_radius=36, spread_radius=2, color=T.soft("#000000", 0.75), offset=ft.Offset(0, 16)),
+                ft.BoxShadow(blur_radius=30, spread_radius=-2, color=T.soft(T.ACCENT, 0.22), offset=ft.Offset(0, 4))]
     return ft.BoxShadow(blur_radius=22, spread_radius=1, color=T.soft("#000000", 0.55), offset=ft.Offset(0, 8))
+
+
+def card_hover(tile: ft.Container, art: ft.Control, scrim: ft.Control | None, on: bool, reduce: bool) -> None:
+    """A cover card under the pointer: lifts, its art zooms in a little inside the frame and darkens behind the round
+    button (scrim), the shadow deepens. Reduce motion: only the shadow and scrim change."""
+    if not reduce:
+        tile.scale = 1.02 if on else 1.0
+        tile.offset = ft.Offset(0, -0.015 if on else 0)
+        art.scale = 1.07 if on else 1.0
+    if scrim is not None:
+        scrim.opacity = 1 if on else 0
+    tile.shadow = card_shadow(on)
+
+
+def hover_motion(tile: ft.Container, art: ft.Control) -> None:
+    """The animations card_hover relies on (set once when the card is built)."""
+    tile.scale, tile.offset = 1.0, ft.Offset(0, 0)
+    tile.animate_scale = ft.Animation(220, ft.AnimationCurve.EASE_OUT)
+    tile.animate_offset = ft.Animation(220, ft.AnimationCurve.EASE_OUT)
+    tile.clip_behavior = ft.ClipBehavior.ANTI_ALIAS  # the zoomed art stays inside the rounded frame
+    art.scale = 1.0
+    art.animate_scale = ft.Animation(600, ft.AnimationCurve.EASE_OUT)
+
+
+def scrim() -> ft.Container:
+    """The darkening behind a card's round button while hovered (a soft radial dim, strongest in the middle)."""
+    return ft.Container(left=0, right=0, top=0, bottom=0, opacity=0,
+                        animate_opacity=ft.Animation(220, ft.AnimationCurve.EASE_OUT),
+                        gradient=ft.RadialGradient(colors=[T.soft("#000000", 0.5), T.soft("#000000", 0.15)],
+                                                   radius=0.8))
 
 
 def quick_icon(kind: str) -> str:
@@ -567,40 +598,39 @@ class LibraryView:
         app = self.app
         pkg = g["package"]
         w, h = T.px(264), T.px(148)
-        play = ft.Container(
-            ft.Icon(ft.Icons.PLAY_ARROW_ROUNDED, size=T.px(34), color=T.ON_ACCENT),
-            width=T.px(60), height=T.px(60), border_radius=T.px(30), bgcolor=T.ACCENT, alignment=ft.Alignment.CENTER,
-            shadow=ft.BoxShadow(blur_radius=20, spread_radius=1, color=T.soft("#000000", 0.6), offset=ft.Offset(0, 4)),
-            tooltip=ft.Tooltip(message=tr("Play on Frame"), wait_duration=800), ink=True,
-            on_click=lambda e: app.play(pkg, "frame"),
-            scale=0.85, animate_scale=ft.Animation(160, ft.AnimationCurve.EASE_OUT))
-        quick = ft.Container(play, left=0, right=0, top=0, bottom=T.px(36), alignment=ft.Alignment.CENTER, opacity=0,
-                             animate_opacity=ft.Animation(160, ft.AnimationCurve.EASE_OUT), visible=not busy)
+        button = C.CoverButton(ft.Icons.PLAY_ARROW_ROUNDED, tr("Play on Frame"), lambda e: app.play(pkg, "frame"),
+                               T.px(56), launch=tr("Starting on Frame…"), reduce_motion=app.reduce_motion)
+        quick = ft.Container(button.control, left=0, right=0, top=0, bottom=T.px(36), alignment=ft.Alignment.CENTER,
+                             opacity=0, animate_opacity=ft.Animation(180, ft.AnimationCurve.EASE_OUT), visible=not busy)
         badges = [C.install_badge("outdated")] if state == "outdated" else []
         if busy:
             badges = [C.pill(tr("Working…"), T.ACCENT, ft.Icons.SYNC_ROUNDED, solid=True)]
+        cover = C.art_fill(art, left=0, right=0, top=0, bottom=0, placeholder_icon=C.platform_icon(g))
+        shade = scrim()
         tile = ft.Container(
             ft.Stack([
-                C.art_fill(art, left=0, right=0, top=0, bottom=0, placeholder_icon=C.platform_icon(g)),
+                cover,
+                shade,
                 ft.Container(C.bottom_fade(None, 0.92), left=0, right=0, bottom=0, top=T.px(48)),
                 *([ft.Container(ft.Row(badges, spacing=T.px(4)), left=T.px(10), top=T.px(10))] if badges else []),
+                ft.Container(button.status, left=0, right=0, top=0, bottom=T.px(36)),  # below the button (clicks)
                 quick,
                 ft.Container(ft.Text(title, size=T.px(14), weight=ft.FontWeight.W_700, color=T.TEXT, max_lines=1,
                                      overflow=ft.TextOverflow.ELLIPSIS),
                              left=T.px(12), right=T.px(12), bottom=T.px(10)),
             ]),
             width=w, height=h, border_radius=T.RADIUS, bgcolor=T.SURFACE, border=ft.Border.all(1, T.BORDER),
-            shadow=card_shadow(), scale=1.0, animate_scale=ft.Animation(140, ft.AnimationCurve.EASE_OUT),
+            shadow=card_shadow(),
             tooltip=ft.Tooltip(message=tr("Click to open · right-click for quick actions"), wait_duration=1500),
             on_click=lambda e: app.open_game(pkg))
+        hover_motion(tile, cover)
 
         def hover(e):
             on = e.data in (True, "true")
-            tile.scale = 1.03 if on else 1.0
-            tile.shadow = card_shadow(on)
+            card_hover(tile, cover, shade, on, app.reduce_motion)
             tile.border = ft.Border.all(1, T.ACCENT if on else T.BORDER)
             quick.opacity = 1 if on else 0
-            play.scale = 1.0 if on else 0.85
+            button.show(on)
             tile.update()
         tile.on_hover = hover
         # (padding: room for the hover lift and shadow inside the scrolling row, which clips)
@@ -708,6 +738,12 @@ class LibraryView:
                 pkg in pc, bool(job), self.app.quick_action(g)[0], thumbs.url(pkg, CARD_ART),
                 self.app.frame_state)
 
+    def starting_text(self, g: dict) -> str:
+        """What a cover's Play button says while the game starts (Play goes to the Frame first, as play_options)."""
+        app = self.app
+        on_frame = app.frame_state == "connected" and C.install_state(g, app.frame_info) in ("installed", "outdated")
+        return tr("Starting on Frame…") if on_frame else tr("Starting on this PC…")
+
     def card(self, g: dict, pc: set[str], tw: set[str]) -> ft.Control:
         app = self.app
         pkg = g["package"]
@@ -738,28 +774,28 @@ class LibraryView:
         self.checks[pkg] = check
         overlay = ft.Container(left=0, right=0, top=0, bottom=0, border_radius=T.RADIUS)  # the selected fade
         quick_label, quick_kind = app.quick_action(g)
-        circle = ft.Container(
-            ft.Icon(quick_icon(quick_kind), size=T.px(56), color=T.ON_ACCENT),
-            width=T.px(96), height=T.px(96), border_radius=T.px(48), bgcolor=T.ACCENT, alignment=ft.Alignment.CENTER,
-            shadow=ft.BoxShadow(blur_radius=28, spread_radius=2, color=T.soft("#000000", 0.6), offset=ft.Offset(0, 6)),
-            tooltip=ft.Tooltip(message=quick_label, wait_duration=800), ink=True,
-            on_click=lambda e: app.primary_action(pkg),
-            scale=0.85, animate_scale=ft.Animation(160, ft.AnimationCurve.EASE_OUT)) if quick_label else None
-        # one big round Play / Install button in the middle of the cover, shown on hover
-        quick = ft.Container(circle, left=0, right=0, top=0, bottom=T.px(56), alignment=ft.Alignment.CENTER,
-                             opacity=0, animate_opacity=ft.Animation(160, ft.AnimationCurve.EASE_OUT)) \
-            if circle else None
+        # one round Play / Install button in the middle of the cover, shown on hover
+        button = C.CoverButton(quick_icon(quick_kind), quick_label, lambda e: app.primary_action(pkg), T.px(72),
+                               launch=self.starting_text(g) if quick_kind == "play" else None,
+                               reduce_motion=app.reduce_motion) if quick_label else None
+        quick = ft.Container(button.control, left=0, right=0, top=0, bottom=T.px(56), alignment=ft.Alignment.CENTER,
+                             opacity=0, animate_opacity=ft.Animation(180, ft.AnimationCurve.EASE_OUT)) \
+            if button else None
         dim = state == "missing" and not on_pc
+        cover = C.art_fill(art, left=0, right=0, top=0, bottom=0, opacity=0.5 if dim else 1.0,
+                           placeholder_icon=C.platform_icon(g))
+        shade = scrim() if button else None
         tile = ft.Container(
             ft.Stack([
-                C.art_fill(art, left=0, right=0, top=0, bottom=0, opacity=0.5 if dim else 1.0,
-                           placeholder_icon=C.platform_icon(g)),
+                cover,
+                *([shade] if shade else []),
                 ft.Container(C.bottom_fade(None, 0.92), left=0, right=0, bottom=0, top=T.px(90)),
                 # platform + state badges in one row that wraps: on a narrow card "On Frame" covered "Android"
                 ft.Container(ft.Row([platform, *badges], spacing=T.px(4), run_spacing=T.px(4), wrap=True),
                              left=T.px(10), right=T.px(10), top=T.px(10)),
                 overlay,
-                *([quick] if quick else []),
+                # the pill's layer below the button's: above it, the (empty) layer took the button's clicks
+                *([ft.Container(button.status, left=0, right=0, top=0, bottom=T.px(56)), quick] if quick else []),
                 check,
                 ft.Container(ft.Column([
                     ft.Text(display_title(g, tw), size=T.px(14), weight=ft.FontWeight.W_700, color=T.TEXT, max_lines=2,
@@ -769,22 +805,24 @@ class LibraryView:
                 ], spacing=T.px(4)), left=T.px(12), right=T.px(12), bottom=T.px(12)),
             ], expand=True),
             border_radius=T.RADIUS, bgcolor=T.SURFACE, border=ft.Border.all(1, T.BORDER), expand=True,
-            scale=1.0, animate_scale=ft.Animation(140, ft.AnimationCurve.EASE_OUT),
             shadow=card_shadow(),
             tooltip=ft.Tooltip(message=tr("Click to open · right-click for quick actions · drag across cards to "
                                           "select several"), wait_duration=1500),
             on_click=lambda e: self.toggle_selected(pkg) if self.select_mode else app.open_game(pkg))
+        hover_motion(tile, cover)
 
         def hover(e):
             on = e.data in (True, "true")
             self.drag.hover(pkg, on)
-            tile.scale = 1.03 if on else 1.0
             self.marks[pkg] = (tile, overlay, on)
             self._paint_card(pkg)
-            tile.shadow = card_shadow(on)
+            show = on and not self.select_mode
+            card_hover(tile, cover, shade, on, app.reduce_motion)
+            if shade:
+                shade.opacity = 1 if show else 0
             if quick:
-                quick.opacity = 1 if on and not self.select_mode else 0
-                circle.scale = 1.0 if on else 0.85
+                quick.opacity = 1 if show else 0
+                button.show(show)
             tile.update()
         tile.on_hover = hover
         self.marks[pkg] = (tile, overlay, False)
