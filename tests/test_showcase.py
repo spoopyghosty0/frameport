@@ -236,7 +236,7 @@ def test_first_run_fakes_never_show_this_pcs_address(monkeypatch):
         monkeypatch.setattr(module, attr, getattr(module, attr))
     fakes.install_first_run_fakes()
     server = pairing.PairingServer(on_paired=None).start()
-    assert server.one_liner == "curl -fsS 192.168.1.20:8765/1a2b3c4d | bash"  # the docs' example
+    assert server.one_liner == "curl -fsS <your-PC-address>:8765/<one-time-code> | bash"  # placeholders
     assert server.requests and server.running  # (no firewall hint, nothing listening)
     assert discovery.browse(4) == []  # no real Frame on this network shows up in a recording
     assert pairing.ensure_reachable(server) == "ok"

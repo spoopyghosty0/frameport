@@ -470,8 +470,8 @@ def install_fakes(game: str | None, monitor_session=None) -> None:
 
 
 # ------------------------------------------------------------------ first run (the install tutorial)
-# The setup command shows the docs' example address and code (never this PC's real address in a recording).
-PAIR_HOST, PAIR_PORT, PAIR_CODE = "192.168.1.20", 8765, "1a2b3c4d"
+# The setup command shows placeholders for the address and code (each PC has its own; never this PC's real address).
+PAIR_HOST, PAIR_PORT, PAIR_CODE = "<your-PC-address>", 8765, "<one-time-code>"
 TOOLS = {"ready": True}  # False: the managed tools look missing until the (pretend) download finishes
 
 
@@ -598,17 +598,17 @@ class FrozenMonitorSession(FakeMonitorSession):
 
 
 class LiveMonitorSession(FakeMonitorSession):
-    """The fake stream, livelier for videos: a sample every 0.6 s and a frame rate with a few-second stutter now and
-    then (also in the two minutes sent first), so the card's sparkline (5 s points) has a shape and visibly moves.
-    Seeded: every recording gets the same curve."""
+    """The fake stream, livelier for videos: a sample every 0.6 s and a steady frame rate with a short, shallow dip
+    now and then (also in the two minutes sent first), so the card's sparkline (5 s points) has a shape and visibly
+    moves without the game looking like it struggles. Seeded: every recording gets the same curve."""
 
     def _sample(self) -> dict:
         s = super()._sample()
         t = self.t
         rnd = random.Random(t)
-        fps = 72 - abs(rnd.gauss(0, 0.8))
-        if (t // 8) % 3 == 1:  # 8 samples of stutter in every 24
-            fps = 56 + 6 * abs(((t % 8) - 4) / 4) + rnd.uniform(-1.5, 1.5)
+        fps = 72 - abs(rnd.gauss(0, 0.6))
+        if t % 45 in (20, 21, 22):  # a short, shallow dip now and then
+            fps = 66 + 2 * abs(t % 45 - 21) + rnd.uniform(-0.8, 0.8)
         for g in s["games"]:
             g["fps"] = round(fps, 1)
         return s
@@ -620,6 +620,12 @@ class LiveMonitorSession(FakeMonitorSession):
             if self.t >= self.BACKFILL:
                 time.sleep(0.6)
             self.t += 1
+
+    def set_modules(self, m):
+        """Opening the Monitor tab adds modules: on film the stream just goes on, as the real one does (the tab's
+        charts start there and grow live). Replaying the two minutes, as the stills' stream does, showed the charts
+        racing to catch up."""
+        return True
 
 
 def install_job(package: str, pace: float = 1.0):

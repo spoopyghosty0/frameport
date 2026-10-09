@@ -79,8 +79,8 @@ scenes:
         - "In the SteamVR dashboard: **Launch a program** → **Desktop**"
         - "Open the app menu (bottom left) → **System** → **Konsole**"
         - "Type the command FramePort shows and press **Enter**"
-      code: "curl -fsS 192.168.1.20:8765/1a2b3c4d | bash"
-      note: "Your address and code differ. The desktop closes by itself after a few seconds (Steam restarts once); if Steam asks to install **Lepton**, confirm it. No password is needed."
+      code: "curl -fsS <your-PC-address>:8765/<one-time-code> | bash"
+      note: "FramePort shows your PC's address and a one-time code in place of **<…>**. The desktop closes by itself after a few seconds (Steam restarts once); if Steam asks to install **Lepton**, confirm it. No password is needed."
 
   - name: connected
     caption: ["Your Frame is connected", "From now on FramePort finds it by itself"]

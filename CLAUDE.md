@@ -288,7 +288,7 @@ Repo is on an NTFS drive (`core.fileMode=false`); line endings are LF (`.gitattr
   `docs/media/frameport-<name>.mp4`. Both build the demo library first (`demo_home.py`, profile `demo` or `fresh`:
   catalog games from `demo-library.yaml` + `demo-analyses.json`, art/details cached in ~/.cache/frameport-showcase, a
   pretend Frame from `showcase-frame.json`) in a temp FRAMEPORT_HOME: no personal data, refuses the real data dir
-  and placeholder art; discovery is off and the setup command shows the docs' example address. Steps find elements
+  and placeholder art; discovery is off and the setup command shows placeholders for the address and code. Steps find elements
   by name through Flutter's semantics tree (`scripts/showcase/web.py`: text, tooltip; the innermost match wins) —
   give new icon-only controls a tooltip. The `showcase` workflow renders on UI pushes to main (+ the videos whose
   storyboard changed, or the ones named on dispatch) and opens PR `showcase/update`; releases attach every video as

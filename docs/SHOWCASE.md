@@ -17,7 +17,7 @@ and store details come from the same public sources the app uses and are cached 
 The renderer refuses to run in FramePort's own data folder, scans the demo data for home paths and IP addresses
 first, and stops when a store didn't send art (placeholders never reach the docs; `--allow-missing-art` overrides
 that). Frame discovery is switched off during a render (no real device on your network can appear), and the setup
-command shows the docs' example address, never this computer's.
+command shows placeholders for the address and code (each PC has its own), never this computer's.
 
 ## Running it
 
@@ -75,7 +75,7 @@ scenes:
       eyebrow: "Step 3 · On the Frame, first time only"
       heading: Run the setup command
       steps: ["In the SteamVR dashboard: **Launch a program** → **Desktop**", …]   # **bold** = a button or menu
-      code: "curl -fsS 192.168.1.20:8765/1a2b3c4d | bash"
+      code: "curl -fsS <your-PC-address>:8765/<one-time-code> | bash"
       note: "Your address and code differ."
 ```
 
