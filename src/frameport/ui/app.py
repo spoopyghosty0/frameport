@@ -546,7 +546,8 @@ class FramePortApp:
         else:
             from .battery import charging
 
-            self._conn_ring.value = ring["value"]
+            if not getattr(self._conn_ring, "_pulsing", False):  # (the charge-complete spin steps the value itself)
+                self._conn_ring.value = ring["value"]
             self._conn_ring.color = {"warn": T.WARN, "charging": T.OK}.get(ring["level"], T.OK)
             self._conn_bat_text.value = ring["text"]
             self._conn_bat_text.color = T.WARN if ring["level"] == "warn" else T.TEXT

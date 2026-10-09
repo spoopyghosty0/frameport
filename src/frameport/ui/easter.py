@@ -600,15 +600,33 @@ def ring_glow(size: float, color: str) -> ft.Container:
                         animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT))
 
 
+def ring_fill_steps(drain: float = 0.5, fill: float = 0.3, dt: float = 0.025) -> list[float]:
+    """The ring's values while it spins: full → empty (easing in) → full again, quicker (easing out); dt apart."""
+    down = [1 - (i / round(drain / dt)) ** 2 for i in range(1, round(drain / dt) + 1)]
+    up = [1 - (1 - i / round(fill / dt)) ** 2 for i in range(1, round(fill / dt) + 1)]
+    return down + up
+
+
 def ring_pulse(ring: ft.Control, glow: ft.Container) -> None:
-    """The sidebar's battery ring pulses three times (the ring alone grows, with a glow behind it; the percentage
-    inside stays put): the Frame just reached 100 % on the charger. `ring` needs animate_scale."""
+    """The Frame just reached 100 % on the charger: the sidebar's battery ring spins once while its bar drains to
+    empty and quickly fills up again, then pulses three times (the ring alone grows, with a glow behind it; the
+    percentage inside stays put). `ring` (a ProgressRing) needs animate_scale; app._apply_card leaves its value
+    alone while `ring._pulsing`."""
     if getattr(ring, "_pulsing", False):
         return
     ring._pulsing = True
+    dt = 0.025
 
     def run():
         try:
+            steps = ring_fill_steps(dt=dt)
+            ring.animate_rotation = ft.Animation(int(len(steps) * dt * 1000), ft.AnimationCurve.EASE_IN_OUT)
+            ring.rotate = (ring.rotate or 0) + 2 * math.pi  # one turn while it drains and refills
+            for value in steps:  # (a ProgressRing doesn't animate its value: step it)
+                ring.value = value
+                C.update(ring)
+                time.sleep(dt)
+            ring.value = 1.0
             for _ in range(3):
                 ring.scale, glow.opacity = 1.2, 1
                 C.update(ring, glow)

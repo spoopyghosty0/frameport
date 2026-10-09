@@ -204,3 +204,12 @@ def test_ring_pulse_leaves_the_percentage_alone():
     assert "scale" in inspect.getsource(easter.ring_pulse)
     assert "ring_pulse(self._conn_ring, self._conn_glow)" in \
         __import__("pathlib").Path(easter.__file__).with_name("app.py").read_text()
+
+
+def test_charge_ring_drains_then_refills_quickly():
+    steps = easter.ring_fill_steps(drain=0.5, fill=0.3, dt=0.025)
+    low = steps.index(min(steps))
+    assert min(steps) == 0 and steps[-1] == 1.0
+    assert steps[:low + 1] == sorted(steps[:low + 1], reverse=True)  # empties ...
+    assert steps[low:] == sorted(steps[low:])  # ... then fills up again
+    assert len(steps) - low - 1 < low  # (filling is quicker than emptying)

@@ -89,7 +89,7 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     hold the badge: Flutter only hit-tests inside a control's bounds; `FRAMEPORT_TODAY` pretends a date),
     Library search "frameport" (logo spins, "That's me!"), Type on Frame "hello" (keys still go to the Frame; a
     headset peeks up from the window's corner and waves), the battery ring (only the ring, with a glow behind
-    it; not the percentage) pulses on reaching 100 % plugged (`charged_now`, `ring_pulse`, `ring_glow`), a long upload (>2.5 min, `HOP_AFTER`) makes the transit cover hop, the Live view
+    it; not the percentage) spins while its bar drains and refills, then pulses, on reaching 100 % plugged (`charged_now`, `ring_pulse`, `ring_glow`), a long upload (>2.5 min, `HOP_AFTER`) makes the transit cover hop, the Live view
     tab shows a blinking ON AIR sign while streaming
     (`app.sync_on_air`), install milestones (confetti +
     message at the 1st/10th/100th *different* game: settings `fun.installed` = game ids, `fun.milestones` = shown;
