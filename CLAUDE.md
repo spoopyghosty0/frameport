@@ -463,6 +463,23 @@ maps a symlink to the already-loaded module) gets past it to **-3021 = ovrError_
 an Oculus-signed runtime. Next step (not done): make the runtime check pass without Detours, e.g. an injected helper
 that patches the game's import table (IAT) for LoadLibrary*/WinVerifyTrust, or a prefix-level override. This is
 runtime interop (what Revive does), not the Platform SDK licence check (which FramePort never touches).
+**Rift via x86_64 Wine under FEX (research, 2026-10-08, headless on the dev Frame, SteamOS 0.4.5; no product code):**
+why Revive failed is confirmed upstream: x64 Detours returns ERROR_NOT_SUPPORTED on ARM64EC targets (microsoft/Detours
+PR #388; only an ARM64EC build of Detours can hook them). A fully x86_64 Wine avoids it: GE-Proton11-7 **x86_64** runs
+under the FEX tool (`fex-compat-tool run -- <x86 binary>`; RootFS /usr/share/guestos/fex-mesa, no FreeType there)
+— prefix boot 35 s, kernelbase.dll is x86-64. Proton's script needs help without the x86_64 SLR (app 4183110, not
+installed): its Python runs natively (the RootFS has none), so `files/bin/wine{,server}` and the two direct
+`wine-preloader` argv calls must go through a FEX wrapper that also unsets `FEX_APP_CONFIG(_LOCATION)` (Proton sets
+them on aarch64 for its own ARM64EC FEX → "RootFS path set to ''"); GE's game drive needs STEAM_COMPAT_INSTALL_PATH
+unset. SteamVR now ships `bin/linux64/vrclient.so` + `bin/vrclient.so` (i386) + `vrclient_x64.dll` (Oct 6 build; not
+there on 09-30): Proton's x86_64 vrclient bridge reaches the arm64 vrserver. **Rick and Morty ran as the scene app**
+("OpenVR initialized!", controller tracking, 9176 presents / 6 dropped, CPU 11.6 / GPU 17.9 ms, target 72).
+**ReviveInjector: "Succesfully injected!"**, LibRevive64.dll loaded next to OVRPlugin.dll in Lies Beneath, which then
+died on 0xc06d007e = delay-loaded `libovrplatform64_1.dll` (Platform SDK) before connecting to SteamVR — so Revive's
+signature hook and Revive→SteamVR are still unproven. Every Rift game in the library except Rick and Morty uses the
+Platform SDK → the Meta (Link) app in the prefix, logged in with the user's own account, is the real blocker; the
+only public attempt (github.com/michauMiau/oculus-wine-linux, 2026-10) never got OculusSetup.exe (32-bit .NET)
+past its HTTPS config fetch. Scratch files on the Frame: `~/frameport-rifttest/` (scripts t1-t4.sh).
 Uninstall (Quest, saves kept) used to leave `deployment.json` → still "installed"; fixed (agent v16).
 
 **Discovery/network:** Developer-Mode SteamOS devices announce `_steamos-devkit._tcp` (TXT `login=steamos`) — use it;
