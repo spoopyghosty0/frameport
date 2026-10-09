@@ -10,13 +10,12 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, ui-refresh]  # TEMPORARY: one verification run before the merge (renders + artifact, no PR)
+    branches: [main]
     paths:
       - "src/frameport/ui/**"
       - "src/frameport/locales/**"
       - "docs/showcase/**"
       - "scripts/showcase/**"
-      - ".github/workflows/showcase.yml"  # TEMPORARY (with ui-refresh above)
 
 concurrency:
   group: showcase-${{ github.ref }}
