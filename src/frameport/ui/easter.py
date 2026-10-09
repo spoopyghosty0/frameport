@@ -608,7 +608,7 @@ def ring_fill_steps(fill: float = 0.4, dt: float = 0.025) -> list[float]:
 
 def ring_pulse(ring: ft.Control, glow: ft.Container) -> None:
     """The Frame just reached 100 % on the charger: the sidebar's battery ring empties at once and spins once while
-    its bar quickly fills up again, then pulses three times (the ring alone grows, with a glow behind it; the
+    its bar quickly fills up again, then pulses once (the ring alone grows, with a glow behind it; the
     percentage inside stays put). `ring` (a ProgressRing) needs animate_scale; app._apply_card leaves its value
     alone while `ring._pulsing`."""
     if getattr(ring, "_pulsing", False):
@@ -626,13 +626,12 @@ def ring_pulse(ring: ft.Control, glow: ft.Container) -> None:
                 C.update(ring)
                 time.sleep(dt)
             ring.value = 1.0
-            for _ in range(3):
-                ring.scale, glow.opacity = 1.2, 1
-                C.update(ring, glow)
-                time.sleep(0.32)
-                ring.scale, glow.opacity = 1.0, 0
-                C.update(ring, glow)
-                time.sleep(0.32)
+            ring.scale, glow.opacity = 1.2, 1  # one pulse
+            C.update(ring, glow)
+            time.sleep(0.32)
+            ring.scale, glow.opacity = 1.0, 0
+            C.update(ring, glow)
+            time.sleep(0.32)
         finally:
             ring._pulsing = False
     threading.Thread(target=run, daemon=True).start()
