@@ -2533,22 +2533,38 @@ def assets_dir() -> str:
     return str(user_data_dir())
 
 
+FLET_LOCK = threading.RLock()  # held while a patch is computed and packed, and while a control property is set
+
+
 def serialize_flet_updates() -> None:
-    """Send page updates one at a time. Flet 1.0 diffs and sends a control's patch without a lock, and FramePort
-    updates the page from several threads (jobs, connection checks, the library loader, dialogs): two patches computed
-    at once desynchronised the window ("dropped a patch for unknown control … needs a reload"), e.g. a dialog shown
-    while a finished scan redrew the view never closed again."""
+    """Send page updates one at a time, and keep property writes out of a patch being packed.
+
+    Flet 1.0 diffs and sends a control's patch without a lock, and FramePort updates the page from several threads
+    (jobs, connection checks, the library loader, the monitor stream, dialogs):
+    - two patches computed at once desynchronised the window ("dropped a patch for unknown control … needs a
+      reload"), e.g. a dialog shown while a finished scan redrew the view never closed again;
+    - a property set on a background thread while the event loop packed a patch changed the control's `_values`
+      dict mid-iteration ("dictionary changed size during iteration"): the handler that was updating (a sidebar
+      click while the live Frame card took a sample) died and the page didn't change.
+    Both take one re-entrant lock: re-entrant because did_mount() may update again and the loop's own handlers set
+    properties during a patch."""
+    from flet.controls.value_types import Prop
     from flet.messaging.session import Session
 
     if getattr(Session.patch_control, "_serialized", False):
         return
-    original, lock = Session.patch_control, threading.RLock()  # re-entrant: did_mount() may update again
+    original_patch, original_set = Session.patch_control, Prop.__set__
 
     def patch_control(self, *args, **kwargs):
-        with lock:
-            return original(self, *args, **kwargs)
+        with FLET_LOCK:
+            return original_patch(self, *args, **kwargs)
+
+    def set_prop(self, obj, value):
+        with FLET_LOCK:
+            original_set(self, obj, value)
     patch_control._serialized = True
     Session.patch_control = patch_control
+    Prop.__set__ = set_prop
 
 
 def main(argv=None):

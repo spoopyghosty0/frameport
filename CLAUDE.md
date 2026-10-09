@@ -356,7 +356,10 @@ The Frame runs firewalld (22 and 32000 open). PC side: the setup server needs in
 firewall blocks it silently (`DefaultInboundAction Block`): `pairing.ensure_reachable` adds a temporary rule via one
 UAC prompt, removed when the server stops (flag file in %TEMP%, max 35 min); hints per OS after 45 s without a request
 (`pairing.firewall_hint`). Flet 1.0 patches aren't thread-safe → `app.serialize_flet_updates()` (a dialog shown while a
-scan redraw ran never closed: "dropped a patch for unknown control").
+scan redraw ran never closed: "dropped a patch for unknown control"); it also makes property writes (Flet's
+`Prop.__set__`) take the same `app.FLET_LOCK`: a property set on a background thread while the loop packed a patch
+changed the control's `_values` mid-iteration ("dictionary changed size during iteration", a sidebar click's page
+change died while the live Frame card took a sample). Anything that serves the app (ui_smoke, showcase) calls it too.
 **Lepton:** needs an activity with category **LAUNCHER** (Quest apps often only have INFO → "APP_ACTIVITY is empty").
 **2D apps:** Lepton runs every app headless (`lepton.headless=true`, only OpenXR output reaches the headset) unless the app folder (`<base>/lepton-app/`) has a `lepton-show-flatscreen` file (liblepton/app_metadata.sh) → Waydroid window on gamescope; agent v28 `set_flatscreen` at finalize for `vr_kind == "none"`. Android 11's navbar covered the
 app's controls → patch `device.hide_navbar` (default on for vr_kind none, migration `flat_hide_navbar`) exports

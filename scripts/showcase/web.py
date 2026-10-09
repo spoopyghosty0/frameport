@@ -443,6 +443,9 @@ class Server:
 
     def run(self, script) -> int:
         """Serve; `script(server) -> exit code` runs in a thread with the browser ready; the process ends with it."""
+        from frameport.ui.app import serialize_flet_updates
+
+        serialize_flet_updates()  # as the app's main() does: patches and property writes don't interleave
         if self.fake_frame:
             fakes.install_fakes(self.game, self.monitor_session)
 

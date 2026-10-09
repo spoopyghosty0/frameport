@@ -156,8 +156,9 @@ def run(session, steps: list, variables: dict | None = None, log=None) -> None:
 
 def _nav(session, label: str, log=None) -> None:
     """Click a sidebar tab like a person, then make sure the page really changed: its heading shows in the content
-    area. A click whose handler died (a Flet update race under load) would otherwise leave the old page in the
-    picture for the rest of a recording; then the route is opened directly (and a warning printed)."""
+    area. A click whose handler died would otherwise leave the old page in the picture for the rest of a recording
+    (seen on CI before property writes took FLET_LOCK; kept as a safety net): then the route is opened directly and
+    a WARN line printed."""
     from frameport.ui import app as app_module
     from showcase.web import Box, NotFound
 

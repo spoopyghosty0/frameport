@@ -436,6 +436,9 @@ def main() -> int:
     steps.insert(0, ("warmup", lambda a: a.go("settings")))
     ready, shot_done, done = threading.Event(), threading.Event(), []
 
+    from frameport.ui.app import serialize_flet_updates
+
+    serialize_flet_updates()  # as the app's main() does
     if args.fake_frame:  # never reach a real Frame (start-up auto-connect, discovery, the 30 s poll)
         install_fakes(game)
 
