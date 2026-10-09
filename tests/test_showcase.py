@@ -82,6 +82,34 @@ def test_demo_library_installed_state_in_ui(demo):
     assert drives["com.Sanzaru.Wrath2"] is False and drives["com.camouflaj.manta"] is True
 
 
+def test_fake_screenshots_are_in_game_pictures(demo):
+    """The Screenshots tab's samples are store screenshots (in-game pictures), never cover art, the running game's
+    first, no picture twice; Take screenshot adds the running game's next one."""
+    from PIL import Image
+    from showcase import fakes
+
+    from frameport.artwork import fetch
+
+    home, _ = demo
+    with_shots = ["com.StressLevelZero.BONELAB", "com.CyanWorlds.Myst", "com.playful.LuckysTale",
+                  "com.CyanWorlds.Riven"]
+    for n, pkg in enumerate(with_shots):
+        d = fetch.artwork_dir(pkg)
+        for i in range(1, 6):
+            Image.new("RGB", (1280, 720), (n * 50, i * 40, 90)).save(d / f"shot_{i}.jpg")
+        Image.new("RGB", (600, 900), (255, 0, 0)).save(d / "portrait.jpg")  # cover art: must not be used
+    fs = fakes.FakeFS()
+    assert fs.owners[0][0] == "com.StressLevelZero.BONELAB"  # the running game (demo-library.yaml)
+    assert fs.owners[-1][1] == "SteamVR" and fs.owners[-1][2]
+    assert {o[0] for o in fs.owners[:3]} <= set(with_shots[:3])  # installed games first, Riven isn't
+    for _pkg, _title, arts in fs.owners:
+        assert arts and all(p.name.startswith("shot_") for p in arts)
+    pixels = {Image.open(s["path"]).convert("RGB").getpixel((5, 5)) for s in fs.shots}
+    assert len(pixels) == len(fs.shots)  # every sample a different picture
+    taken = fs.take_screenshot()
+    assert taken["taken"] and fs.shots[0]["package"] == "com.StressLevelZero.BONELAB"
+
+
 def test_build_refuses_the_real_data_dir(monkeypatch):
     monkeypatch.setattr(demo_home, "real_data_dir", lambda: Path("/somewhere/frameport").resolve())
     with pytest.raises(SystemExit, match="refusing"):

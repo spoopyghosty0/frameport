@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import tempfile
 import time
@@ -121,6 +122,10 @@ def main() -> int:
     from showcase.web import Screencast, Server
 
     variables = tour.get("vars") or {}
+    started = time.monotonic()
+    # SHOWCASE_DEBUG=1: every step with the time it started (a scene that runs long shows which step waited)
+    step_log = (lambda msg: print(f"{time.monotonic() - started:7.1f} {msg}", flush=True)) \
+        if os.environ.get("SHOWCASE_DEBUG") else None
 
     def script(server) -> int:
         scale = 1.0 if args.draft else 4 / 3
@@ -137,7 +142,7 @@ def main() -> int:
             t0 = time.time()
             print(f"SCENE {sc['name']}", flush=True)
             try:
-                steps.run(s, sc.get("steps") or [], variables)
+                steps.run(s, sc.get("steps") or [], variables, log=step_log)
             except Exception as exc:  # noqa: BLE001
                 server.errors.append(f"scene {sc['name']}: {exc!r}")
             s.sleep(sc.get("hold", 0.6))

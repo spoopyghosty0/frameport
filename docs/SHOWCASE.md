@@ -46,7 +46,7 @@ Shots and scenes use one step language (`scripts/showcase/steps.py`). A step is 
 - hover: {name: "Batman: Arkham Shadow", dy: 0.3}  # …offset inside the element (fraction of its size, or px)
 - click: "Install on Frame"                    # right_click, double_click, drag: [from, …, to]
 - type: "ri"                                   # press: Escape
-- wait_for: "Batman: Arkham Shadow · 2026-10-04 21:50"
+- wait_for: "BONELAB · 2026-10-04 21:50"
 - wait: 1.2
 - hook: {name: held_install, args: ["${new_game}"]}   # the pretend Frame's scripted events
 ```

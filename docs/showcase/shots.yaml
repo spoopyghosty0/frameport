@@ -9,7 +9,7 @@
 #   docs:     where the image is used (checked by the tests: every image a doc shows has an entry here)
 
 vars:
-  game: com.camouflaj.manta          # installed, running on the pretend Frame
+  game: com.camouflaj.manta          # installed on the pretend Frame
   new_game: com.CyanWorlds.Riven     # in the library, not installed yet
 
 defaults:

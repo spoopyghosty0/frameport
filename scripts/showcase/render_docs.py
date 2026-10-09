@@ -29,8 +29,11 @@ MANIFEST = REPO / "docs" / "showcase" / "shots.yaml"
 IMAGES = REPO / "docs" / "images"
 SHOT_KEYS = {"name", "docs", "steps", "viewport", "scale", "crop"}
 # a picture counts as changed when the mean difference per channel exceeds MEAN_LIMIT (0-255 scale) or more than
-# PIXEL_SHARE of its pixels differ by more than PIXEL_LIMIT in some channel
-MEAN_LIMIT, PIXEL_LIMIT, PIXEL_SHARE = 0.5, 24, 0.002
+# PIXEL_SHARE of its pixels differ by more than PIXEL_LIMIT in some channel. Measured: run-to-run noise (the live
+# card's sparkline) stays under 0.007 % of the pixels; the smallest real change seen (the sidebar card showing
+# another game) is 0.12 %
+MEAN_LIMIT, PIXEL_LIMIT, PIXEL_SHARE = 0.5, 24, 0.0004
+ATTEMPTS = 2  # a shot whose steps fail (e.g. the window never connected) is tried once more in a fresh window
 
 
 def load_manifest(path: Path = MANIFEST) -> dict:
@@ -123,28 +126,66 @@ def crop_box(session, crop: dict):
     return Box(crop["x"], crop["y"], crop["width"], crop["height"])
 
 
-def render(shots: list[dict], variables: dict, defaults: dict, out: Path, log=print):
+def render(shots: list[dict], variables: dict, defaults: dict, out: Path, log=print, verify: bool = True):
     """A script for web.Server.run: renders every shot into out/<name>.png."""
     from showcase import steps
-    from showcase.web import call
+
+    def one(server, shot: dict, path: Path) -> None:
+        """Render one shot. Any failing step raises: no picture is taken of a page that didn't get where the steps
+        lead (a window that never connected once produced an empty, unconnected Library)."""
+        vw, vh = shot.get("viewport") or defaults.get("viewport") or (1280, 820)
+        s = server.session((vw, vh))
+        try:
+            steps.run(s, shot.get("steps") or [], variables)
+            s.park(away=True)
+            box = crop_box(s, steps.substitute(shot["crop"], variables)) if shot.get("crop") else None
+            s.shot(path, clip=box)
+        finally:
+            s.close()
+
+    def attempt(server, shot: dict, path: Path) -> bool:
+        """One render into `path` (a failing step: one more try in a fresh window). False when both failed."""
+        for n in range(1, ATTEMPTS + 1):
+            try:
+                one(server, shot, path)
+                return True
+            except Exception as exc:  # noqa: BLE001
+                path.unlink(missing_ok=True)
+                if n < ATTEMPTS:
+                    log(f"RETRY {shot['name']}: {exc!r}")
+                else:
+                    server.errors.append(f"{shot['name']}: {exc!r}")
+        return False
 
     def script(server) -> int:
+        """Every shot is rendered twice, each in a fresh window, and kept only when both agree: the headless GPU
+        now and then draws a glyph wrong ("7.θ W" for "7.30 W"), a fault the settling can't see. Disagreeing
+        renders get a third: the one two of them match is kept."""
         failed = 0
         for shot in shots:
             t0 = time.monotonic()
-            vw, vh = shot.get("viewport") or defaults.get("viewport") or (1280, 820)
-            s = server.session((vw, vh))
-            try:
-                call(s, steps.run, s, shot.get("steps") or [], variables)
-                s.park(away=True)
-                box = crop_box(s, steps.substitute(shot["crop"], variables)) if shot.get("crop") else None
-                s.shot(out / f"{shot['name']}.png", clip=box)
-                log(f"SHOT {shot['name']} ({time.monotonic() - t0:.1f} s)")
-            except Exception as exc:  # noqa: BLE001
-                server.errors.append(f"{shot['name']}: {exc!r}")
+            final = out / f"{shot['name']}.png"
+            takes = []
+            for k in range(3 if verify else 1):
+                path = out / f".take{k}-{shot['name']}.png"
+                if not attempt(server, shot, path):
+                    break
+                takes.append(path)
+                if not verify:
+                    path.replace(final)
+                    break
+                agreed = next((a for i, a in enumerate(takes) for b in takes[i + 1:] if not changed(a, b)), None)
+                if agreed is not None:
+                    agreed.replace(final)
+                    break
+            else:
+                server.errors.append(f"{shot['name']}: three renders, no two alike (an unstable page?)")
+            for p in takes:
+                p.unlink(missing_ok=True)
+            if final.exists():
+                log(f"SHOT {shot['name']} ({time.monotonic() - t0:.1f} s, {len(takes)} renders)")
+            else:
                 failed += 1
-            finally:
-                s.close()
         return 1 if failed else 0
     return script
 
@@ -158,6 +199,8 @@ def main() -> int:
     ap.add_argument("--offline", action="store_true", help="use only cached art")
     ap.add_argument("--allow-missing-art", action="store_true", help="render even when a game got no art")
     ap.add_argument("--keep", type=Path, default=None, help="also keep every raw render in this folder")
+    ap.add_argument("--fast", action="store_true", help="render each shot once (no second render to catch a "
+                    "misdrawn glyph); for trying out a manifest edit")
     args = ap.parse_args()
 
     manifest = load_manifest()
@@ -209,7 +252,7 @@ def main() -> int:
 
     from showcase.web import Server
 
-    script = render(shots, manifest.get("vars") or {}, manifest.get("defaults") or {}, renders)
+    script = render(shots, manifest.get("vars") or {}, manifest.get("defaults") or {}, renders, verify=not args.fast)
     from showcase.fakes import FrozenMonitorSession
 
     return Server(monitor_session=FrozenMonitorSession).run(lambda server: finish(script(server)))

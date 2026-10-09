@@ -8,7 +8,7 @@
 #   hold:    seconds to keep filming after the last step (default 0.6)
 
 vars:
-  game: com.camouflaj.manta        # installed and running on the pretend Frame
+  game: com.camouflaj.manta        # installed on the pretend Frame
   new_game: com.CyanWorlds.Riven   # installed during the tour
 
 title:
@@ -85,7 +85,7 @@ scenes:
     steps:
       - nav: "Monitor"
       - wait: 2.4
-      - hover: "GPU"
+      - hover: "Temperature"   # (a tile only: "GPU" is also the process table's sortable column)
       - wait: 1.0
       - hover: "Battery"
       - wait: 1.0
@@ -99,9 +99,9 @@ scenes:
       - nav: "Screenshots"
       - wait: 1.6
       - click: "Take screenshot"
-      - wait_for: "Batman: Arkham Shadow · 2026-10-04 21:50"
+      - wait_for: "BONELAB · 2026-10-04 21:50"
       - wait: 0.8
-      - click: "Batman: Arkham Shadow · 2026-10-04 21:50"
+      - click: "BONELAB · 2026-10-04 21:50"
       - wait: 2.0
       - click: "Close"
       - wait: 0.4

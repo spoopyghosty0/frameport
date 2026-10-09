@@ -15,12 +15,13 @@
 
 frame:
   battery: 82                       # %
-  running: com.camouflaj.manta      # the game the Monitor tab and the sidebar's live card show
+  running: com.StressLevelZero.BONELAB   # the game the Monitor tab and the sidebar's live card show (it needs
+                                         # store screenshots: Take screenshot adds one of it)
 
 games:
   - package: com.camouflaj.manta
     frame: internal
-    played: 0.05
+    played: 0.6
     tags: [Favorites]
   - package: com.Sanzaru.Wrath2
     art: pick       # the store's image service has a placeholder cover for it: use the picker's Meta result
@@ -32,7 +33,7 @@ games:
     played: 2.4
   - package: com.StressLevelZero.BONELAB
     frame: internal
-    played: 3.1
+    played: 0.05
   - package: com.vertigogames.ImpactDevelopment
     frame: outdated
     played: 4.5

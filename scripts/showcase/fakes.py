@@ -56,49 +56,54 @@ class FakeFS:
         self.shots = self._screenshots()
 
     def _screenshots(self) -> list[dict]:
-        """Sample Steam screenshots for the Screenshots tab, two days, a few games + SteamVR: crops of the games' own
-        store art (hero/landscape) when the library has some (docs screenshots), else colour gradients."""
-
+        """Sample Steam screenshots for the Screenshots tab, two days, a few games + SteamVR. They are the games' own
+        in-game store screenshots (shot_*.jpg from the store details), never cover art: games installed on the
+        pretend Frame first, the running one leading (Take screenshot adds one of it); SteamVR's own shots (taken in
+        a game FramePort didn't install) come from another game's. Only a library without any store screenshots falls
+        back to hero/wide art, else colour gradients."""
         from frameport.artwork import fetch
 
         folder = os.path.join(self.home, "shots")
         os.makedirs(folder, exist_ok=True)
-        games = []
+        state = frame_state()
+        on_frame = {i["package"] for i in state.get("installed") or []}
+        running = state.get("running")
+        real, covers = [], []
         for g in library.games():
             if g.get("kind") == "rift":
                 continue
-            # the store's own screenshots look like real captures; else hero/wide art
             shots_art = sorted(fetch.artwork_dir(g["package"]).glob("shot_*.jpg"))
-            games.append((g, shots_art or [p for p in fetch.files(g["package"]) if p.stem in ("hero", "landscape")],
-                          bool(shots_art)))
-        games.sort(key=lambda ga: (not ga[2], -len(ga[1])))
-        running = frame_state().get("running")
-        if running:  # the running game's shots first (Take screenshot adds one of it)
-            games.sort(key=lambda ga: ga[0]["package"] != running)
-        self.owners = [(g["package"], g.get("title") or g["package"], arts) for g, arts, _real in games[:3]]
-        spare = games[3][1] if len(games) > 3 else []  # SteamVR's own shots (taken outside a FramePort game)
-        self.owners.append((None, "SteamVR", spare))
+            if shots_art:
+                real.append((g, shots_art))
+            else:
+                covers.append((g, [p for p in fetch.files(g["package"]) if p.stem in ("hero", "landscape")]))
+        games = real or covers
+        games.sort(key=lambda ga: (ga[0]["package"] != running, ga[0]["package"] not in on_frame, -len(ga[1]),
+                                   ga[0]["package"]))
+        self.owners = [(g["package"], g.get("title") or g["package"], arts) for g, arts in games[:3]]
+        rest = [arts for g, arts in games[3:] if g["package"] not in on_frame] or [arts for _g, arts in games[3:4]]
+        self.owners.append((None, "SteamVR", rest[0] if rest else []))
+        self._used = [0] * len(self.owners)  # the next screenshot of each owner (no picture shown twice)
         # fixed dates (renders don't change from one day to the next): 6 shots on the first day, 4 on the one before
         # (--gestures drags across the first row)
         shots = []
         for i in range(10):
             t = SHOTS_AT - i * 2400 - (86400 if i >= 6 else 0)
-            shots.append(self._shot(t, i, *self.owners[i % len(self.owners)]))
+            shots.append(self._shot(t, i, i % len(self.owners)))
         return shots
 
-    def _shot(self, t: float, i: int, pkg: str | None, title: str, arts: list) -> dict:
-        """One Steam screenshot (a crop of the game's art; a different one per i, so they don't all look alike)."""
+    def _shot(self, t: float, i: int, owner: int) -> dict:
+        """One Steam screenshot: the owner's next store screenshot, whole (scaled to 1280x720)."""
         from PIL import Image, ImageOps
 
+        pkg, title, arts = self.owners[owner]
         name = time.strftime("%Y%m%d%H%M%S", time.localtime(t)) + "_1.jpg"
         path = os.path.join(self.home, "shots", name)
         if arts:
-            with Image.open(arts[i % len(arts)]) as src:
-                src = src.convert("RGB")
-                zoom = 1.0 + 0.15 * (i % 3) * (src.width < 2 * src.height)
-                w, h = int(src.width / zoom), int(src.height / zoom)
-                x, y = (src.width - w) * (i % 2), (src.height - h) // 2
-                im = ImageOps.fit(src.crop((x, y, x + w, y + h)), (1280, 720))
+            n = self._used[owner]
+            self._used[owner] += 1
+            with Image.open(arts[n % len(arts)]) as src:
+                im = ImageOps.fit(src.convert("RGB"), (1280, 720))
         else:
             im = Image.linear_gradient("L").resize((640, 360)).convert("RGB")
             im = Image.merge("RGB", (im.getchannel(0).point(lambda v, i=i: (v + 40 * i) % 256),
@@ -108,10 +113,10 @@ class FakeFS:
                 "size": os.path.getsize(path), "account": "1", "appid": "250820", "package": pkg, "title": title}
 
     def take_screenshot(self) -> dict:
-        """Take screenshot: a new shot of the running game (another crop of its art), newest of all."""
+        """Take screenshot: a new shot of the running game (its next store screenshot), newest of all."""
         time.sleep(1.2)  # SteamVR captures, Steam saves
         t = max(s["time"] for s in self.shots) + 600
-        shot = self._shot(t, len(self.shots) + 1, *self.owners[0])
+        shot = self._shot(t, len(self.shots) + 1, 0)
         self.shots.insert(0, shot)
         return {"taken": True, "path": shot["path"], "reason": None, "hmd": "Normal"}
 

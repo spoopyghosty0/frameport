@@ -179,6 +179,19 @@ def filters_active(f: dict) -> bool:
         f.get(k, DEFAULT_FILTERS[k]) != DEFAULT_FILTERS[k] for k in ("where", "platform", "status"))
 
 
+def shelf_divider() -> ft.Control:
+    """The line between the "On your Frame" shelf and the grid of every game: a label and a 2 px rule (the portal's
+    blue→orange in dual themes), so the shelf doesn't read as the grid's first row. Part of the shelf: it hides
+    with it."""
+    rule = ft.Container(height=T.px(2), expand=True, border_radius=T.px(1),
+                        gradient=C.portal_gradient(opacity=0.55) if T.DUAL else None,
+                        bgcolor=None if T.DUAL else T.BORDER_STRONG)
+    label = ft.Text(tr("All games").upper(), size=T.T_SMALL, weight=ft.FontWeight.W_600, color=T.TEXT_2,
+                    style=ft.TextStyle(letter_spacing=1.2))
+    return ft.Container(ft.Row([label, rule], spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                        padding=ft.Padding(0, T.S2, T.S2, 0))
+
+
 def shelf_games(games: list[dict], f: dict, frame_info: dict | None, connected: bool, select_mode: bool = False,
                 limit: int = SHELF_MAX) -> list[dict]:
     """The "On your Frame" shelf: games installed on the connected Frame (outdated ones too), most recently used
@@ -279,6 +292,7 @@ class LibraryView:
         self.shelf = ft.Container(ft.Column([
             C.h2(tr("On your Frame")),
             ft.Container(self.shelf_row, padding=ft.Padding(0, 0, 0, T.S2)),
+            shelf_divider(),
         ], spacing=T.S3, tight=True), visible=False)
         self._lock = threading.Lock()
         self._search_timer: threading.Timer | None = None
