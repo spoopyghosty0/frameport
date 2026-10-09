@@ -707,11 +707,11 @@ class CoverButton:
         self.on_click, self.launch, self.reduce = on_click, launch, reduce_motion
         self.hovered = self.starting = False
         motion = (lambda ms, curve=ft.AnimationCurve.EASE_OUT: None if reduce_motion else ft.Animation(ms, curve))
-        play = icon == ft.Icons.PLAY_ARROW_ROUNDED
+        # (Material's play arrow is already drawn right of its box's centre for optical balance: no extra nudge — an
+        # extra one put the triangle visibly off centre)
         self.icon = ft.Icon(icon, size=size * 0.52, color="#FFFFFF")
         self.circle = ft.Container(
-            # the play triangle's weight sits left of its box: nudged right so it looks centred
-            ft.Container(self.icon, padding=ft.Padding(size * 0.07 if play else 0, 0, 0, 0)),
+            self.icon,
             width=size, height=size, border_radius=size / 2, alignment=ft.Alignment.CENTER,
             bgcolor=T.soft("#0B0C10", 0.45), border=ft.Border.all(1.5, T.soft("#FFFFFF", 0.6)),
             blur=ft.Blur(10, 10), shadow=self._shadow(False),

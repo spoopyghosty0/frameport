@@ -546,8 +546,19 @@ def main() -> int:
         mouse["library"] = open_and_shoot(1354, 54, "library-add-menu")
         # type to search: click an empty part of the header, then type (the "-mouse" shot shows "arc" + the matches)
         steps.insert(1, ("library-typed", lambda a: a.library_view.clear_search()))
-        mouse["library-typed"] = lambda page: (page.mouse.click(480, 60), time.sleep(0.5),
-                                               page.keyboard.type("arc", delay=120))
+        def typed(page):
+            page.mouse.click(480, 60)
+            time.sleep(0.5)
+            page.keyboard.type("arc", delay=120)
+            if args.fake_frame:  # the matches' cover buttons: Install (Arcsmith, not installed), Update (Pinball FX)
+                time.sleep(PAINT_SECONDS)
+                for name, pt in (("library-install-hover", (742, 215)), ("library-install-button", (742, 276)),
+                                 ("library-update-button", (357, 276))):
+                    page.mouse.move(*pt, steps=8)
+                    time.sleep(1.2)
+                    page.screenshot(path=str(args.out / f"{name}.png"))
+                page.mouse.move(1300, 700)
+        mouse["library-typed"] = typed
         steps.insert(2, ("library-cleared", lambda a: a.library_view.clear_search()))
         if args.fake_frame:  # the "On your Frame" shelf's first card, hovered: its Play button shows
             steps.insert(3, ("library-shelf-hover", lambda a: None))

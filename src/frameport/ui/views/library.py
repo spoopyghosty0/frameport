@@ -599,7 +599,7 @@ class LibraryView:
         pkg = g["package"]
         w, h = T.px(264), T.px(148)
         button = C.CoverButton(ft.Icons.PLAY_ARROW_ROUNDED, tr("Play on Frame"), lambda e: app.play(pkg, "frame"),
-                               T.px(56), launch=tr("Starting on Frame…"), reduce_motion=app.reduce_motion)
+                               T.px(48), launch=tr("Starting on Frame…"), reduce_motion=app.reduce_motion)
         quick = ft.Container(button.control, left=0, right=0, top=0, bottom=T.px(36), alignment=ft.Alignment.CENTER,
                              opacity=0, animate_opacity=ft.Animation(180, ft.AnimationCurve.EASE_OUT), visible=not busy)
         badges = [C.install_badge("outdated")] if state == "outdated" else []
@@ -775,7 +775,7 @@ class LibraryView:
         overlay = ft.Container(left=0, right=0, top=0, bottom=0, border_radius=T.RADIUS)  # the selected fade
         quick_label, quick_kind = app.quick_action(g)
         # one round Play / Install button in the middle of the cover, shown on hover
-        button = C.CoverButton(quick_icon(quick_kind), quick_label, lambda e: app.primary_action(pkg), T.px(72),
+        button = C.CoverButton(quick_icon(quick_kind), quick_label, lambda e: app.primary_action(pkg), T.px(60),
                                launch=self.starting_text(g) if quick_kind == "play" else None,
                                reduce_motion=app.reduce_motion) if quick_label else None
         quick = ft.Container(button.control, left=0, right=0, top=0, bottom=T.px(56), alignment=ft.Alignment.CENTER,
