@@ -147,9 +147,11 @@ def test_delete_screenshots_only_in_screenshot_folders(monkeypatch, tmp_path):
     with pytest.raises(a.AgentError):
         a.cmd_delete_screenshots({"paths": [str(link_dir / "20260101000000_1.jpg")]})
     assert (outside / "20260101000000_1.jpg").exists()
+    (shots / "20260928184431_1_vr.jpg").write_bytes(b"stereo")  # Steam's stereo copy of a VR screenshot
     r = a.cmd_delete_screenshots({"paths": [target]})
     assert r == {"deleted": [target]}
     assert not os.path.exists(target) and not (shots / "thumbnails/20260928184431_1.jpg").exists()
+    assert not (shots / "20260928184431_1_vr.jpg").exists()
     assert "20260928184431_1.jpg" in (user / "760/screenshots.vdf").read_text()  # Steam's index is left alone
     assert target not in [s["path"] for s in a.cmd_list_screenshots({})["shots"]]
 

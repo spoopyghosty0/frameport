@@ -2082,6 +2082,11 @@ def cmd_delete_screenshots(args):
     for p in paths:
         os.unlink(p)
         deleted.append(p)
+        stem, ext = os.path.splitext(p)
+        try:  # a VR screenshot's stereo copy (<name>_vr.jpg) next to it goes too
+            os.unlink(stem + "_vr" + ext)
+        except FileNotFoundError:
+            pass
         thumbs = os.path.join(os.path.dirname(p), "thumbnails")
         if inside_userdata(thumbs):
             try:
