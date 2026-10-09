@@ -480,6 +480,11 @@ signature hook and Revive→SteamVR are still unproven. Every Rift game in the l
 Platform SDK → the Meta (Link) app in the prefix, logged in with the user's own account, is the real blocker; the
 only public attempt (github.com/michauMiau/oculus-wine-linux, 2026-10) never got OculusSetup.exe (32-bit .NET)
 past its HTTPS config fetch. Scratch files on the Frame: `~/frameport-rifttest/` (scripts t1-t4.sh).
+Meta runtime in the same Wine (2026-10-09): Platform SDK games reach OVRServer's IPC on the Frame. The apparent
+intermittent handshake hang was **OVRLibrarian.exe** (.NET, Wine Mono): under FEX it finishes its work but never exits,
+its AppTracker entry stays, and the runtime then tracks no later client (Meta app, game), so the game waits forever
+for the reply event the runtime only sets after identifying it (found with wineserver `+server` traces PC vs Frame).
+Ending OVRLibrarian before the game → game tracked, "Missing entitlement" exactly as on the PC (needs a login).
 Uninstall (Quest, saves kept) used to leave `deployment.json` → still "installed"; fixed (agent v16).
 
 **Discovery/network:** Developer-Mode SteamOS devices announce `_steamos-devkit._tcp` (TXT `login=steamos`) — use it;
