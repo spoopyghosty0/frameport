@@ -718,6 +718,18 @@ wheels = [
 ]
 
 [[package]]
+name = "flet-video"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flet" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/b6/d785b025628fb334b103bc69def5fcaf0940ce3e5c54f230b64301a73408/flet_video-1.0.2.tar.gz", hash = "sha256:669aaa9c570b9520cfddb07242cf9851261c87be5dc88874ba177618dc88bf94", size = 24093 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/07/2dee37b3cc723a6784b8f30219d658ca2e75c848018e68d8fa8eded8c0c4/flet_video-1.0.2-py3-none-any.whl", hash = "sha256:392ccd38a2dd4d1ed3befea5f0ec1095b75d2520741c7c49a1421ea70c1d0779", size = 25832 },
+]
+
+[[package]]
 name = "flet-web"
 version = "1.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -768,13 +780,14 @@ wheels = [
 
 [[package]]
 name = "frameport"
-version = "0.3.4"
+version = "0.12.0"
 source = { editable = "." }
 dependencies = [
     { name = "capstone" },
     { name = "flet" },
     { name = "flet-desktop" },
     { name = "flet-dropzone" },
+    { name = "flet-video", marker = "sys_platform != 'linux'" },
     { name = "paramiko" },
     { name = "psutil" },
     { name = "pyaxmlparser" },
@@ -803,6 +816,7 @@ requires-dist = [
     { name = "flet-cli", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "flet-desktop", specifier = ">=1.0" },
     { name = "flet-dropzone", specifier = ">=0.4.0" },
+    { name = "flet-video", marker = "sys_platform != 'linux'", specifier = "==1.0.2" },
     { name = "flet-web", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "paramiko", specifier = ">=3.4" },
     { name = "playwright", marker = "extra == 'dev'", specifier = ">=1.40" },

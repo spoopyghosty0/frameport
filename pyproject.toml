@@ -22,6 +22,10 @@ dependencies = [
     "flet>=1.0",
     "flet-desktop>=1.0",
     "flet-dropzone>=0.4.0",  # drag-and-drop uploads in the Files tab (packaged app only; Apache-2.0)
+    # the live view inside the window (media_kit/libmpv; Apache-2.0). Not on Linux: there the plugin links libmpv.so.1
+    # and a bundle with it wouldn't start without that library (Linux plays in an mpv window or the browser instead).
+    # flet-video pins flet exactly: keep it at the installed flet's version.
+    "flet-video==1.0.2; sys_platform != 'linux'",
     "paramiko>=3.4",
     "zeroconf>=0.132",
     "psutil>=5.9",

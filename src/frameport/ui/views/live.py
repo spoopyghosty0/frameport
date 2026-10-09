@@ -12,10 +12,12 @@ from typing import TYPE_CHECKING
 
 import flet as ft
 
+from ...core import applog, library
 from ...errors import explain
 from ...i18n import tr, tr_n
 from .. import components as C
 from .. import glyphs as G
+from .. import live_players as LP
 from .. import theme as T
 from .files_dialog import human
 
@@ -65,6 +67,17 @@ def live_features() -> list[tuple[str, str, str]]:
              tr("The Frame's own video encoder does the work where it can."))]
 
 
+def player_label(mode: str) -> str:
+    return {"auto": tr("Automatic"), "app": tr("In this window"), "mpv": tr("mpv window"),
+            "browser": tr("Web browser")}[mode]
+
+
+def where_text(mode: str | None) -> str:
+    """Where a running stream is shown (the bar's detail line)."""
+    return {"app": tr("Playing below, in this window."), "mpv": tr("Playing in an mpv window."),
+            "browser": tr("Playing in your web browser.")}.get(mode or "", "")
+
+
 def default_quality() -> str:
     from ...install.livestream import DEFAULT_QUALITY
 
@@ -87,10 +100,23 @@ class LiveView:
                                       options=[ft.DropdownOption(key=k, text=t) for k, t in QUALITIES],
                                       on_select=self._set_quality)
         self.start_btn = C.primary(tr("Start live view"), ft.Icons.PLAY_ARROW_ROUNDED, self._start)
-        self.open_btn = C.secondary(tr("Open viewer"), ft.Icons.OPEN_IN_NEW_ROUNDED, self._open)
+        self.open_btn = C.secondary(tr("Open in browser"), ft.Icons.OPEN_IN_NEW_ROUNDED, self._open)
         self.stop_btn = C.ghost(tr("Stop"), ft.Icons.STOP_ROUNDED, self._stop_click)
+        self.sound_btn = C.ghost(tr("Sound off"), ft.Icons.VOLUME_OFF_ROUNDED, self._toggle_sound)
+        self.window_btn = C.ghost(tr("Show the mpv window"), ft.Icons.OPEN_IN_NEW_ROUNDED, self._reopen_mpv)
         self.url = C.meta("", selectable=True)
         self._push = None  # components.LoopUpdater (updates from background threads; a direct update dropped patches)
+        # where the stream plays (ui/live_players): the user's pick, what's available here, what plays it now
+        self.player = library.setting(LP.SETTING, "auto")
+        self.embedded_ok: bool | None = None  # decided at the first mount (needs page.web)
+        self.mpv_exe: str | None = None
+        self.mode: str | None = None  # "app" | "mpv" | "browser" while streaming
+        self.mpv = None  # live_players.MpvWindow
+        self.video = None  # the flet-video control while it plays in the window
+        self.muted = False
+        self.screen = ft.Container(expand=True, visible=False, bgcolor="#000000", border_radius=T.RADIUS,
+                                   clip_behavior=ft.ClipBehavior.ANTI_ALIAS, border=ft.Border.all(1, T.BORDER))
+        self.player_dd = None  # built at the first mount (its options depend on what's available)
 
     # ---------------------------------------------------------------- building
     def mount(self) -> ft.Control:
@@ -103,7 +129,20 @@ class LiveView:
                               tr("Connect to your Steam Frame to stream its view and sound to this PC."),
                               C.primary(tr("Connect"), ft.Icons.LINK_ROUNDED, lambda e: app.go("frame")),
                               features=live_features())], expand=True)
+        if self.embedded_ok is None:
+            self.embedded_ok = LP.embedded_available(web=bool(getattr(app.page, "web", False)))
+            self.mpv_exe = LP.find_mpv()
+            applog.log.info("live view players: in the window %s, mpv %s", self.embedded_ok, self.mpv_exe or "no")
         if self.root is None:
+            avail = [m for m, ok in (("app", self.embedded_ok), ("mpv", bool(self.mpv_exe)), ("browser", True)) if ok]
+            if self.player not in ("auto", *avail):
+                self.player = "auto"
+            self.player_dd = C.dropdown(label=tr("Play in"), value=self.player, width=T.px(190),
+                                        options=[ft.DropdownOption(key=m, text=player_label(m))
+                                                 for m in ("auto", *avail)],
+                                        on_select=self._set_player)
+            self.where = C.meta("", T.TEXT_2)
+            self.idle_text = C.body("", T.TEXT_2, text_align=ft.TextAlign.CENTER)
             parts = C.transit_parts()
             h = T.px(88)
             self.idle_start = C.primary(tr("Start live view"), ft.Icons.PLAY_ARROW_ROUNDED, self._start, big=True)
@@ -114,8 +153,7 @@ class LiveView:
                        spacing=T.S4, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ft.Container(height=T.S2),
                 C.title(tr("Ready when you are"), T.T_DISPLAY),
-                C.body(tr("Start the live view to watch the headset in your browser."), T.TEXT_2,
-                       text_align=ft.TextAlign.CENTER),
+                self.idle_text,
                 ft.Container(height=T.S2),
                 self.idle_start,
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=T.S2, tight=True),
@@ -125,48 +163,68 @@ class LiveView:
                                   horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
             self.root = ft.Column([
                 app.top_bar(heading, sub),
-                ft.Row([C.meta(tr("The headset's view and sound open in your web browser. Stop the stream when "
-                                  "you're done."), T.TEXT_2), C.help_icon("live_view", 16)],
+                ft.Row([self.where, C.help_icon("live_view", 16)],
                        spacing=T.px(2), tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                # status, Start/Open/Stop and Quality in one bar
+                # status, Start/Stop, where it plays and Quality in one bar
                 C.card(ft.Column([
                     ft.Row([self.dot, ft.Column([self.state, self.detail], spacing=T.px(2), expand=True),
-                            self.quality_dd, self.start_btn, self.open_btn, self.stop_btn],
+                            self.player_dd, self.quality_dd, self.start_btn, self.sound_btn, self.window_btn,
+                            self.open_btn, self.stop_btn],
                            spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     self.url,
                 ], spacing=T.S2)),
                 self.idle,
+                self.screen,  # the stream, when it plays in this window
             ], spacing=T.S4, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, expand=True)
         self._refresh(update=False)
         self._ensure_ticker()
         return self.root
 
     def _refresh(self, update: bool = True) -> None:
+        if self.root is None:  # not built yet (e.g. stop() on a disconnect before the tab was opened)
+            return
         live = self.live
         running = bool(live and live.running)
+        first = LP.order(self.player, bool(self.embedded_ok), bool(self.mpv_exe))[0]
         if live is None:
             self.dot.bgcolor, self.state.value = T.TEXT_3, tr("Not streaming")
-            self.detail.value = tr("Starts a video stream on the Frame and opens it in your browser.")
+            self.detail.value = {"app": tr("Starts a video stream on the Frame and shows it here."),
+                                 "mpv": tr("Starts a video stream on the Frame and opens it in an mpv window.")
+                                 }.get(first, tr("Starts a video stream on the Frame and opens it in your browser."))
         else:
             st = live.status()
             ok = running and st.get("ready")
             warning = health_text(st) if ok else ""
             self.dot.bgcolor = T.WARN if warning else T.OK if ok else T.ERROR if st.get("ended") else T.WARN
             self.state.value = status_text(st)
-            self.detail.value = (warning if ok else "" if st.get("ended")
+            self.detail.value = (warning or where_text(self.mode) if ok else "" if st.get("ended")
                                  else tr("The first picture takes a few seconds."))
+        self.where.value = {
+            "app": tr("The headset's view and sound play right here. Open it in your browser any time."),
+            "mpv": tr("The headset's view and sound open in an mpv window. Open it in your browser any time."),
+        }.get(self.mode if running else first,
+              tr("The headset's view and sound open in your web browser. Stop the stream when you're done."))
+        self.idle_text.value = {"app": tr("Start the live view to watch the headset here."),
+                                "mpv": tr("Start the live view to watch the headset in an mpv window.")
+                                }.get(first, tr("Start the live view to watch the headset in your browser."))
         self.start_btn.visible = not running
         self.start_btn.disabled = self.idle_start.disabled = self._busy
         self.open_btn.visible = self.stop_btn.visible = running
+        self.sound_btn.visible = running and self.mode == "app"
+        self.sound_btn.content = tr("Sound on") if self.muted else tr("Sound off")
+        self.sound_btn.icon = ft.Icons.VOLUME_UP_ROUNDED if self.muted else ft.Icons.VOLUME_OFF_ROUNDED
+        self.window_btn.visible = running and self.mode == "mpv" and not (self.mpv and self.mpv.alive)
         self.quality_dd.disabled = running or self._busy
         self.url.value = (tr("Viewer address on this PC: {url}").format(url=live.url) if running else "")
         self.url.visible = running
         self.idle.visible = live is None
+        self.screen.visible = running and self.mode == "app"
         if update:  # called from the ticker / start / stream-end threads: send through Flet's event loop
             if self._push is None:
                 self._push = C.LoopUpdater(self.app.page)
-            self._push(self.dot, self.state, self.detail, self.start_btn, self.open_btn, self.stop_btn,
-                       self.quality_dd, self.url, self.idle, self.idle_start)
+            self._push(self.dot, self.state, self.detail, self.where, self.start_btn, self.open_btn, self.stop_btn,
+                       self.sound_btn, self.window_btn, self.quality_dd, self.url, self.idle, self.idle_text,
+                       self.idle_start, self.screen)
 
     def _ensure_ticker(self) -> None:
         if self._ticker and self._ticker.is_alive():
@@ -184,6 +242,19 @@ class LiveView:
     def _set_quality(self, e) -> None:
         self.quality = e.control.value or default_quality()
 
+    def _set_player(self, e) -> None:
+        """Play in…: remembered; while streaming, the stream moves there now."""
+        self.player = e.control.value or "auto"
+        library.set_setting(LP.SETTING, self.player)
+        if self.live and self.live.running:
+            self.app.run_bg(self._switch_player)
+        else:
+            self._refresh()
+
+    def _switch_player(self) -> None:
+        self._dismiss_player()
+        self._present()
+
     def _start(self, e=None) -> None:
         if self._busy or (self.live and self.live.running):
             return
@@ -198,7 +269,7 @@ class LiveView:
             if self.live:
                 self.live.stop()
             self.live = livestream.start(self.app.target.frame, quality=self.quality)
-            self.live.on_end = lambda why: self._refresh()
+            self.live.on_end = lambda why: self._on_stream_end()
         except Exception as exc:  # noqa: BLE001
             self.live = None
             self.app.toast(tr("Couldn't start the live view: {exc}").format(exc=explain(exc)), error=True)
@@ -206,7 +277,74 @@ class LiveView:
             self._busy = False
         self._refresh()
         if self.live:
-            self._open()
+            self._present()
+
+    def _present(self, tried: tuple[str, ...] = ()) -> None:
+        """Show the running stream in the first player that works here (the user's pick first), falling back to the
+        browser. Runs in a background thread (mpv is given a moment to show it could open the stream)."""
+        live = self.live
+        if not (live and live.running):
+            return
+        for mode in LP.order(self.player, bool(self.embedded_ok), bool(self.mpv_exe)):
+            if mode in tried:
+                continue
+            try:
+                if mode == "app":
+                    self._show_in_window(live)
+                elif mode == "mpv":
+                    self.mpv = LP.MpvWindow(self.mpv_exe, LP.stream_url(live.url), tr("FramePort live view")).start()
+                else:
+                    self.app.open_url(live.url)
+            except Exception as exc:  # noqa: BLE001 - try the next one
+                applog.log.warning("live view: the %s player failed: %s", mode, exc)
+                tried = (*tried, mode)
+                continue
+            self.mode = mode
+            if tried:  # the user's (or the first) choice didn't work: say where it went instead
+                self.app.toast(tr("The live view couldn't play {first}, so it opened {where}.").format(
+                    first=self._place(tried[0]), where=self._place(mode)))
+            break
+        self._refresh()
+
+    @staticmethod
+    def _place(mode: str) -> str:
+        return {"app": tr("in this window"), "mpv": tr("in an mpv window"), "browser": tr("in your browser")}[mode]
+
+    def _show_in_window(self, live) -> None:
+        self.video = LP.video_control(LP.stream_url(live.url), on_error=self._video_failed,
+                                      on_complete=self._video_failed, muted=self.muted)
+        self.screen.content = self.video
+
+    def _video_failed(self, e=None) -> None:
+        """The in-window player reported an error or stopped while the stream still runs: next player."""
+        if self.mode != "app" or not (self.live and self.live.running):
+            return
+        applog.log.warning("live view: the in-window player stopped (%s)", getattr(e, "data", ""))
+        self._dismiss_player()
+        self.app.run_bg(self._present, ("app",))
+
+    def _dismiss_player(self) -> None:
+        if self.mpv:
+            self.mpv.stop()
+            self.mpv = None
+        if self.video is not None:
+            self.screen.content, self.video = None, None
+        self.mode = None
+        self._refresh()
+
+    def _toggle_sound(self, e=None) -> None:
+        self.muted = not self.muted
+        if self.video is not None:
+            self.video.muted = self.muted
+            C.update(self.video)
+        self._refresh()
+
+    def _reopen_mpv(self, e=None) -> None:
+        """The mpv window was closed: open it again (or fall back to the browser)."""
+        self.app.run_bg(self._present, ("app",))
+
+    def _on_stream_end(self) -> None:
+        self._dismiss_player()
 
     def _open(self, e=None) -> None:
         if self.live and self.live.running:
@@ -218,6 +356,7 @@ class LiveView:
     def stop(self) -> None:
         """Stop streaming (also called when the Frame disconnects or the app closes)."""
         live, self.live = self.live, None
+        self._dismiss_player()
         if live:
             live.stop()
         self._refresh()

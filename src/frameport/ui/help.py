@@ -132,8 +132,10 @@ HELP: dict[str, str] = _Translated({
                   "/sdcard/Documents); each installed game also has its own storage (its /sdcard). Apps find files "
                   "by browsing folders. Video players that list only their own folder (for example 4XVR's Internal "
                   "Storage = 4XPlayer): upload into that folder in the game's storage.",
-    "live_view": "The picture opens in your default web browser, where it plays smoothly and can go full screen. "
-                 "It shows the headset's view with its sound (click Sound on in the player) whatever is running: "
+    "live_view": "The picture plays right in this window where FramePort can (Windows and macOS), else in an mpv "
+                 "window if mpv is installed, else in your web browser — Play in picks one, and Open in browser "
+                 "always works too (full screen, Sound on in the player). "
+                 "It shows the headset's view with its sound whatever is running: "
                  "Steam's menus, SteamVR or a game; while the headset sleeps the picture is black and updates about "
                  "once a second. The Frame's hardware video encoder does the work (if it isn't available, the "
                  "processor does, which costs a game more): stop the stream when you're done.",
