@@ -11,8 +11,9 @@
 // Haptics (GitHub #9, found by Klownicle in Lucky's Tale): overport's dispatcher converts an
 // XrHapticAmplitudeEnvelopeVibrationFB with its nanosecond duration taken as seconds, so one vibration allocates an
 // enormous sample buffer and the Frame runs out of memory and freezes. The shim hands OVRPlugin its own
-// xrApplyHapticFeedback, which turns such an envelope into a plain XrHapticVibration (same duration, its peak
-// amplitude) before the dispatcher sees it. Everything else passes through unchanged.
+// xrApplyHapticFeedback, which turns such an envelope into a plain XrHapticVibration (same duration, its RMS
+// amplitude) before the dispatcher sees it; PCM vibrations (XrHapticPcmVibrationFB) are converted the same way.
+// Everything else passes through unchanged.
 // Upstream: ovrport/app#73; tracked in FramePort GitHub #74.
 #include <openxr/openxr.h>
 #include <android/log.h>
@@ -67,6 +68,23 @@ static XRAPI_ATTR XrResult XRAPI_CALL apply_haptic_feedback(XrSession session, c
         if (haptics_logged++ < 3)
             __android_log_print(ANDROID_LOG_INFO, TAG, "extension shim: haptic envelope (%u samples, %lld ns) -> "
                                 "vibration %.2f", env->amplitudeCount, (long long)env->duration, plain.amplitude);
+        return overport_haptics(session, info, (const XrHapticBaseHeader *)&plain);
+    }
+    if (feedback && feedback->type == XR_TYPE_HAPTIC_PCM_VIBRATION_FB) {
+        // the other buffered form goes through the same conversion: a plain vibration as long as the samples (all
+        // consumed), with their RMS
+        const XrHapticPcmVibrationFB *pcm = (const XrHapticPcmVibrationFB *)feedback;
+        double sum = 0.0;
+        for (uint32_t i = 0; pcm->buffer && i < pcm->bufferSize; ++i)
+            sum += (double)pcm->buffer[i] * pcm->buffer[i];
+        float rms = pcm->bufferSize ? (float)sqrt(sum / pcm->bufferSize) : 0.0f;
+        XrDuration duration = pcm->sampleRate > 0 ? (XrDuration)(pcm->bufferSize / pcm->sampleRate * 1e9) : 0;
+        XrHapticVibration plain = {XR_TYPE_HAPTIC_VIBRATION, NULL, duration > 0 ? duration : XR_MIN_HAPTIC_DURATION,
+                                   XR_FREQUENCY_UNSPECIFIED, rms > 1.0f ? 1.0f : rms};
+        if (pcm->samplesConsumed) *pcm->samplesConsumed = pcm->bufferSize;
+        if (haptics_logged++ < 3)
+            __android_log_print(ANDROID_LOG_INFO, TAG, "extension shim: haptic PCM (%u samples at %.0f Hz) -> "
+                                "vibration %.2f", pcm->bufferSize, pcm->sampleRate, plain.amplitude);
         return overport_haptics(session, info, (const XrHapticBaseHeader *)&plain);
     }
     return overport_haptics(session, info, feedback);

@@ -340,3 +340,42 @@ def test_install_builds_a_game_that_was_never_built(tmp_path, monkeypatch):
                              add_to_library=lambda pkgs, rep: None)
     pipeline.install_game("com.x.fresh", target, None)  # used to fail with KeyError 'apk'
     assert installed == [out]
+
+
+def test_frame_wait_follows_unitys_frame_begins():
+    """Sniper Elite VR deadlocked at a scene switch: the shim's xrWaitFrame waited for a frame Unity never began. The
+    begin/end lookups in libunity.so go to the shim too (same-length, in-place renames) and the shim exports
+    them."""
+    import io
+
+    from elftools.elf.elffile import ELFFile
+
+    from frameport.patches.frame import artifact
+    from frameport.patches.frame import unity_oculus_check as C
+
+    for old, new in ((C.UPDATE, C.SHIM_UPDATE), (C.BEGIN, C.SHIM_BEGIN), (C.END, C.SHIM_END)):
+        assert len(old) == len(new)
+    shim = ELFFile(io.BytesIO(artifact("arm64-v8a", C.SHIM)))
+    exported = {s.name for s in shim.get_section_by_name(".dynsym").iter_symbols() if s["st_shndx"] != "SHN_UNDEF"}
+    assert {C.SHIM_UPDATE, C.SHIM_BEGIN, C.SHIM_END} <= exported
+    log = ("10-06 15:01:12.256  1232  1255 I FrameBridge: ovrp frame loop shim: frame 2175: the last waited frame "
+           "wasn't begun within 50 ms, not waiting (2 times)")
+    assert "unity-frame-not-begun" in {f.id for f in triage(log, "RUNNING", None).findings}
+
+
+def test_frame_loop_fixes_are_per_game_settings():
+    """The frame-begin gate and the held-back physics update (Sniper Elite VR) are off by default: BattleSisters'
+    hands lagged and its loading screen stuttered with them; Sniper's recipe turns them on."""
+    from pathlib import Path
+
+    import yaml
+
+    from frameport.patches import settings
+
+    src = Path(settings.__file__).read_text()
+    assert '("ovrp_begin_gate", "int", 0,' in src and '("ovrp_hold_physics", "int", 0,' in src
+    shim = (Path(__file__).parents[1] / "native/ovrpshim/ovrpshim.c").read_text()
+    assert "if (!begin_gate) return 1;" in shim and "if (hold_physics && step == STEP_PHYSICS" in shim
+    recipe = yaml.safe_load((Path(__file__).parents[1] / "catalog/games/com.JustAddWater.SniperEliteVR.yaml")
+                            .read_text())
+    assert recipe["adapter"]["ovrp_begin_gate"] == 1 and recipe["adapter"]["ovrp_hold_physics"] == 1

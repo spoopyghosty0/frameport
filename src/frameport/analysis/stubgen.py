@@ -24,12 +24,21 @@ def _elf_hash(name: bytes) -> int:
     return h
 
 
-def build_stub_library(symbols: list[str], soname: str = "libovrstubs.so", abi: str = "arm64-v8a") -> bytes:
+def build_stub_library(symbols: list[str], soname: str = "libovrstubs.so", abi: str = "arm64-v8a",
+                       result: int = 0) -> bytes:
+    """`result`: what every function returns (a 32-bit int; arm64 only for values other than 0), e.g. OVRPlugin's
+    ovrpFailure (-1000) for stand-ins whose callers must not trust untouched output arguments."""
     is64 = abi == "arm64-v8a"
     symbols = sorted(set(symbols))
+    if result and not (is64 and -0x10000 <= result <= 0xFFFF):
+        raise ValueError(f"stub result {result} not supported for {abi}")
     if is64:
         machine, ehsize, phentsize, shentsize, symsize, dynsize = 183, 64, 56, 64, 24, 16  # EM_AARCH64
         body = struct.pack("<II", 0xD2800000, 0xD65F03C0)  # mov x0, #0 ; ret
+        if result > 0:  # movz w0, #result ; ret
+            body = struct.pack("<II", 0x52800000 | result << 5, 0xD65F03C0)
+        elif result < 0:  # movn w0, #~result ; ret  (w0 = result)
+            body = struct.pack("<II", 0x12800000 | (~result & 0xFFFF) << 5, 0xD65F03C0)
     else:
         machine, ehsize, phentsize, shentsize, symsize, dynsize = 40, 52, 32, 40, 16, 8  # EM_ARM
         body = struct.pack("<II", 0xE3A00000, 0xE12FFF1E)  # mov r0, #0 ; bx lr

@@ -33,6 +33,16 @@ signatures:
     severity: fatal
     diagnosis: Unity's render thread crashed inside the Frame's GL driver (Mesa/Zink); the picture freezes or stays grey. Known triggers - an OVROverlay copy (try "Unity - skip OVROverlay layers", e.g. The Room VR), MSAA switched on at runtime, a GPU hang (zink DEVICE LOST).
     suggest: [frame.unity_no_overlay_copy, frame.unity_runtime_msaa_off]
+  - id: unreal-msrtt-crash
+    pattern: 'fault addr 0x10000 in tid \d+ \((RHIThread|RenderThread)'
+    severity: fatal
+    diagnosis: The game's render thread jumped to address 0x10000 inside the Frame's GL driver (Mesa/Zink) a few seconds after start. Zink looks up a render-pass cache slot past its end when a game renders through multisampled render-to-texture (Unreal's mobile MSAA, e.g. Star Wars Pinball VR). Load the GL shim, which hides that extension.
+    suggest: [frame.unreal_gl_shim, frame.unity_gl_shim]
+  - id: pac-unpaired
+    pattern: 'ILL_ILLOPN\), fault addr 0x[0-9a-f]+ \(\*pc=0xd50323bf\)'
+    severity: fatal
+    diagnosis: The game crashed on a return-address check (autiasp) its code never signed. The Quest's CPU ignores these checks, the Steam Frame's enforces them; some OpenSSL assembly in game engines has such unpaired checks (e.g. Star Wars Pinball VR on its first network connection, thread HttpManager).
+    suggest: [frame.pac_hints]
   - id: swapchain-rect-invalid
     pattern: 'xrEndFrame failed -25\b'
     severity: fatal
@@ -94,6 +104,12 @@ signatures:
     diagnosis: Unity didn't start its Oculus VR device (older Unity checks for Meta's system apps first), so the game
       runs as a hidden 2D app.
     suggest: [frame.unity_oculus_check]
+  - id: unity-frame-not-begun
+    pattern: 'frame loop shim: frame \d+: the last waited frame wasn.t begun'
+    severity: info
+    diagnosis: Unity skipped beginning a frame (typically while it activates a scene); FramePort's frame wait didn't
+      wait for that frame instead of blocking the game. A few at each scene load are normal.
+    suggest: []
   - id: sdl-no-clipboard
     pattern: 'ClipboardManager\.addPrimaryClipChangedListener|SDLClipboardHandler\.<init>'
     severity: fatal
@@ -229,6 +245,12 @@ signatures:
       voice chat a few seconds after the logo).
     suggest: [frame.ovr_microphone]
     supersedes: [native-crash]
+  - id: slz-vulkan-hook-crash
+    pattern: 'SLZ Graphics plugin loading![\s\S]{0,20000}?E CRASH   : .*pc  0000000000000000'
+    severity: fatal
+    diagnosis: Stress Level Zero's graphics plugin (libSLZQuestNative.so) hooks Unity's Vulkan start-up and calls an invalid function there on the Frame (e.g. BONELAB 1.2974); the game crashes or hangs before its first frame.
+    suggest: [frame.slz_vulkan_hooks]
+    supersedes: [java-crash, native-crash]
   - id: native-crash
     pattern: 'Fatal signal (\d+) \(SIG[A-Z]+\)'
     severity: fatal

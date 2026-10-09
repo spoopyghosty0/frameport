@@ -1,0 +1,25 @@
+package: com.YourCompany.SWP_VR
+title: Star Wars Pinball VR
+tested_version: '1.4'
+source_hint: Star Wars Pinball VR
+engine: Unreal
+xr: VrApi
+status: works
+notes: Plays (owner's headset test); one short audio hiccup seen.
+details: 'Unreal 4.25 (GLES) built against OVRPlugin 1.44. Four Frame problems in a row: Zink crashed on Unreal''s
+  multisampled render-to-texture (fault addr 0x10000 on the RHIThread): frame.unreal_gl_shim, which keeps Unreal''s
+  multiview and draws those passes single-sampled; OVRPort''s OVRPlugin lacks ovrp_GetPTWNear, so Unreal''s Oculus
+  module never started VR (then a null pointer in GetMultiViewSceneColor): frame.unreal_ovrp_entrypoints; the engine''s
+  OpenSSL assembly has unpaired return-address checks the Frame''s CPU enforces (SIGILL on the HttpManager thread):
+  frame.pac_hints. Needs its OBB (main.10765).'
+frame:
+- frame.unreal_gl_shim
+- frame.unreal_ovrp_entrypoints
+- frame.pac_hints
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-08'
+  issue: 83
+updated: '2026-10-08'
+min_app: 0.12.1

@@ -1,20 +1,25 @@
 package: com.StressLevelZero.BONELAB
 title: BONELAB
-status: issues
-notes: Build 1.2068 plays (head tracking and controls work with frame.unity_user_presence); the newer build
-  1.2974 crashes at start (Vulkan), no fix yet.
-details: The game runs (72 fps), but its player body stayed frozen - no head tracking, the controllers stuck to the
+status: works
+notes: Builds 1.2068 and 1.2974 play (owner's headset tests). One recipe serves both builds - 1.2068 needs frame.unity_user_presence (head tracking and controls); 1.2974 also needs
+  frame.slz_vulkan_hooks (72 fps after about 35 s of shader prewarming), which changes nothing on 1.2068.
+details: Both builds - the game runs (72 fps), but its player body stayed frozen - no head tracking, the controllers stuck to the
   model, no buttons - although OpenXR input and OVRPlugin's poses were fine. A few seconds after start (when Unity
   switches XR loaders) OVRPlugin reports the worn headset as not worn (ovrp_GetUserPresent2 -> 0), and BONELAB's
   Marrow rig only follows the player while Unity's HMD device reports UserPresence (OpenControllerRig checks
-  XRHMD.IsUserPresent every frame). frame.unity_user_presence reports the headset as worn. Build 1.2974 crashed
-  earlier in vkCreateInstance from the game's own Vulkan hooks (libSLZQuestNative.so); not retested.
-tested_version: 1.2068.34555
+  XRHMD.IsUserPresent every frame). frame.unity_user_presence reports the headset as worn. Build 1.2974 only - it adds Stress
+  Level Zero's graphics plugin (libSLZQuestNative.so), which hooks Unity's Vulkan start-up (vkCreateInstance/
+  vkCreateDevice) and vkCreateSampler; on the Frame its vkCreateInstance wrapper calls an invalid pointer right after
+  OVRPlugin's pre-init instance is destroyed (a jump to 0, into an unloaded library, or a hang). frame.slz_vulkan_hooks
+  switches its two registrations off, so Unity starts Vulkan itself; the plugin's pipeline cache isn't used.
+tested_version: 1.2974.57485
 engine: Unity
 xr: OpenXR
 frame:
 - frame.unity_user_presence
+- frame.slz_vulkan_hooks
 verified:
-  date: '2026-10-06'
-updated: '2026-10-06'
+  date: '2026-10-08'
+updated: '2026-10-08'
 source_hint: BONELAB
+min_app: 0.12.1

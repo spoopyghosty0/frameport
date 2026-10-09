@@ -772,3 +772,67 @@ def test_avatar_stub_keeps_the_loaders_functions(tmp_path, quest_manifest):
         assert p.apply(base.ApkContext(ws, a, {}, Reporter(), {p.id: {}}))
         stub = ws.read_lib("libovravatarloader.so")
         assert elf.dyn_symbols(stub, True) == {"ovrAvatar_InitializeAndroid", "ovrAvatarMessage_Pop"}
+
+
+def test_unreal_gl_shim_offered_for_unreal_gles_only():
+    """Star Wars Pinball VR (GitHub #83): Zink crashes Unreal's MSRTT path; the shim is an option, not a suggestion."""
+    shim = base.get("frame.unreal_gl_shim")
+    gles = _analysis(engine="Unreal", graphics="GLES or unknown (no Vulkan declaration)")
+    assert shim.applies(gles) and shim.detect(gles) is None
+    assert not shim.applies(_analysis(engine="Unreal"))  # Vulkan
+    assert not shim.applies(_analysis(engine="Unity", graphics="GLES (Unity boot.config)"))
+    assert not shim.applies(gles.__class__(**{**gles.__dict__, "abis": ["armeabi-v7a"]}))
+
+
+def test_gl_shim_keeps_unreal_multiview_msrtt():
+    """Unreal 4.25 enables multiview only with GL_OVR_multiview_multisampled_render_to_texture listed: the shim keeps it
+    for Unreal and draws its function single-sampled (the prebuilt library must be rebuilt from the current source)."""
+    from frameport.patches.frame import artifact
+
+    shim = artifact("arm64-v8a", "libglshim.so")
+    assert b"multiview multisampled render-to-texture (%d samples) drawn single-sampled" in shim
+    assert b"glFramebufferTextureMultiviewOVR\0" in shim
+
+
+def test_slz_vulkan_hooks_switches_off_both_registrations(tmp_path, quest_manifest):
+    """BONELAB 1.2974: SLZ's graphics plugin crashed Unity's Vulkan start-up; only its two registrations go."""
+    import struct
+
+    from frameport.patches.frame import slz_vulkan_hooks as S
+
+    lib = _fixture("libfakeslz_arm64.so")
+    sites = S.find_registrations(lib)
+    assert len(sites) == 2
+    apk = _apk(tmp_path, quest_manifest)
+    with zipfile.ZipFile(apk, "a") as z:
+        z.writestr(f"lib/arm64-v8a/{S.LIB}", lib)
+    p = base.get("frame.slz_vulkan_hooks")
+    a = _analysis(engine="Unity", libs=["libunity.so", S.LIB])
+    assert p.applies(a) and p.detect(a).recommended
+    assert not p.applies(_analysis(engine="Unity", libs=["libunity.so"]))
+    with ApkWorkspace(apk) as ws:
+        ctx = base.ApkContext(ws, a, {}, Reporter(), {})
+        assert p.apply(ctx)
+        assert p.validate(ctx) == [("SLZ Vulkan hooks off", True, "")]
+        assert not p.apply(ctx)  # nothing left to switch off
+        out = ws.write(tmp_path / "out.apk")
+    with zipfile.ZipFile(out) as z:
+        patched = z.read(f"lib/arm64-v8a/{S.LIB}")
+    changed = [i for i in range(0, len(lib), 4) if lib[i:i + 4] != patched[i:i + 4]]
+    assert changed == sites and all(struct.unpack_from("<I", patched, o)[0] == S.NOP for o in sites)
+
+
+def test_bonelab_recipe_serves_both_builds():
+    """One catalog entry for BONELAB 1.2068 (no SLZ plugin: the Vulkan-hook patch changes nothing) and 1.2974."""
+    from pathlib import Path
+
+    import yaml
+
+    entry = yaml.safe_load((Path(__file__).resolve().parents[1] / "catalog/games/com.StressLevelZero.BONELAB.yaml")
+                           .read_text(encoding="utf-8"))
+    assert {"frame.unity_user_presence", "frame.slz_vulkan_hooks"} <= set(entry["frame"])
+    hooks, presence = base.get("frame.slz_vulkan_hooks"), base.get("frame.unity_user_presence")
+    libs = ["libunity.so", "libOVRPlugin.so", "libOculusXRPlugin.so"]
+    old, new = _analysis(engine="Unity", libs=libs), _analysis(engine="Unity", libs=libs + ["libSLZQuestNative.so"])
+    assert presence.applies(old) and presence.applies(new)
+    assert not hooks.applies(old) and hooks.applies(new)

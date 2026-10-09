@@ -16,6 +16,10 @@ ALWAYS_THERE = "android"
 # Unity's legacy frame loop never calls ovrp_WaitToBeginFrame: its ovrp_Update2 lookup goes to native/ovrpshim
 SHIM = "libfp_ovrp.so"
 UPDATE, SHIM_UPDATE = "ovrp_Update2", "fpov_Update2"
+# the shim follows Unity's frame begins/ends so its frame wait never blocks for a frame Unity didn't begin (Sniper Elite
+# VR deadlocked at a scene switch: xrWaitFrame waits for the previous frame's xrBeginFrame)
+BEGIN, SHIM_BEGIN = "ovrp_BeginFrame", "fpov_BeginFrame"
+END, SHIM_END = "ovrp_EndFrame", "fpov_EndFrame"
 # Unity creates its XR controller devices for the hand nodes OVRPlugin reports present (logged/fixed by the shim)
 NODE, SHIM_NODE = "ovrp_GetNodePresent", "fpov_GetNodePresent"
 # input diagnostics (off): the C# P/Invoke names in libil2cpp.so pointed at the shim's wrappers, which log what they
@@ -76,13 +80,19 @@ class UnityOculusCheck(Patch):
                    "libunity.so at \"android\", which always exists. Games on Unity's built-in VR (2017–2018, and 2019 "
                    "without the Oculus XR Plugin) also get the frame wait their legacy frame loop never makes "
                    "(libfp_ovrp.so calls ovrp_WaitToBeginFrame before ovrp_Update2; without it no frame starts, the "
-                   "dashboard freezes or the GPU hangs). The shim also counts a newly pressed trigger or A/B/X/Y as a "
-                   "mouse click (Input.GetMouseButtonDown), which Go-era screens wait for (e.g. Accounting+'s motion "
+                   "dashboard freezes or the GPU hangs). Per game, the settings ovrp_begin_gate (a freeze at the first "
+                   "scene switch) and ovrp_hold_physics (hands trailing the controllers) switch on two more frame-loop "
+                   "fixes (e.g. Sniper Elite VR). The shim also "
+                   "counts a newly pressed trigger or A/B/X/Y as a mouse click (Input.GetMouseButtonDown), which "
+                   "Go-era screens wait for (e.g. Accounting+'s motion "
                    "warning) and which Lepton never delivers.")
     order = 45
     # 2: frame wait also for Unity 2019 without the Oculus XR Plugin; 3: controller presses as mouse clicks
     # (ovrpshim); 4: Unity 2019's Oculus device-model checks (Touch controllers on Lepton)
-    revision = 4
+    # 5: frame begins gate the frame wait (no deadlock when Unity skips a frame); physics-step pose
+    # updates kept from OVRPlugin (they located poses in the past: hands lagged); both only with the per-game settings
+    # ovrp_begin_gate / ovrp_hold_physics (BattleSisters' hands lagged with them)
+    revision = 5
 
     @staticmethod
     def _major(a) -> int:
@@ -117,6 +127,11 @@ class UnityOculusCheck(Patch):
             return False
         data, loops = elf.replace_rodata_string(data, UPDATE, SHIM_UPDATE) if self.legacy_loop(ctx.analysis) \
             else (data, 0)
+        if loops:
+            data, begins = elf.replace_rodata_string(data, BEGIN, SHIM_BEGIN)
+            if begins:  # the end goes with it: a begin the shim gave the waited frame's index ends with that index
+                data, _ = elf.replace_rodata_string(data, END, SHIM_END)
+                ctx.notes.append(f"libunity.so: {BEGIN}/{END} -> {SHIM_BEGIN}/{SHIM_END}")
         if loops and self._major(ctx.analysis) >= 2019:  # Accounting+ (2017) reads OVRInput: works without
             data, models = oculus_model_checks(data)
             if models:

@@ -9,10 +9,14 @@
 //
 // FramePort renames the "ovrp_Update2" lookup in libunity.so to "fpov_Update2" (same length) and adds this library to
 // libOVRPlugin.so's DT_NEEDED, so Unity's dlsym on the plugin finds this function: it waits for the frame first (once
-// per frame index, render step only), then calls the real ovrp_Update2.
+// per frame index, render step only), then calls the real ovrp_Update2 (render step; the physics step: see below).
 #include <android/log.h>
 #include <dlfcn.h>
 #include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 #define TAG "FrameBridge"
 #define EXPORT __attribute__((visibility("default")))
@@ -25,31 +29,168 @@ static PFN_Update2 real_update2;
 static PFN_WaitToBeginFrame real_wait;
 static pthread_once_t once = PTHREAD_ONCE_INIT;
 
+// Per-game settings (the same sources as FrameBridge and the GL shim, later ones winning): the frame-begin gate and
+// the held-back physics update below were needed by Sniper Elite VR; in Unity 2019 games (BattleSisters) holding the
+// physics update back made the hands lag and the gate made loading screens stutter, so both are off unless the recipe
+// turns them on (ovrp_begin_gate=1, ovrp_hold_physics=1).
+static int begin_gate, hold_physics;
+
+static void read_conf_file(const char *path) {
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        if (!strncmp(line, "ovrp_begin_gate=", 16)) begin_gate = atoi(line + 16);
+        if (!strncmp(line, "ovrp_hold_physics=", 18)) hold_physics = atoi(line + 18);
+    }
+    fclose(f);
+}
+
+static void read_conf(void) {
+    Dl_info info;
+    char path[600];
+    if (dladdr((void *)read_conf, &info) && info.dli_fname) {
+        const char *slash = strrchr(info.dli_fname, '/');
+        if (slash && slash - info.dli_fname < 500) {
+            snprintf(path, sizeof(path), "%.*s/libframe_settings.so", (int)(slash - info.dli_fname), info.dli_fname);
+            read_conf_file(path);
+        }
+    }
+    char pkg[256] = {0};
+    FILE *f = fopen("/proc/self/cmdline", "r");
+    if (f) {
+        size_t n = fread(pkg, 1, sizeof(pkg) - 1, f);
+        fclose(f);
+        pkg[n] = 0;
+    }
+    char *colon = strchr(pkg, ':');
+    if (colon) *colon = 0;
+    if (*pkg && !strchr(pkg, '/')) {
+        snprintf(path, sizeof(path), "/sdcard/Android/data/%s/files/framebridge.conf", pkg);
+        read_conf_file(path);
+    }
+    const char *env = getenv("FRAMEBRIDGE_CONFIG");
+    if (env && *env) read_conf_file(env);
+}
+
 static void init(void) {
+    read_conf();
     void *ovrp = dlopen("libOVRPlugin.so", RTLD_NOW | RTLD_NOLOAD);
     if (!ovrp) ovrp = dlopen("libOVRPlugin.so", RTLD_NOW);
     if (ovrp) {
         real_update2 = (PFN_Update2)dlsym(ovrp, "ovrp_Update2");
         real_wait = (PFN_WaitToBeginFrame)dlsym(ovrp, "ovrp_WaitToBeginFrame");
     }
-    LOG("ovrp frame loop shim: ovrp_Update2 %s, ovrp_WaitToBeginFrame %s", real_update2 ? "OK" : "MISSING",
-        real_wait ? "OK" : "MISSING");
+    LOG("ovrp frame loop shim: ovrp_Update2 %s, ovrp_WaitToBeginFrame %s, begin gate %d, hold physics %d",
+        real_update2 ? "OK" : "MISSING", real_wait ? "OK" : "MISSING", begin_gate, hold_physics);
 }
 
 #define STEP_RENDER (-1)  // ovrpStep_Render
 
 static void mouse_click_frame(void);  // below: controller presses as Unity mouse clicks
 
+// xrWaitFrame blocks until the frame waited for before it has begun (xrBeginFrame). Unity begins frames on its render
+// thread, which sometimes skips one (scene activation) and then waits for the main thread: our next wait never
+// returned (Sniper Elite VR hung at its Init scene, main thread in SteamVR's CSxrSession::StartNextFrame, render
+// thread idle). FramePort also renames libunity.so's "ovrp_BeginFrame"/"ovrp_EndFrame" lookups to the functions below.
+// Once a begin has come through, the main thread first waits (≤ BEGIN_TIMEOUT_MS) for the last waited frame to begin
+// and skips this frame's wait if it doesn't (normally the render thread begins it within a frame: pacing unchanged).
+// OVRPlugin only begins the frame index it waited for (else "outside of frame bounds" and no xrBeginFrame, after which
+// the next wait blocked for good), so a begin of another index while a wait is outstanding becomes a begin of the
+// waited index, and the matching end follows it.
+#define BEGIN_TIMEOUT_MS 50
+static pthread_mutex_t begin_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t begin_cond = PTHREAD_COND_INITIALIZER;
+static int begin_hooked;     // fpov_BeginFrame has been called: the gate is armed
+static int outstanding = -1; // frame index waited for and not begun yet, else -1 (under begin_lock)
+static int remap_from = -1, remap_to = -1;  // the last begin that was given the waited index (for its end)
+
+static int last_wait_begun(int frame_index) {
+    if (!begin_gate) return 1;
+    pthread_mutex_lock(&begin_lock);
+    struct timespec until;
+    clock_gettime(CLOCK_REALTIME, &until);
+    until.tv_nsec += BEGIN_TIMEOUT_MS * 1000000L;
+    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
+    while (begin_hooked && outstanding >= 0)
+        if (pthread_cond_timedwait(&begin_cond, &begin_lock, &until)) break;
+    int ok = !begin_hooked || outstanding < 0;
+    if (ok) outstanding = frame_index;
+    pthread_mutex_unlock(&begin_lock);
+    return ok;
+}
+
+// Unity's physics step updates OVRPlugin's poses with prediction 0 ("now"). OVRPlugin takes "now" from the monotonic
+// clock, which is the XrTime base on a Quest but not on the Frame (its XrTime ran 0.05-0.9 s ahead), so it located
+// every node that much in the past (the runtime extrapolates backwards), and the render-step reads after it got those
+// poses too: the game's hands trailed the controllers by several centimetres whenever they moved (Sniper Elite VR). A
+// larger prediction doesn't reach (OVRPlugin caps it at ~0.07 s), so the physics update isn't passed on: OVRPlugin
+// keeps the render update's display-time poses for the whole frame (physics and render reads agree).
+#define STEP_PHYSICS 0
+
 EXPORT int fpov_Update2(int step, int frame_index, double prediction_seconds) {
     pthread_once(&once, init);
-    static int last_waited = -1, logged;
+    static int last_waited = -1, rendered, logged, skipped, last_result;
     if (step == STEP_RENDER && real_wait && frame_index != last_waited) {
         last_waited = frame_index;
-        int r = real_wait(frame_index);
-        if (logged++ < 3) LOG("ovrp frame loop shim: waited for frame %d: %d", frame_index, r);
+        if (last_wait_begun(frame_index)) {
+            int r = real_wait(frame_index);
+            if (logged++ < 3) LOG("ovrp frame loop shim: waited for frame %d: %d", frame_index, r);
+        } else if (skipped++ < 20 || skipped % 1000 == 0) {
+            LOG("ovrp frame loop shim: frame %d: the last waited frame wasn't begun within %d ms, not waiting "
+                "(%d times)", frame_index, BEGIN_TIMEOUT_MS, skipped);
+        }
         mouse_click_frame();
     }
-    return real_update2 ? real_update2(step, frame_index, prediction_seconds) : -1000;  // ovrpFailure
+    if (hold_physics && step == STEP_PHYSICS && rendered) return last_result;  // see above: keeps the display-time poses
+    int r = real_update2 ? real_update2(step, frame_index, prediction_seconds) : -1000;  // ovrpFailure
+    if (step == STEP_RENDER) rendered = 1, last_result = r;
+    return r;
+}
+
+// Unity's legacy ovrp_BeginFrame(frameIndex) / ovrp_EndFrame(frameIndex) on the render thread; further arguments
+// (older plugins) are passed on as they are
+typedef int (*PFN_FrameCall)(long, long, long, long);
+
+static PFN_FrameCall ovrp_fn(const char *name) {
+    void *ovrp = dlopen("libOVRPlugin.so", RTLD_NOW | RTLD_NOLOAD);
+    PFN_FrameCall fn = ovrp ? (PFN_FrameCall)dlsym(ovrp, name) : 0;
+    LOG("ovrp frame loop shim: %s %s", name, fn ? "OK" : "MISSING");
+    return fn;
+}
+
+EXPORT int fpov_BeginFrame(long frame, long b, long c, long d) {
+    static PFN_FrameCall real;
+    static int logged;
+    pthread_once(&once, init);  // the settings (begin_gate) before the first begin
+    if (!real) real = ovrp_fn("ovrp_BeginFrame");
+    pthread_mutex_lock(&begin_lock);
+    long index = frame;
+    if (begin_gate && outstanding >= 0 && outstanding != (int)frame) {
+        index = outstanding;
+        remap_from = (int)frame, remap_to = outstanding;
+    } else {
+        remap_from = remap_to = -1;
+    }
+    pthread_mutex_unlock(&begin_lock);
+    int r = real ? real(index, b, c, d) : -1000;
+    if (index != frame && logged++ < 20)
+        LOG("ovrp frame loop shim: begin frame %ld as waited frame %ld: %d", frame, index, r);
+    pthread_mutex_lock(&begin_lock);
+    begin_hooked = 1;
+    outstanding = -1;  // the waited frame (if any) is begun now
+    pthread_cond_broadcast(&begin_cond);
+    pthread_mutex_unlock(&begin_lock);
+    return r;
+}
+
+EXPORT int fpov_EndFrame(long frame, long b, long c, long d) {
+    static PFN_FrameCall real;
+    if (!real) real = ovrp_fn("ovrp_EndFrame");
+    pthread_mutex_lock(&begin_lock);
+    if ((int)frame == remap_from) frame = remap_to;
+    pthread_mutex_unlock(&begin_lock);
+    return real ? real(frame, b, c, d) : -1000;
 }
 
 // ---------------------------------------------------------------- input diagnostics (pass-through)

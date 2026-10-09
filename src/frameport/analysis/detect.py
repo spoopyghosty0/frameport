@@ -22,7 +22,8 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 # offered (GitHub #104: entries from before `sdl_java` never got frame.sdl_clipboard). Entries without it are 0.
 # 1: sdl_java, min_sdk, web_wrapper, expects_obb, vr_activity, unity_version (2026-10)
 # 2: unity_split (a Unity split-binary build expects an OBB too: expects_obb) (2026-10)
-ANALYSIS_VERSION = 2
+# 3: unreal_ovrp_lookups (the OVRPlugin functions Unreal's Oculus module looks up: frame.unreal_ovrp_entrypoints)
+ANALYSIS_VERSION = 3
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
@@ -292,8 +293,27 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             # scene in one: without it the game hangs at start (GitHub #85, #92)
             "expects_obb": expects_obb(meta) or unity_split,
             "unity_split": unity_split,
+            # Unreal's Oculus module needs every OVRPlugin function it looks up (frame.unreal_ovrp_entrypoints)
+            "unreal_ovrp_lookups": (ovrp_lookups(lib_bytes.get(engine_lib.rsplit("/", 1)[1], b""))
+                                    if engine_lib and "libOVRPlugin.so" in libset else []),
         },
     )
+
+
+def ovrp_lookups(data: bytes) -> list[str]:
+    """The OVRPlugin function names (`ovrp_*` strings) an engine library holds: Unreal's Oculus module looks each one
+    up with dlsym in libOVRPlugin.so and gives up on VR when any is missing (FOculusHMDModule::
+    InitializeOculusPluginWrapper)."""
+    names, at = set(), data.find(b"\0ovrp_")
+    while at >= 0:
+        end = data.find(b"\0", at + 1)
+        if end < 0:
+            break
+        name = data[at + 1:end]
+        if re.fullmatch(rb"ovrp_[A-Za-z0-9_]+", name):
+            names.add(name.decode())
+        at = data.find(b"\0ovrp_", end)
+    return sorted(names)
 
 
 def unity_text_fields(metadata: bytes) -> list[str]:

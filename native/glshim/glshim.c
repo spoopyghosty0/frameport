@@ -30,8 +30,13 @@ static void (*real_glGetIntegerv)(GLenum, GLint *);
 static __eglMustCastToProperFunctionPointerType (*real_eglGetProcAddress)(const char *);
 static pthread_once_t once = PTHREAD_ONCE_INIT;
 
-static int hide_multiview = -1;  // -1: not set (Unity keeps multiview, everything else hides it)
+static int hide_multiview = -1;  // -1: not set (Unity and Unreal keep multiview, everything else hides it)
 static int hide_msrtt = 1;
+// Unreal (4.25) only turns on its mobile multiview when GL_OVR_multiview, GL_OVR_multiview2 AND
+// GL_OVR_multiview_multisampled_render_to_texture are all there (FOpenGLES::ProcessExtensions). Hiding the last one
+// with the MSRTT extensions switched Unreal's multiview off, so for Unreal it stays visible and its function draws
+// single-sampled (glFramebufferTextureMultiviewOVR), like the EXT stand-ins below.
+static int unreal;
 
 static void read_conf_file(const char *path) {
     FILE *f = fopen(path, "r");
@@ -335,12 +340,21 @@ static void init(void) {
     real_glGetStringi = gles ? dlsym(gles, "glGetStringi") : NULL;
     real_glGetIntegerv = gles ? dlsym(gles, "glGetIntegerv") : NULL;
     real_eglGetProcAddress = egl ? dlsym(egl, "eglGetProcAddress") : NULL;
-    if (hide_multiview < 0) {  // Unity renders multiview itself and only needs MSRTT hidden
-        void *unity = dlopen("libunity.so", RTLD_NOW | RTLD_NOLOAD);
-        hide_multiview = unity ? 0 : 1;
-        if (unity) dlclose(unity);
+    static const char *const engines[] = {"libunity.so", "libUE4.so", "libUnreal.so"};
+    int engine_found = 0;
+    for (unsigned i = 0; i < sizeof engines / sizeof *engines && !engine_found; i++) {
+        void *engine = dlopen(engines[i], RTLD_NOW | RTLD_NOLOAD);
+        if (engine) {
+            engine_found = 1;
+            unreal = i > 0;
+            dlclose(engine);
+        }
     }
-    LOG("GL shim active: hide_multiview=%d hide_msrtt=%d", hide_multiview, hide_msrtt);
+    // Unity and Unreal render multiview themselves and only need MSRTT hidden
+    if (hide_multiview < 0) hide_multiview = !engine_found;
+    unreal = unreal && hide_msrtt && !hide_multiview;  // only matters while MSRTT is hidden and multiview kept
+    LOG("GL shim active: hide_multiview=%d hide_msrtt=%d%s", hide_multiview, hide_msrtt,
+        unreal ? " (Unreal: multiview MSRTT kept, drawn single-sampled)" : "");
 }
 
 static int is_hidden(const char *name) {
@@ -349,7 +363,8 @@ static int is_hidden(const char *name) {
             if (!strcmp(name, hidden_multiview[i])) return 1;
     if (hide_msrtt)
         for (size_t i = 0; i < sizeof(hidden_msrtt) / sizeof(hidden_msrtt[0]); ++i)
-            if (!strcmp(name, hidden_msrtt[i])) return 1;
+            if (!strcmp(name, hidden_msrtt[i]))
+                return !(unreal && !strcmp(name, "GL_OVR_multiview_multisampled_render_to_texture"));
     return 0;
 }
 
@@ -416,6 +431,14 @@ static void plain_rbsms(GLenum target, GLsizei samples, GLenum format, GLsizei w
     (void)samples;
     if (r_plain_rbs) r_plain_rbs(target, format, width, height);
 }
+static PFN_FTMV r_plain_ftmv;
+static int mv_msrtt_logged;
+static void plain_ftmsmv(GLenum target, GLenum attachment, GLuint texture, GLint level, GLsizei samples,
+                         GLint base, GLsizei views) {
+    if (!mv_msrtt_logged++)
+        LOG("GL shim: multiview multisampled render-to-texture (%d samples) drawn single-sampled", (int)samples);
+    if (r_plain_ftmv) r_plain_ftmv(target, attachment, texture, level, base, views);
+}
 
 __attribute__((visibility("default"))) __eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *name) {
     pthread_once(&once, init);
@@ -431,6 +454,10 @@ __attribute__((visibility("default"))) __eglMustCastToProperFunctionPointerType 
         if (!r_plain_rbs) r_plain_rbs = (PFN_RBS)real_eglGetProcAddress("glRenderbufferStorage");
         return name[2] == 'F' ? (__eglMustCastToProperFunctionPointerType)plain_ft2dms
                               : (__eglMustCastToProperFunctionPointerType)plain_rbsms;
+    }
+    if (unreal && !strcmp(name, "glFramebufferTextureMultisampleMultiviewOVR")) {
+        if (!r_plain_ftmv) r_plain_ftmv = (PFN_FTMV)real_eglGetProcAddress("glFramebufferTextureMultiviewOVR");
+        return (__eglMustCastToProperFunctionPointerType)plain_ftmsmv;
     }
 #ifdef GLSHIM_TRACE  // build with -DGLSHIM_TRACE for eye-buffer / draw / error tracing
     WRAP("glFramebufferTextureMultiviewOVR", real_ftmv, w_ftmv)

@@ -169,6 +169,14 @@ SETTINGS = [
      "fragment-density-map foveation when the driver offers it and expects the density map from the headset, which the "
      "Frame doesn't provide: image views and barriers for a missing image, then a crash in the Frame's Vulkan driver "
      "(e.g. Metro Awakening). Valve's own foveation layer isn't affected."),
+    ("ovrp_begin_gate", "int", 0, "Unity frame loop: wait for skipped frames",
+     "Unity's built-in Oculus frame loop (frame.unity_oculus_check): before each frame wait, wait up to 50 ms for the "
+     "last waited frame to begin and skip the wait if it doesn't. Fixes a freeze at the first scene switch (e.g. "
+     "Sniper Elite VR); in other games it can make loading screens stutter."),
+    ("ovrp_hold_physics", "int", 0, "Unity frame loop: keep display-time poses",
+     "Unity's built-in Oculus frame loop (frame.unity_oculus_check): don't pass Unity's physics-step pose update on, "
+     "so the hands use the frame's display-time poses. Fixes hands trailing the controllers in some games (e.g. Sniper "
+     "Elite VR); in others it makes the hands lag (e.g. BattleSisters)."),
     ("gl_hide_multiview", "int", 1, "GL shim: hide multiview",
      "GL shim only: hide GL_OVR_multiview so all passes use single-view shaders. For GLES games whose multiview "
      "shaders fail on single-view render targets (e.g. Path of the Warrior)."),
@@ -176,7 +184,8 @@ SETTINGS = [
 
 
 # settings that need a new build, not only new settings files: the Vulkan shim learned vk_shader_fix in 0.6.4 and
-# vk_query_slots and vk_spec_fixes in 0.10.0
+# vk_query_slots and vk_spec_fixes in 0.10.0. haptic_fix stays at 2 although the shim also converts PCM vibrations
+# since 0.12.1: no game is known to need that, and a bump would mark every OVRPlugin game's build outdated
 REVISIONS = {"vk_shader_fix": 2, "vk_query_slots": 3, "vk_spec_fixes": 2, "haptic_fix": 2, "pose_consistency": 2}
 
 # How the "Game settings" dialog shows each setting to non-technical users: group, level (common settings are always
@@ -281,7 +290,8 @@ UI: dict[str, dict] = {
     **{key: dict(group="troubleshooting", level="advanced", control=("switch",)) for key in (
         "foveation_fix", "hide_space_warp", "swapchain_fix", "layer_fix", "gl_hide_multiview", "mutable_fix",
         "flip_quads", "swap_eyes", "vk_validation", "rect_clamp", "gl_hide_msrtt", "strip_color_bias", "snapshot",
-        "strip_depth", "respace_kick", "layer_debug", "eye_debug", "input_diag", "release_wait", "vk_hide_fdm")},
+        "strip_depth", "respace_kick", "layer_debug", "eye_debug", "input_diag", "release_wait", "vk_hide_fdm",
+        "ovrp_begin_gate", "ovrp_hold_physics")},
 }
 
 
@@ -340,6 +350,8 @@ class AdapterSetting(Patch):
             "swapchain_fix": ap.is_gles,
             "gl_hide_multiview": lambda a: a.direct_vrapi and ap.is_gles(a),
             "gl_hide_msrtt": ap.is_gles,
+            "ovrp_begin_gate": lambda a: a.engine == "Unity" and "libOVRPlugin.so" in a.libs,
+            "ovrp_hold_physics": lambda a: a.engine == "Unity" and "libOVRPlugin.so" in a.libs,
             "vk_shader_fix": lambda a: a.engine == "Unreal",  # read by the Vulkan shim, which only Unreal games get
             "vk_hide_fdm": lambda a: a.engine == "Unreal",  # Unreal's Vulkan isn't always detected (Metro Awakening)
             "vk_query_slots": lambda a: a.engine == "Unreal" and ap.is_vulkan(a),

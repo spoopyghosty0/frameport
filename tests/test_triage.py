@@ -96,6 +96,17 @@ def test_swapchain_rect_invalid_is_recognised():
     assert "swapchain-rect-invalid" in [f.id for f in triage.triage(log).findings]
 
 
+def test_unreal_msrtt_crash():
+    """Star Wars Pinball VR (GitHub #83): Zink jumps to 0x10000 on Unreal's RHIThread."""
+    from frameport.validate import triage
+
+    line = ("10-07 11:41:11.156  1127  1231 F libc    : Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr "
+            "0x10000 in tid 1231 (RHIThread), pid 1127 (MainThread-UE4)\n")
+    r = triage.triage(line, "EXITED")
+    hit = next(f for f in r.findings if f.id == "unreal-msrtt-crash")
+    assert "frame.unreal_gl_shim" in hit.suggest
+
+
 def test_frames_stopped_and_unity_render_crash():
     """The Room VR passed its launch test although Unity's render thread had crashed in libgallium (GitHub #38)."""
     from frameport.validate import triage
@@ -187,3 +198,17 @@ def test_web_wrapper_signature():
            "NameNotFoundException: com.oculus.browser\n")
     r = triage(log, "EXITED")
     assert {f.id for f in r.findings} == {"web-wrapper"} and r.verdict == "fail"
+
+
+def test_slz_vulkan_hook_crash_is_recognised():
+    """BONELAB 1.2974: SLZ's Vulkan plugin crashed Unity's Vulkan start-up (pc 0) before the first frame."""
+    log = ("10-07 09:29:07.191  1131  1157 I SlzGfx  : SLZ Graphics plugin loading!\n"
+           "10-07 09:29:09.434  1131  1157 I OVRPlugin: Preinitialize: xrDestroyInstance() succeeded\n"
+           "10-07 09:29:09.445  1131  1157 E CRASH   :     sp  0000ffff189a2430  lr  0000fffdd93f6ed0  "
+           "pc  0000000000000000\n"
+           "10-07 09:29:09.500  1131  1157 E AndroidRuntime: FATAL EXCEPTION: UnityMain\n")
+    r = triage(log, "EXITED", "com.StressLevelZero.BONELAB")
+    f = next(f for f in r.findings if f.id == "slz-vulkan-hook-crash")
+    assert f.suggest == ["frame.slz_vulkan_hooks"] and "java-crash" not in [x.id for x in r.findings]
+    other = triage(log.replace("SLZ Graphics", "Other"), "EXITED", None)
+    assert "slz-vulkan-hook-crash" not in [x.id for x in other.findings]

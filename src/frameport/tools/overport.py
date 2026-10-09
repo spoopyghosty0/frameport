@@ -71,3 +71,23 @@ def patch(apk: Path, outdir: Path, name: str, patches: list[str], reporter: Repo
     if p.returncode or not target.exists():
         raise RuntimeError(f"OVRPort failed (exit {p.returncode}); see log")
     return target
+
+
+def runtime_lib(name: str, abi: str = "arm64-v8a") -> Path | None:
+    """A library of the newest OVRPort runtime in the workspace (what `patch --version=latest` ships, e.g.
+    libOVRPlugin.so), or None before OVRPort downloaded one. Newest = first in the workspace's installed.json (the
+    release tracker's order), else the most recently unpacked runtime folder."""
+    import json
+
+    root = user_data_dir() / "overport-workspace" / "libraries"
+    if not root.is_dir():
+        return None
+    order: list[str] = []
+    try:
+        releases = json.loads((root.parent / "installed.json").read_text()).get("releases") or []
+        order = [str(r.get("version")) for r in releases if isinstance(r, dict)]
+    except (OSError, ValueError, AttributeError):
+        pass
+    found = [d for d in root.iterdir() if (d / "lib" / abi / name).is_file()]
+    found.sort(key=lambda d: (order.index(d.name) if d.name in order else len(order), -d.stat().st_mtime))
+    return found[0] / "lib" / abi / name if found else None

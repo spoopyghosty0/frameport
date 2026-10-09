@@ -108,6 +108,31 @@ class UnityGlShim(GlShim):
         return a.engine == "Unity" and "GLES" in a.graphics and "arm64-v8a" in a.abis
 
 
+class UnrealGlShim(GlShim):
+    id = "frame.unreal_gl_shim"
+    title = "GL shim for Unreal (no multisampled render-to-texture)"
+    description = (
+        "Loads the GL shim into an Unreal GLES game and hides GL_EXT_multisampled_render_to_texture. Unreal's mobile "
+        "MSAA renders through multisampled render-to-texture, and the Frame's GL driver (Mesa/Zink) can crash on it: "
+        "SIGSEGV with fault address 0x10000 in libgallium_dri.so on the RHIThread a few seconds after start (Zink "
+        "looks up a render-pass cache slot past its end, e.g. Star Wars Pinball VR). Hidden, Unreal renders without "
+        "that path. Unreal's multiview stays on: Unreal only uses it when GL_OVR_multiview_multisampled_render_to_"
+        "texture is listed too, so for Unreal the shim keeps that one visible and draws its multiview MSAA "
+        "attachments single-sampled (glFramebufferTextureMultiviewOVR).")
+    order = 62
+    requires = ()
+    experimental = False
+
+    def detect(self, a):
+        # not suggested from the APK alone: most Unreal GLES games run without it; the launch test's triage
+        # (unreal-msrtt-crash) and catalog recipes turn it on
+        return None
+
+    def applies(self, a):
+        return a.engine == "Unreal" and "GLES" in a.graphics and "arm64-v8a" in a.abis
+
+
 register(VrApiBridge)
 register(GlShim)
 register(UnityGlShim)
+register(UnrealGlShim)

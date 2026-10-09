@@ -1,10 +1,10 @@
 e7554c6343ee2989b0a273ee6230e65c25bfe6499eefd00de19f5f0fee58754f  ./arm64-v8a/libfp_langpack.so
-98a99cefe93079268d9158b23fa8ad5c7ade8e54c0d31526892635625eb3ef04  ./arm64-v8a/libfp_ovrp.so
+321da502e0f8f46f0880aad39fe6b84bdef88f925164568814cf704a1b31a577  ./arm64-v8a/libfp_ovrp.so
 40defdaddcda53bd2649eb48076fae1622bfc2bfc88e9e03c94fc8b45af2a4f2  ./arm64-v8a/libfp_ovrtrace.so
 7522a7cfb236e48d3442d418c4820cd37760a9627c6bdef80fb0df82df5fd826  ./arm64-v8a/libfp_vk.so
 383054f8b3b41dde76d062c71856cd3163655e50009c08454bc1793f393ead65  ./arm64-v8a/libfpg.so
-06c8a17b37cb1513fdfeba87ece457a02097bb22dd0a3a3a8719fb8fea16b52a  ./arm64-v8a/libframe_xrshim.so
-9f5ba793d1804728394a8fe9e83028e13f1bc939b558892e7beb5c3662317259  ./arm64-v8a/libglshim.so
+8a8f6b1da8952cb3933a5b53558424a5fc56043b2527a16bb6dd62a00d2de01a  ./arm64-v8a/libframe_xrshim.so
+fc559dbe0b87eecc3641256837293260cefb7c2ce7b21d808d10edd2a2dba9fc  ./arm64-v8a/libglshim.so
 cc5b493cadefe76ad13fd096d3f8494a140ba593e0e1692db12d284bc548c1cf  ./arm64-v8a/libopenxr_loader_generic.so
 1feaeafad467c4cafdf2b018a4d84b0bee200c3f711697b4ce97e66a3ba256ca  ./arm64-v8a/libovrplatformcompat.so
 aa4dc0020c77e12d41ef6ce80b23ad90c9cb7e882338eddf2261efe8645cf38d  ./arm64-v8a/libvrapi.so
