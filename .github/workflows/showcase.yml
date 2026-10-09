@@ -41,7 +41,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - name: ffmpeg and fonts
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-roboto fonts-noto-color-emoji
-      - run: uv sync --extra dev
+      - run: uv sync --extra dev --python 3.12  # the Python the renders are made with locally
       - name: Chromium for Playwright
         run: uv run playwright install --with-deps chromium
       - name: Store art cache (fetched once from the stores the app uses)

@@ -67,7 +67,7 @@ scenes:
     caption: ["Play from your PC", "Starts the game in the headset through Steam"]
     teaser: [4.3, 3.2]
     steps:
-      - click: "Library"
+      - nav: "Library"
       - call: library_view.clear_search
       - wait: 1.4
       - hover: {name: "Asgard's Wrath 2", dy: 0.3}
@@ -83,7 +83,7 @@ scenes:
     caption: ["See what the Frame is doing", "Frame rate, CPU, GPU, temperatures and every process, live"]
     teaser: [0.5, 2.6]
     steps:
-      - click: "Monitor"
+      - nav: "Monitor"
       - wait: 2.4
       - hover: "GPU"
       - wait: 1.0
@@ -96,7 +96,7 @@ scenes:
   - name: screenshots
     caption: ["Screenshots from the headset", "Take one from the PC, then view or download them"]
     steps:
-      - click: "Screenshots"
+      - nav: "Screenshots"
       - wait: 1.6
       - click: "Take screenshot"
       - wait_for: "Batman: Arkham Shadow · 2026-10-04 21:50"
@@ -109,7 +109,7 @@ scenes:
   - name: files
     caption: ["Files on the Frame", "Videos, mods and saves: upload, download, select with a drag"]
     steps:
-      - click: "Files"
+      - nav: "Files"
       - wait: 1.6
       - drag: ["Concert 8K 3D.mp4", "Mars landing (VR180).mkv"]
       - wait: 1.0
@@ -121,7 +121,7 @@ scenes:
   - name: themes
     caption: ["Make it yours", "Dark themes, including true black for OLED screens"]
     steps:
-      - click: "Settings"
+      - nav: "Settings"
       - wait: 1.4
       - click: "Portal (OLED)"
       - wait: 1.4
@@ -129,5 +129,5 @@ scenes:
       - wait: 1.4
       - click: "Portal"
       - wait: 1.0
-      - click: "Library"
+      - nav: "Library"
       - wait: 1.4

@@ -4,6 +4,7 @@ A step is a one-key mapping. App steps call the app the way its own handlers do;
 mouse to things found by name (see web.Session.find); hooks run the pretend Frame's scripted events.
 
     - go: monitor                      # a sidebar route (library, frame, files, screenshots, live, keyboard, …)
+    - nav: "Monitor"                   # click that tab like a person (checked: the page really changed)
     - open_game: ${game}               # or {package: …, advanced: true} = with Customize open
     - call: {fn: screenshots_view.viewer, args: [0]}   # any app method (dotted path from the app)
     - pop_dialog: true                 # close the top dialog
@@ -31,7 +32,7 @@ import time
 from showcase import fakes
 
 POINTER = {"hover", "move", "click", "right_click", "double_click"}
-ACTIONS = POINTER | {"go", "open_game", "call", "pop_dialog", "theme", "drag", "type", "press", "scroll", "wait",
+ACTIONS = POINTER | {"nav", "go", "open_game", "call", "pop_dialog", "theme", "drag", "type", "press", "scroll", "wait",
                      "wait_for", "settle", "park", "hook"}
 
 
@@ -111,6 +112,8 @@ def run(session, steps: list, variables: dict | None = None, log=None) -> None:
                 app.page.run_task(method, *args)
             else:
                 method(*args)
+        elif action == "nav":
+            _nav(session, v, log)
         elif action == "pop_dialog":
             app.page.pop_dialog()
         elif action == "theme":
@@ -149,6 +152,30 @@ def run(session, steps: list, variables: dict | None = None, log=None) -> None:
         elif action == "hook":
             name, args = (v, []) if isinstance(v, str) else (v["name"], v.get("args") or [])
             HOOKS[name](session, *args)
+
+
+def _nav(session, label: str, log=None) -> None:
+    """Click a sidebar tab like a person, then make sure the page really changed: its heading shows in the content
+    area. A click whose handler died (a Flet update race under load) would otherwise leave the old page in the
+    picture for the rest of a recording; then the route is opened directly (and a warning printed)."""
+    from frameport.ui import app as app_module
+    from showcase.web import Box, NotFound
+
+    keys = {str(lbl).casefold(): key for key, lbl, _icon in app_module.NAV}
+    key = keys.get(label.casefold())
+    if key is None:
+        raise StepError(f"nav: {label!r} is not a sidebar tab ({', '.join(sorted(keys))})")
+    session.click(label)
+    vw, _vh = session.viewport
+    content = Box(260, 0, vw - 260, 160)  # right of the sidebar, the page's title row
+    for _ in range(2):
+        try:
+            session.find(label, within=content, timeout=2.5)
+            return
+        except NotFound:
+            print(f"WARN nav {label}: the page didn't change after the click, opening it directly", flush=True)
+            session.app.go(key)
+    session.find(label, within=content, timeout=2.5)
 
 
 # ------------------------------------------------------------------ hooks: the pretend Frame's scripted events
