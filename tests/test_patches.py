@@ -83,7 +83,9 @@ def test_native_video_is_internal_and_scoped_to_batman(tmp_path, quest_manifest)
             assert base.get("frame.adapter").apply(ctx)
             assert (b"surface_native=1\n" in ws.read_lib("libframe_settings.so")) is enabled
             assert ws.has(ws.lib("libframe_xrshim.so")) is enabled
-            assert any(n.startswith("assets/frameport/hevc/") for n in ws.names()) is enabled
+            # Hardware decoding is deployed once by the agent, never embedded
+            # in an individual game's APK (including Batman).
+            assert not any(n.startswith("assets/frameport/hevc/") for n in ws.names())
             if enabled:
                 assert b"libframe_xrshim.so\0" in ws.read_lib("libOVRPlugin.so")
             assert not base.get("frame.adapter").apply(ctx)

@@ -21,7 +21,7 @@ def settings_text(recipe_patches: dict) -> bytes:
 
 class FrameBridgeAdapter(Patch):
     id = "frame.adapter"
-    package_revisions = {"com.camouflaj.manta": 20}
+    package_revisions = {"com.camouflaj.manta": 21}
     title = "FrameBridge OpenXR adapter"
     description = (
         "Wraps OVRPort's generic OpenXR loader (renamed libopenxr_loader_original.so). Fixes the Frame runtime's "
@@ -62,23 +62,15 @@ class FrameBridgeAdapter(Patch):
             changed = True
         if (needs_xrshim(ctx.recipe_patches) or native_video) and ws.abi == "arm64-v8a":
             changed |= add_xrshim(ctx)
-        # Only the validated Batman renderer needs this private hardware codec.
-        # Assets are extracted into its container; the shared runtime is untouched.
+        # The decoder now lives in the agent's shared, versioned codec store.
+        # Remove old embedded payloads without changing any game/video assets.
         for name in ("libstagefrighthw.so", "media_codecs_frameport.xml", "podman.py", "manifest.json",
                      "COPYING.FFmpeg"):
             target = f"assets/frameport/hevc/{name}"
-            if not native_video:
-                if ws.has(target):
-                    ws.remove.add(target)
-                    ws.add.pop(target, None)
-                    ws.replace.pop(target, None)
-                    changed = True
-                continue
-            # Flet compiles/removes .py files in bundled data, so keep the
-            # remote wrapper's source under a non-Python extension on the PC.
-            data = artifact("hevc", name + ".txt" if name == "podman.py" else name)
-            if not ws.has(target) or ws.read(target) != data:
-                ws.put(target, data)
+            if ws.has(target):
+                ws.remove.add(target)
+                ws.add.pop(target, None)
+                ws.replace.pop(target, None)
                 changed = True
         return changed
 

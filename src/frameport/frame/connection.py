@@ -6,6 +6,7 @@ password if given.
 """
 from __future__ import annotations
 
+import base64
 import contextlib
 import hashlib
 import json
@@ -21,7 +22,7 @@ from pathlib import Path
 
 import paramiko
 
-from ..core.paths import agent_file, ssh_dir, user_data_dir, write_atomic
+from ..core.paths import agent_file, artifacts_dir, ssh_dir, user_data_dir, write_atomic
 
 log = logging.getLogger(__name__)
 
@@ -349,6 +350,8 @@ class Frame:
     _pool: SftpPool | None = None  # SFTP channels shared by all threads (see sftp)
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _agent_digest: str = ""  # the agent version known to be on the Frame (checked once per connection)
+    _video_codec_digest: str = ""
+    _video_codec_lock: threading.Lock = field(default_factory=threading.Lock)
     home: str = ""
 
     # ------------------------------------------------------------------ connect
@@ -476,6 +479,7 @@ class Frame:
             self.client.close()
         self.client = None
         self._agent_digest = ""
+        self._video_codec_digest = ""
 
     def alive(self) -> bool:
         """The SSH connection itself still works (a failed agent command doesn't mean the Frame is gone)."""
@@ -517,6 +521,7 @@ class Frame:
         remote_dir = posixpath.join(self.home, REMOTE_AGENT_DIR)
         remote = posixpath.join(remote_dir, "frameport_agent.py")
         if self._agent_digest == digest:
+            self._ensure_video_codec_if_supported(text)
             return remote
         code, out, _ = self.run(f"sha256sum {sh_quote(remote)} 2>/dev/null | cut -c1-16; "
                                 f"grep -m1 '^AGENT_VERSION' {sh_quote(remote)} 2>/dev/null")
@@ -527,6 +532,7 @@ class Frame:
             # stay compatible with older apps; replacing it broke the newer one's launchers (2026-10-04: an older
             # app put agent 43 back over 45 every few seconds)
             self._agent_digest = digest
+            self._ensure_video_codec_if_supported(text)
             return remote
         if lines[0].strip() != digest:
             self.run(f"mkdir -p {sh_quote(remote_dir)}")
@@ -537,7 +543,44 @@ class Frame:
             if code:
                 raise AgentFailed(f"couldn't install the FramePort agent on the Frame: {err.strip()[-300:]}")
         self._agent_digest = digest
+        self._ensure_video_codec_if_supported(text)
         return remote
+
+    def _ensure_video_codec_if_supported(self, agent_source: bytes) -> None:
+        if agent_version_of(agent_source.decode("utf-8", "replace")) < 71:
+            return
+        try:
+            self.ensure_video_codec()
+        except Exception as exc:
+            # Optional acceleration must never block pairing, installs or play.
+            log.warning("Hardware video decoder unavailable; retaining stock codecs: %s", exc)
+
+    def ensure_video_codec(self) -> None:
+        """Deploy once per Frame, independently of APKs and per-game recipes."""
+        import io
+        import zipfile
+
+        with self._video_codec_lock:
+            directory = artifacts_dir() / "hevc"
+            raw = (directory / "manifest.json").read_bytes()
+            digest = hashlib.sha256(raw).hexdigest()
+            if self._video_codec_digest == digest:
+                return
+            manifest = json.loads(raw)
+            status = self.agent("video_codec_status", ensure=False)
+            if status.get("digest") != digest and status.get("revision", 0) <= manifest.get("revision", 1):
+                bundle = io.BytesIO()
+                with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                    archive.writestr("manifest.json", raw)
+                    for name, expected in manifest["files"].items():
+                        path = directory / (name + ".txt" if name == "podman.py" else name)
+                        data = path.read_bytes()
+                        if hashlib.sha256(data).hexdigest() != expected:
+                            raise AgentFailed(f"video codec asset checksum mismatch: {name}")
+                        archive.writestr(name, data)
+                self.agent("install_video_codec", ensure=False, digest=digest,
+                           bundle=base64.b64encode(bundle.getvalue()).decode("ascii"))
+            self._video_codec_digest = digest
 
     def agent(self, command: str, timeout: float | None = 600, ensure: bool = True, **args):
         """Run an agent command. ensure=False uses the agent already on the Frame (never re-uploads it)."""

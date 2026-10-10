@@ -19,6 +19,32 @@ ARTIFACTS = HERE.parents[1] / "artifacts/hevc"
 FFMPEG_SHA = "733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1"
 RUNTIME_SHA = "456e912c75cd389abcf6a63bc80e2a53bdc334371d00b200c93680388ae955e2"
 NDK_REVISION = "27.2.12479018"
+FLUSH_SOURCE = r"""static void v4l2_flush(AVCodecContext *avctx)
+{
+    V4L2m2mPriv *priv = avctx->priv_data;
+    V4L2m2mContext *s = priv->context;
+    struct v4l2_decoder_cmd cmd = { .cmd = V4L2_DEC_CMD_START };
+
+    av_packet_unref(&s->buf_pkt);
+    priv->frameport_flush_error = 0;
+    /* Only a drained decoder restarts in place: it has returned every picture
+     * and is stopped until V4L2_DEC_CMD_START (both queues keep streaming).
+     * Restarting a running decoder's queues failed Iris session admission and
+     * left its buffers unreturned (kernel warnings): callers reopen instead. */
+    if (!s->draining || !s->capture.done) {
+        priv->frameport_flush_error = AVERROR(EINVAL);
+        av_log(avctx, AV_LOG_WARNING, "flush before the drain completed; reopen the decoder\n");
+        return;
+    }
+    if (ioctl(s->fd, VIDIOC_DECODER_CMD, &cmd) < 0) {
+        priv->frameport_flush_error = AVERROR(errno);
+        av_log(avctx, AV_LOG_ERROR, "V4L2_DEC_CMD_START after drain: %s\n", av_err2str(priv->frameport_flush_error));
+        return;
+    }
+    s->draining = 0;
+    s->output.done = s->capture.done = 0;
+}
+"""
 
 
 def run(args, **kwargs):
@@ -57,6 +83,40 @@ def main():
         run(["make", "distclean"], cwd=source)
     if install.exists():
         shutil.rmtree(install)
+    # Unlike FFmpeg's software VP9 decoder, its V4L2 wrapper does not split
+    # packed VP9 superframes. Iris requires the same individual-frame input.
+    decoder_source = source / "libavcodec/v4l2_m2m_dec.c"
+    decoder_text = decoder_source.read_text()
+    original_vp9 = 'M2MDEC(vp9,   "VP9",   AV_CODEC_ID_VP9,        NULL);'
+    if decoder_text.count(original_vp9) != 1:
+        raise RuntimeError("unexpected FFmpeg VP9 wrapper source")
+    decoder_text = decoder_text.replace(original_vp9, 'M2MDEC(vp9, "VP9", AV_CODEC_ID_VP9, "vp9_superframe_split");')
+    # The wrapper has no flush callback, so restarting after EOS (replay, loop)
+    # could only close and reopen the hardware session. Add the stateful
+    # decoder's restart after a completed drain (V4L2_DEC_CMD_START).
+    close_fn = "static av_cold int v4l2_decode_close(AVCodecContext *avctx)\n"
+    close_cb = "        .close          = v4l2_decode_close, \\\n"
+    if decoder_text.count(close_fn) != 1 or decoder_text.count(close_cb) != 1:
+        raise RuntimeError("unexpected FFmpeg V4L2 decoder source")
+    decoder_text = decoder_text.replace(close_fn, FLUSH_SOURCE + "\n" + close_fn).replace(
+        close_cb, close_cb + "        .flush          = v4l2_flush, \\\n")
+    decoder_source.write_text(decoder_text)
+    # avcodec_flush_buffers has no return value. Expose restart status through
+    # an AVOption rather than having the OMX component inspect private structs.
+    private_header = source / "libavcodec/v4l2_m2m.h"
+    private_text = private_header.read_text()
+    field = "    int num_capture_buffers;\n} V4L2m2mPriv;"
+    option_end = "    { NULL},\n};"
+    if private_text.count(field) != 1 or decoder_text.count(option_end) != 1:
+        raise RuntimeError("unexpected FFmpeg V4L2 private options source")
+    private_header.write_text(private_text.replace(field, "    int num_capture_buffers;\n"
+                                                  "    int frameport_flush_error;\n} V4L2m2mPriv;"))
+    decoder_source.write_text(decoder_text.replace(option_end,
+        '    { "frameport_flush_error", "Last drained-session restart error",\n'
+        '        OFFSET(frameport_flush_error), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, 0,\n'
+        '        FLAGS | AV_OPT_FLAG_READONLY },\n' + option_end))
+    buffers_source = source / "libavcodec/v4l2_buffers.c"
+    buffers_source.write_text(buffers_source.read_text() + (HERE / "v4l2_export.c.inc").read_text())
     env = dict(os.environ, PATH=str(ndk / "bin") + os.pathsep + os.environ["PATH"])
     prefix_maps = [f"-ffile-prefix-map={HERE.parents[1]}=.", f"-ffile-prefix-map={ndk_root}=android-ndk-r27c",
                    f"-ffile-prefix-map={runtime}=lepton-rootfs"]
@@ -68,8 +128,9 @@ def main():
         "--extra-cxxflags=" + " ".join(prefix_maps),
         "--disable-everything", "--disable-autodetect", "--enable-v4l2-m2m", "--disable-programs",
         "--disable-doc", "--enable-pic", "--enable-static", "--disable-shared",
-        "--enable-decoder=hevc_v4l2m2m", "--enable-parser=hevc", "--enable-bsf=hevc_mp4toannexb",
-        "--enable-demuxer=mov", "--enable-protocol=file", "--enable-avcodec", "--enable-avformat",
+        "--enable-decoder=hevc_v4l2m2m,h264_v4l2m2m,vp9_v4l2m2m,hevc,h264,vp9",
+        "--enable-parser=hevc,h264,vp9", "--enable-bsf=hevc_mp4toannexb,h264_mp4toannexb,vp9_superframe_split",
+        "--enable-demuxer=mov,matroska", "--enable-protocol=file", "--enable-avcodec", "--enable-avformat",
         "--enable-avutil", "--disable-avdevice", "--disable-avfilter", "--disable-swscale",
         "--disable-swresample", "--disable-postproc",
     ], cwd=source, env=env)
@@ -94,11 +155,12 @@ def main():
         ndk / "bin/aarch64-linux-android30-clang++", "-std=gnu++17", "-O3", "-fPIC", "-shared",
         *prefix_maps,
         "-fno-rtti", "-fno-exceptions", "-nostdlib++", "-nostdinc++", "-Wall", "-Wextra", "-Werror",
+        "-D_LIBCPP_VERBOSE_ABORT(...)=__builtin_abort()",
         "-Wno-unused-private-field", "-isystem", cpp, "-I", HERE / "platform",
         "-I", HERE / "platform/media/openmax", "-I", install / "include", HERE / "frameport_hevc.cpp",
         "-L", install / "lib", "-lavcodec", "-lavutil", "-L", runtime / "vendor/lib64",
         "-L", runtime / "system/lib64", "-lstagefright_softomx", "-lstagefright_foundation", "-lutils",
-        "-llog", "-lnativewindow", "-lyuv", "-l:libc++.so", "-lm", "-ldl", "-Wl,--no-undefined",
+        "-llog", "-lnativewindow", "-lyuv", "-lvulkan", "-l:libc++.so", "-lm", "-ldl", "-Wl,--no-undefined",
         "-Wl,-z,max-page-size=16384",
         "-Wl,-soname,libstagefrighthw.so", "-o", ARTIFACTS / "libstagefrighthw.so",
     ], env=env)
@@ -109,7 +171,8 @@ def main():
     for name in ("libstagefrighthw.so", "podman.py", "media_codecs_frameport.xml", "COPYING.FFmpeg"):
         path = ARTIFACTS / (name + ".txt" if name == "podman.py" else name)
         files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
-    manifest = {"runtime_sha256": RUNTIME_SHA, "files": files,
+    manifest = {"revision": 6, "runtime_sha256": RUNTIME_SHA, "files": files,
+                "codecs": ["video/hevc", "video/avc", "video/x-vnd.on2.vp9"],
                 "build": {"ndk_revision": NDK_REVISION, "ffmpeg_source_sha256": FFMPEG_SHA}}
     (ARTIFACTS / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 

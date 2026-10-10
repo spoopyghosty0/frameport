@@ -10,11 +10,12 @@ assets.
 ## Scope and installation
 
 FrameBridge enables the internal native-video path only for this package's
-arm64 APK. It bundles a private hardware codec, its checksum manifest, and a
-Podman wrapper in that APK. The agent verifies and extracts those files into
-the game's own directory. The launcher places this wrapper on its child PATH.
-Only the matching game's container receives the read-only plugin/XML mounts
-and Iris decoder device. Shared Lepton files and original MP4/OBB assets are
+arm64 APK. Hardware decoding is deployed independently into FramePort's shared,
+versioned codec store and automatically exposed to compatible Lepton app
+containers, without embedding decoder assets or requiring per-game recipes.
+The launcher places the shared wrapper on its child PATH. Matching containers
+receive read-only plugin/XML mounts and the Iris decoder device. Shared Lepton
+files and original MP4/OBB assets are
 never replaced, transcoded, resized, or rewritten.
 
 The native projection, view recording and Vulkan-enable hooks are gated by
@@ -34,9 +35,10 @@ If the driver's session limit is exhausted, Android can fall back to software
 decoding; that preserves functionality but not full-resolution performance.
 FramePort does not change Steam's global hardware-decoding settings.
 
-Other packages and arm32 APKs do not receive the native-video setting or these
-codec assets. Rebuilding an older unrelated APK removes the previously bundled
-codec files, and installing an APK without its manifest disables its old wrapper.
+Other packages and arm32 APKs do not receive the native-video setting. The
+decoder is separate from that setting, and runs in Lepton's arm64 media service.
+Rebuilding an older APK removes the previously bundled codec files; launcher
+migration replaces its old wrapper with the common version.
 MP4 presence alone is not evidence of compatible surface/overlay semantics.
 
 Package-specific patch revisions use the existing Update on Frame state without
@@ -49,8 +51,10 @@ fingerprints are handled with the same package scope.
 `native/hevc/frameport_hevc.cpp` exposes `OMX.frameport.hevc.decoder` through the
 tested SoftOMX ABI, using FFmpeg's LGPL Iris V4L2 hardware decoder wrapper.
 Native surface clients receive full-resolution YUV hardware buffers with fences.
-Persistent workers copy disjoint NV12 row bands into Android buffers without
-CPU color conversion. Input timestamps, EOS, dynamic dimensions, seek and flush
+Compatible large native surfaces use fenced Vulkan transfers between imported
+decoder and Android DMA buffers, retaining the decoded frame until GPU completion.
+Other surfaces retain parallel NV12 row copies without CPU color conversion.
+Input timestamps, EOS, dynamic dimensions, seek and flush
 are preserved.
 
 An AImageReader retains the decoder's actual image. The surface worker samples

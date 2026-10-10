@@ -3,9 +3,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import sys
-import types
-import zipfile
 from pathlib import Path
 
 import pytest
@@ -39,6 +36,8 @@ def test_mounts_only_matching_game_and_runtime(tmp_path, monkeypatch):
     xml.write_text('<MediaCodecs><Include href="stock.xml" /></MediaCodecs>')
     directory = tmp_path / "game/frameport-codec"
     directory.mkdir(parents=True)
+    for name in ("libstagefrighthw.so", "media_codecs_frameport.xml"):
+        (directory / name).write_bytes(b"codec asset")
     config = {"lepton": str(tmp_path / "lepton/lepton"), "appid": "123",
               "runtime_sha256": hashlib.sha256(b"runtime ABI").hexdigest()}
     exists = Path.exists
@@ -47,58 +46,30 @@ def test_mounts_only_matching_game_and_runtime(tmp_path, monkeypatch):
     extra = wrapper.mounts(directory, config, args)
     assert [s.replace("\\", "/") for s in extra[:2]] == [
         "--mount", "type=bind,source=/dev/video-dec0,destination=/dev/video-dec0,rw"]
-    assert "media_codecs_frameport.xml" in (directory / "media_codecs.xml").read_text()
+    merged = next(directory.glob("media_codecs.*.xml"))
+    assert "media_codecs_frameport.xml" in merged.read_text()
+    for spec in extra[1::2][1:]:
+        fields = dict(item.split("=", 1) for item in spec.split(",") if "=" in item)
+        assert Path(fields["source"]).is_file()
     assert "frameport" not in xml.read_text()  # shared runtime stays unchanged
     assert wrapper.mounts(directory, config, ["kill", "lepton-steamlaunch-123"]) == []
     assert wrapper.mounts(directory, config, [s.replace("123", "456") for s in args]) == []
     config["runtime_sha256"] = "wrong ABI"
     assert wrapper.mounts(directory, config, args) == []
 
-
-def test_agent_extracts_only_verified_assets_and_removes_old_wrapper(tmp_path, monkeypatch):
-    # The agent targets Linux; this test only exercises stdlib ZIP/file work.
-    if sys.platform == "win32":
-        monkeypatch.setitem(sys.modules, "fcntl", types.SimpleNamespace())
-    agent = load_module(ROOT / "agent/frameport_agent.py", "codec_agent")
-    monkeypatch.setattr(agent.shutil, "which", lambda _: "/usr/bin/podman")
-    base = tmp_path / "game"
-    (base / "lepton-app/obb").mkdir(parents=True)
-    video = base / "lepton-app/obb/movie.mp4"
-    video.write_bytes(b"original large asset")
-    apk = base / "lepton-app/game.apk"
-    assets = ROOT / "artifacts/hevc"
-    with zipfile.ZipFile(apk, "w") as z:
-        for name in ("manifest.json", "podman.py", "libstagefrighthw.so", "media_codecs_frameport.xml",
-                     "COPYING.FFmpeg"):
-            z.write(assets / (name + ".txt" if name == "podman.py" else name), "assets/frameport/hevc/" + name)
-    replace = agent.os.replace
-    published = []
-
-    def publish(source, target):
-        target = Path(target)
-        if target.name == "podman":
-            config = json.loads((base / "frameport-codec/deployment.json").read_text())
-            assert config["podman"] == "/usr/bin/podman"
-            assert all((base / "frameport-codec" / n).is_file()
-                       for n in ("libstagefrighthw.so", "media_codecs_frameport.xml", "COPYING.FFmpeg"))
-        published.append(target.name)
-        replace(source, target)
-
-    monkeypatch.setattr(agent.os, "replace", publish)
-    assert agent.install_video_codec(str(base), "/lepton/lepton", 123)
-    assert published[0] == "deployment.json" and published[-1] == "podman"
-    wrapper = base / "frameport-codec/bin/podman"
-    assert wrapper.read_bytes() == (assets / "podman.py.txt").read_bytes()
-    assert video.read_bytes() == b"original large asset"
-    with zipfile.ZipFile(apk, "w") as z:
-        z.writestr("AndroidManifest.xml", b"old APK")
-    assert not agent.install_video_codec(str(base), "/lepton/lepton", 123)
-    assert not wrapper.exists()
-    with zipfile.ZipFile(apk, "w") as z:
-        z.write(assets / "manifest.json", "assets/frameport/hevc/manifest.json")
-        z.writestr("assets/frameport/hevc/libstagefrighthw.so", b"corrupt")
-    with pytest.raises(agent.AgentError, match="checksum mismatch"):
-        agent.install_video_codec(str(base), "/lepton/lepton", 123)
+    # One shared wrapper also accelerates arbitrary packages with unchanged
+    # APKs. The launcher/container identity, not a recipe, selects its scope.
+    app = tmp_path / "another-package/lepton-app"
+    app.mkdir(parents=True)
+    monkeypatch.setenv("SteamAppId", "123")
+    monkeypatch.setenv("STEAM_COMPAT_INSTALL_PATH", str(app))
+    shared = {"scope": "shared", "runtime_sha256": hashlib.sha256(b"runtime ABI").hexdigest()}
+    assert wrapper.mounts(directory, shared, args)
+    assert wrapper.mounts(directory, shared, [s.replace("123", "456") for s in args]) == []
+    assert wrapper.mounts(directory, shared, [s.replace(":O", "") for s in args]) == []
+    assert wrapper.mounts(directory, shared, ["kill", "lepton-steamlaunch-123"]) == []
+    monkeypatch.delenv("SteamAppId")
+    assert wrapper.mounts(directory, shared, args) == []
 
 
 @pytest.mark.parametrize("configuration", [None, "{", "[]", "{}", '{"podman":null}',
@@ -183,6 +154,9 @@ def test_wrapper_finds_podman_under_the_android_path(tmp_path, monkeypatch):
     wrapper = load_module(ROOT / "native/hevc/podman.py", "android_path_wrapper")
     monkeypatch.setattr(wrapper, "__file__", str(tmp_path / "codec/bin/podman"))
     monkeypatch.setenv("PATH", "/product/bin:/system/bin:/vendor/bin")
-    monkeypatch.setattr(wrapper.shutil, "which", lambda _, path: path + "/podman" if path.endswith("usr/bin") else None)
+    monkeypatch.setattr(
+        wrapper.shutil, "which",
+        lambda _, path: path + "/podman" if Path(path).as_posix().endswith("/usr/bin") else None,
+    )
     monkeypatch.setattr(wrapper.Path, "resolve", lambda self: self)
     assert Path(wrapper.real_podman(tmp_path / "codec")).as_posix().endswith("/usr/bin/podman")
