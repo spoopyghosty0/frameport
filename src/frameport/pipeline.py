@@ -695,9 +695,14 @@ def prepare_as_is(package: str, reporter: Reporter) -> dict:
     art, store_title = artwork.fetch(package, apk)
     info = {"apk": str(apk), "alt_apk": None, "sha256": sha256(apk), "alt_sha256": None, "applied": [],
             "checks": checks, "ok": all(c["ok"] is not False for c in checks), "as_is": True,
-            "recipe_fp": recipe_fingerprint(entry["recipe"], package)}
+            "recipe_fp": recipe_fingerprint(entry["recipe"], package), "source_version": _source_version(entry)}
     library.upsert_game(package, build=info, title=entry.get("title") or store_title)
     return info
+
+
+def _source_version(entry: dict) -> str | None:
+    """The game version a build was made from: a newer APK added later shows the game as outdated (GitHub #161)."""
+    return (entry.get("analysis") or {}).get("version") or None
 
 
 def recipe_fingerprint(recipe: dict, package: str = "") -> str:
@@ -735,7 +740,7 @@ def build_game(package: str, reporter: Reporter, outdir: Path | None = None) -> 
     build_info = {"apk": str(res.apk), "alt_apk": str(res.alt_apk) if res.alt_apk else None, "sha256": res.sha256,
                   "alt_sha256": res.alt_sha256, "applied": res.applied, "checks": res.checks, "ok": res.ok,
                   "overport": res.meta.get("overport"), "recipe_fp": recipe_fingerprint(entry["recipe"], package),
-                  "superseded": res.meta.get("superseded") or {}}
+                  "superseded": res.meta.get("superseded") or {}, "source_version": _source_version(entry)}
     library.upsert_game(package, build=build_info, title=entry.get("title") or store_title)
     return build_info
 
@@ -962,18 +967,24 @@ def proton_alternative_worth_trying(package: str, verdict: str | None) -> bool:
 
 def useful_suggestions(package: str, suggestions: list[str]) -> list[str]:
     """Triage suggestions that would change something: not already on (a value suggestion: not already that value),
-    and not conflicting with the recipe (e.g. no Revive for a repack that runs its own)."""
+    applicable to the game, and not conflicting with the recipe (e.g. no Revive for a repack that runs its own)."""
     from .patches.base import REGISTRY
     from .validate.triage import split_suggestion
 
     entry = library.game(package) or {}
     patches = (entry.get("recipe") or {}).get("patches") or {}
+    try:
+        analysis = library.analysis_from_dict(entry["analysis"]) if entry.get("analysis") else None
+    except Exception:  # noqa: BLE001
+        analysis = None
     out = []
     for s in suggestions:
         pid, value = split_suggestion(s)
         p = REGISTRY.get(pid)
         if p and any(c in patches for c in p.conflicts):
             continue
+        if p and analysis is not None and not p.applies(analysis):
+            continue  # can't matter for this game, e.g. GLES-only 360° emulation for a Vulkan game (GitHub #138)
         if pid in patches and (value is None or _same_value((patches[pid] or {}).get("value"), value)):
             continue
         if s not in out:

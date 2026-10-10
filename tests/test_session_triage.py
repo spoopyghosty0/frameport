@@ -265,3 +265,12 @@ def test_last_session_callout():
     assert view.session_callout() is None
     view.g = {"package": PKG, "last_session": {"findings": [ls["findings"][3]]}}
     assert view.session_callout() is None  # nothing worth showing
+
+
+def test_suggestions_that_cant_matter_for_the_game_are_dropped():
+    """GitHub #138: a Vulkan game (AC Nexus) was offered the GLES-only 360° emulation."""
+    add_game()
+    library.update_game(PKG, lambda e: e["analysis"].update(graphics="Vulkan"))
+    assert pipeline.useful_suggestions(PKG, ["adapter.equirect_emul", "adapter.scale=0.85"]) == ["adapter.scale=0.85"]
+    library.update_game(PKG, lambda e: e["analysis"].update(graphics="GLES3"))
+    assert pipeline.useful_suggestions(PKG, ["adapter.equirect_emul"]) == ["adapter.equirect_emul"]

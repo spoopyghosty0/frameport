@@ -116,6 +116,9 @@ def install_state(game: dict, frame_info: dict | None) -> str | None:
         return "outdated"
     if built and dep.get("sha256") in built and recipe_changed(game):
         return "outdated"  # the recipe changed since this build (e.g. a catalog fix): it needs a new build
+    if built and dep.get("sha256") in built and b.get("source_version") and \
+            b["source_version"] != (game.get("analysis") or {}).get("version"):
+        return "outdated"  # a newer (or older) APK of the game was added since this build (GitHub #161)
     return "outdated" if settings_diff(game, frame_info) else "installed"
 
 

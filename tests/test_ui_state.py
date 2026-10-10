@@ -30,6 +30,16 @@ def test_outdated():
     assert install_state(game("a"), frame({"package": "com.x", "sha256": "old"})) == "outdated"
 
 
+
+def test_outdated_after_a_newer_apk_was_added():
+    """GitHub #161: re-adding a newer APK of an installed game shows "Update on Frame", not "Reinstall"."""
+    g = game("a")
+    g["build"]["source_version"] = "1.0"
+    g["analysis"] = {"version": "1.0"}
+    assert install_state(g, frame({"package": "com.x", "sha256": "a"})) == "installed"
+    g["analysis"]["version"] = "1.1"
+    assert install_state(g, frame({"package": "com.x", "sha256": "a"})) == "outdated"
+
 # ------------------------------------------------------------------------------------------ library filters / tags
 def lib_games():
     return [
