@@ -5,7 +5,7 @@
 Some Quest games come as an APK (the app file) plus `.obb` files (the game's data). Give every game its own folder,
 put the APK in it and put the data in a folder named after the game's **package name** (for example `com.Armature.VR4`):
 
-```
+```tree
 Games/                                  ← scan this folder (Add games → Scan a folder)
 ├── Resident Evil 4/                    ← one folder per game (any name)
 │   ├── VR4.apk                         ← the APK (any file name)

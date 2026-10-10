@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 400" width="1120" height="400" role="img" aria-labelledby="t d">
+  <title id="t">How FramePort updates itself</title>
+  <desc id="d">check() asks GitHub for the latest release every 6 hours. install_kind() tells a packaged app from a source checkout or a Python wheel: a checkout runs git pull and uv sync, a wheel is reinstalled. For the packaged app, prepare() downloads the release, checks SHA256SUMS and the Windows signer and unpacks it, then apply() starts a script that waits for FramePort to quit, swaps the folders with a rollback and starts the new version.</desc>
+  <defs>
+    <linearGradient id="portal" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#3aa8ff"/>
+      <stop offset="1" stop-color="#ff8a1f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.2" r="0.8">
+      <stop offset="0" stop-color="#3aa8ff" stop-opacity="0.09"/>
+      <stop offset="0.55" stop-color="#ff8a1f" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#0d0e12" stop-opacity="0"/>
+    </radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#717583"/>
+    </marker>
+    <style>
+      .n { font: 800 30px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+      .mt { font: 700 16px ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; fill: #edeef2; }
+      .s { font: 400 13.5px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; fill: #a7abb7; }
+      .m { font: 500 12.5px ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; fill: #a7abb7; }
+      .lab { font: 600 12px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; fill: #717583; letter-spacing: .04em; }
+      .card { fill: #16181e; stroke: #2a2d37; stroke-width: 1.5; }
+      .line { stroke: #4a4e5c; stroke-width: 1.8; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="1120" height="400" rx="18" fill="#0d0e12"/>
+  <rect width="1120" height="400" rx="18" fill="url(#glow)"/>
+  <rect x="40" y="36" width="1040" height="3" rx="1.5" fill="url(#portal)" opacity="0.7"/>
+
+  <!-- 1 check -->
+  <rect class="card" x="40" y="62" width="236" height="178" rx="14"/>
+  <text class="n" x="60" y="104" fill="#3aa8ff">1</text>
+  <text class="mt" x="90" y="100">check()</text>
+  <text class="s" x="60" y="134">Asks GitHub for the latest</text>
+  <text class="s" x="60" y="154">release, every 6 hours.</text>
+  <text class="s" x="60" y="182">Skips drafts, pre-releases</text>
+  <text class="s" x="60" y="202">and versions you skipped.</text>
+  <path class="line" d="M276 151 H306" marker-end="url(#arrow)"/>
+
+  <!-- 2 install_kind -->
+  <rect class="card" x="312" y="62" width="236" height="178" rx="14"/>
+  <text class="n" x="332" y="104" fill="#7f9bd6">2</text>
+  <text class="mt" x="362" y="100">install_kind()</text>
+  <text class="s" x="332" y="134">How this copy was installed:</text>
+  <text class="m" x="332" y="164">bundle</text>
+  <text class="s" x="388" y="164">the packaged app</text>
+  <text class="m" x="332" y="190">source</text>
+  <text class="s" x="388" y="190">a git checkout</text>
+  <text class="m" x="332" y="216">wheel</text>
+  <text class="s" x="388" y="216">uv tool, pipx, pip</text>
+  <path class="line" d="M548 151 H604" marker-end="url(#arrow)"/>
+  <text class="lab" x="576" y="141" text-anchor="middle">bundle</text>
+
+  <!-- 3 prepare -->
+  <rect class="card" x="610" y="62" width="226" height="178" rx="14"/>
+  <text class="n" x="630" y="104" fill="#c2905a">3</text>
+  <text class="mt" x="660" y="100">prepare()</text>
+  <text class="s" x="630" y="134">Downloads the release to</text>
+  <text class="m" x="630" y="154">updates/&lt;version&gt;/</text>
+  <text class="s" x="630" y="182">Checks SHA256SUMS and, on</text>
+  <text class="s" x="630" y="202">Windows, the code signer.</text>
+  <text class="s" x="630" y="222">Unpacks; writes ready.json.</text>
+  <path class="line" d="M836 151 H862" marker-end="url(#arrow)"/>
+
+  <!-- 4 apply -->
+  <rect x="868" y="62" width="212" height="178" rx="14" fill="#1d150d" stroke="#ff8a1f" stroke-width="1.5"/>
+  <text class="n" x="888" y="104" fill="#ff8a1f">4</text>
+  <text class="mt" x="918" y="100">apply()</text>
+  <text class="s" x="888" y="134">A script waits for</text>
+  <text class="s" x="888" y="154">FramePort to quit, swaps</text>
+  <text class="s" x="888" y="174">the folders (rolls back on</text>
+  <text class="s" x="888" y="194">failure) and starts the</text>
+  <text class="s" x="888" y="214">new version.</text>
+
+  <!-- the other two ways -->
+  <path class="line" d="M400 240 V282" marker-end="url(#arrow)"/>
+  <path class="line" d="M470 240 V262 H710 V282" marker-end="url(#arrow)"/>
+  <text class="lab" x="400" y="266" text-anchor="end" dx="-8">source</text>
+  <text class="lab" x="600" y="256" text-anchor="middle">wheel</text>
+  <rect class="card" x="240" y="288" width="320" height="74" rx="12"/>
+  <text class="s" x="260" y="318">Source checkout: pulls and syncs</text>
+  <text class="m" x="260" y="342">git pull --ff-only · uv sync</text>
+  <rect class="card" x="584" y="288" width="320" height="74" rx="12"/>
+  <text class="s" x="604" y="318">Wheel: reinstalls the release's wheel</text>
+  <text class="m" x="604" y="342">uv tool · pipx · pip</text>
+</svg>
