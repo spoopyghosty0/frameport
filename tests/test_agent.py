@@ -438,6 +438,19 @@ def test_uninstall_quest_keeping_saves_drops_the_install_record(monkeypatch, tmp
     assert (anchor / "lepton-data/saves/slot1").read_text() == "progress"  # saves kept
 
 
+
+def test_uninstall_quest_deleting_data_removes_saves_and_mods(monkeypatch, tmp_path):
+    """GitHub #130: the Uninstall dialog's "Also delete its saves…" box (keep_data False) removes lepton-data too."""
+    a = load_agent(monkeypatch, tmp_path)
+    anchor = tmp_path / "Applications/quest-frame/com.x.y"
+    (anchor / "lepton-app").mkdir(parents=True)
+    (anchor / "lepton-data/external/ModData/songs").mkdir(parents=True)
+    (anchor / "lepton-data/external/ModData/songs/old.zip").write_bytes(b"x")
+    (anchor / "deployment.json").write_text(json.dumps({"package": "com.x.y", "base": str(anchor), "appid": 1}))
+    monkeypatch.setattr(a, "container_running", lambda appid: False)
+    assert a.cmd_uninstall({"package": "com.x.y", "keep_data": False})["removed"]
+    assert not (anchor / "lepton-data").exists()
+
 def test_prune_shortcuts_on_relaunch_change(monkeypatch, tmp_path):
     a = load_agent(monkeypatch, tmp_path)
     vdf = str(tmp_path / "shortcuts.vdf")

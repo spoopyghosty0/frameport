@@ -1341,15 +1341,21 @@ class FramePortApp:
 
     def uninstall(self, pkg: str, to: str = "frame") -> None:
         title = self._title(pkg)
-        text = (tr("Removes {title}'s game files from the Frame. Saves are kept; the Steam entry disappears "
-                   "after the next Steam restart.").format(title=title)) if to == "frame" else \
+        text = tr("Removes {title}'s game files from the Frame. Saves and the game's own files are kept unless you "
+                  "tick the box below; the Steam entry disappears after the next Steam restart.").format(
+            title=title) if to == "frame" else \
             tr("Removes {title} from this PC's Steam library (Steam restarts once). "
                "The game folder isn't touched.").format(title=title)
 
         delete_local, extra = self._delete_local_option(pkg)
+        delete_data = None
+        if to == "frame":  # GitHub #130: what the game stored (saves, mods, downloads) used to survive every uninstall
+            delete_data = ft.Checkbox(label=tr("Also delete its saves and everything it stored on the Frame (mods, "
+                                               "downloaded content)"), value=False, active_color=T.ERROR)
+            extra = delete_data if extra is None else ft.Column([delete_data, extra], spacing=T.px(8), tight=True)
 
         def run(job: Job):
-            self._target_for(to).uninstall(pkg, keep_data=True)
+            self._target_for(to).uninstall(pkg, keep_data=not (delete_data and delete_data.value))
             self._pc_cache = None
             if delete_local and delete_local.value:
                 done, freed = pipeline.delete_local_files(pkg)
