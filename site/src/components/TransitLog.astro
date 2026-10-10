@@ -3,8 +3,9 @@
 // orange, the portal between them.
 import Glyph from './Glyph.astro';
 
-interface Props { example: { title: string; engine: string; xr: string; verified?: string } }
-const { example } = Astro.props;
+export interface LogGame { title: string; engine: string; xr: string; verified?: string; patches: number }
+interface Props { example: LogGame; others: LogGame[] }
+const { example, others } = Astro.props;
 
 type Stage = { glyph: Parameters<typeof Glyph>[0]['name']; name: string; detail: string; text: string };
 const pc: Stage[] = [
@@ -16,7 +17,7 @@ const pc: Stage[] = [
     text: 'Uses the tested recipe when the game is in the catalog, otherwise suggests patches from the analysis. Every patch is explained in plain words.' },
   { glyph: 'port', name: 'convert', detail: 'OVRPort · → OpenXR',
     text: "OVRPort translates Meta's VR runtime calls to OpenXR, which the Frame speaks." },
-  { glyph: 'patch', name: 'patch', detail: 'FrameBridge + Frame patches',
+  { glyph: 'patch', name: 'patch', detail: example.patches ? `FrameBridge + ${example.patches} from the recipe` : 'FrameBridge + Frame patches',
     text: 'FrameBridge, FramePort’s OpenXR adapter, fills in what the Frame lacks: passthrough, the room, curved and 360° layers.' },
   { glyph: 'keys', name: 'sign', detail: "the game's own key",
     text: 'Each game keeps one signing key, so an update installs over the old build and your saves stay.' },
@@ -41,7 +42,7 @@ const frame: Stage[] = [
 
     <div class="log reveal" data-log>
       <div class="log-bar">
-        <span class="log-title"><Glyph name="frame" size={18} /> Installing {example.title} on Steam Frame</span>
+        <span class="log-title"><Glyph name="frame" size={18} /> Installing <span data-lg="title">{example.title}</span> on Steam Frame</span>
         <span class="log-progress" aria-hidden="true"><i></i></span>
       </div>
 
@@ -52,7 +53,7 @@ const frame: Stage[] = [
             <span class="g"><Glyph name={s.glyph} size={20} /></span>
             <code class="n">{s.name}</code>
             <p class="t">{s.text}</p>
-            <code class="d">{s.detail}</code>
+            <code class="d" data-lg={s.name}>{s.detail}</code>
             <span class="ok" aria-label="done">ok</span>
           </li>
         ))}
@@ -67,17 +68,44 @@ const frame: Stage[] = [
             <span class="g"><Glyph name={s.glyph} size={20} /></span>
             <code class="n">{s.name}</code>
             <p class="t">{s.text}</p>
-            <code class="d">{s.detail}</code>
+            <code class="d" data-lg={s.name}>{s.detail}</code>
             <span class="ok" aria-label="done">ok</span>
           </li>
         ))}
       </ol>
     </div>
     <p class="foot muted reveal">
-      {example.title}'s real recipe from the catalog. Games outside the catalog get the same stages with suggested patches.
+      <span data-lg="foot">{example.title}</span>'s real recipe from the catalog. Games outside the catalog get the same stages with suggested patches.
+      <button type="button" class="btn btn-secondary btn-small again" data-again>↻ Try another game</button>
     </p>
   </div>
 </section>
+
+<script type="application/json" data-log-games set:html={JSON.stringify(others).replaceAll('<', '\\u003c')} />
+
+<script>
+  // another tested game, its real engine, VR API and recipe; the log plays again
+  const log = document.querySelector<HTMLElement>('[data-log]');
+  const games = JSON.parse(document.querySelector('[data-log-games]')?.textContent || '[]') as
+    { title: string; engine: string; xr: string; verified?: string; patches: number }[];
+  let last = -1;
+  document.querySelector('[data-again]')?.addEventListener('click', () => {
+    if (!log || !games.length) return;
+    let k = Math.floor(Math.random() * games.length);
+    if (k === last) k = (k + 1) % games.length;
+    last = k;
+    const g = games[k];
+    const set = (key: string, v: string) => document.querySelectorAll(`[data-lg="${key}"]`).forEach((el) => { el.textContent = v; });
+    set('title', g.title); set('foot', g.title);
+    set('scan', `${g.title} · APK + OBB`);
+    set('analyze', `${g.engine} · ${g.xr} · arm64`);
+    set('recipe', g.verified ? `tested recipe · ${g.verified}` : 'tested recipe');
+    set('patch', g.patches ? `FrameBridge + ${g.patches} from the recipe` : 'FrameBridge + Frame patches');
+    log.classList.remove('in');
+    void log.offsetWidth;  // restart the line-by-line entrance
+    log.classList.add('in');
+  });
+</script>
 
 <style>
   .log { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
@@ -125,7 +153,8 @@ const frame: Stage[] = [
   .seam span { position: relative; padding: 4px 12px; background: var(--surface); font: 500 12px/1 var(--font-mono);
     color: var(--text-2); letter-spacing: .06em; }
 
-  .foot { margin-top: 18px; font-size: 14px; }
+  .foot { margin-top: 18px; font-size: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .again { font-size: 13px; }
 
   @media (max-width: 860px) {
     .stage { grid-template-columns: 36px minmax(0, 1fr) auto; }

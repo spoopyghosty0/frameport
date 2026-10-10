@@ -13,7 +13,7 @@ const { games } = Astro.props;
       <h1>Your <span class="q">VR games</span>, on the <span class="f">Steam Frame</span>.</h1>
       <p class="lead">
         FramePort converts, patches and installs Meta Quest games, Android apps and PC VR games on the Steam Frame, and adds
-        them to your Steam library. Set up the Frame once with one command; after that it's one click per game.
+        them to your Steam library. Connect the Frame once, over Wi-Fi or a USB cable; after that it's one click per game.
       </p>
       <div class="ctas">
         <a class="btn btn-primary" href={RELEASES} data-download>
@@ -28,7 +28,7 @@ const { games } = Astro.props;
         ))}
         <li><a href={RELEASES}>All releases</a></li>
       </ul>
-      <p class="facts">Free and open source · GPL-3.0 · Proof of concept · Not affiliated with Valve or Meta</p>
+      <p class="facts">Free and open source · GPL-3.0 · Wi-Fi or USB cable · Proof of concept · Not affiliated with Valve or Meta</p>
     </div>
     <div class="scene">
       <Crossing games={games} />

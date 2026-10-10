@@ -1,0 +1,187 @@
+---
+// Real screenshots of the app (rendered by scripts/showcase, never by hand) as a carousel: arrows, keys, swipe,
+// thumbnails, autoplay that pauses for the reader, full screen on click.
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
+interface Slide { img: ImageMetadata; title: string; text: string; fit?: 'contain' }
+interface Props { slides: Slide[] }
+const { slides } = Astro.props;
+---
+<div class="car" data-car tabindex="0" role="region" aria-roledescription="carousel" aria-label="Screenshots of FramePort">
+  <div class="stage" data-car-stage>
+    {slides.map((s, i) => (
+      <figure class:list={['slide', { on: i === 0, contain: s.fit === 'contain' }]} data-slide={i} aria-roledescription="slide" aria-label={`${i + 1} of ${slides.length}: ${s.title}`} aria-hidden={i !== 0 ? 'true' : undefined}>
+        <button type="button" class="zoom" data-zoom aria-label={`Show ${s.title} full screen`}>
+          <Image src={s.img} alt={`FramePort: ${s.title}`} widths={[800, 1280, 1920]} sizes="(max-width: 1240px) 94vw, 1180px" loading={i === 0 ? 'eager' : 'lazy'} />
+        </button>
+      </figure>
+    ))}
+    <button type="button" class="nav prev" data-prev aria-label="Previous screenshot">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7" /></svg>
+    </button>
+    <button type="button" class="nav next" data-next aria-label="Next screenshot">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7" /></svg>
+    </button>
+  </div>
+  <div class="cap">
+    <p class="ct" aria-live="polite"><b data-ct>{slides[0].title}</b> <span data-cx>{slides[0].text}</span></p>
+    <span class="count"><span data-cn>1</span> / {slides.length}</span>
+    <button type="button" class="pp" data-pp aria-label="Pause the slideshow" aria-pressed="false">
+      <svg class="i-pause" viewBox="0 0 24 24" width="16" height="16"><path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor" /></svg>
+      <svg class="i-play" viewBox="0 0 24 24" width="16" height="16"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg>
+    </button>
+  </div>
+  <ol class="thumbs">
+    {slides.map((s, i) => (
+      <li>
+        <button type="button" class:list={['th', { on: i === 0 }]} data-thumb={i} aria-label={`Show ${s.title}`} aria-current={i === 0 ? 'true' : undefined}>
+          <Image src={s.img} alt="" widths={[240, 480]} sizes="160px" />
+          <span class="bar"><i></i></span>
+          <span class="tl">{s.title}</span>
+        </button>
+      </li>
+    ))}
+  </ol>
+  <script type="application/json" data-car-text set:html={JSON.stringify(slides.map((s) => [s.title, s.text])).replaceAll('<', '\\u003c')} />
+  <dialog class="full" data-full aria-label="Screenshot">
+    <img data-full-img alt="" />
+    <button type="button" class="nav prev" data-fprev aria-label="Previous screenshot">‹</button>
+    <button type="button" class="nav next" data-fnext aria-label="Next screenshot">›</button>
+    <form method="dialog"><button class="close" aria-label="Close">×</button></form>
+  </dialog>
+</div>
+
+<script>
+  const car = document.querySelector<HTMLElement>('[data-car]');
+  if (car) {
+    const slides = [...car.querySelectorAll<HTMLElement>('[data-slide]')];
+    const thumbs = [...car.querySelectorAll<HTMLButtonElement>('[data-thumb]')];
+    const text = JSON.parse(car.querySelector('[data-car-text]')?.textContent || '[]') as [string, string][];
+    const full = car.querySelector<HTMLDialogElement>('[data-full]')!;
+    const fullImg = car.querySelector<HTMLImageElement>('[data-full-img]')!;
+    const pp = car.querySelector<HTMLButtonElement>('[data-pp]')!;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const DWELL = 5200;
+    let i = 0, paused = reduce, hover = false, visible = false, elapsed = 0, swiped = false;
+
+    const go = (n: number, dir = n > i ? 1 : -1) => {
+      const next = (n + slides.length) % slides.length;
+      if (next === i) return;
+      car.style.setProperty('--dir', String(dir));
+      slides[i].classList.remove('on'); slides[i].setAttribute('aria-hidden', 'true');
+      thumbs[i].classList.remove('on'); thumbs[i].removeAttribute('aria-current');
+      i = next;
+      slides[i].classList.add('on'); slides[i].removeAttribute('aria-hidden');
+      thumbs[i].classList.add('on'); thumbs[i].setAttribute('aria-current', 'true');
+      // only the thumbnail strip scrolls sideways: scrollIntoView would also move the page during autoplay
+      const strip = thumbs[i].closest('ol')!, li = thumbs[i].parentElement!;
+      strip.scrollTo({ left: li.offsetLeft - (strip.clientWidth - li.offsetWidth) / 2, behavior: reduce ? 'auto' : 'smooth' });
+      car.querySelector('[data-ct]')!.textContent = text[i][0];
+      car.querySelector('[data-cx]')!.textContent = text[i][1];
+      car.querySelector('[data-cn]')!.textContent = String(i + 1);
+      elapsed = 0;
+      if (full.open) showFull();
+    };
+    const showFull = () => {
+      const img = slides[i].querySelector('img')!;
+      fullImg.src = img.currentSrc || img.src;
+      fullImg.alt = img.alt;
+    };
+    car.querySelector('[data-prev]')!.addEventListener('click', () => go(i - 1, -1));
+    car.querySelector('[data-next]')!.addEventListener('click', () => go(i + 1, 1));
+    car.querySelector('[data-fprev]')!.addEventListener('click', () => go(i - 1, -1));
+    car.querySelector('[data-fnext]')!.addEventListener('click', () => go(i + 1, 1));
+    thumbs.forEach((t, k) => t.addEventListener('click', () => go(k)));
+    car.querySelectorAll('[data-zoom]').forEach((z) => z.addEventListener('click', () => {
+      if (swiped) { swiped = false; return; }
+      showFull(); full.showModal();
+    }));
+    full.addEventListener('click', (e) => { if (e.target === full) full.close(); });
+    car.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(i - 1, -1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(i + 1, 1); }
+    });
+    // swipe
+    let x0: number | null = null;
+    const stage = car.querySelector<HTMLElement>('[data-car-stage]')!;
+    stage.addEventListener('pointerdown', (e) => { x0 = e.clientX; swiped = false; });
+    stage.addEventListener('pointerup', (e) => {
+      if (x0 !== null && Math.abs(e.clientX - x0) > 40) { swiped = true; go(i + (e.clientX < x0 ? 1 : -1), e.clientX < x0 ? 1 : -1); }
+      x0 = null;
+    });
+    // autoplay: only on screen, not under the pointer or focus, not in full screen
+    const setPaused = (p: boolean) => { paused = p; pp.setAttribute('aria-pressed', String(p)); pp.setAttribute('aria-label', p ? 'Play the slideshow' : 'Pause the slideshow'); car.classList.toggle('paused', p); };
+    setPaused(paused);
+    pp.addEventListener('click', () => setPaused(!paused));
+    car.addEventListener('pointerenter', () => { hover = true; });
+    car.addEventListener('pointerleave', () => { hover = false; });
+    car.addEventListener('focusin', () => { hover = true; });
+    car.addEventListener('focusout', () => { hover = false; });
+    new IntersectionObserver((es) => { visible = es.some((x) => x.isIntersecting); }, { threshold: 0.4 }).observe(car);
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = now - last; last = now;
+      const running = !paused && !hover && visible && !full.open && !document.hidden;
+      if (running) elapsed += dt;
+      car.style.setProperty('--p', String(Math.min(1, elapsed / DWELL)));
+      if (elapsed >= DWELL) go(i + 1, 1);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+</script>
+
+<style>
+  .car { --p: 0; --dir: 1; outline: none; min-width: 0; max-width: 100%; }
+  .car:focus-visible .stage { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+  .stage { position: relative; aspect-ratio: 1280 / 820; border-radius: var(--radius-md); overflow: hidden; background: #050608;
+    border: 1px solid var(--border-strong); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .8); touch-action: pan-y; }
+  .slide { position: absolute; inset: 0; margin: 0; opacity: 0; transform: translateX(calc(var(--dir) * 3%)) scale(1.02);
+    transition: opacity 600ms var(--ease-out), transform 900ms var(--ease-out); pointer-events: none; }
+  .slide.on { opacity: 1; transform: none; pointer-events: auto; }
+  .zoom { all: unset; display: block; width: 100%; height: 100%; cursor: zoom-in; }
+  .zoom :global(img) { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+  .contain .zoom :global(img) { object-fit: contain; }
+  .nav { all: unset; position: absolute; top: 50%; width: 46px; height: 46px; margin-top: -23px; border-radius: 50%; display: grid; place-items: center;
+    cursor: pointer; color: var(--text); background: rgba(13, 14, 18, .6); backdrop-filter: blur(8px); border: 1px solid rgba(237, 238, 242, .2);
+    opacity: 0; transition: opacity 220ms, background-color 220ms, transform 320ms var(--ease-back); font-size: 28px; line-height: 1; }
+  .prev { left: 14px; } .next { right: 14px; }
+  .stage:hover .nav, .nav:focus-visible, .car:focus-within .nav { opacity: 1; }
+  .nav:hover { background: var(--accent); color: var(--on-accent); transform: scale(1.08); }
+  .nav:focus-visible { outline: 2px solid var(--accent); }
+  .cap { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+  .ct { margin-right: auto; color: var(--text-2); font-size: 15px; }
+  .ct b { color: var(--text); font-weight: 600; margin-right: 4px; }
+  .count { font: 500 13px/1 var(--font-mono); color: var(--text-2); white-space: nowrap; }
+  .pp { all: unset; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--text);
+    border: 1px solid var(--border-strong); }
+  .pp:hover { background: rgba(237, 238, 242, .06); }
+  .pp:focus-visible { outline: 2px solid var(--accent); }
+  .i-play { display: none; } .paused .i-play { display: block; } .paused .i-pause { display: none; }
+  .thumbs { list-style: none; margin: 14px 0 0; padding: 4px 2px 8px; display: flex; gap: 10px; overflow-x: auto; scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent; }
+  .th { all: unset; position: relative; display: grid; gap: 6px; width: 160px; flex: none; cursor: pointer; }
+  .th :global(img) { width: 160px; height: 90px; object-fit: cover; object-position: top left; border-radius: 8px; border: 1px solid var(--border);
+    opacity: .55; transition: opacity 220ms, transform 220ms var(--ease-out), border-color 220ms; }
+  .th:hover :global(img) { opacity: .9; transform: translateY(-2px); }
+  .th.on :global(img) { opacity: 1; border-color: var(--accent); }
+  .th:focus-visible :global(img) { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .bar { height: 3px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--portal); }
+  .th.on .bar i { width: calc(var(--p) * 100%); }
+  .tl { font-size: 12.5px; color: var(--text-2); }
+  .th.on .tl { color: var(--text); }
+  .full { padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: #000; max-width: 96vw; max-height: 94vh; overflow: hidden; }
+  .full::backdrop { background: rgba(5, 6, 8, .9); backdrop-filter: blur(4px); }
+  .full img { display: block; max-width: 96vw; max-height: 94vh; }
+  .full .nav { opacity: 1; }
+  .full .close { all: unset; position: absolute; right: 10px; top: 8px; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 24px; color: var(--text); background: rgba(22, 24, 30, .7); cursor: pointer; }
+  .full .close:hover { background: var(--accent); color: var(--on-accent); }
+  @media (max-width: 700px) {
+    .nav { opacity: 1; width: 38px; height: 38px; margin-top: -19px; }
+    .th { width: 120px; } .th :global(img) { width: 120px; height: 68px; }
+    .cap { flex-wrap: wrap; }
+  }
+</style>

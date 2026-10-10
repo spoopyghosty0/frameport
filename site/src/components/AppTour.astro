@@ -1,9 +1,8 @@
 ---
 // The app itself: a clickable copy (AppMock) with a guided tour, the showcase videos (rendered by scripts/showcase,
 // never by hand) in a player, and real screenshots.
-import { Image } from 'astro:assets';
 import AppMock from './AppMock.astro';
-import Glyph from './Glyph.astro';
+import Carousel from './Carousel.astro';
 import type { MockGame } from '../scripts/mock';
 import { url } from '../data/site';
 import library from '../assets/media/library.png';
@@ -13,6 +12,8 @@ import live from '../assets/media/live-view.png';
 import files from '../assets/media/files.png';
 import keys from '../assets/media/type-on-frame.png';
 import screenshots from '../assets/media/screenshots.png';
+import progress from '../assets/media/install-progress.png';
+import patches from '../assets/media/patches.png';
 
 interface Props { games: MockGame[] }
 const { games } = Astro.props;
@@ -24,6 +25,8 @@ const shots = [
   { img: screenshots, title: 'Screenshots', text: 'The pictures you took in the headset, sorted by game and day.' },
   { img: files, title: 'Files', text: "The Frame's videos, downloads and each game's storage. Drag and drop." },
   { img: keys, title: 'Type on Frame', text: "Your computer's keyboard, typing in VR apps, Steam and the desktop." },
+  { img: progress, title: 'Installing', text: 'Every stage on the way to the Frame, with speed and time left.' },
+  { img: patches, title: 'Patches', text: 'What each patch does, in plain words; switch any of them.', fit: 'contain' as const },
 ];
 const videos = [
   { id: 'tour', title: 'The tour', text: 'Library, install, play, monitor · about 90 s' },
@@ -55,20 +58,9 @@ const videos = [
     </div>
   </div>
 
-  <div class="strip-wrap reveal">
-    <ul class="strip" tabindex="0" aria-label="Screenshots">
-      {shots.map((s) => (
-        <li>
-          <figure class="shot">
-            <a class="shot-img" href={s.img.src}>
-              <Image src={s.img} alt={`FramePort ${s.title}`} widths={[480, 800, 1200]} sizes="(max-width: 700px) 82vw, 560px" />
-            </a>
-            <figcaption><strong>{s.title}</strong> {s.text}</figcaption>
-          </figure>
-        </li>
-      ))}
-    </ul>
-    <p class="strip-hint wrap"><Glyph name="shot" size={16} /> Screenshots of the real app · scroll sideways for more</p>
+  <div class="wrap shots reveal">
+    <p class="watch-k">The real app, screenshot by screenshot</p>
+    <Carousel slides={shots} />
   </div>
 
   <dialog class="player" data-player aria-label="Video">
@@ -123,20 +115,5 @@ const videos = [
     place-items: center; font-size: 24px; color: var(--text); background: rgba(22, 24, 30, .7); cursor: pointer; }
   .player .close:hover { background: var(--accent); color: var(--on-accent); }
 
-  .strip-wrap { margin-top: clamp(48px, 7vw, 72px); }
-  .strip { list-style: none; margin: 0; display: flex; gap: 20px; overflow-x: auto; scroll-snap-type: x mandatory;
-    padding: 12px max(var(--gutter), calc((100vw - var(--page)) / 2)) 28px; scroll-padding-inline: max(var(--gutter), calc((100vw - var(--page)) / 2));
-    scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
-  .strip li { flex: 0 0 min(82vw, 560px); scroll-snap-align: start; }
-  .shot { margin: 0; }
-  .shot-img { display: block; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border);
-    box-shadow: var(--shadow-art); background: var(--surface);
-    transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out), border-color 220ms; }
-  .shot-img :global(img) { width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; object-position: top left;
-    transition: transform 600ms var(--ease-out); }
-  .shot-img:hover { transform: translateY(-4px); box-shadow: var(--shadow-art-hover); border-color: rgba(255, 138, 31, 0.4); }
-  .shot-img:hover :global(img) { transform: scale(1.03); }
-  figcaption { margin-top: 14px; color: var(--text-2); font-size: 14px; line-height: 1.55; }
-  figcaption strong { color: var(--text); font-weight: 600; margin-right: 4px; }
-  .strip-hint { display: flex; align-items: center; gap: 8px; color: var(--text-2); font: 400 12px/1 var(--font-mono); }
+  .shots { margin-top: clamp(48px, 7vw, 72px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 </style>

@@ -1,0 +1,104 @@
+---
+// Everyone who reported an issue, opened a pull request or committed code (scripts/contributors.mjs).
+import data from '../data/contributors.json';
+
+const people = data.people;
+const what = (p: (typeof people)[number]) => [
+  p.commits && `${p.commits} ${p.commits === 1 ? 'commit' : 'commits'}`,
+  p.prs && `${p.prs} ${p.prs === 1 ? 'pull request' : 'pull requests'}`,
+  p.issues && `${p.issues} ${p.issues === 1 ? 'issue' : 'issues'}`,
+].filter(Boolean).join(' · ');
+const code = people.filter((p) => p.commits || p.prs).length;
+const reports = people.filter((p) => p.issues).length;
+---
+<div class="contrib reveal" data-contrib>
+  <div class="ch">
+    <h3>{people.length} people made FramePort better</h3>
+    <div class="cf" role="group" aria-label="Show">
+      <button type="button" data-cf="all" aria-pressed="true">Everyone</button>
+      <button type="button" data-cf="code" aria-pressed="false">Code · {code}</button>
+      <button type="button" data-cf="issues" aria-pressed="false">Reports · {reports}</button>
+    </div>
+  </div>
+  <p class="cl">Every bug report with a diagnostics zip and every shared recipe made a game work for someone else.</p>
+  <ul class="wall" data-wall>
+    {people.map((p, i) => (
+      <li data-kind={`${p.commits || p.prs ? 'code' : ''} ${p.issues ? 'issues' : ''}`} style={`--i:${i}`}>
+        <a href={p.url} aria-label={`${p.login}: ${what(p)}`} data-who={p.login} data-what={what(p)}>
+          <img src={`${p.avatar}${p.avatar.includes('?') ? '&' : '?'}s=96`} alt="" width="48" height="48" loading="lazy" decoding="async" />
+        </a>
+      </li>
+    ))}
+  </ul>
+  <p class="card-tip" data-card hidden><b data-card-who></b><span data-card-what></span></p>
+  <p class="cu">From GitHub, {data.updated}. <a href="https://github.com/spoopyghosty0/frameport/issues/new/choose">Report something</a> to join them.</p>
+</div>
+
+<script>
+  const box = document.querySelector<HTMLElement>('[data-contrib]');
+  if (box) {
+    const wall = box.querySelector<HTMLElement>('[data-wall]')!;
+    const links = [...wall.querySelectorAll<HTMLAnchorElement>('a')];
+    const card = box.querySelector<HTMLElement>('[data-card]')!;
+    // filters
+    box.querySelectorAll<HTMLButtonElement>('[data-cf]').forEach((b) => b.addEventListener('click', () => {
+      const f = b.dataset.cf!;
+      box.querySelectorAll('[data-cf]').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+      wall.querySelectorAll<HTMLElement>('li').forEach((li) => li.classList.toggle('dim', f !== 'all' && !li.dataset.kind!.includes(f)));
+    }));
+    // who is this: a card follows the avatar under the pointer (or keyboard focus)
+    const show = (a: HTMLAnchorElement) => {
+      card.querySelector('[data-card-who]')!.textContent = a.dataset.who!;
+      card.querySelector('[data-card-what]')!.textContent = a.dataset.what!;
+      card.hidden = false;
+      const r = a.getBoundingClientRect(), b = box.getBoundingClientRect();
+      card.style.left = `${Math.max(0, Math.min(b.width - card.offsetWidth, r.left - b.left + r.width / 2 - card.offsetWidth / 2))}px`;
+      card.style.top = `${r.top - b.top - card.offsetHeight - 10}px`;
+    };
+    links.forEach((a) => { a.addEventListener('pointerenter', () => show(a)); a.addEventListener('focus', () => show(a)); });
+    wall.addEventListener('pointerleave', () => { card.hidden = true; });
+    wall.addEventListener('focusout', () => { card.hidden = true; });
+    // dock magnification: avatars near the pointer grow
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches && matchMedia('(pointer: fine)').matches) {
+      let raf = 0;
+      wall.addEventListener('pointermove', (e) => {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => {
+          for (const a of links) {
+            const r = a.getBoundingClientRect();
+            const d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+            a.style.setProperty('--m', (1 + Math.max(0, 1 - d / 140) * 0.75).toFixed(3));
+          }
+        });
+      });
+      wall.addEventListener('pointerleave', () => links.forEach((a) => a.style.setProperty('--m', '1')));
+    }
+  }
+</script>
+
+<style>
+  .contrib { position: relative; margin-top: clamp(40px, 6vw, 64px); padding: 26px; border-radius: var(--radius-md);
+    background: radial-gradient(80% 120% at 50% 0%, rgba(58, 168, 255, .07), transparent 70%), var(--surface); border: 1px solid var(--border); }
+  .ch { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .ch h3 { font-size: clamp(20px, 2.4vw, 26px); }
+  .cf { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cf button { all: unset; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: 13px; color: var(--text-2); cursor: pointer; }
+  .cf button[aria-pressed="true"] { color: var(--text); border-color: transparent; background: linear-gradient(90deg, rgba(58, 168, 255, .22), rgba(255, 138, 31, .22)); }
+  .cf button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .cl { margin-top: 6px; color: var(--text-2); font-size: 14px; }
+  .wall { list-style: none; margin: 22px 0 6px; padding: 10px 0; display: flex; flex-wrap: wrap; gap: 10px; }
+  .wall li { transition: opacity 300ms, filter 300ms; animation: rise .5s var(--ease-back) both; animation-delay: calc(var(--i) * 18ms); }
+  .wall li.dim { opacity: .18; filter: grayscale(1); }
+  .wall a { --m: 1; display: block; width: 48px; height: 48px; border-radius: 50%; transform: scale(var(--m)); transform-origin: center bottom;
+    transition: transform 160ms var(--ease-out), box-shadow 200ms; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--border-strong); }
+  .wall a:hover, .wall a:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent), 0 8px 20px rgba(0, 0, 0, .5); z-index: 2; position: relative; }
+  .wall img { width: 100%; height: 100%; border-radius: 50%; display: block; background: var(--surface-3); }
+  .card-tip { position: absolute; z-index: 5; display: grid; gap: 2px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2);
+    border: 1px solid var(--border-strong); box-shadow: 0 12px 30px rgba(0, 0, 0, .5); pointer-events: none; white-space: nowrap; font-size: 12.5px; }
+  .card-tip[hidden] { display: none; }
+  .card-tip b { font-size: 14px; }
+  .card-tip span { color: var(--text-2); }
+  .cu { font-size: 13px; color: var(--text-2); }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(.8); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .wall li { animation: none; } }
+</style>

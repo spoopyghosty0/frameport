@@ -5,7 +5,7 @@ import Layout from '../../layouts/Layout.astro';
 import Nav from '../../components/Nav.astro';
 import Footer from '../../components/Footer.astro';
 import Glyph from '../../components/Glyph.astro';
-import { DOWNLOADS, RELEASES, blob, downloadUrl, url } from '../../data/site';
+import { DOWNLOADS, RELEASES, downloadUrl, url } from '../../data/site';
 ---
 <Layout
   title="Install with FramePort"
@@ -73,7 +73,7 @@ import { DOWNLOADS, RELEASES, blob, downloadUrl, url } from '../../data/site';
         <p data-error class="error-text"></p>
         <p class="muted">The page that sent you here may have an old or mistyped link. If you made it: install links look
           like <code>{url('install/')}?manifest=https://…/game.json</code> or <code>?url=https://…/game.apk</code>.
-          <a href={blob('docs/INSTALL_BUTTON.md')}>How to make one</a></p>
+          <a href={url('docs/install-button/')}>How to make one</a></p>
         <p><a class="btn btn-secondary" href={url()}>What is FramePort?</a></p>
       </section>
 

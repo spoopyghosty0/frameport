@@ -1,55 +1,76 @@
 ---
-// FramePort next to FrameDrop and Valve's own tools (data/compare.ts, same facts as the README's table).
-import { CHECKED, ROWS, SOURCES, TOOLS, TOOL_NOTES } from '../data/compare';
+// FramePort next to FrameDrop and Valve's own tools (data/compare.ts; the README's table says the same): the few
+// differences most people decide on as cards, every difference in a table behind "Show all differences".
+import { CHECKED, HEADLINES, ROWS, SOURCES, TOOLS, TOOL_NOTES } from '../data/compare';
 
 const SYMBOL = { yes: '✓', no: '–', part: '◐', unknown: '?' } as const;
 const LABEL = { yes: 'Yes', no: 'No', part: 'Partly', unknown: 'Not stated' } as const;
+const ICON = {
+  code: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/>',
+  game: '<path d="M3 9.5A3.5 3.5 0 0 1 6.5 6h11A3.5 3.5 0 0 1 21 9.5v4a3.5 3.5 0 0 1-3.5 3.5h-2.2a2 2 0 0 1-1.7-.95l-.75-1.2a1 1 0 0 0-1.7 0l-.75 1.2A2 2 0 0 1 8.7 17H6.5A3.5 3.5 0 0 1 3 13.5z"/>',
+  pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/>',
+  link: '<path d="M5 12.5a9 9 0 0 1 14 0M8 15.5a5 5 0 0 1 8 0M12 19h.01"/><path d="M19 3v4M17 5h4" opacity=".6"/>',
+} as const;
 ---
 <section class="section" id="compare">
   <div class="wrap">
     <div class="head reveal">
-      <p class="label"><b>05</b> Compared</p>
-      <h2>How it differs from other ways to sideload.</h2>
-      <p class="lead">FrameDrop and Valve's own tools install an app as it is. FramePort also converts and patches Meta Quest
-        games that don't run on the Frame as they are, and keeps a tested recipe per game. It opens FrameDrop's install
-        links too.</p>
+      <p class="label"><b>04</b> Compared</p>
+      <h2>Free, open, and it fixes the games that don’t just work.</h2>
+      <p class="lead">FrameDrop and Valve's own tools install an app as it is. FramePort is open source, converts and patches
+        Meta Quest games that don't run on the Frame as they are, and opens FrameDrop's install links too.</p>
     </div>
 
-    <div class="cmp reveal" data-cmp data-with="both">
+    <div class="cmp" data-cmp data-with="1">
       <div class="with" role="group" aria-label="Compare FramePort with">
-        <span>Compare FramePort with</span>
-        <button type="button" data-with-btn="1" aria-pressed="false">FrameDrop</button>
+        <span>Compare with</span>
+        <button type="button" data-with-btn="1" aria-pressed="true">FrameDrop</button>
         <button type="button" data-with-btn="2" aria-pressed="false">Valve’s tools</button>
-        <button type="button" data-with-btn="both" aria-pressed="true">Both</button>
       </div>
-      <div class="scroll">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col" class="rowh"><span class="visually-hidden">Feature</span></th>
-              {TOOLS.map((t, i) => (
-                <th scope="col" class={`c${i}`}><b>{t}</b><span>{TOOL_NOTES[i]}</span></th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {ROWS.map((r) => (
+
+      <ul class="heads reveal">
+        {HEADLINES.map((h, i) => (
+          <li class:list={['hcard', { foss: i === 0 }]} data-tilt>
+            <span class="hicon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" set:html={ICON[h.icon]} />
+            </span>
+            <h3>{h.title}</h3>
+            <p class="fp"><span class="who">FramePort</span>{h.frameport}</p>
+            <p class="other o1"><span class="who">FrameDrop</span>{h.others[0]}</p>
+            <p class="other o2"><span class="who">Valve’s tools</span>{h.others[1]}</p>
+          </li>
+        ))}
+      </ul>
+
+      <details class="all" data-all>
+        <summary><span>Show all {ROWS.length} differences</span><i aria-hidden="true">▾</i></summary>
+        <div class="scroll">
+          <table>
+            <thead>
               <tr>
-                <th scope="row" class="rowh">{r.label}</th>
-                {r.cells.map((c, i) => (
-                  <td class={`c${i} m-${c.mark}`}>
-                    <span class="mk" aria-label={LABEL[c.mark]} title={LABEL[c.mark]}>{SYMBOL[c.mark]}</span>
-                    <span class="tx">{c.text}</span>
-                  </td>
-                ))}
+                <th scope="col" class="rowh"><span class="visually-hidden">Question</span></th>
+                {TOOLS.map((t, i) => <th scope="col" class={`c${i}`}><b>{t}</b><span>{TOOL_NOTES[i]}</span></th>)}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p class="src">Other tools as described on their own pages, checked {CHECKED}:
-        {SOURCES.map((s, i) => <>{i > 0 && ' · '}<a href={s.href}>{s.label}</a></>)}.
-        Something out of date? <a href="https://github.com/spoopyghosty0/frameport/issues/new">Open an issue</a>.</p>
+            </thead>
+            <tbody>
+              {ROWS.map((r) => (
+                <tr>
+                  <th scope="row" class="rowh">{r.label}</th>
+                  {r.cells.map((c, i) => (
+                    <td class={`c${i} m-${c.mark}`}>
+                      <span class="mk" title={LABEL[c.mark]}><span aria-hidden="true">{SYMBOL[c.mark]}</span><span class="visually-hidden">{LABEL[c.mark]}:</span></span>
+                      <span class="tx">{c.text}</span>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="src">Other tools as described on their own pages, checked {CHECKED}:
+          {SOURCES.map((s, i) => <>{i > 0 && ' · '}<a href={s.href}>{s.label}</a></>)}.
+          Something out of date? <a href="https://github.com/spoopyghosty0/frameport/issues/new">Open an issue</a>.</p>
+      </details>
     </div>
   </div>
 </section>
@@ -60,43 +81,92 @@ const LABEL = { yes: 'Yes', no: 'No', part: 'Partly', unknown: 'Not stated' } as
     cmp.dataset.with = b.dataset.withBtn!;
     cmp.querySelectorAll('[data-with-btn]').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
   }));
-  // phones: one tool next to FramePort at a time
-  if (cmp && matchMedia('(max-width: 760px)').matches) cmp.querySelector<HTMLButtonElement>('[data-with-btn="1"]')?.click();
+  // the cards lean toward the pointer and a light follows it
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches && matchMedia('(pointer: fine)').matches) {
+    document.querySelectorAll<HTMLElement>('[data-tilt]').forEach((card) => {
+      card.addEventListener('pointermove', (e) => {
+        const r = card.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        card.style.setProperty('--tx', `${((x - 0.5) * 10).toFixed(2)}deg`);
+        card.style.setProperty('--ty', `${((0.5 - y) * 8).toFixed(2)}deg`);
+        card.style.setProperty('--mx', `${(x * 100).toFixed(1)}%`);
+        card.style.setProperty('--my', `${(y * 100).toFixed(1)}%`);
+      });
+      card.addEventListener('pointerleave', () => { card.style.setProperty('--tx', '0deg'); card.style.setProperty('--ty', '0deg'); });
+    });
+  }
 </script>
 
 <style>
-  .with { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; }
+  .with { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 18px; }
   .with span { font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-2); margin-right: 6px; }
-  .with button { all: unset; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: 13px; color: var(--text-2);
-    cursor: pointer; }
+  .with button { all: unset; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: 13px; color: var(--text-2); cursor: pointer; }
   .with button:hover { color: var(--text); }
-  .with button[aria-pressed="true"] { color: var(--text); border-color: transparent;
-    background: linear-gradient(90deg, rgba(58, 168, 255, .22), rgba(255, 138, 31, .22)); }
+  .with button[aria-pressed="true"] { color: var(--text); border-color: transparent; background: linear-gradient(90deg, rgba(58, 168, 255, .22), rgba(255, 138, 31, .22)); }
   .with button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
-  table { width: 100%; border-collapse: collapse; min-width: 640px; font-size: 14px; }
+
+  .heads { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+    perspective: 1000px; }
+  .hcard { position: relative; display: grid; gap: 10px; align-content: start; padding: 22px; border-radius: var(--radius-md);
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 138, 31, .10), transparent 70%), var(--surface);
+    border: 1px solid var(--border); transform: rotateY(var(--tx, 0deg)) rotateX(var(--ty, 0deg));
+    transition: transform 300ms var(--ease-out), border-color 220ms; }
+  .hcard:hover { border-color: rgba(255, 138, 31, .45); }
+  .hcard.foss { grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-items: start; background: radial-gradient(320px circle at var(--mx, 30%) var(--my, 0%), rgba(61, 214, 140, .14), transparent 70%),
+    linear-gradient(135deg, rgba(58, 168, 255, .08), rgba(255, 138, 31, .08)), var(--surface); border-color: rgba(61, 214, 140, .35); }
+  .hcard.foss h3 { font-size: clamp(24px, 3vw, 34px); }
+  .hcard.foss .hicon { grid-row: span 2; width: 56px; height: 56px; }
+  .hcard.foss h3 { grid-column: 2 / -1; }
+  .hcard.foss .other { border-top: 0; padding-top: 0; border-left: 1px dashed var(--border-strong); padding-left: 20px; }
+  .hicon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: var(--secondary); background: rgba(58, 168, 255, .12); }
+  .foss .hicon { color: var(--ok); background: rgba(61, 214, 140, .14); }
+  .hcard h3 { font-size: 19px; }
+  .fp { color: var(--text); font-size: 15px; }
+  .other { color: var(--text-2); font-size: 13.5px; padding-top: 8px; border-top: 1px dashed var(--border-strong); }
+  .who { display: block; font: 600 10.5px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 5px; }
+  .fp .who { color: var(--accent); }
+  .other .who { color: var(--text-2); }
+  [data-with="1"] .o2, [data-with="2"] .o1 { display: none; }
+
+  .all { margin-top: 18px; }
+  .all summary { list-style: none; display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--secondary-line); cursor: pointer; font-weight: 600; font-size: 14px; }
+  .all summary::-webkit-details-marker { display: none; }
+  .all summary:hover { background: rgba(58, 168, 255, .08); }
+  .all summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .all summary i { font-style: normal; transition: transform 300ms var(--ease-out); }
+  .all[open] summary i { transform: rotate(180deg); }
+  .all[open] summary span { font-size: 0; }
+  .all[open] summary span::after { content: "Hide the full table"; font-size: 14px; }
+  .all::details-content { block-size: 0; overflow: hidden; transition: block-size 450ms var(--ease-out), content-visibility 450ms allow-discrete; }
+  .all[open]::details-content { block-size: auto; }
+
+  .scroll { margin-top: 14px; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th, td { padding: 12px 16px; text-align: left; vertical-align: top; border-top: 1px solid rgba(42, 45, 55, .7); }
   thead th { border-top: 0; background: var(--sidebar); position: relative; }
   thead th b { display: block; font: 700 16px/1.2 var(--font-display); }
   thead th span { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--text-2); }
   thead th.c0 b { color: var(--accent); }
   thead th.c0::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--portal); }
-  .rowh { width: 22%; font-weight: 600; color: var(--text); }
-  td { width: 26%; color: var(--text-2); line-height: 1.45; }
+  .rowh { width: 30%; font-weight: 600; color: var(--text); }
+  td { color: var(--text-2); line-height: 1.45; }
   td.c0 { color: var(--text); background: rgba(255, 138, 31, .04); }
-  td { display: table-cell; }
   td .mk { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 8px; border-radius: 50%; font-size: 12px;
     font-weight: 700; vertical-align: 1px; }
   .m-yes .mk { color: var(--ok); background: rgba(61, 214, 140, .14); }
   .m-no .mk { color: var(--text-2); background: var(--surface-3); }
   .m-part .mk { color: var(--warn); background: rgba(242, 201, 76, .12); }
-  .m-unknown .mk { color: var(--text-2); background: transparent; border: 1px dashed var(--border-strong); }
+  .m-unknown .mk { color: var(--text-2); border: 1px dashed var(--border-strong); }
   tbody tr:hover th, tbody tr:hover td { background-color: rgba(237, 238, 242, .03); }
   [data-with="1"] .c2, [data-with="2"] .c1 { display: none; }
-  [data-with="1"] table, [data-with="2"] table { min-width: 0; }
   .src { margin-top: 14px; font-size: 13px; color: var(--text-2); max-width: 90ch; }
   @media (max-width: 760px) {
+    .heads { grid-template-columns: minmax(0, 1fr); }
+    .hcard.foss { grid-template-columns: minmax(0, 1fr); }
+    .hcard.foss .hicon { grid-row: auto; }
+    .hcard.foss .other { border-left: 0; padding-left: 0; border-top: 1px dashed var(--border-strong); padding-top: 8px; }
     th, td { padding: 10px 12px; }
-    .rowh { width: 28%; }
+    .rowh { width: 38%; }
   }
 </style>

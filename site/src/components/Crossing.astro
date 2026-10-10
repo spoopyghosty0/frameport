@@ -51,13 +51,25 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
     <div class="track">
       <div class="card game">
         <div class="art"><i class="sun"></i><i class="band"></i><i class="band b2"></i></div>
-        <span class="icon" data-f="initials">{initials(first.title)}</span>
-        <span class="pill pill-ok">Works</span>
-        <div class="game-title" data-f="title">{first.title}</div>
-        <div class="game-foot">
-          <span class="where">Steam library · Frame</span>
-          <span class="play"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg></span>
+        <!-- what the headset shows: one view per eye, the game's scene running in both -->
+        <div class="eyes">
+          {['l', 'r'].map((e) => (
+            <span class={`eye ${e}`}><i class="sky"></i><i class="glow"></i><i class="floor"></i><i class="scan"></i></span>
+          ))}
         </div>
+        <div class="gt-row">
+          <span class="icon" data-f="initials">{initials(first.title)}</span>
+          <span class="pill pill-ok">Works</span>
+        </div>
+        <div class="game-title" data-f="title">{first.title}</div>
+        <div class="now">
+          <span class="dot"></span><span class="playing">Playing</span>
+          <span class="fps"><b class="n"></b> fps</span>
+        </div>
+        <svg class="pace" viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden="true">
+          <polyline points="0,13 8,11 14,12 20,6 28,5 36,4.5 44,4 52,4.4 60,3.8 68,4.1 76,4 84,3.9 92,4 100,4" />
+        </svg>
+        <span class="pulse" aria-hidden="true"></span>
       </div>
     </div>
   </div>
@@ -215,35 +227,54 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
   .bar i { display: block; height: 100%; width: 100%; background: var(--portal); transform-origin: left;
     animation: fill var(--lap) infinite; }
 
-  /* the Frame's side: a game in the library, with generated cover art */
-  .game { border: 1px solid rgba(255, 138, 31, 0.45); box-shadow: var(--shadow-art-hover); padding: 2.2cqi; gap: 1.2cqi;
-    background: hsl(var(--h) 45% 12%); }
-  .art { position: absolute; inset: 0; overflow: hidden;
-    background: linear-gradient(170deg, hsl(var(--h) 45% 32%), hsl(var(--h) 40% 10%) 85%); }
+  /* the Frame's side: the game running in the headset. It comes out of the portal dark, switches on (scan line,
+     a portal-coloured pulse), then its frame rate climbs to 72 while the pacing line draws itself */
+  .game { border: 1px solid rgba(255, 138, 31, 0.5); box-shadow: var(--shadow-art-hover); padding: 2cqi; gap: 1cqi;
+    background: hsl(var(--h) 40% 9%); overflow: visible; }
+  .art { position: absolute; inset: 0; overflow: hidden; border-radius: inherit;
+    background: linear-gradient(170deg, hsl(var(--h) 45% 26%), hsl(var(--h) 40% 8%) 70%); }
   .art .sun { position: absolute; left: var(--sx); top: var(--sy); width: 26cqi; height: 26cqi; margin: -13cqi 0 0 -13cqi;
-    border-radius: 50%; background: radial-gradient(circle, hsl(var(--h2) 90% 70% / .85), hsl(var(--h2) 90% 55% / 0) 68%);
+    border-radius: 50%; background: radial-gradient(circle, hsl(var(--h2) 90% 70% / .55), hsl(var(--h2) 90% 55% / 0) 68%);
     mix-blend-mode: screen; }
   .art .band { position: absolute; left: -20%; right: -20%; top: 52%; height: 9cqi; transform: rotate(var(--rot));
-    background: linear-gradient(90deg, transparent, hsl(var(--h2) 80% 60% / .28), transparent); }
+    background: linear-gradient(90deg, transparent, hsl(var(--h2) 80% 60% / .2), transparent); }
   .art .band.b2 { top: 66%; height: 3cqi; transform: rotate(calc(var(--rot) * -1.4)); opacity: .7; }
-  .art::after { content: ""; position: absolute; inset: 0;
-    background: linear-gradient(180deg, transparent 40%, rgba(8, 9, 12, .82) 92%); }
-  .game > *:not(.art) { position: relative; }
-  .game .icon { position: absolute; top: 2.2cqi; left: 2.2cqi; }
-  .game .pill { position: absolute; top: 2.6cqi; right: 2.2cqi; font-size: 1.6cqi; line-height: 1.3;
-    padding: .35cqi 1.1cqi .35cqi .9cqi; gap: .6cqi; background: rgba(8, 9, 12, .6); }
+  .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(8, 9, 12, .9) 80%); }
+  .game > *:not(.art):not(.pulse) { position: relative; }
+
+  .eyes { display: grid; grid-template-columns: 1fr 1fr; gap: 1cqi; height: 41%; flex: none; filter: brightness(0);
+    animation: poweron var(--lap) infinite; }
+  .eye { position: relative; overflow: hidden; border-radius: 45% 45% 38% 38% / 55% 55% 45% 45%; background: #050608;
+    box-shadow: inset 0 0 1.4cqi rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 138, 31, .3); }
+  .eye .sky { position: absolute; inset: 0; background: linear-gradient(180deg, hsl(var(--h) 55% 32%), hsl(var(--h2) 60% 40%) 55%, #08090c 56%); }
+  .eye .glow { position: absolute; top: 24%; width: 7cqi; height: 7cqi; margin-left: -3.5cqi; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff, hsl(var(--h2) 90% 62%) 45%, transparent 72%);
+    box-shadow: 0 0 2.4cqi hsl(var(--h2) 90% 60% / .7); animation: drift 6s ease-in-out infinite alternate; }
+  .eye.l .glow { left: 56%; } .eye.r .glow { left: 46%; }  /* one picture per eye: the near object sits apart */
+  .eye .floor { position: absolute; left: -60%; right: -60%; top: 56%; height: 90%; transform-origin: top; transform: perspective(8cqi) rotateX(62deg);
+    background-image: linear-gradient(hsl(var(--h2) 85% 62% / .55) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--h) 80% 62% / .45) 1px, transparent 1px);
+    background-size: 3cqi 3cqi; animation: run .9s linear infinite; }
+  .eye.r .floor { left: -63%; right: -57%; }
+  .eye .scan { position: absolute; left: 0; right: 0; height: 18%; top: -20%;
+    background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .55), transparent); animation: scanline var(--lap) infinite; }
+
+  .gt-row { display: flex; align-items: center; justify-content: space-between; margin-top: -3.6cqi; }
+  .game .pill { font-size: 1.6cqi; line-height: 1.3; padding: .35cqi 1.1cqi .35cqi .9cqi; gap: .6cqi; background: rgba(8, 9, 12, .7); }
   .game .pill::before { width: .9cqi; height: .9cqi; }
   .game-title { margin-top: auto; font: 800 var(--ts)/1.04 var(--font-display); letter-spacing: -0.015em; color: #fff;
     overflow-wrap: normal; word-break: normal; hyphens: none; text-wrap: balance; text-shadow: 0 .3cqi 1.2cqi rgba(0, 0, 0, .5); }
-  .game-foot { display: flex; align-items: center; justify-content: space-between; gap: 1cqi; }
-  .where { font: 500 1.6cqi/1.2 var(--font-sans); color: rgba(237, 238, 242, .75); white-space: nowrap; }
-  .play { position: relative; width: 5.6cqi; height: 5.6cqi; flex: none; border-radius: 50%; display: grid; place-items: center;
-    color: var(--on-accent); background: var(--accent); box-shadow: 0 0 2cqi rgba(255, 138, 31, .55); }
-  .play svg { width: 2.8cqi; height: 2.8cqi; margin-left: .3cqi; }
-  /* the app's Play ripple: a blue ring, then an orange one 160 ms later */
-  .play::before, .play::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: .35cqi solid var(--secondary);
-    opacity: 0; animation: ring var(--lap) infinite; }
-  .play::after { border-color: var(--accent); animation-name: ring2; }
+  .now { display: flex; align-items: center; gap: .9cqi; font: 600 1.7cqi/1 var(--font-sans); color: var(--text); opacity: 0;
+    animation: shown var(--lap) infinite; }
+  .dot { position: relative; width: 1.1cqi; height: 1.1cqi; border-radius: 50%; background: var(--ok); box-shadow: 0 0 1cqi var(--ok); }
+  .dot::after { content: ""; position: absolute; inset: -.4cqi; border-radius: 50%; border: .25cqi solid var(--ok); animation: ping 1.4s ease-out infinite; }
+  .fps { margin-left: auto; font-family: var(--font-mono); color: var(--text-2); white-space: nowrap; }
+  .fps .n { color: var(--ok); font: 800 2.6cqi/1 var(--font-display); counter-reset: fps var(--fps); animation: count var(--lap) infinite; }
+  .fps .n::after { content: counter(fps); }
+  .pace { width: 100%; height: 3.2cqi; flex: none; overflow: visible; }
+  .pace polyline { fill: none; stroke: var(--ok); stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 140; stroke-dashoffset: 140; animation: draw var(--lap) infinite; }
+  .pulse { position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; opacity: 0;
+    box-shadow: 0 0 0 .4cqi var(--secondary), 0 0 3cqi .6cqi rgba(255, 138, 31, .7); animation: landpulse var(--lap) infinite; }
 
   .portal { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   .portal .glow { opacity: .35; animation: breathe 5.5s ease-in-out infinite; }
@@ -294,16 +325,25 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
     52% { opacity: 0; transform: rotate(var(--a)) translateX(17cqi) scale(.4); }
     100% { opacity: 0; transform: rotate(var(--a)) translateX(17cqi) scale(.4); }
   }
-  @keyframes ring { 0%, 64% { opacity: 0; transform: scale(1); } 65% { opacity: .9; transform: scale(1); }
-    74%, 100% { opacity: 0; transform: scale(2.5); } }
-  @keyframes ring2 { 0%, 66% { opacity: 0; transform: scale(1); } 67% { opacity: .9; transform: scale(1); }
-    76%, 100% { opacity: 0; transform: scale(2.5); } }
   @keyframes breathe { 0%, 100% { opacity: .28; } 50% { opacity: .5; } }
+
+  @property --fps { syntax: '<integer>'; inherits: false; initial-value: 0; }
+  @keyframes poweron { 0%, 55% { filter: brightness(0); } 57% { filter: brightness(1.8); } 61%, 100% { filter: brightness(1); } }
+  @keyframes scanline { 0%, 55% { top: -20%; opacity: 0; } 56% { opacity: 1; } 62%, 100% { top: 110%; opacity: 0; } }
+  @keyframes shown { 0%, 58% { opacity: 0; transform: translateY(.6cqi); } 62%, 100% { opacity: 1; transform: none; } }
+  @keyframes count { 0%, 58% { --fps: 0; } 70%, 100% { --fps: 72; } }
+  @keyframes draw { 0%, 59% { stroke-dashoffset: 140; } 78%, 100% { stroke-dashoffset: 0; } }
+  @keyframes landpulse { 0%, 55% { opacity: 0; transform: scale(1); } 57% { opacity: 1; transform: scale(1); } 66%, 100% { opacity: 0; transform: scale(1.08); } }
+  @keyframes run { to { background-position: 0 3cqi; } }
+  @keyframes drift { from { transform: translate(-1.5cqi, 0); } to { transform: translate(1.5cqi, -.8cqi); } }
+  @keyframes ping { from { opacity: .8; transform: scale(.6); } to { opacity: 0; transform: scale(1.8); } }
 
   /* reduced motion: the logo's own moment, the card halfway through */
   @media (prefers-reduced-motion: reduce) {
     .track { animation: none; transform: translateX(31%); opacity: 1; }
-    .card, .ticker span, .bar i, .play::before, .play::after, .sparks i, .portal .glow, .portal .flash { animation: none; }
+    .card, .ticker span, .bar i, .sparks i, .portal .glow, .portal .flash, .eyes, .eye .scan, .eye .floor, .eye .glow, .now, .fps .n,
+      .pace polyline, .pulse, .dot::after { animation: none; }
+    .eyes { filter: none; } .now { opacity: 1; } .fps .n { --fps: 72; } .pace polyline { stroke-dashoffset: 0; }
     .ticker span { transform: translateY(-300%); }
   }
 </style>

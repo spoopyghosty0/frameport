@@ -8,13 +8,14 @@
   "scripts": {
     "sync": "node scripts/sync-media.mjs",
     "dev": "npm run sync && astro dev",
-    "build": "npm run sync && astro build",
+    "build": "npm run sync && node scripts/contributors.mjs && astro build",
     "preview": "astro preview",
     "check": "astro check",
     "test": "node --test --experimental-strip-types \"src/scripts/*.test.mjs\""
   },
   "dependencies": {
     "astro": "7.3.5",
+    "marked": "18.0.14",
     "yaml": "2.9.1"
   },
   "devDependencies": {

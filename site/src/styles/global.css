@@ -11,6 +11,7 @@
 
 :root {
   color-scheme: dark;
+  interpolate-size: allow-keywords;
 
   --bg: #0d0e12;
   --sidebar: #111217;
@@ -123,7 +124,7 @@ code, kbd, pre { font-family: var(--font-mono); }
   font: 600 15px/20px var(--font-sans); text-decoration: none; cursor: pointer; white-space: nowrap;
   color: var(--text); background: transparent;
   transition: background-color 220ms var(--ease-out), border-color 220ms var(--ease-out), filter 220ms var(--ease-out),
-    transform 320ms var(--ease-back);
+    transform 320ms var(--ease-back), translate 260ms var(--ease-out);
 }
 .btn:active { transform: scale(0.97); }
 .btn-primary { background: var(--accent); color: var(--on-accent); }
@@ -165,3 +166,41 @@ code, kbd, pre { font-family: var(--font-mono); }
     transition-duration: 0.001ms !important; }
   .js .reveal { opacity: 1; transform: none; }
 }
+
+/* documentation pages (rendered from docs/*.md) */
+.prose { min-width: 0; font-size: 16px; line-height: 1.7; color: var(--text); }
+.prose h1 { font-size: clamp(32px, 4vw, 44px); line-height: 1.1; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 18px; }
+.prose h2 { font-size: 26px; line-height: 1.2; letter-spacing: -0.01em; margin: 44px 0 12px; padding-top: 18px; border-top: 1px solid var(--border); }
+.prose h3 { font-size: 19px; margin: 30px 0 8px; }
+.prose h4 { font-size: 16px; margin: 22px 0 6px; font-family: var(--font-display); }
+.prose :is(h2, h3, h4) { position: relative; scroll-margin-top: 90px; }
+.prose .anchor { position: absolute; left: -24px; padding-right: 8px; color: var(--text-3); text-decoration: none; opacity: 0; transition: opacity 150ms; }
+.prose :is(h2, h3, h4):hover .anchor, .prose .anchor:focus-visible { opacity: 1; }
+.prose .anchor:hover { color: var(--accent); }
+.prose :target { animation: target-flash 1.6s var(--ease-out); }
+@keyframes target-flash { 0%, 30% { color: var(--accent); } }
+.prose p, .prose ul, .prose ol, .prose blockquote, .prose pre, .prose .tbl { margin: 0 0 16px; }
+.prose ul, .prose ol { padding-left: 22px; }
+.prose li { margin: 4px 0; }
+.prose li::marker { color: var(--text-3); }
+.prose a { color: var(--accent); overflow-wrap: anywhere; }
+.prose strong { color: var(--text); }
+.prose code { overflow-wrap: anywhere; font-size: .88em; padding: .12em .4em; border-radius: 5px; background: var(--surface-3); color: var(--text); }
+.prose pre { position: relative; overflow-x: auto; padding: 16px 18px; border-radius: var(--radius-sm); background: var(--surface-2);
+  border: 1px solid var(--border); font-size: 13.5px; line-height: 1.55; scrollbar-width: thin; }
+.prose pre code { padding: 0; background: none; font-size: inherit; }
+.prose pre .copy { position: absolute; right: 8px; top: 8px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-2); font: 600 12px/1.4 var(--font-sans); cursor: pointer; opacity: 0; transition: opacity 150ms; }
+.prose pre:hover .copy, .prose pre .copy:focus-visible { opacity: 1; }
+.prose pre .copy:hover { color: var(--text); border-color: var(--accent); }
+.prose blockquote { padding: 12px 16px; border-left: 3px solid var(--secondary); background: rgba(58, 168, 255, .06); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; color: var(--text-2); }
+.prose blockquote p:last-child { margin: 0; }
+.prose img { max-width: 100%; height: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.prose hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+.prose .tbl { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.prose table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px; }
+.prose th, .prose td { padding: 9px 12px; text-align: left; vertical-align: top; border-top: 1px solid var(--border); }
+.prose thead th { border-top: 0; background: var(--sidebar); font-weight: 600; }
+.prose tbody tr:hover td { background: rgba(237, 238, 242, .03); }
+.prose details { margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.prose summary { cursor: pointer; font-weight: 600; }

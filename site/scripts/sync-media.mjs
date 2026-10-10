@@ -1,7 +1,7 @@
 // Copies the showcase renders (docs/images, docs/media) and the install badges (docs/badges) into the site before a
 // build. They are rendered by scripts/showcase in CI and never by hand, so the site always shows the current ones.
 // Screenshots go to src/assets/media (Astro optimizes them), videos and badges to public/media (served as they are).
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,7 +13,8 @@ const SHOTS = ['library.png', 'game.png', 'monitor.png', 'live-view.png', 'files
 const PUBLIC = {
   'docs/images': ['tour-teaser.webp'],
   'docs/media': ['frameport-tour.mp4', 'frameport-tour.jpg', 'frameport-install.mp4', 'frameport-install.jpg'],
-  'docs/badges': ['install-with-frameport.svg', 'install-with-frameport-animated.svg', 'install-with-frameport@2x.png'],
+  'docs/badges': ['install-with-frameport.svg', 'install-with-frameport-animated.svg', 'install-with-frameport-hover.svg',
+    'install-with-frameport@2x.png'],
 };
 
 function copy(from, to) {
@@ -31,4 +32,12 @@ for (const [dir, names] of Object.entries(PUBLIC)) {
     copy(dir === 'docs/media' && existsSync(hq) ? hq : join(repo, dir, name), join(site, 'public/media', name));
   }
 }
+// every image the docs pages show (docs/images → media/docs)
+let docImages = 0;
+for (const name of readdirSync(join(repo, 'docs/images'))) {
+  if (!/\.(png|jpe?g|webp|gif|svg)$/i.test(name)) continue;
+  copy(join(repo, 'docs/images', name), join(site, 'public/media/docs', name));
+  docImages++;
+}
+console.log(`synced ${docImages} doc images`);
 console.log(`synced ${SHOTS.length} screenshots and ${Object.values(PUBLIC).flat().length} media files`);

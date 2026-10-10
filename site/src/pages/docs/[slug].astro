@@ -1,0 +1,50 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import DocsShell from '../../components/DocsShell.astro';
+import { DOCS, loadDoc } from '../../data/docs';
+import { REPO, url } from '../../data/site';
+
+export function getStaticPaths() {
+  return DOCS.map((d) => ({ params: { slug: d.slug } }));
+}
+const info = DOCS.find((d) => d.slug === Astro.params.slug)!;
+const doc = loadDoc(info);
+const i = DOCS.indexOf(info);
+const prev = DOCS[i - 1], next = DOCS[i + 1];
+---
+<Layout title={`${doc.title} · FramePort docs`} description={doc.description}>
+  <Nav home={false} />
+  <main>
+    <DocsShell current={doc.slug} toc={doc.toc}>
+      <article class="prose">
+        <p class="crumb"><a href={url('docs/')}>Docs</a> <span>/</span> {doc.group}</p>
+        <h1>{doc.title}</h1>
+        <Fragment set:html={doc.html} />
+        <footer class="dfoot">
+          <a class="edit" href={`${REPO}/blob/main/docs/${doc.file}`}>Edit this page on GitHub</a>
+          <div class="pn">
+            {prev && <a class="pv" href={url(`docs/${prev.slug}/`)}><span>Previous</span>{loadDoc(prev).title}</a>}
+            {next && <a class="nx" href={url(`docs/${next.slug}/`)}><span>Next</span>{loadDoc(next).title}</a>}
+          </div>
+        </footer>
+      </article>
+    </DocsShell>
+  </main>
+  <Footer credits={false} />
+</Layout>
+
+<style>
+  .crumb { font-size: 13px; color: var(--text-2); margin-bottom: 10px; }
+  .crumb a { color: var(--text-2); }
+  .crumb span { margin: 0 4px; color: var(--text-3); }
+  .dfoot { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); display: grid; gap: 18px; }
+  .edit { font-size: 14px; }
+  .pn { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pn a { display: grid; gap: 4px; padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border); text-decoration: none;
+    color: var(--text); font-weight: 600; transition: border-color 220ms, transform 220ms var(--ease-out); }
+  .pn a:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .pn span { font-size: 12px; color: var(--text-2); font-weight: 400; }
+  .nx { grid-column: 2; text-align: right; }
+</style>

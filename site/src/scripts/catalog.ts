@@ -18,6 +18,11 @@ export interface Game {
   xr: string;
   note: string;
   checked: string;
+  /** what opens under a row: the recipe as the catalog has it */
+  details: string;
+  patches: string[];
+  version: string;
+  app: string;
 }
 
 /** The note's first sentence, without technical asides (compat_list.short). */
@@ -45,6 +50,14 @@ export function toGame(raw: unknown): Game | null {
     xr: text(d.xr),
     note: status === 'works' ? '' : short(text(d.notes)),
     checked: day(d.verified?.date ?? d.updated),
+    details: [text(d.notes), text(d.details)].filter(Boolean).join(' ').split(/\s+/).join(' ').trim(),
+    patches: [
+      ...(Array.isArray(d.frame) ? d.frame : []), ...(Array.isArray(d.device) ? d.device : []),
+      ...(Array.isArray(d.alt_overport) ? d.alt_overport.map((p: string) => `overport.${p}`) : []),
+      ...(d.adapter && typeof d.adapter === 'object' ? Object.keys(d.adapter).map((k) => `adapter.${k}`) : []),
+    ].map(String),
+    version: text(d.tested_version),
+    app: text(d.verified?.app),
   };
 }
 
@@ -57,8 +70,14 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 export function rowHtml(g: Game, showPackage = false): string {
   const s = STATUS[g.status];
-  return `<li class="row" role="row" data-status="${g.status}" data-engine="${esc(g.engine)}" `
-    + `data-text="${esc(`${g.title} ${g.engine} ${g.xr} ${g.platform}`.toLowerCase())}">`
+  const facts = [g.version && `tested with version ${g.version}`, g.app && `checked with FramePort ${g.app}`, g.checked]
+    .filter(Boolean).join(' · ');
+  const more = `<div class="more" role="cell" hidden>`
+    + (g.details ? `<p>${esc(g.details)}</p>` : '<p>Runs with the default patches; nothing special needed.</p>')
+    + (g.patches.length ? `<p class="pt"><span>Recipe</span>${g.patches.map((p) => `<code>${esc(p)}</code>`).join('')}</p>` : '')
+    + (facts ? `<p class="fx">${esc(facts)}</p>` : '') + '</div>';
+  return `<li class="row" role="row" tabindex="0" aria-expanded="false" data-status="${g.status}" data-engine="${esc(g.engine)}" `
+    + `data-text="${esc(`${g.title} ${g.engine} ${g.xr} ${g.platform} ${g.patches.join(' ')}`.toLowerCase())}">`
     + `<span class="c-game" role="cell"><span class="title">${esc(g.title)}</span>`
     + (g.platform !== 'Quest' ? `<span class="tag">${esc(g.platform)}</span>` : '')
     + (showPackage && g.package ? `<code class="pkg">${esc(g.package)}</code>` : '')
@@ -66,7 +85,7 @@ export function rowHtml(g: Game, showPackage = false): string {
     + `</span><span class="c-eng" role="cell">${esc(g.engine)}</span>`
     + `<span class="c-xr" role="cell">${esc(g.xr)}</span>`
     + `<span role="cell"><span class="pill ${s.pill}">${s.label}</span></span>`
-    + `<span class="c-date" role="cell">${esc(g.checked)}</span></li>`;
+    + `<span class="c-date" role="cell">${esc(g.checked)}</span>${more}</li>`;
 }
 
 /** All rows; games that share a title and platform (e.g. two builds) show their package to tell them apart. */

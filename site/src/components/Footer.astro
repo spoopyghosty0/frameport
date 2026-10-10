@@ -1,6 +1,7 @@
 ---
 import Wordmark from './Wordmark.astro';
-import { REPO, RELEASES, REPORT_PROBLEM, blob, url } from '../data/site';
+import Contributors from './Contributors.astro';
+import { REPO, RELEASES, REPORT_PROBLEM, url } from '../data/site';
 
 interface Props { credits?: boolean }
 const { credits = true } = Astro.props;
@@ -19,16 +20,17 @@ const builtOn = [
   <section class="section credits" id="credits">
     <div class="wrap">
       <div class="head reveal">
-        <p class="label"><b>07</b> Built on</p>
-        <h2>Most of the work is theirs.</h2>
+        <p class="label"><b>06</b> Built on</p>
+        <h2>Built on open source, by its users.</h2>
         <p class="lead">FramePort downloads these projects, wires them together and adds what the Frame needs.
-          <a href={blob('docs/ARCHITECTURE.md')}>What FramePort adds itself</a></p>
+          <a href={url('docs/architecture/')}>What FramePort adds itself</a></p>
       </div>
       <ul class="built reveal">
         {builtOn.map((b) => (
           <li>{b.href ? <a href={b.href}>{b.name}</a> : <span class="n">{b.name}</span>} <span class="w">{b.what}</span></li>
         ))}
       </ul>
+      <Contributors />
     </div>
   </section>
 )}
@@ -43,7 +45,7 @@ const builtOn = [
     <nav class="foot-links" aria-label="Project">
       <a href={REPO}>Source code</a>
       <a href={RELEASES}>Releases</a>
-      <a href={blob('docs/INSTALL.md')}>Documentation</a>
+      <a href={url('docs/')}>Documentation</a>
       <a href={REPORT_PROBLEM}>Report a problem</a>
       <a href={url('install/')}>Install links</a>
     </nav>

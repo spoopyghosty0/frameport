@@ -120,24 +120,35 @@ recipe for you) or **Report a problem…** (attaches a diagnostics zip with pers
 
 ## Compared with other tools
 
-FrameDrop and Valve's own tools install an app as it is. FramePort also converts and patches Meta Quest games that
-don't run on the Frame as they are, and keeps a tested recipe per game. It opens FrameDrop's install links too.
+FrameDrop and Valve's own tools install an app as it is. FramePort differs in four ways most people decide on:
+
+- **Free and open source** (GPL-3.0): read every line, build it yourself, change it, share it. FrameDrop is free
+  (donationware) without published source.
+- **Quest games that don't run on the Frame as they are** get converted to OpenXR and patched, with a tested recipe
+  for 100+ games. The others install the APK as it is.
+- **Windows, macOS and Linux.** FrameDrop is for Windows.
+- **Wi-Fi or a USB cable**: your home Wi-Fi, the Frame's own hotspot, or a cable. No pairing screen.
+
+<details>
+<summary>All differences</summary>
 
 | | **FramePort** | **FrameDrop** | **By hand with Valve's tools** |
 |---|---|---|---|
-| Price and source | Free, open source (GPL-3.0) | Free (donationware), source not published | Free, from Valve |
-| Your computer | Windows, macOS, Linux | Windows | Depends on the tool |
-| Connecting the Frame | One command in the Frame's Konsole (turns on Developer Mode itself); Wi-Fi or USB cable | Developer Mode, then Settings → Developer → Pair new host; same Wi-Fi | Developer Mode and pairing (Devkit Client), or Lepton Development and adb |
-| Meta Quest games that don't run as they are | Converted (OVRPort: Meta's VR runtime → OpenXR) and patched for the Frame | Not mentioned: the APK must meet Lepton's requirements as it is (arm64, minSdk 30 or lower) | Installed as they are |
-| Tested per-game recipes | 100+ tested games, followed automatically | Not stated | No |
-| Steam library entry | Shortcut with artwork and tags | "Devkit Game" shortcut | "Devkit Game: &lt;title&gt;" (Devkit Client); none with adb |
-| Android 2D apps | Yes, in a window | Yes (Lepton Flatscreen) | Yes, with a marker file |
-| Linux apps | arm64, and x86_64 through FEX | arm64 zips; x86_64 less reliable | Yes (Devkit Client) |
-| Windows programs and PC VR games | Proton (installed for you); PC VR games also through Revive on your PC | Windows .exe through Proton (install Proton first) | Proton (Devkit Client) |
-| "Install with …" buttons on web pages | `frameport://` and FrameDrop's `framedrop://` links | `framedrop://` links (FrameDrop defined them) | No |
-| After installing | Launch test that reads the logs and names the likely fix | Log viewer (pull the headset log) | No |
-| Also on the PC | Files, Screenshots, Live view, Monitor, Type on Frame | Not stated | No |
-| Updates | Updates itself | Run the new installer (automatic updates not stated) | Per tool |
+| What does it cost, and can I see the code? | Free, open source (GPL-3.0) | Free (donationware), source not published | Free, from Valve |
+| Which computer can I use? | Windows, macOS, Linux | Windows | Depends on the tool |
+| How do I connect the Frame the first time? | Type one command in the Frame's Konsole; it turns on Developer Mode itself. No password | Turn on Developer Mode, then Settings → Developer → Pair new host | Turn on Developer Mode and pair, or start Lepton Development and use adb |
+| Wireless or cable? | Wi-Fi, the Frame's hotspot, or a USB cable | Same Wi-Fi network | Wi-Fi pairing, or adb |
+| Will a Quest game that doesn't run on the Frame work? | Converted (OVRPort: Meta's VR runtime → OpenXR) and patched for the Frame | Not mentioned: the APK must meet Lepton's requirements as it is (arm64, minSdk 30 or lower) | Installs the APK as it is |
+| Does it know which fixes a game needs? | A tested recipe for 100+ games, updated without an app update | Not stated | No |
+| Will the game be in my Steam library? | Yes, with artwork and tags | As a "Devkit Game" shortcut | As "Devkit Game: &lt;title&gt;" (Devkit Client); not with adb |
+| Android apps, Linux apps, Windows programs? | All three: Android apps in a window, Linux arm64 and x86_64, Windows programs through Proton (installed for you) | All three: Lepton Flatscreen, Linux arm64 zips, Windows .exe through Proton (install Proton first) | Through the Devkit Client; 2D Android apps need a marker file |
+| PC VR (Rift) games? | On your PC through Revive; SteamVR and OpenXR ones on the Frame through Proton | Not stated | Not stated |
+| Do "Install with …" buttons on websites work? | Its own and FrameDrop's | FrameDrop's (it defined them) | No |
+| What if a game doesn't start? | A launch test reads the logs and names the likely fix | A log viewer pulls the headset log | No help |
+| Can I see and use the Frame from my computer? | Live view, Monitor, Files, Screenshots, Type on Frame | Not stated | No |
+| Does it update itself? | Yes | Run the new installer (automatic updates not stated) | Per tool |
+
+</details>
 
 Other tools as described on their own pages, checked 2026-10-09:
 [FrameDrop about](https://framedropvr.com/about) · [how-to](https://framedropvr.com/how-to) ·

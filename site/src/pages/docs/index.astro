@@ -1,0 +1,52 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import DocsShell from '../../components/DocsShell.astro';
+import { DOCS, loadDoc } from '../../data/docs';
+import { url } from '../../data/site';
+
+const docs = DOCS.map(loadDoc);
+const groups = [...new Set(docs.map((d) => d.group))];
+---
+<Layout title="Documentation · FramePort" description="How to install FramePort, connect a Steam Frame, and everything else in FramePort's documentation.">
+  <Nav home={false} />
+  <main>
+    <DocsShell>
+      <div class="prose">
+        <h1>Documentation</h1>
+        <p class="intro">From the first download to the details of the Frame's runtime. The same pages are in the
+          repository's <code>docs/</code> folder.</p>
+      </div>
+      {groups.map((g) => (
+        <section class="dg">
+          <h2>{g}</h2>
+          <div class="cards">
+            {docs.filter((d) => d.group === g).map((d) => (
+              <a class="dc" href={url(`docs/${d.slug}/`)}>
+                <b>{d.title}</b>
+                <span>{d.blurb}</span>
+                <i aria-hidden="true">→</i>
+              </a>
+            ))}
+          </div>
+        </section>
+      ))}
+    </DocsShell>
+  </main>
+  <Footer credits={false} />
+</Layout>
+
+<style>
+  .intro { color: var(--text-2); }
+  .dg { margin-top: 36px; }
+  .dg h2 { font-size: 22px; margin-bottom: 14px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .dc { position: relative; display: grid; gap: 6px; padding: 18px 40px 18px 18px; border-radius: var(--radius-md); border: 1px solid var(--border);
+    background: var(--surface); text-decoration: none; color: var(--text); transition: border-color 220ms, transform 220ms var(--ease-out), box-shadow 220ms; }
+  .dc:hover { border-color: rgba(255, 138, 31, .5); transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0, 0, 0, .4); }
+  .dc b { font: 700 16px/1.25 var(--font-display); }
+  .dc span { font-size: 14px; color: var(--text-2); }
+  .dc i { position: absolute; right: 16px; top: 18px; font-style: normal; color: var(--accent); transition: transform 220ms var(--ease-out); }
+  .dc:hover i { transform: translateX(4px); }
+</style>

@@ -108,6 +108,21 @@ const latest = latestCheck(games);
       more.textContent = `Show all ${matches} games`;
     };
 
+    // a row opens to show its recipe
+    const toggle = (row: HTMLElement) => {
+      const open = row.getAttribute('aria-expanded') !== 'true';
+      row.setAttribute('aria-expanded', String(open));
+      row.querySelector<HTMLElement>('.more')!.hidden = !open;
+    };
+    list.addEventListener('click', (ev) => {
+      if ((ev.target as Element).closest('a, code')) return;
+      const row = (ev.target as Element).closest<HTMLElement>('li.row');
+      if (row) toggle(row);
+    });
+    list.addEventListener('keydown', (ev) => {
+      const row = (ev.target as Element).closest<HTMLElement>('li.row');
+      if (row && (ev.key === 'Enter' || ev.key === ' ') && ev.target === row) { ev.preventDefault(); toggle(row); }
+    });
     board.addEventListener('click', (ev) => {
       const b = (ev.target as Element).closest('button');
       if (!b) return;
@@ -194,6 +209,21 @@ const latest = latestCheck(games);
   .rows :global(.row) { display: grid; grid-template-columns: minmax(0, 1fr) 100px 90px 120px 100px; gap: 6px 16px;
     align-items: center; padding: 12px 20px; border-top: 1px solid rgba(42, 45, 55, 0.7); }
   .rows :global(.row:hover) { background: rgba(237, 238, 242, 0.025); }
+  .rows :global(.row) { cursor: pointer; position: relative; padding-right: 30px; }
+  .rows :global(.row:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .rows :global(.row::after) { content: "▾"; position: absolute; right: 10px; top: 15px; font-size: 11px; color: var(--text-3);
+    transition: transform 300ms var(--ease-out); }
+  .rows :global(.row[aria-expanded="true"]) { background: rgba(255, 138, 31, .04); }
+  .rows :global(.row[aria-expanded="true"]::after) { transform: rotate(180deg); color: var(--accent); }
+  .rows :global(.more) { grid-column: 1 / -1; display: grid; gap: 8px; padding: 6px 0 4px; font-size: 14px; color: var(--text-2);
+    animation: open .35s var(--ease-out); cursor: auto; }
+  .rows :global(.more[hidden]) { display: none; }
+  .rows :global(.more p) { max-width: 100ch; line-height: 1.55; }
+  .rows :global(.pt) { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .rows :global(.pt span) { font: 600 10.5px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-2); margin-right: 4px; }
+  .rows :global(.pt code) { font-size: 12px; padding: 3px 8px; border-radius: 6px; background: rgba(58, 168, 255, .1); color: var(--secondary); }
+  .rows :global(.fx) { font: 400 12px/1.4 var(--font-mono); color: var(--text-3); }
+  @keyframes open { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   .rows :global(.row[hidden]) { display: none; }
   .head-row { padding-block: 10px; font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase;
     color: var(--text-2); }
@@ -214,7 +244,7 @@ const latest = latestCheck(games);
   .links { display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px; color: var(--text-3); margin-left: auto; }
 
   @media (max-width: 760px) {
-    .row, .rows :global(.row) { grid-template-columns: minmax(0, 1fr) auto; padding-inline: 16px; }
+    .row, .rows :global(.row) { grid-template-columns: minmax(0, 1fr) auto; padding-left: 16px; padding-right: 30px; }
     .table :global(.c-eng), .table :global(.c-xr), .table :global(.c-date) { display: none; }
     .head-row { display: none; }
     .search { margin-left: 0; flex-basis: 100%; }

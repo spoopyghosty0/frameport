@@ -1,0 +1,98 @@
+---
+// The documentation's frame: the doc list on the left, the page, its contents on the right (follows the reader).
+import { DOCS } from '../data/docs';
+import { url } from '../data/site';
+
+interface Props { current?: string; toc?: { id: string; text: string; depth: number }[] }
+const { current, toc = [] } = Astro.props;
+const groups = [...new Set(DOCS.map((d) => d.group))];
+---
+<div class="docs wrap">
+  <aside class="dnav" aria-label="Documentation">
+    <details class="dnav-in" open data-dnav>
+      <summary>Documentation</summary>
+      <a class:list={['home', { on: !current }]} href={url('docs/')}>Overview</a>
+      {groups.map((g) => (
+        <div class="grp">
+          <p>{g}</p>
+          {DOCS.filter((d) => d.group === g).map((d) => (
+            <a href={url(`docs/${d.slug}/`)} class:list={{ on: d.slug === current }} aria-current={d.slug === current ? 'page' : undefined}>{d.name}</a>
+          ))}
+        </div>
+      ))}
+    </details>
+  </aside>
+  <div class="dmain"><slot /></div>
+  {toc.length > 2 && (
+    <nav class="dtoc" aria-label="On this page">
+      <p>On this page</p>
+      <ol>
+        {toc.filter((t) => t.depth >= 2).map((t) => <li class={`d${t.depth}`}><a href={`#${t.id}`} data-toc={t.id}>{t.text}</a></li>)}
+      </ol>
+      <span class="progress" aria-hidden="true"><i data-read></i></span>
+    </nav>
+  )}
+</div>
+
+<script>
+  // contents: the section being read is marked; a bar shows how far through the page you are
+  const links = [...document.querySelectorAll<HTMLAnchorElement>('[data-toc]')];
+  const read = document.querySelector<HTMLElement>('[data-read]');
+  if (links.length) {
+    const heads = links.map((a) => document.getElementById(a.dataset.toc!)).filter((h): h is HTMLElement => !!h);
+    const update = () => {
+      let cur = heads[0];
+      for (const h of heads) if (h.getBoundingClientRect().top < 120) cur = h;
+      links.forEach((a) => a.classList.toggle('on', a.dataset.toc === cur?.id));
+      const max = document.documentElement.scrollHeight - innerHeight;
+      if (read) read.style.width = `${Math.min(100, (scrollY / Math.max(1, max)) * 100)}%`;
+    };
+    addEventListener('scroll', update, { passive: true });
+    update();
+  }
+  // narrow screens: the doc list starts folded
+  const dnav = document.querySelector<HTMLDetailsElement>('[data-dnav]');
+  if (dnav && matchMedia('(max-width: 900px)').matches) dnav.open = false;
+  // code blocks get a copy button
+  document.querySelectorAll<HTMLPreElement>('.prose pre').forEach((pre) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'copy';
+    b.textContent = 'Copy';
+    b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(pre.innerText.replace(/\nCopy$/, '')); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy'; }
+      setTimeout(() => { b.textContent = 'Copy'; }, 1600);
+    });
+    pre.append(b);
+  });
+</script>
+
+<style>
+  .docs { display: grid; grid-template-columns: 220px minmax(0, 1fr) 220px; gap: 40px; align-items: start; padding-block: 40px 80px; }
+  .dmain { min-width: 0; }
+  .dnav, .dtoc { position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow: auto; scrollbar-width: thin; }
+  .dnav summary { list-style: none; font: 600 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2);
+    padding: 6px 0 12px; cursor: default; }
+  .dnav summary::-webkit-details-marker { display: none; }
+  .grp { margin-top: 14px; display: grid; gap: 2px; }
+  .grp p { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 4px; }
+  .dnav a { display: block; padding: 6px 10px; border-radius: var(--radius-sm); color: var(--text-2); text-decoration: none; font-size: 14px; }
+  .dnav a:hover { color: var(--text); background: rgba(237, 238, 242, .05); }
+  .dnav a.on { color: var(--text); font-weight: 600; background: linear-gradient(90deg, rgba(58, 168, 255, .2), rgba(255, 138, 31, .2)); }
+  .dtoc p { font: 600 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); margin-bottom: 10px; }
+  .dtoc ol { list-style: none; margin: 0; padding: 0 0 0 10px; border-left: 1px solid var(--border); display: grid; gap: 2px; }
+  .dtoc a { display: block; padding: 4px 8px; font-size: 13px; color: var(--text-2); text-decoration: none; border-radius: 6px; position: relative; }
+  .dtoc .d3 a { padding-left: 20px; font-size: 12.5px; }
+  .dtoc a:hover { color: var(--text); }
+  .dtoc a.on { color: var(--accent); }
+  .dtoc a.on::before { content: ""; position: absolute; left: -11px; top: 4px; bottom: 4px; width: 2px; background: var(--accent); border-radius: 2px; }
+  .progress { display: block; margin-top: 14px; height: 3px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--portal); }
+  @media (max-width: 1180px) { .docs { grid-template-columns: 210px minmax(0, 1fr); } .dtoc { display: none; } }
+  @media (max-width: 900px) {
+    .docs { grid-template-columns: minmax(0, 1fr); gap: 16px; padding-top: 20px; }
+    .dnav { position: static; max-height: none; }
+    .dnav summary { cursor: pointer; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+    .dnav summary::after { content: " ▾"; }
+  }
+</style>

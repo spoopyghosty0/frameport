@@ -43,6 +43,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # the contributors list (higher API limit)
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site/dist
