@@ -96,7 +96,7 @@ def needs_xrshim(recipe_patches: dict) -> bool:
     from ..settings import XRSHIM_SETTINGS, adapter_settings
 
     s = adapter_settings(recipe_patches)
-    return any(s.get(key) for key in XRSHIM_SETTINGS)
+    return any(s.get(key) for key in (*XRSHIM_SETTINGS, "scene_emul"))
 
 
 def add_xrshim(ctx: ApkContext) -> bool:

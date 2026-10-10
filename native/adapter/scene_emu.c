@@ -11,6 +11,7 @@ static int emulate_scene;            // app requested the scene extensions and t
 static const char *const scene_extensions[] = {
     "XR_FB_spatial_entity", "XR_FB_spatial_entity_query", "XR_FB_spatial_entity_storage",
     "XR_FB_spatial_entity_container", "XR_FB_scene", "XR_FB_scene_capture",
+    "XR_META_spatial_entity_discovery", "XR_META_boundary_visibility",
 };
 #define SCENE_EXTENSION_COUNT (sizeof(scene_extensions) / sizeof(scene_extensions[0]))
 
@@ -259,6 +260,74 @@ static int filter_matches(const query_filter *f, const scene_entity *e) {
     return 1;
 }
 
+static XRAPI_ATTR XrResult XRAPI_CALL emu_discover_spaces(XrSession session, const XrSpaceDiscoveryInfoMETA *info,
+                                                          XrAsyncRequestIdFB *request) {
+    if (!info || !request) return XR_ERROR_VALIDATION_FAILURE;
+    pthread_mutex_lock(&scene_lock);
+    scene_session = session;
+    build_room();
+    *request = next_request++;
+
+    query_filter *f = &filters[filter_next++ % 16];
+    memset(f, 0, sizeof(*f));
+    f->id = *request;
+    if (info->filters && info->filterCount) {
+        for (uint32_t i = 0; i < info->filterCount; ++i) {
+            const XrSpaceFilterBaseHeaderMETA *flt = info->filters[i];
+            if (!flt) continue;
+            if (flt->type == XR_TYPE_SPACE_FILTER_COMPONENT_META) {
+                f->has_component = 1;
+                f->component = ((const XrSpaceFilterComponentMETA *)flt)->componentType;
+            } else if (flt->type == XR_TYPE_SPACE_FILTER_UUID_META) {
+                const XrSpaceFilterUuidMETA *u = (const XrSpaceFilterUuidMETA *)flt;
+                f->uuid_count = u->uuidCount < 64 ? u->uuidCount : 64;
+                for (uint32_t k = 0; k < f->uuid_count; ++k) f->uuids[k] = u->uuids[k];
+            }
+        }
+    }
+
+    XrEventDataSpaceDiscoveryResultsAvailableMETA avail = {
+        XR_TYPE_EVENT_DATA_SPACE_DISCOVERY_RESULTS_AVAILABLE_META, NULL, *request
+    };
+    XrEventDataSpaceDiscoveryCompleteMETA done = {
+        XR_TYPE_EVENT_DATA_SPACE_DISCOVERY_COMPLETE_META, NULL, *request, XR_SUCCESS
+    };
+    push_event(&avail, sizeof(avail));
+    push_event(&done, sizeof(done));
+    LOG("scene: discover spaces request=%llu filterCount=%u", (unsigned long long)*request, info->filterCount);
+    pthread_mutex_unlock(&scene_lock);
+    return XR_SUCCESS;
+}
+
+static XRAPI_ATTR XrResult XRAPI_CALL emu_retrieve_discovery_results(XrSession session, XrAsyncRequestIdFB request,
+                                                                     XrSpaceDiscoveryResultsMETA *results) {
+    (void)session;
+    if (!results) return XR_ERROR_VALIDATION_FAILURE;
+    pthread_mutex_lock(&scene_lock);
+    const query_filter *f = NULL;
+    for (int i = 0; i < 16; ++i) if (filters[i].id == request) f = &filters[i];
+    uint32_t n = 0;
+    for (int i = 0; i < entity_count; ++i) {
+        if (!filter_matches(f, &entities[i])) continue;
+        if (results->resultCapacityInput && n < results->resultCapacityInput && results->results) {
+            results->results[n].space = entities[i].handle;
+            results->results[n].uuid = entities[i].uuid;
+        }
+        ++n;
+    }
+    results->resultCountOutput = n;
+    LOG("scene: retrieve discovery results request=%llu found=%u returned=%u",
+        (unsigned long long)request, n, results->resultCapacityInput ? (results->resultCapacityInput < n ? results->resultCapacityInput : n) : 0);
+    pthread_mutex_unlock(&scene_lock);
+    return (results->resultCapacityInput && results->resultCapacityInput < n) ? XR_ERROR_SIZE_INSUFFICIENT : XR_SUCCESS;
+}
+
+static XRAPI_ATTR XrResult XRAPI_CALL emu_request_boundary_visibility(XrSession session, XrBoundaryVisibilityMETA boundaryVisibility) {
+    (void)session; (void)boundaryVisibility;
+    LOG("scene: boundary visibility requested: %d", (int)boundaryVisibility);
+    return XR_SUCCESS;
+}
+
 static XRAPI_ATTR XrResult XRAPI_CALL emu_retrieve_results(XrSession session, XrAsyncRequestIdFB request,
                                                            XrSpaceQueryResultsFB *results) {
     (void)session;
@@ -386,11 +455,13 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_semantic_labels(XrSession session,
     int i = fake_space_index(space);
     if (i < 0 || !labels) return XR_ERROR_HANDLE_INVALID;
     if (!entities[i].label) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
-    uint32_t n = (uint32_t)strlen(entities[i].label) + 1;
+    uint32_t n = (uint32_t)strlen(entities[i].label);
     labels->bufferCountOutput = n;
+    LOG("scene: get semantic labels entity=%d label=%s cap=%u", i, entities[i].label, labels->bufferCapacityInput);
     if (!labels->bufferCapacityInput) return XR_SUCCESS;
     if (labels->bufferCapacityInput < n) return XR_ERROR_SIZE_INSUFFICIENT;
     memcpy(labels->buffer, entities[i].label, n);
+    if (labels->bufferCapacityInput > n) labels->buffer[n] = '\0';
     return XR_SUCCESS;
 }
 
@@ -473,6 +544,10 @@ static PFN_xrVoidFunction scene_emulation(const char *name) {
         {"xrCreateSpatialAnchorFB", (PFN_xrVoidFunction)emu_create_anchor},
         {"xrSaveSpaceFB", (PFN_xrVoidFunction)emu_save_space},
         {"xrEraseSpaceFB", (PFN_xrVoidFunction)emu_erase_space},
+        {"xrDiscoverSpacesMETA", (PFN_xrVoidFunction)emu_discover_spaces},
+        {"xrRetrieveSpaceDiscoveryResultsMETA", (PFN_xrVoidFunction)emu_retrieve_discovery_results},
+        {"xrSetSpaceComponentStatusPrivilegedFB", (PFN_xrVoidFunction)emu_set_component_status},
+        {"xrRequestBoundaryVisibilityMETA", (PFN_xrVoidFunction)emu_request_boundary_visibility},
     };
     for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); ++i)
         if (!strcmp(name, table[i].name)) return table[i].fn;
