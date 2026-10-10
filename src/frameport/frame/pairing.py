@@ -39,6 +39,10 @@ SETUP_LINE = f"curl -fsSL {SETUP_URL} | bash"
 SERVICE = "_frameport-pair._tcp.local."
 MAX_ASKS = 3  # open requests at a time (more get 429)
 WAIT = 100  # seconds one /wait may hold before the Frame asks again
+# An open request whose Frame stopped polling /wait for more than 2 x WAIT is gone (setup.sh ended, Ctrl+C, the Frame
+# slept): it no longer counts against MAX_ASKS and its Allow card goes. Decided ones are kept a while for the record.
+DECIDED_KEEP = 10 * 60
+EXPIRE_EVERY = 5  # seconds between expiry checks while the server runs
 
 # two words that name this PC's app key (its public key: same on every start), shown on both sides
 _ADJ = ("amber", "brisk", "calm", "dusky", "eager", "fable", "gentle", "hazel", "ivory", "jolly", "keen", "lunar",
@@ -65,6 +69,13 @@ def announce_properties(name: str) -> dict[str, str]:
     return {"v": "1", "pc": name, "words": pc_words()}
 
 
+def _default_frame_name() -> str:
+    """The name shown for a Frame that didn't send its host name (shown in the Allow card)."""
+    from ..i18n import tr
+
+    return tr("Steam Frame")
+
+
 @dataclass
 class Ask:
     """A Frame asking to be set up (from /hello), waiting for the user to allow it."""
@@ -72,9 +83,22 @@ class Ask:
     frame: str  # the Frame's host name
     address: str
     digits: str
-    state: str = "open"  # open | allowed | denied
+    state: str = "open"  # open | allowed | denied | expired
     created: float = field(default_factory=time.time)
     event: threading.Event = field(default_factory=threading.Event, repr=False)
+    seen: float = 0.0  # when the Frame last asked or polled (/hello, /wait start or end)
+    waiting: int = 0  # /wait requests held right now
+    decided: float = 0.0  # when the user allowed or denied it
+
+    def __post_init__(self):
+        self.seen = self.seen or self.created
+
+    def expired(self, now: float | None = None) -> bool:
+        """An open request nobody polls any more (no /wait for 2 x WAIT), or a decided one older than DECIDED_KEEP."""
+        now = time.time() if now is None else now
+        if self.state == "open":
+            return self.waiting == 0 and now - self.seen > 2 * WAIT
+        return now - (self.decided or self.seen) > DECIDED_KEEP
 
 
 def ensure_reachable(server: PairingServer) -> str:
@@ -155,10 +179,13 @@ class PairingServer:
     # setup uses the cable's fixed PC address (10.86.200.234), so no Wi-Fi, router or discovery is involved
     asks: list[Ask] = field(default_factory=list)
     on_ask: object = None  # called with each new Ask (the UI shows Allow / Deny)
+    on_expire: object = None  # called with the list of Asks that just expired (the UI drops their cards)
     announce: bool = True  # announce over mDNS so the setup URL finds this PC
     _httpd: http.server.ThreadingHTTPServer | None = None
     _zc: object = None
     _info: object = None
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _stopped: threading.Event = field(default_factory=threading.Event, repr=False)
 
     @property
     def url(self) -> str:
@@ -194,20 +221,31 @@ class PairingServer:
                     nonce = q.get("nonce", "")
                     if not (8 <= len(nonce) <= 64) or not nonce.isalnum():
                         return self._send(b"bad request\n", status=400)
-                    if sum(a.state == "open" for a in server.asks) >= MAX_ASKS:
-                        return self._send(b"too many open requests\n", status=429)
-                    ask = Ask(secrets.token_hex(8), q.get("host", "")[:64] or "Steam Frame", self.client_address[0],
-                              ask_digits(nonce))
-                    server.asks.append(ask)
+                    server.prune()
+                    with server._lock:
+                        if len(server.open_asks()) >= MAX_ASKS:
+                            return self._send(b"too many open requests\n", status=429)
+                        ask = Ask(secrets.token_hex(8), q.get("host", "")[:64] or _default_frame_name(),
+                                  self.client_address[0], ask_digits(nonce))
+                        server.asks.append(ask)
                     if callable(server.on_ask):
                         server.on_ask(ask)
                     return self._send(json.dumps({"id": ask.id, "pc": socket.gethostname(), "words": pc_words(),
                                                   "digits": ask.digits}).encode(), "application/json")
                 if path == "/wait":  # held until the user decides (or WAIT seconds: the Frame asks again)
-                    ask = next((a for a in server.asks if secrets.compare_digest(a.id, q.get("id", ""))), None)
+                    with server._lock:
+                        ask = next((a for a in server.asks if secrets.compare_digest(a.id, q.get("id", ""))), None)
+                        if ask is not None:
+                            ask.waiting += 1
+                            ask.seen = time.time()
                     if ask is None:
                         return self._send(b"unknown request\n", status=404)
-                    ask.event.wait(WAIT)
+                    try:
+                        ask.event.wait(WAIT)
+                    finally:
+                        with server._lock:
+                            ask.waiting -= 1
+                            ask.seen = time.time()
                     if ask.state == "allowed":
                         return self._send(json.dumps({"code": server.code}).encode(), "application/json")
                     if ask.state == "denied":
@@ -249,14 +287,47 @@ class PairingServer:
         self._timer.start()
         if self.announce:
             threading.Thread(target=self._announce, daemon=True).start()
+        threading.Thread(target=self._expire_loop, daemon=True).start()
         return self
 
     def decide(self, ask_id: str, allow: bool) -> None:
         """The user allowed (or denied) a Frame that asked via /hello."""
-        for a in self.asks:
-            if a.id == ask_id and a.state == "open":
-                a.state = "allowed" if allow else "denied"
+        with self._lock:
+            for a in self.asks:
+                if a.id == ask_id and a.state == "open":
+                    a.state = "allowed" if allow else "denied"
+                    a.decided = time.time()
+                    a.event.set()
+
+    def open_asks(self) -> list[Ask]:
+        """The requests still waiting for Allow / Deny (expired ones not included)."""
+        now = time.time()
+        return [a for a in self.asks if a.state == "open" and not a.expired(now)]
+
+    def prune(self, now: float | None = None) -> list[Ask]:
+        """Drop expired requests (see Ask.expired); calls on_expire with them. Returns them."""
+        now = time.time() if now is None else now
+        with self._lock:
+            gone = [a for a in self.asks if a.expired(now)]
+            if not gone:
+                return []
+            self.asks = [a for a in self.asks if a not in gone]
+            for a in gone:
+                if a.state == "open":
+                    a.state = "expired"
                 a.event.set()
+        if callable(self.on_expire):
+            try:
+                self.on_expire(gone)
+            except Exception:  # noqa: BLE001 - a UI callback must not stop the expiry checks
+                pass
+        return gone
+
+    def _expire_loop(self) -> None:
+        while not self._stopped.wait(EXPIRE_EVERY):
+            if self._httpd is None:
+                return
+            self.prune()
 
     def _announce(self) -> None:
         """mDNS `_frameport-pair._tcp` while the server runs: the setup URL's script finds this PC with it. Never the
@@ -296,6 +367,7 @@ class PairingServer:
         threading.Thread(target=self.stop, daemon=True).start()
 
     def stop(self) -> None:
+        self._stopped.set()
         httpd, self._httpd = self._httpd, None
         if httpd:
             httpd.shutdown()

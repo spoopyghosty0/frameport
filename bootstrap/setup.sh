@@ -201,15 +201,23 @@ fi
 
 nonce=$(python3 -c 'import secrets; print(secrets.token_hex(12))')
 digits=$(python3 -c 'import hashlib, sys; print(f"{int(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:8], 16) % 10000:04d}")' "$nonce")
-reply=$(curl -fsS -G --data-urlencode "host=$(hostname)" --data-urlencode "nonce=$nonce" "http://$PC/hello") || {
-    echo "FramePort at $PC didn't answer. Is it still open at Steam Frame → Start setup?"; exit 1; }
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+status=$(curl -sS -o "$tmp" -w '%{http_code}' -G --data-urlencode "host=$(hostname)" --data-urlencode "nonce=$nonce" \
+    "http://$PC/hello") || true
+case $status in
+    200) reply=$(cat "$tmp") ;;
+    429) echo "FramePort at $PC already has several setup requests waiting. Allow or deny them there (requests from"
+         echo "setups that ended go away by themselves within a few minutes), then run this again."; exit 1 ;;
+    000|"") echo "FramePort at $PC didn't answer. Is it still open at Steam Frame → Start setup?"; exit 1 ;;
+    *) echo "FramePort at $PC refused the request (HTTP $status). Run this again, or run the setup command FramePort shows."
+       exit 1 ;;
+esac
 id=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["id"])' "$reply")
 WORDS=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1]).get("words", ""))' "$reply")
 
 say "FramePort on your PC asks to set up this Frame"
 printf '   Click Allow there if it shows  \033[1;33m%s\033[0m  (PC: %s)\n' "$digits" "${WORDS:-?}"
-tmp=$(mktemp)
-trap 'rm -f "$tmp"' EXIT
 code=""
 for _ in $(seq 12); do  # up to about 20 minutes
     status=$(curl -sS -o "$tmp" -w '%{http_code}' -m 115 "http://$PC/wait?id=$id" || echo 000)
