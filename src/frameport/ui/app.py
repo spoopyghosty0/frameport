@@ -8,6 +8,7 @@ The UI only calls `frameport.pipeline`, the targets and the toolchain; long work
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 import traceback
@@ -167,6 +168,7 @@ class FramePortApp:
         self.go("welcome" if needed() else "library")
         threading.Thread(target=self._startup, daemon=True).start()
         threading.Thread(target=self._poll, daemon=True).start()
+        self._start_auto_pair()
         threading.Thread(target=self._backfill_covers, daemon=True).start()
         self.updater.start()
         self.run_bg(self._refresh_catalog)  # confirmed game configs from GitHub main (no release needed)
@@ -2184,6 +2186,37 @@ class FramePortApp:
                     self.connect(saved_targets()[0], quiet=True)
             except Exception:  # noqa: BLE001
                 traceback.print_exc()
+
+    def _start_auto_pair(self) -> None:
+        """Frames in Developer Mode pair themselves (frame/autopair.py): while nothing is connected, one that lets
+        FramePort in is connected, one that doesn't is offered FramePort's key through Valve's pairing (approve in
+        the headset after opening Settings → Developer → Pair new host). Never in an isolated data dir (tests,
+        screenshots: they'd connect to a real Frame on the network) or with FRAMEPORT_NO_AUTO_PAIR."""
+        from ..frame import autopair, devkit
+
+        self.auto_pair_status = ""
+        if os.environ.get("FRAMEPORT_HOME") or os.environ.get("FRAMEPORT_NO_AUTO_PAIR"):
+            return
+
+        def active() -> bool:
+            return (self.frame_state in ("none", "offline") and bool(library.setting("frame.auto_pair", True))
+                    and not (self.pairing and self.pairing.running and self.pairing.asks))
+
+        def ready(target) -> None:
+            self.auto_pair_status = ""
+            if self.frame_state != "connected":
+                self.connect(target)
+
+        def status(kind: str, detail: str) -> None:
+            text = (tr("{frame} is in Developer Mode: open Settings → Developer → Pair new host on it, then approve "
+                       "FramePort there.").format(frame=detail) if kind == "waiting" else explain(RuntimeError(detail)))
+            if text != self.auto_pair_status:
+                self.auto_pair_status = text
+                if self.route[0] == "frame":
+                    self.refresh_view()
+
+        self.auto_pairer = autopair.AutoPairer(autopair.find_devkits, autopair.try_login, devkit.register, ready,
+                                               active, status).start()
 
     def _check_frame_restart(self, info: dict | None) -> None:
         """The Frame restarted without shutting down (a crash, a GPU reset) soon after a FramePort game started: say

@@ -283,6 +283,11 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
   server announces while open; else the USB address and a /24 scan of `/ping`), `/hello` → the user clicks Allow (4
   digits on both sides, `ask_digits`) → `/wait` hands over the code → runs bootstrap.sh exactly like the typed line.
   Checked on the dev Frame 2026-10-10 (mDNS and scan paths) with a stub bootstrap; tests/test_setup_url.py.
+  Auto-pairing (`frame/autopair.py`, `app._start_auto_pair`, setting `frame.auto_pair`, default on; off with
+  FRAMEPORT_HOME/FRAMEPORT_NO_AUTO_PAIR): while no Frame is connected, Frames in Developer Mode (devkit mDNS, else a
+  30 s scan of the /24s for :32000/login-name, deduped by host key) are connected if FramePort's key works, else
+  offered the key via devkit.register every 4 s (refused at once until Pair new host is open; 45 s back-off after an
+  unanswered request). This WSL dev PC never hears the Frame's mDNS (Hyper-V firewall): the scan finds it.
 - `catalog/games/<package>.yaml` (installed apps also fetch these from GitHub `main`, see "Catalog updates") — 38 recipes (34 verified 2026-09-28; Deadpool VR, 4XVR, NEX Player and AC Nexus's
   90 Hz default confirmed later by the owner); `catalog/triage.yaml` — log signatures → fixes.
 - `native/` — sources of the prebuilt binaries in `artifacts/` (adapter, VrApi bridge patches, GL shim, stubs).

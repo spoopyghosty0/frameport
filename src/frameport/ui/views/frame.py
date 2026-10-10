@@ -485,6 +485,24 @@ class FrameView:
         else:
             found.controls = [C.meta(tr("Searched a moment ago.")),
                               C.ghost(tr("Search again"), ft.Icons.REFRESH_ROUNDED, lambda e: app.run_bg(discover))]
+        def auto_pair_controls() -> list[ft.Control]:
+            """Frames in Developer Mode pair by themselves (app._start_auto_pair): what it's doing, and its switch."""
+            from ...core import library as lib
+
+            on = bool(lib.setting("frame.auto_pair", True))
+
+            def toggle(e):
+                lib.set_setting("frame.auto_pair", bool(e.control.value))
+                app.refresh_view()
+            out: list[ft.Control] = [C.switch(tr("Pair Frames in Developer Mode automatically: open Settings → "
+                                                 "Developer → Pair new host on the Frame and approve FramePort "
+                                                 "there; no click here"), value=on, on_change=toggle)]
+            status = getattr(app, "auto_pair_status", "")
+            if on and status:
+                out.insert(0, C.callout(ft.Row([C.spinner(), C.body(status, T.TEXT, expand=True)], spacing=T.S3),
+                                        "info"))
+            return out
+
         step = lambda n, head, text, *content, help=None: C.card(ft.Row([  # noqa: E731
             ft.Container(ft.Text(str(n), weight=ft.FontWeight.W_700, color=T.ACCENT), width=T.px(30), height=T.px(30),
                          border_radius=T.px(15), bgcolor=T.ACCENT_SOFT, alignment=ft.Alignment.CENTER),
@@ -509,6 +527,7 @@ class FrameView:
                  pair_box,
                  help="first_time_setup"),
             step(2, tr("Already set up: on your network"), tr("Frames in Developer Mode show up here."), found,
+                 *auto_pair_controls(),
                  help="developer_mode"),
             step(3, tr("Enter the address"), tr("If you know the Frame's address."),
                  ft.Row([addr, pw, C.primary(tr("Connect"),

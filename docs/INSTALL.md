@@ -61,9 +61,11 @@ The Frame and the computer must be on the same network (or connected with a USB 
 code instead, such as `curl -fsS 192.168.1.20:8765/1a2b3c4d | bash`. It needs neither the project page nor the
 network search (for networks that block mDNS); it runs the same setup.
 
-**Without Konsole:** turn on Developer Mode yourself (Settings → System → Developer). The Frame then appears under
-**On your network**. On the Frame open Settings → Developer → **Pair new host**, then click **Connect** in FramePort
-and approve it on the Frame (Valve's own devkit pairing; it only sends this computer's key to the Frame). Install
+**Without Konsole, without a click on the PC:** turn on Developer Mode yourself (Settings → System → Developer),
+then open Settings → Developer → **Pair new host** on the Frame. FramePort, open on your PC, notices the Frame by
+itself and sends its pairing request; approve FramePort in the headset and it connects (Valve's own devkit pairing; it
+only sends this computer's key to the Frame). Switch it off on the Steam Frame page (**Pair Frames in Developer Mode
+automatically**) if you don't want FramePort to ask Frames on your network. Install
 Lepton from the Steam Frame page afterwards if it's missing.
 
 ### With a USB cable
