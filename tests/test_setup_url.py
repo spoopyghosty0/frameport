@@ -264,6 +264,21 @@ def test_expiry_loop_runs(monkeypatch):
         srv.stop()
 
 
+def test_only_open_requests_hold_off_auto_pairing(server):
+    """Automatic pairing waits only while a Frame waits for Allow / Deny, not for decided or stale requests."""
+    assert not pairing.asking(None) and not pairing.asking(server)
+    hello(server)
+    assert pairing.asking(server)
+    server.decide(server.asks[0].id, False)
+    assert not pairing.asking(server)  # denied: no longer waiting
+    hello(server, nonce="fedcba9876543210")
+    server.asks[-1].seen -= 3 * pairing.WAIT
+    assert not pairing.asking(server)  # its Frame stopped asking
+    hello(server, nonce="00112233445566778899")
+    server.stop()
+    assert not pairing.asking(server)  # setup page closed
+
+
 @pytest.mark.skipif(sys.platform == "win32" or not shutil.which("bash") or not shutil.which("curl"),
                     reason="needs bash and curl")
 def test_setup_sh_says_why_when_full(server):

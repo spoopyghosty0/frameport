@@ -2192,7 +2192,7 @@ class FramePortApp:
         FramePort in is connected, one that doesn't is offered FramePort's key through Valve's pairing (approve in
         the headset after opening Settings → Developer → Pair new host). Never in an isolated data dir (tests,
         screenshots: they'd connect to a real Frame on the network) or with FRAMEPORT_NO_AUTO_PAIR."""
-        from ..frame import autopair, devkit
+        from ..frame import autopair, devkit, pairing
 
         self.auto_pair_status = ""
         if os.environ.get("FRAMEPORT_HOME") or os.environ.get("FRAMEPORT_NO_AUTO_PAIR"):
@@ -2200,7 +2200,7 @@ class FramePortApp:
 
         def active() -> bool:
             return (self.frame_state in ("none", "offline") and bool(library.setting("frame.auto_pair", True))
-                    and not (self.pairing and self.pairing.running and self.pairing.asks))
+                    and not pairing.asking(self.pairing))
 
         def ready(target) -> None:
             self.auto_pair_status = ""

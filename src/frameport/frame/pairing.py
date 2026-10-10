@@ -101,6 +101,12 @@ class Ask:
         return now - (self.decided or self.seen) > DECIDED_KEEP
 
 
+def asking(server: PairingServer | None) -> bool:
+    """A running setup page has a Frame waiting for Allow / Deny right now (automatic pairing holds off meanwhile;
+    allowed, denied and expired requests don't count)."""
+    return bool(server is not None and server.running and server.open_asks())
+
+
 def ensure_reachable(server: PairingServer) -> str:
     """Under WSL, let the Frame reach the pairing ports through Windows' Hyper-V firewall while `server` runs (one
     admin prompt; the rule is removed again when the server stops, see winhost.open_wsl_inbound).
