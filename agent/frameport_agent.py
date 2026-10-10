@@ -23,7 +23,6 @@ PC VR (Oculus Rift) games packed for the Frame (id "rift.<slug>"), run by Proton
     <dest>/<id>/compatdata/                      Proton prefix = saves (kept across reinstalls), launch.log
 """
 import base64
-import fcntl
 import glob
 import hashlib
 import json
@@ -38,6 +37,11 @@ import time
 import zipfile
 import zlib
 from types import SimpleNamespace
+
+try:
+    import fcntl
+except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
+    fcntl = None
 
 AGENT_VERSION = 70
 HOME = os.path.expanduser("~")

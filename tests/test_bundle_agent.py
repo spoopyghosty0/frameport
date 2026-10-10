@@ -51,3 +51,12 @@ def test_package_script_checks_the_bundle(tmp_path):
         package.check_bundle(tmp_path)
     (data / "frameport_agent.py.txt").write_text("x")
     package.check_bundle(tmp_path)
+
+
+def test_pc_shortcut_code_loads_without_fcntl(monkeypatch):
+    """GitHub #131: on Windows "Install on this PC" loads the agent for its VDF code; its `import fcntl` (POSIX only)
+    made every PC install fail."""
+    from frameport.targets import pc_revive
+
+    monkeypatch.setitem(sys.modules, "fcntl", None)  # import fails as on Windows
+    assert callable(pc_revive._vdf().vdf_decode)
