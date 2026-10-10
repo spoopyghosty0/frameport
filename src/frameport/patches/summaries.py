@@ -78,6 +78,8 @@ SUMMARIES = {
     "frame.swapchain_limit": "Allows very large pictures (8K video, theatres) instead of quitting.",
     "frame.vrapi_stub": "Stops Meta's leftover VrApi library from closing the game at start (e.g. Jurassic World "
                         "Aftermath).",
+    "frame.hw_video_decode": "Plays the game's videos on the Frame's video hardware, so 4K and 8K video runs "
+                             "smoothly.",
     "frame.tbxr_vendor": "Lets Team Beef ports (e.g. Lambda1VR) start on the Frame and use their Meta Quest setup.",
     "frame.asset_files": "Lets the game find content it keeps in separate files next to its data (e.g. Star Wars "
                          "Tales' seasons).",

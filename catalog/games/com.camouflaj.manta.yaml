@@ -2,20 +2,25 @@ package: com.camouflaj.manta
 title: 'Batman: Arkham Shadow'
 status: works
 notes: Large data set (~27 GiB) incl. all language packs.
-details: 'Uses Meta XR Audio (Wwise), handled by patch_meta_xr_audio. Includes all language packs (~28 GB). sync_guard
-  (to test, GitHub #102) - a reporter''s game quit to Steam''s waiting screen after the Frame runtime crashed in
-  xrSyncActions (CVRInputLatest::UpdateActionState), the input race Myst had.'
+details: 'Uses Meta XR Audio (Wwise), handled by patch_meta_xr_audio. Cutscenes are 8K HEVC panoramas: frame.hw_video_decode
+  decodes them on the Frame''s hardware, adapter.surface_native shows them in stereo (PRs #96, #128). Includes all
+  language packs (~28 GB). sync_guard (to test, GitHub #102) - a reporter''s game quit to Steam''s waiting screen
+  after the Frame runtime crashed in xrSyncActions (CVRInputLatest::UpdateActionState), the input race Myst had.'
 tested_version: 1.4.1-350961
 engine: Unity
 xr: OpenXR
 overport_extra:
 - patch_disable_space_warp
+frame:
+- frame.hw_video_decode
 adapter:
   sync_guard: 1
+  surface_native: 1
 verified:
   date: '2026-09-28'
   overport_cli: 1.2.3
   overport_runtime: 3.4.3-23204ea
   known_good_sha256: 796d1cab08f614d72c50d9702974c719c0908f5de91183cfe02d1fd5eb09551a
-updated: '2026-10-09'
+updated: '2026-10-10'
+min_app: 0.12.1
 source_hint: Batman- Arkham Shadow

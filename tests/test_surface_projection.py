@@ -6,48 +6,20 @@ from pathlib import Path
 import pytest
 
 
-def test_video_adapter_update_uses_existing_install_state(monkeypatch):
+def test_video_patches_outdate_only_the_recipes_that_gain_them():
+    """Batman's cutscene setup moved from a package check in frame.adapter to its recipe (frame.hw_video_decode +
+    adapter.surface_native): its build is outdated by the recipe change; other games' builds stay installed."""
     from frameport.patches.base import get, recipe_fingerprint
     from frameport.ui.components import install_state
 
-    adapter = get("frame.adapter")
-    recipe = {"patches": {"frame.adapter": {}}}
-    with monkeypatch.context() as old:
-        old.setattr(adapter, "revision", 1)
-        previous = recipe_fingerprint(recipe)
-    game = {"package": "com.camouflaj.manta", "recipe": recipe,
-            "build": {"sha256": "installed", "recipe_fp": previous}}
-    frame = {"installed": [{"package": game["package"], "sha256": "installed"}]}
-    assert install_state(game, frame) == "outdated"
-    game["build"]["recipe_fp"] = recipe_fingerprint(recipe, game["package"])
-    assert install_state(game, frame) == "installed"
-
-
-def test_video_revision_only_outdates_batman(monkeypatch):
-    from frameport.patches.base import get, recipe_fingerprint
-    from frameport.ui.components import install_state
-
-    adapter = get("frame.adapter")
-    recipe = {"patches": {"frame.adapter": {}}}
-    with monkeypatch.context() as old:
-        old.setattr(adapter, "package_revisions", {})
-        previous = recipe_fingerprint(recipe)
-    for package, expected in (("com.camouflaj.manta", "outdated"), ("com.example.other", "installed")):
-        game = {"package": package, "recipe": recipe, "build": {"sha256": "installed", "recipe_fp": previous}}
+    assert get("frame.adapter").revision == 1 and not get("frame.adapter").package_revisions
+    before = {"patches": {"frame.adapter": {}}}
+    after = {"patches": {"frame.adapter": {}, "frame.hw_video_decode": {}, "adapter.surface_native": {"value": 1}}}
+    for package, recipe, expected in (("com.camouflaj.manta", after, "outdated"),
+                                      ("com.example.other", before, "installed")):
+        game = {"package": package, "recipe": recipe,
+                "build": {"sha256": "installed", "recipe_fp": recipe_fingerprint(before, package)}}
         frame = {"installed": [{"package": package, "sha256": "installed"}]}
-        assert install_state(game, frame) == expected
-
-
-def test_video_revision_scopes_older_builds_without_fingerprints():
-    from frameport.patches.base import get, revised_since_unrecorded
-    from frameport.ui.components import install_state
-
-    recipe = {"patches": {"frame.adapter": {}}}
-    assert get("frame.adapter").revision == 1  # preserve upstream's shared revision
-    for package, expected in (("com.camouflaj.manta", "outdated"), ("com.example.other", "installed")):
-        game = {"package": package, "recipe": recipe, "build": {"sha256": "installed"}}
-        frame = {"installed": [{"package": package, "sha256": "installed"}]}
-        assert revised_since_unrecorded(recipe, package) is (expected == "outdated")
         assert install_state(game, frame) == expected
 
 

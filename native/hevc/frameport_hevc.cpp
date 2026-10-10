@@ -51,15 +51,47 @@ struct DecoderKind {
     uint32_t fourcc;
     const CodecProfileLevel *profiles;
     unsigned profile_count;
+    // What Iris returns pictures for on the Frame: VP9 at 7680x3840 opened but
+    // never returned one (2026-10-09), so larger VP9 decodes in software.
+    unsigned max_width,max_height;
 };
 static const DecoderKind kinds[]={
     {"OMX.frameport.hevc.decoder","video_decoder.hevc","video/hevc","hevc_v4l2m2m","hevc",
-        OMX_VIDEO_CodingHEVC,V4L2_PIX_FMT_HEVC,hevc_profiles,1},
+        OMX_VIDEO_CodingHEVC,V4L2_PIX_FMT_HEVC,hevc_profiles,1,8192,8192},
     {"OMX.frameport.avc.decoder","video_decoder.avc","video/avc","h264_v4l2m2m","h264",
-        OMX_VIDEO_CodingAVC,V4L2_PIX_FMT_H264,avc_profiles,5},
+        OMX_VIDEO_CodingAVC,V4L2_PIX_FMT_H264,avc_profiles,5,8192,8192},
     {"OMX.frameport.vp9.decoder","video_decoder.vp9","video/x-vnd.on2.vp9","vp9_v4l2m2m","vp9",
-        OMX_VIDEO_CodingVP9,V4L2_PIX_FMT_VP9,vp9_profiles,1}};
+        OMX_VIDEO_CodingVP9,V4L2_PIX_FMT_VP9,vp9_profiles,1,4096,2304}};
 static constexpr unsigned kind_count=sizeof(kinds)/sizeof(kinds[0]);
+// When the media service loaded the plugin (= the container's start).
+static int64_t plugin_loaded_ns=0;
+// VP9 superframes can carry hidden frames (alt-ref) next to the shown one.
+// vp9_superframe_split gives them no timestamp, and Iris returned a picture
+// for each of them (304 pictures for 300 packets, measured 2026-10-09), which
+// Android's decoders never output. Counts the hidden frames of one packet.
+static bool vp9Shown(const uint8_t *frame,size_t size) {
+    if(size<2 || (frame[0]>>6)!=2)return true; // not a frame header: count it as shown
+    unsigned bits=frame[0]<<8|frame[1];
+    unsigned profile=((bits>>13)&1)|(((bits>>12)&1)<<1);
+    int at=profile==3?10:11; // show_existing_frame, then frame_type and show_frame
+    if((bits>>at)&1)return true;
+    return (bits>>(at-2))&1;
+}
+static unsigned vp9Hidden(const uint8_t *data,size_t size) {
+    if(!size)return 0;
+    uint8_t marker=data[size-1];
+    if((marker&0xe0)!=0xc0)return vp9Shown(data,size)?0:1;
+    unsigned frames=(marker&7)+1,bytes=((marker>>3)&3)+1;size_t index=2+bytes*frames;
+    if(size<index || data[size-index]!=marker)return vp9Shown(data,size)?0:1;
+    const uint8_t *entry=data+size-index+1;size_t offset=0;unsigned hidden=0;
+    for(unsigned i=0;i<frames;i++,entry+=bytes) {
+        size_t length=0;
+        for(unsigned b=0;b<bytes;b++)length|=(size_t)entry[b]<<(8*b);
+        if(offset+length>size-index)break;
+        hidden+=!vp9Shown(data+offset,length);offset+=length;
+    }
+    return hidden;
+}
 class ColorWorkers {
     struct Worker {ColorWorkers *owner;unsigned band,seen;pthread_t thread;};
     Worker workers[3];unsigned count=0,generation=0,complete=0;
@@ -157,6 +189,8 @@ class FramePortVideo final : public SoftVideoDecoderOMXComponent {
     bool native_enabled=false,metadata=false;
     bool hardware_active=false,prefer_software=false,eos_submitted=false,replay_eos=false;
     bool prepend_config=false;
+    // hidden VP9 frames submitted to Iris whose pictures are still to drop
+    unsigned vp9_hidden=0;bool zero_input=false,zero_shown=false;
     Vector<AVPacket*> history;
     size_t history_bytes=0;
     ssize_t replay_next=-1;
@@ -270,7 +304,25 @@ class FramePortVideo final : public SoftVideoDecoderOMXComponent {
     }
     bool openDecoder() {
         if(codec)return true;
-        int result=prefer_software?AVERROR(ENODEV):openCodec(kind.hardware,true);
+        const auto &size=editPortInfo(kInputPortIndex)->mDef.format.video;
+        int result=AVERROR(ENODEV);
+        if(size.nFrameWidth>kind.max_width || size.nFrameHeight>kind.max_height)
+            ALOGW("%s %ux%u is above what Iris decodes (%ux%u); using software decoding",kind.mime,
+                (unsigned)size.nFrameWidth,(unsigned)size.nFrameHeight,kind.max_width,kind.max_height);
+        else if(!prefer_software)for(int64_t start=clockNs(),attempt=0;;attempt++) {
+            result=openCodec(kind.hardware,true);
+            if(result>=0 || (result!=AVERROR(ENOMEM) && result!=AVERROR(EBUSY)))break;
+            // The driver refuses a session that doesn't fit next to the open
+            // ones (8K while any other is open). SteamVR's link holds one for
+            // about 12 s around every game start, when the plugin loads too:
+            // wait for it then (an 8K panorama in software is a slideshow),
+            // otherwise 2 s, before continuing in software.
+            int64_t now=clockNs();
+            if(now-start>=2000000000ll && now-plugin_loaded_ns>=20000000000ll)break;
+            if(!attempt)ALOGW("Iris %s busy (%ux%u); waiting for capacity",kind.mime,(unsigned)size.nFrameWidth,
+                    (unsigned)size.nFrameHeight);
+            gpu.clearBuffers();avcodec_free_context(&codec);usleep(250000);
+        }
         hardware_active=result>=0;
         if(result<0){
             // Availability can change after enumeration (another app/Steam
@@ -293,7 +345,7 @@ class FramePortVideo final : public SoftVideoDecoderOMXComponent {
         }
         ALOGW("Iris %s failed during %s; replaying %zu compressed packets in software, last pts=%lld",kind.mime,operation,history.size(),(long long)last_output_pts);
         av_frame_unref(frame);held=false;av_parser_close(parser);parser=nullptr;gpu.clearBuffers();avcodec_free_context(&codec);
-        hardware_active=false;prefer_software=true;
+        hardware_active=false;prefer_software=true;vp9_hidden=0;
         int result=openCodec(kind.software,false);
         if(result<0){fail(result,"software recovery initialization");return false;}
         replay_next=0;replay_eos=eos_submitted;eos_submitted=false;discard_until=last_output_pts;
@@ -517,6 +569,13 @@ protected:
             if(codec) {
                 int result=avcodec_receive_frame(codec,frame);
                 if(result==0){
+                    if(hardware_active && kind.coding==OMX_VIDEO_CodingVP9 &&
+                        (frame->pts==0 || frame->pts==AV_NOPTS_VALUE)) {
+                        // a hidden frame's picture (no timestamp of its own), unless it is the stream's real
+                        // picture at 0: Iris returns pictures in decode order, so that one comes first
+                        if(vp9_hidden && (zero_shown || !zero_input)){vp9_hidden--;av_frame_unref(frame);continue;}
+                        zero_shown=true;
+                    }
                     int64_t pts=frame->pts==AV_NOPTS_VALUE?frame->best_effort_timestamp:frame->pts;
                     if(discard_until!=AV_NOPTS_VALUE && pts!=AV_NOPTS_VALUE && pts<=discard_until){av_frame_unref(frame);continue;}
                     discard_until=AV_NOPTS_VALUE;held=true;continue;
@@ -593,6 +652,10 @@ protected:
                     }
                     result=avcodec_send_packet(codec,packet);
                     if(result>=0){prepend_config=false;rememberInput(packet);}
+                    if(result>=0 && hardware_active && kind.coding==OMX_VIDEO_CodingVP9) {
+                        vp9_hidden+=vp9Hidden(header->pBuffer+header->nOffset,header->nFilledLen);
+                        if(!header->nTimeStamp)zero_input=true;
+                    }
                 }
                 av_packet_free(&packet);
                 if(result==AVERROR(EAGAIN))return;
@@ -623,7 +686,7 @@ protected:
             // restarting a running Iris session's queues failed its admission
             // check and left buffers unreturned, so other seeks reopen it.
             bool usable=codec && !failed && (!hardware_active || drained);
-            eos_submitted=false;replay_eos=false;
+            eos_submitted=false;replay_eos=false;vp9_hidden=0;zero_input=zero_shown=false;
             last_output_pts=discard_until=AV_NOPTS_VALUE;
             held=false;drained=false;failed=false;replace_config=true;
             if(usable) {
@@ -654,6 +717,7 @@ protected:
         gpu_allowed=true;
         av_frame_unref(frame);av_parser_close(parser);parser=nullptr;gpu.clearBuffers();avcodec_free_context(&codec);av_freep(&config);config_size=0;clearHistory();
         hardware_active=false;prefer_software=false;eos_submitted=false;replay_eos=false;
+        vp9_hidden=0;zero_input=zero_shown=false;
         last_output_pts=discard_until=AV_NOPTS_VALUE;
         held=false;drained=false;failed=false;replace_config=false;
         SoftVideoDecoderOMXComponent::onReset();
@@ -695,6 +759,7 @@ class FramePortOMXPlugin final : public OMXPluginBase {
     }
 public:
     FramePortOMXPlugin() {
+        timespec now;clock_gettime(CLOCK_MONOTONIC,&now);plugin_loaded_ns=now.tv_sec*1000000000ll+now.tv_nsec;
         for(unsigned i=0;i<kind_count;i++){
             available[i]=probeCapacity(kinds[i]);
             if(!available[i])ALOGW("Iris %s unavailable; keeping Android's stock decoder",kinds[i].mime);

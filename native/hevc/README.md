@@ -33,12 +33,22 @@ deploys the plugin, codec XML and Podman wrapper once into the agent's shared
 `~/.local/share/frameport/video-codec/versions/<manifest-sha256>` store.
 Payload checksums are verified before an atomic `current` symlink exposes the
 complete version. Older clients cannot downgrade a newer codec revision.
+A Frame keeps an installed codec of the same or a newer manifest `revision`
+(two PCs with different builds of one revision don't replace each other's), so
+`build.py` bumps the revision with every change. A failed install is not
+retried during the same connection.
 Superseded versions are pruned, keeping the active version and the one it
 replaced (a launch that resolved the previous `current` can still mount it).
-Existing and new Lepton launchers use the shared wrapper without rebuilding an
-APK or selecting a per-game recipe. Only their matching `podman run` gains a
-read-only plugin/XML mount and `/dev/video-dec0`. All other Podman operations
-pass through. Shared Lepton, drivers and original MP4 assets are unchanged.
+Games opt in through their recipe: the patch `frame.hw_video_decode` (no APK
+change; suggested when the APK decodes video through MediaCodec, ExoPlayer or
+VLC) makes the agent give that game's launcher the line that puts the shared
+wrapper first on Lepton's PATH (`deployment.json` `hw_video_decode`;
+`upgrade_launchers` adds or removes it on existing launchers). Only that game's
+matching `podman run` gains a read-only plugin/XML mount and `/dev/video-dec0`.
+All other Podman operations pass through. FramePort's setting "Hardware video
+decoding" turns it off for every game (`video-codec/disabled`, checked by the
+launcher line and the wrapper at every start); `FRAMEPORT_NO_HW_VIDEO=1` in a
+game's Steam launch options turns it off for that game. Shared Lepton, drivers and original MP4 assets are unchanged.
 Unknown runtime ABIs retain the stock codecs and log why. A future native
 Lepton hardware plugin takes precedence.
 
@@ -49,11 +59,15 @@ Missing/malformed configuration,
 recursive executable paths, mount-preparation errors and failed exec calls
 retain the original arguments and launch stock Podman. The agent publishes
 `deployment.json` and codec payloads before exposing the complete version.
-Merged runtime XML uses separate runtime paths and process-local temporary
-filenames, so concurrent app launches do not overwrite each other's staging.
+The merged runtime XML is written to `$XDG_RUNTIME_DIR/frameport-video/`
+(never into the verified version directory), named per runtime path, with
+process-local temporary filenames, so concurrent app launches do not overwrite
+each other's staging.
 
-No package check or MP4 scan selects decoding. Older embedded codec assets are
-removed when an APK is rebuilt; they are no longer used by the launcher. The
+No package check or MP4 scan selects decoding: the recipe does. Older embedded
+codec assets are removed when an APK is rebuilt, and agent 70's per-game
+`<base>/frameport-codec` folders are removed once the launcher is converted (a
+game that had one, Batman, keeps hardware decoding). The
 codec has no OpenXR calls, camera poses or composition changes. Batman's
 `surface_native` renderer remains package-scoped and separate. Other apps keep
 their existing rendering path; hardware decoding alone does not eliminate
@@ -62,8 +76,17 @@ surface upload/conversion or GPU rendering bottlenecks.
 The plugin enumerates coded formats and probes each at 1920x1080, not Batman's
 8K geometry. Unavailable components are omitted so Android retains its stock
 decoders. Actual-session admission can still fail (including Iris's concurrent
-session-accounting issue); initialization then falls back to FFmpeg software
-decoding inside the already-selected component. This preserves the client's
+session-accounting issue: while any other decoder session is open, 8K is
+refused with ENOMEM). SteamVR's link (`vrlinkrunthread`) holds a session for
+about 12 s around every game start, when the plugin loads too (measured on the
+dev Frame, 2026-10-09), so a refused session is retried every 250 ms until 20 s
+after the plugin loaded (later: for 2 s); initialization then falls back to
+FFmpeg software decoding inside the already-selected component. VP9 is limited
+to 4096x2304 (codec list and component; larger VP9 decodes in software): at
+7680x3840 Iris accepted the session but never returned a picture. Iris returned
+pictures for hidden VP9 frames too (304 for 300 packets); the split hidden
+frames carry no timestamp (picture time 0), and the component drops as many of
+those as the submitted superframes held hidden frames. This preserves the client's
 buffer/surface contract without requiring the app to retry another codec.
 
 During hardware playback, bounded references to two GOPs of compressed packets
@@ -123,6 +146,12 @@ Build on Linux/WSL with Android NDK r27c and the tested Lepton rootfs:
 ```
 python native/hevc/build.py --ndk /path/to/android-ndk-r27c --lepton-root /path/to/Lepton/images/rootfs
 ```
+
+Paths with spaces work: the builder links the repo, the NDK and the rootfs into
+a space-free temp dir and compiles through those link paths (FFmpeg's configure
+splits `--extra-cflags` on whitespace); with `-no-canonical-prefixes` clang keeps
+the link path too, so the prefix maps give the same bytes wherever the real
+folders are. Each build starts from freshly extracted FFmpeg sources.
 
 The build requires Linux x86-64, Python 3.12+, Make, Perl, and a working host C
 compiler with libc development headers (FFmpeg builds host tools). The NDK

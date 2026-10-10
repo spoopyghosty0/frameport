@@ -62,6 +62,11 @@ HELP: dict[str, str] = _Translated({
                 "anyway.",
     "where": "Steam Frame: installed on the headset with an entry in its Steam library. This PC: a Steam shortcut on "
              "this Windows PC that starts the game through Revive, for a PC-tethered headset.",
+    "hw_video_decode": "Games with the patch \"Hardware video decoding\" (e.g. video players, Batman: Arkham Shadow) "
+                       "decode their videos on the Frame's video hardware instead of Android's slower software "
+                       "decoders. Switch it off if videos misbehave in such a game; it then applies to every game the "
+                       "next time it starts. One game only: put FRAMEPORT_NO_HW_VIDEO=1 %command% in its Steam "
+                       "launch options.",
     "launch_test": "Starts the game on the Frame while nobody is wearing it and reads the log: did it start, create a "
                    "VR session and render frames. It can't check what you'd see: tracking only runs with the "
                    "headset on.",

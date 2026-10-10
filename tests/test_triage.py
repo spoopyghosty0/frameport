@@ -274,6 +274,17 @@ def test_unity_pcvr_signatures():
     assert not triage(log, "EXITED", "com.example.game").findings  # PC VR signatures only for rift games
 
 
+def test_hw_video_decoder_busy_from_the_media_service():
+    """The codec plugin logs from Android's media service (another pid than the game's): still triaged."""
+    for line in ("W FramePortVideo: Iris video/hevc unavailable; keeping Android's stock decoder",
+                 "W FramePortVideo: Iris video/hevc initialization failed (-12); using software decoding"):
+        log = LOG_OK + f"09-28 17:39:01.500   412   412 {line}\n"
+        r = triage(log, "RUNNING", "com.example.game")
+        assert [f.id for f in r.findings] == ["hw-video-decoder-busy"] and r.verdict == "pass"
+    log = LOG_OK + "09-28 17:39:01.500   412   412 I FramePortVideo: Iris hardware video/hevc decoder active\n"
+    assert not triage(log, "RUNNING", "com.example.game").findings
+
+
 def test_lepton_lines_survive_the_game_filter():
     """With the package known, triage keeps only the game's logcat lines plus Lepton's own: the short "Boot complete!"
     used to be dropped, so Lepton 3's transient "is not a running context" failed every launch test in the GUI."""

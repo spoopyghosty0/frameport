@@ -456,6 +456,14 @@ signatures:
     diagnosis: FrameBridge couldn't emulate an Android video panel (XR_KHR_android_surface_swapchain); the panel stays
       empty, and a game waiting for its intro video may stay black (e.g. I Am Monkey's intro).
     suggest: []
+  - id: hw-video-decoder-busy
+    pattern: 'Iris \S+ unavailable; keeping Android|Iris \S+ initialization failed \(-1[26]\); using software'
+    severity: info
+    diagnosis: FramePort's hardware video decoder (frame.hw_video_decode) couldn't open a session, because other
+      decoder sessions held the hardware (Steam's own hardware video decoding, SteamVR's link while a game starts);
+      the video was decoded in software instead, which is slow for 4K/8K. Turn off hardware video decoding in Steam's
+      settings, restart Steam, then start the game again.
+    suggest: []
 milestones:  # progress markers, in order; the furthest one reached is reported
   - {id: pcvr-launch, kind: pcvr, pattern: 'FramePort: launching|Launched injector with', label: Launcher started}
   - {id: pcvr-oculus-hmd, kind: pcvr, pattern: 'FramePort oculushmd: OculusHMDConnected event ready', label: Oculus headset event provided}

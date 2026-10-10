@@ -42,12 +42,16 @@ def test_mounts_only_matching_game_and_runtime(tmp_path, monkeypatch):
               "runtime_sha256": hashlib.sha256(b"runtime ABI").hexdigest()}
     exists = Path.exists
     monkeypatch.setattr(Path, "exists", lambda p: True if p.as_posix() == "/dev/video-dec0" else exists(p))
+    (tmp_path / "run").mkdir()
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "run"))
     args = ["run", "--name", "lepton-steamlaunch-123", "--rootfs", str(runtime) + ":O", "/init"]
     extra = wrapper.mounts(directory, config, args)
     assert [s.replace("\\", "/") for s in extra[:2]] == [
         "--mount", "type=bind,source=/dev/video-dec0,destination=/dev/video-dec0,rw"]
-    merged = next(directory.glob("media_codecs.*.xml"))
+    # the merged codec list goes to the runtime dir: the verified version directory is never written
+    merged = next((tmp_path / "run/frameport-video").glob("media_codecs.*.xml"))
     assert "media_codecs_frameport.xml" in merged.read_text()
+    assert sorted(p.name for p in directory.iterdir()) == ["libstagefrighthw.so", "media_codecs_frameport.xml"]
     for spec in extra[1::2][1:]:
         fields = dict(item.split("=", 1) for item in spec.split(",") if "=" in item)
         assert Path(fields["source"]).is_file()
@@ -57,8 +61,8 @@ def test_mounts_only_matching_game_and_runtime(tmp_path, monkeypatch):
     config["runtime_sha256"] = "wrong ABI"
     assert wrapper.mounts(directory, config, args) == []
 
-    # One shared wrapper also accelerates arbitrary packages with unchanged
-    # APKs. The launcher/container identity, not a recipe, selects its scope.
+    # The shared wrapper serves any package with an unchanged APK: the launcher (frame.hw_video_decode in the game's
+    # recipe) puts it on PATH, the container identity limits it to that game's container.
     app = tmp_path / "another-package/lepton-app"
     app.mkdir(parents=True)
     monkeypatch.setenv("SteamAppId", "123")
@@ -160,3 +164,63 @@ def test_wrapper_finds_podman_under_the_android_path(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(wrapper.Path, "resolve", lambda self: self)
     assert Path(wrapper.real_podman(tmp_path / "codec")).as_posix().endswith("/usr/bin/podman")
+
+
+def test_codec_list_matches_the_plugin_table():
+    """H.264, HEVC and VP9: the codec XML names exactly the components the plugin's table enumerates."""
+    from xml.etree import ElementTree as ET
+
+    xml = ET.parse(ROOT / "artifacts/hevc/media_codecs_frameport.xml").getroot()
+    entries = {c.get("name"): c.get("type") for c in xml.iter("MediaCodec")}
+    assert entries == {"OMX.frameport.avc.decoder": "video/avc", "OMX.frameport.hevc.decoder": "video/hevc",
+                       "OMX.frameport.vp9.decoder": "video/x-vnd.on2.vp9"}
+    for codec in xml.iter("MediaCodec"):
+        limits = {limit.get("name"): limit for limit in codec.iter("Limit")}
+        # VP9 at 7680x3840 never returned a picture on the Frame (2026-10-09): it stops at 4K
+        expected = "4096x2304" if "vp9" in codec.get("name") else "8192x8192"
+        assert limits["concurrent-instances"].get("max") == "1" and limits["size"].get("max") == expected
+    source = (ROOT / "native/hevc/frameport_hevc.cpp").read_text()
+    for name, mime in entries.items():
+        assert f'"{name}"' in source and f'"{mime}"' in source
+    assert "4096,2304}" in source  # the plugin's own VP9 limit (larger VP9 decodes in software)
+    build = (ROOT / "native/hevc/build.py").read_text()
+    for decoder in ("h264_v4l2m2m", "hevc_v4l2m2m", "vp9_v4l2m2m"):
+        assert f'"{decoder}"' in source and decoder in build
+    assert (ROOT / "artifacts/hevc/media_codecs_frameport.xml").read_bytes() == (
+        ROOT / "native/hevc/media_codecs_frameport.xml").read_bytes()
+
+
+@pytest.mark.parametrize("how", ["env", "flag"])
+def test_switched_off_wrapper_runs_stock_podman_untouched(tmp_path, monkeypatch, how):
+    """FRAMEPORT_NO_HW_VIDEO=1 or FramePort's setting (video-codec/disabled): the wrapper adds nothing."""
+    wrapper = load_module(ROOT / "native/hevc/podman.py", f"off_wrapper_{how}")
+    directory = tmp_path / "video-codec/versions/abc"
+    own = directory / "bin/podman"
+    own.parent.mkdir(parents=True)
+    (directory / "deployment.json").write_text('{"scope": "shared", "runtime_sha256": "x"}')
+    monkeypatch.setattr(wrapper, "__file__", str(own))
+    monkeypatch.setattr(wrapper, "real_podman", lambda _: "/usr/bin/podman")
+    monkeypatch.delenv("FRAMEPORT_NO_HW_VIDEO", raising=False)
+    if how == "env":
+        monkeypatch.setenv("FRAMEPORT_NO_HW_VIDEO", "1")
+    else:
+        (tmp_path / "video-codec/disabled").write_text("off")
+    monkeypatch.setattr(wrapper, "mounts", lambda *_: pytest.fail("mounts while switched off"))
+    args = ["run", "--name", "lepton-steamlaunch-123", "/init"]
+    monkeypatch.setattr(wrapper.sys, "argv", [str(own), *args])
+    executed = []
+
+    class ExecSucceeded(BaseException):
+        pass
+
+    def execute(path, argv):
+        executed.append(argv)
+        raise ExecSucceeded
+
+    monkeypatch.setattr(wrapper.os, "execv", execute)
+    with pytest.raises(ExecSucceeded):
+        wrapper.main()
+    assert executed == [["/usr/bin/podman", *args]]
+    monkeypatch.setenv("FRAMEPORT_NO_HW_VIDEO", "0")
+    (tmp_path / "video-codec/disabled").unlink(missing_ok=True)
+    assert not wrapper.switched_off(directory)

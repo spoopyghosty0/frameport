@@ -66,25 +66,41 @@ def mounts(directory, config, args):
         ET.SubElement(xml.getroot(), "Include", href="media_codecs_frameport.xml")
     # Immutable plugin versions can serve simultaneous app launches and
     # different Lepton installations. Never share a temporary XML filename.
+    # The version directory stays as the agent verified it: the merged list goes to the user's runtime dir.
     root_key = hashlib.sha256(str(root).encode()).hexdigest()[:16]
-    merged = directory / f"media_codecs.{root_key}.xml"
+    merged = merged_dir() / f"media_codecs.{root_key}.xml"
     temporary = merged.with_suffix(f".{os.getpid()}.tmp")
     xml.write(temporary, encoding="utf-8", xml_declaration=True)
     temporary.replace(merged)
     # Lepton supplies its own /dev tmpfs. A Podman --device node disappears
     # beneath it; a bind mount matches Lepton's existing GPU/sound device setup.
     result = ["--mount", f"type=bind,source={device},destination=/dev/video-dec0,rw"]
-    for source, target in (
-        ("libstagefrighthw.so", "/vendor/lib64/libstagefrighthw.so"),
-        (merged.name, "/vendor/etc/media_codecs.xml"),
-        ("media_codecs_frameport.xml", "/vendor/etc/media_codecs_frameport.xml"),
+    for path, target in (
+        (directory / "libstagefrighthw.so", "/vendor/lib64/libstagefrighthw.so"),
+        (merged, "/vendor/etc/media_codecs.xml"),
+        (directory / "media_codecs_frameport.xml", "/vendor/etc/media_codecs_frameport.xml"),
     ):
-        path = directory / source
         if not path.is_file():
             raise FileNotFoundError(f"missing video codec mount: {path}")
         result += ["--mount", f"type=bind,source={path},destination={target},ro"]
     print("FramePort video: loading the Iris hardware codec plugin for this container", file=sys.stderr)
     return result
+
+
+def merged_dir():
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    base = Path(runtime) if runtime and Path(runtime).is_dir() else Path.home() / ".cache"
+    path = base / "frameport-video"
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return path
+
+
+def switched_off(directory):
+    """FRAMEPORT_NO_HW_VIDEO=1 (e.g. in a game's Steam launch options) or the Frame-wide switch (FramePort's
+    setting; the agent writes video-codec/disabled) leave every container with Android's stock codecs."""
+    if os.environ.get("FRAMEPORT_NO_HW_VIDEO", "") not in ("", "0"):
+        return True
+    return directory.parent.name == "versions" and (directory.parent.parent / "disabled").exists()
 
 
 def real_podman(directory):
@@ -111,6 +127,8 @@ def main():
     directory = Path(__file__).resolve().parent.parent
     args = sys.argv[1:]
     fallback = real_podman(directory)
+    if switched_off(directory):
+        os.execv(fallback, [fallback, *args])
     try:
         config = json.loads((directory / "deployment.json").read_text())
         podman = Path(config.get("podman", fallback)).resolve()

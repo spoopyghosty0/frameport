@@ -1416,7 +1416,7 @@ def test_second_launch_while_starting_is_ignored(monkeypatch, tmp_path):
     lepton.chmod(0o755)
     text = a.LAUNCH_SH.format(title="T", pkg="com.x.y", base_q=str(base), appid=1, lepton_q=str(lepton), extra_env="",
                               watchdog=a.WATCHDOG, dashboard="true", logcat="true", single=a.SINGLE_LINE,
-                              plays_start="true", plays_end="true")
+                              plays_start="true", plays_end="true", video_codec="")
     launcher = tmp_path / "launch.sh"
     launcher.write_text(text)
     launcher.chmod(0o755)

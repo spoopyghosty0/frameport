@@ -82,7 +82,8 @@ def game_lines(log: str, package: str | None = None) -> list[str]:
         # "Boot complete!", which the container-not-started signature checks for: it used to be dropped here)
         if not (len(f) > 3 and LOGCAT_LINE.match(ln) and f[2].isdigit()):
             out.append(ln)
-        elif f[2] in pids or "lepton" in ln.lower() or "APP_ACTIVITY" in ln:
+        elif f[2] in pids or "lepton" in ln.lower() or "APP_ACTIVITY" in ln or " FramePortVideo" in ln:
+            # FramePortVideo: the hardware codec plugin logs from Android's media service, not the game's process
             out.append(ln)
     return out
 

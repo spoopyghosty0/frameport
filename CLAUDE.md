@@ -651,6 +651,23 @@ XR_ERROR_RUNTIME_FAILURE); OVRPlugin ignores that ("CreateSwapchain for eye 0: 0
 ovrp_EndFrame4 (memset). FrameBridge `cube_standin` (default on, `native/adapter/cube_standin.c`) serves a refused cube
 swapchain as one GL cube-map texture in the app's context (GLES only) and drops its layers. Verified headless with
 Budget Cuts Ultimate (2048² sRGB, 12 mips; runs on at ~70 fps); what the cube layer showed is simply missing.
+**Hardware video decoding (PR #96, PR #128 by Lucas-Mathieu, adapted 2026-10-10, agent v71):** `native/hevc` = one
+OMX plugin `OMX.frameport.{avc,hevc,vp9}.decoder` (FFmpeg v4l2m2m on Iris /dev/video-dec0, FFmpeg software decoders as
+fallback inside the component, Vulkan copy for big native surfaces). The connection installs it once per Frame
+(`ensure_video_codec` → agent `video_codec_status`/`install_video_codec`: `~/.local/share/frameport/video-codec/versions/
+<manifest sha>` + `current` symlink). A Frame keeps the same or a newer `revision` (no flip-flop between PCs) → **bump
+`revision` in native/hevc/build.py with every artifact change**; a failed install isn't retried during the connection.
+Per game: only launchers of games whose recipe has `frame.hw_video_decode` (install stage, no APK change; suggested
+from analysis `media_codec`, ANALYSIS_VERSION 8; deployment.json `hw_video_decode`) get the codec line → the Podman
+wrapper (native/hevc/podman.py) mounts the plugin into that container (merged media_codecs.xml in
+$XDG_RUNTIME_DIR/frameport-video). Off for every game: Settings → Installing (library `video.hw_decode` → agent
+`video_codec_switch` = video-codec/disabled); one game: `FRAMEPORT_NO_HW_VIDEO=1 %command%`. `upgrade_launchers`
+converts agent ≤70 launchers (Batman's `<base>/frameport-codec` → keeps the line, folder then removed). Batman: catalog
++ migration `batman_video_patches` (`frame.hw_video_decode` + hidden adapter setting `surface_native`). Iris: 8K
+refused (ENOMEM) while any other decoder session is open; SteamVR's vrlinkrunthread holds one ~12 s at game start →
+refused opens retry until 20 s after the plugin loaded (else 2 s), then software; VP9 7680x3840 never returned a
+picture → VP9 ≤4096x2304; hidden VP9 frames' pictures (time 0) dropped. Rebuilds are deterministic (ext4 + NTFS path
+with spaces, two NDK copies → same a776c951…; PR #128's own sources → its 27a2d749…). Not yet run on the device.
 **Vivox API 31 (GitHub #101, 2026-10-09):** newer Vivox builds (Green Hell VR) call Android 12 AudioManager
 communication-device methods from `com.vivox.sdk.AudioChangeListener` with no SDK check → NoSuchMethodError on Lepton's
 Android 11. `frame.vivox_audio_route` (analysis `vivox_api31`, ANALYSIS_VERSION 4) makes every such method return at

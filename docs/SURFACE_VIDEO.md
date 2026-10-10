@@ -9,11 +9,13 @@ assets.
 
 ## Scope and installation
 
-FrameBridge enables the internal native-video path only for this package's
-arm64 APK. Hardware decoding is deployed independently into FramePort's shared,
-versioned codec store and automatically exposed to compatible Lepton app
-containers, without embedding decoder assets or requiring per-game recipes.
-The launcher places the shared wrapper on its child PATH. Matching containers
+FrameBridge enables the native-video path through the recipe-only adapter
+setting `surface_native` (Batman's catalog recipe; a one-time library migration,
+`batman_video_patches`, adds it and `frame.hw_video_decode` to existing Batman
+recipes). Hardware decoding is deployed independently into FramePort's shared,
+versioned codec store, without embedding decoder assets; games that have
+`frame.hw_video_decode` in their recipe get the launcher line that places the
+shared wrapper on the launcher's child PATH. Matching containers
 receive read-only plugin/XML mounts and the Iris decoder device. Shared Lepton
 files and original MP4/OBB assets are
 never replaced, transcoded, resized, or rewritten.
@@ -35,16 +37,14 @@ If the driver's session limit is exhausted, Android can fall back to software
 decoding; that preserves functionality but not full-resolution performance.
 FramePort does not change Steam's global hardware-decoding settings.
 
-Other packages and arm32 APKs do not receive the native-video setting. The
-decoder is separate from that setting, and runs in Lepton's arm64 media service.
-Rebuilding an older APK removes the previously bundled codec files; launcher
-migration replaces its old wrapper with the common version.
-MP4 presence alone is not evidence of compatible surface/overlay semantics.
+Other games don't get `surface_native`. The decoder is separate from that
+setting, and runs in Lepton's arm64 media service. Rebuilding an older APK
+removes the previously bundled codec files; launcher migration replaces
+Batman's old per-game wrapper with the shared one. MP4 presence alone is not
+evidence of compatible surface/overlay semantics.
 
-Package-specific patch revisions use the existing Update on Frame state without
-adding UI controls or wording. The shared adapter revision is unchanged; only
-Batman is marked outdated for this repair. Older builds without recorded recipe
-fingerprints are handled with the same package scope.
+The recipe change marks Batman's installed build "Update on Frame"; the shared
+adapter revision is unchanged, so other games stay installed as they are.
 
 ## Decode and render path
 
