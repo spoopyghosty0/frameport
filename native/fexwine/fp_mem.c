@@ -2,7 +2,7 @@
  * compat tool strips LD_PRELOAD).
  *
  * FP_BIGCACHE_MB=<n>: keep the pages of released anonymous regions of >= n MB (up to FP_BIGCACHE_SLOTS regions,
- *   default 8, and FP_BIGCACHE_MAX_MB in total, default 3072) and hand them back when Wine maps memory at the
+ *   default 12, and FP_BIGCACHE_MAX_MB in total, default 6144) and hand them back when Wine maps memory at the
  *   same start address again. Unreal's large-block allocator gives blocks above its cache limit straight back to
  *   the OS, and some games (Oculus First Contact: 0.5-1.4 GB every few seconds while playing) fill such blocks
  *   completely each time: under FEX every 4 KB page then faults and is zeroed by the kernel (~130k faults, ~110 ms)
@@ -23,8 +23,8 @@
 #include <sys/types.h>
 
 #define MAX_SLOTS 16
-static size_t cache_min, cache_max = (size_t)3072 << 20, thp_min = (size_t)32 << 20;
-static int debug, thp, slots = 8;
+static size_t cache_min, cache_max = (size_t)6144 << 20, thp_min = (size_t)32 << 20;
+static int debug, thp, slots = 12;
 static int (*real_mprotect)(void *, size_t, int);
 static int (*real_munmap)(void *, size_t);
 static void *(*real_mmap)(void *, size_t, int, int, int, off_t);
