@@ -1116,6 +1116,13 @@ def share_working_config(package: str, status: str = "works", notes: str = "",
                          frame_info: dict | None = None) -> str:
     """Save the game's recipe as a known-good user recipe and return a prefilled GitHub issue link that submits it
     to the catalog (a maintainer turns accepted ones into a PR)."""
+    return share_working_config_links(package, status, notes, frame_info).form
+
+
+def share_working_config_links(package: str, status: str = "works", notes: str = "",
+                               frame_info: dict | None = None):
+    """share_working_config's issue.IssueLinks: the form link, a plain issue link and the Markdown body (for
+    browsers that open GitHub's form with empty fields, GitHub #167)."""
     from .diag import bundle, issue, redact
     from .recommend import catalog
 
@@ -1128,12 +1135,18 @@ def share_working_config(package: str, status: str = "works", notes: str = "",
                 "agent": (env.get("frame") or {}).get("agent_version")}
     entry = catalog.entry_from_library(g, status=status, notes=notes or None, verified=verified)
     catalog.save_user_entry(entry)
-    return issue.working_config_url(g, catalog.to_yaml(entry), status, notes, env, redact.default(frame_info))
+    return issue.working_config_links(g, catalog.to_yaml(entry), status, notes, env, redact.default(frame_info))
 
 
 def problem_report(package: str | None, description: str, bundle_path: Path | None,
                    frame_info: dict | None = None) -> str:
     """A prefilled GitHub bug-report link (the user attaches the diagnostics zip)."""
+    return problem_report_links(package, description, bundle_path, frame_info).form
+
+
+def problem_report_links(package: str | None, description: str, bundle_path: Path | None,
+                         frame_info: dict | None = None):
+    """problem_report's issue.IssueLinks (form link, plain issue link, Markdown body)."""
     from .diag import bundle, issue, redact
     from .recommend import catalog
 
@@ -1144,5 +1157,5 @@ def problem_report(package: str | None, description: str, bundle_path: Path | No
             recipe = catalog.to_yaml(catalog.entry_from_library(g, status=g.get("status") or "unknown"))
         except Exception:  # noqa: BLE001
             recipe = ""
-    return issue.problem_url(g, description, bundle.env_info(frame_info),
-                             bundle_path.name if bundle_path else None, recipe, redact.default(frame_info))
+    return issue.problem_links(g, description, bundle.env_info(frame_info),
+                               bundle_path.name if bundle_path else None, recipe, redact.default(frame_info))

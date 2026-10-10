@@ -1,5 +1,5 @@
 name: Game report
-description: A game doesn't run right on the Frame, or FramePort itself misbehaves (FramePort fills this in: "Report a problem…").
+description: 'A game doesn''t run right on the Frame, or FramePort itself misbehaves (FramePort fills this in: "Report a problem…").'
 title: "[Game report] "
 labels: ["game-compatibility"]
 body:

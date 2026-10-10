@@ -1743,6 +1743,28 @@ class FramePortApp:
         except Exception:  # noqa: BLE001
             winhost.open_url(url)
 
+    def open_issue(self, links, message: str) -> None:
+        """Open a prefilled GitHub issue form (diag.issue.IssueLinks), copy its text to the clipboard and offer a
+        plain issue with the same text: some browsers open the form with every field empty (GitHub #167)."""
+        try:
+            self.page.run_task(ft.Clipboard().set, links.body)
+        except Exception:  # noqa: BLE001 - the plain issue still works
+            pass
+        self.open_url(links.form)
+
+        def plain(e):
+            self.page.pop_dialog()
+            self.open_url(links.plain)
+        self.page.show_dialog(C.dialog(
+            tr("GitHub issue opened"),
+            ft.Column([
+                C.body(message, T.TEXT_2),
+                C.body(tr("The issue's text is also on your clipboard. If the form's fields are empty, open a plain "
+                          "issue instead: it comes filled in."), T.TEXT_3),
+            ], tight=True, spacing=T.S3),
+            actions=[C.secondary(tr("Form empty? Open a plain issue"), ft.Icons.OPEN_IN_NEW_ROUNDED, on_click=plain),
+                     C.ghost(tr("Done"), on_click=lambda e: self.page.pop_dialog())]))
+
     def _diag_target(self, pkg: str | None):
         g = library.game(pkg) if pkg else None
         if g and g.get("kind") == "rift" and pkg in self.pc_installs() and \
@@ -1761,7 +1783,10 @@ class FramePortApp:
             path = pipeline.collect_diagnostics([pkg] if pkg else None, target, job.reporter)
             winhost.open_folder(path, select=True)
             if report is not None:
-                self.open_url(pipeline.problem_report(pkg, report, path, info if target is self.target else None))
+                self.open_issue(pipeline.problem_report_links(pkg, report, path,
+                                                              info if target is self.target else None),
+                                tr("Drag {name} into the GitHub issue that opened, then submit it.").format(
+                                    name=path.name))
                 return tr("Saved {name} — drag it into the GitHub issue that opened").format(name=path.name)
             return tr("Saved {name} (in {parent})").format(name=path.name, parent=path.parent)
         job_title = tr("Collect logs: {title}").format(title=self._title(pkg)) if pkg else tr("Collect FramePort logs")
@@ -1808,10 +1833,9 @@ class FramePortApp:
             info = self.frame_info if self.frame_state == "connected" else None
 
             def work():
-                url = pipeline.share_working_config(pkg, status.value or "works", notes.value or "", info)
-                library.upsert_game(pkg, shared_config=time.time())  # the game page stops asking
-                self.open_url(url)
-                self.toast(tr("Saved as known-good — check the GitHub issue and submit it"))
+                links = pipeline.share_working_config_links(pkg, status.value or "works", notes.value or "", info)
+                self.open_issue(links, tr("Saved as known-good. Check the GitHub issue that opened and submit it."))
+                library.upsert_game(pkg, shared_config=time.time())  # opened: the game page stops asking
             self.run_bg(work)
         send.on_click = go
         self.page.show_dialog(C.dialog(

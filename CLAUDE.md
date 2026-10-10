@@ -249,8 +249,12 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
   - `diag/` — user feedback without tokens (docs/DIAGNOSTICS.md): `redact.py` (every file/issue text: IPs, hosts,
     home dirs, Steam ids, dump folders → placeholders), `bundle.py` (redacted diagnostics zip; agent v21
     `collect_diag`; `frameport diag collect|inspect|report`), `issue.py` (prefilled GitHub issue-form links, ≤7.5k
-    chars). "Share working config" → `working-config.yml` issue → maintainer label `catalog-accepted` →
-    `catalog-from-issue.yml` workflow (`scripts/catalog_from_issue.py` validates) opens a catalog PR. App log:
+    chars; `*_links` = `IssueLinks(form, plain, body)`: body = the Markdown the form writes (`### <label>`, recipe in
+    a ```yaml block; labels checked against the templates), plain = `?title=&body=` link. GitHub #167: some (Flatpak)
+    browsers opened the form with empty fields → `app.open_issue` copies the body to the clipboard and offers "Form
+    empty? Open a plain issue"; keep the templates valid YAML, quote `: ` in descriptions). "Share working config" →
+    `working-config.yml` issue → maintainer label `catalog-accepted` (a plain issue needs `working-config` added by
+    hand) → `catalog-from-issue.yml` workflow (`scripts/catalog_from_issue.py` validates) opens a catalog PR. App log:
     `core/applog.py` (`<data>/logs/app.log`, finished GUI jobs in `<data>/logs/jobs/`).
   - Self-update (docs/ARCHITECTURE.md "Self-update", docs/INSTALL.md "Updating"): `_version.py` = the only version
     (`frameport.__version__`; pyproject reads it via hatch `dynamic`; app log, diagnostics, User-Agent, Settings use
@@ -768,6 +772,12 @@ applies where vk_sanitize can: Unreal/Other arm64) writes each distinct SPIR-V m
 returns `shaders` (newest modules of fp_vk_shaders + fp_spirv, ≤4 MB each, base64) → bundle
 `games/<pkg>/target/shaders/`. Triage `gpu-hang` suggests both dumps; `triage.graphics_api` (FrameBridge's
 xrCreateSwapchain formats: <0x1000 Vulkan, else GL) keeps only the session's API's (`API_ONLY`). Host-tested only.
+Agent v74: a reporter's hang came ~10 s after the last new module, so the culprit wasn't among the newest written →
+with an index naming modules, `shader_dumps` sends every module of the index's **newest session** (after the last
+`# start`), deduplicated, last used first, each ≤4 MB, ≤30 MB in all (`session` = how many it names) + that session's
+index lines; no index (fp_spirv) = the old newest-by-mtime 4 MB. One JSON line (~40 MB base64) over the SSH channel
+is read whole by `Frame.agent` (fine at that size); `_Writer.fit` drops the least recently used modules last, after
+cutting logs, to stay under the 24 MB zip limit.
 **Vivox API 31 (GitHub #101, 2026-10-09):** newer Vivox builds (Green Hell VR) call Android 12 AudioManager
 communication-device methods from `com.vivox.sdk.AudioChangeListener` with no SDK check → NoSuchMethodError on Lepton's
 Android 11. `frame.vivox_audio_route` (analysis `vivox_api31`, ANALYSIS_VERSION 4) makes every such method return at

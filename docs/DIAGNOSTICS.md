@@ -44,9 +44,12 @@ games/<pkg>/target/shaders/  shader dumps (agent v72), when the game wrote any:
     fp_vk_shaders/           adapter vk_shader_dump=1 (Vulkan shim): <size>_<sha256>.spv + index.txt
     fp_spirv/                adapter zink_shader_dump=1 (OpenGL ES, shader-fix layer under Zink): <size>_<sha256>.spv
 ```
-Each log keeps at most its last 4 MB (2 MB per file from the Frame). Shader dumps: the newest modules (by time
-written) up to 4 MB per folder, SPIR-V unchanged (compiled game shaders, not redacted); a module the game created
-for the first time right before a GPU hang is among them. `index.txt` (Vulkan) lists every vkCreateShaderModule as
+Each log keeps at most its last 4 MB (2 MB per file from the Frame). Shader dumps, SPIR-V unchanged (compiled game
+shaders, not redacted): Vulkan (agent v74) every module the game's newest run (the last `# start` in `index.txt`)
+created, last used first, each up to 4 MB and up to 30 MB in all, with that run's index lines, so a module created
+well before a GPU hang comes along too (if the zip would pass 24 MB, the least recently used ones are left out
+after the logs were cut); OpenGL ES (no index): the newest modules (by time written) up to 4 MB.
+`index.txt` (Vulkan) lists every vkCreateShaderModule as
 `<seq> <ms since the first module> <unix ms> <size>_<sha256>.spv new|known|again|failed`; match the unix time with
 the kernel's `hangcheck detected gpu lockup` line (this-boot-kernel.txt). All modules stay in the game's storage on
 the Frame (`Android/data/<pkg>/files/fp_vk_shaders/`, Files tab → the game's storage).
