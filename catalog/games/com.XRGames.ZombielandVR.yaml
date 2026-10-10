@@ -1,0 +1,22 @@
+package: com.XRGames.ZombielandVR
+title: ZombielandVR
+status: works
+tested_version: 1.7.0
+engine: Unity
+xr: VrApi
+frame:
+- frame.unity_text_input
+- frame.vrapi_stub
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-10'
+  known_good_sha256: 750067107cd739c80b65516dd1c18219283b2a29b39430bb21ed85d48b9b94ac
+  app: 0.12.1.dev252
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 71
+  issue: 141
+source_hint: ZombielandVR

@@ -1,0 +1,20 @@
+package: com.rrrgames.CaveCrave
+title: Caves
+status: works
+notes: First cave loads up perfectly, didn't play to unlock other game modes
+tested_version: 1.1.4
+engine: Unity
+xr: OpenXR
+frame:
+- frame.oculusos
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-10'
+  known_good_sha256: 9720a9af42590dfdb742f278352583e56f36efbf5d96c56c59ac4b6a615f276e
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 142
+source_hint: com.rrrgames.CaveCrave

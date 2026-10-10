@@ -1,0 +1,22 @@
+package: com.UNIVRS.Freedom
+title: Freedom
+status: issues
+notes: Volume can't be changed in the game.
+tested_version: 1.0.2950
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-10'
+  known_good_sha256: 24662272c4cbe5dc7c4f3c803bdb9dead9661ac3d59bf80cca2e260256acc4bc
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 132
+source_hint: AOT VR

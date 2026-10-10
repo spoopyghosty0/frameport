@@ -1,0 +1,22 @@
+package: de.erthu.ancientdungeonfull
+title: Ancient_Dungeon
+status: issues
+notes: Multiplayer isn't available (offline).
+tested_version: ea0.1.10.2
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-10'
+  known_good_sha256: 0bcbd6d01d085183df586ee692267341a9ea15d1f52fbc33265601d55c73c2d2
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 143
+source_hint: de.erthu.ancientdungeonfull

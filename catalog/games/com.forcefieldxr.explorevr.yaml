@@ -1,0 +1,22 @@
+package: com.forcefieldxr.explorevr
+title: ExploreVR
+status: issues
+notes: The 3D world warps and shifts with head movement (wrong perspective).
+tested_version: 1.2.1
+engine: Unreal
+xr: VrApi
+alt_overport:
+- patch_remove_unreal_force_quit
+frame:
+- frame.nodebug
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-10'
+  known_good_sha256: 04576c46a91f4bb851a344c75e022b17a5d2837d054e7323a184b81436cf8019
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 149
+source_hint: com.forcefieldxr.explorevr
