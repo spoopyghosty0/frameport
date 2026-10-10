@@ -167,6 +167,51 @@ def test_problem_url(tmp_path):
     assert "missing-ovr-symbol" in f["findings"] and "alice" not in url
 
 
+@pytest.mark.parametrize("template,layout", [("working-config.yml", issue.WORKING_CONFIG_FIELDS),
+                                             ("bug-report.yml", issue.PROBLEM_FIELDS)])
+def test_issue_body_labels_match_the_forms(template, layout):
+    form = yaml.safe_load((ROOT / ".github/ISSUE_TEMPLATE" / template).read_text(encoding="utf-8"))
+    fields = {f["id"]: (f["attributes"]["label"], f["attributes"].get("render"))
+              for f in form["body"] if f.get("id") and f["type"] in ("input", "textarea")}
+    assert fields == layout
+    if template == "working-config.yml":
+        confirm = next(f for f in form["body"] if f.get("id") == "confirm")["attributes"]
+        assert issue.WORKING_CONFIG_CONFIRM == (confirm["label"], confirm["options"][0]["label"])
+
+
+def test_working_config_body_round_trips_through_the_catalog_script(tmp_path):
+    """GitHub #167: the plain-issue body (and the clipboard copy) is what the issue form would have written."""
+    g = _game(tmp_path)
+    e = catalog.entry_from_library(g, status="works", notes="n", verified={"app": "0.2.0"})
+    env = {"app": "0.2.0", "os": "Linux"}
+    body = issue.working_config_body(g, catalog.to_yaml(e), "works", "", env, redact.default())
+    assert body.startswith("### Game\n\n") and "### Notes\n\n_No response_" in body
+    assert "```yaml\npackage: com.example.game" in body and "- [X] I played the game" in body
+    s = _script()
+    assert s.main([str(_write(tmp_path, body)), "--issue", "9", "--out", str(tmp_path)]) == 0
+    d = yaml.safe_load((tmp_path / "com.example.game.yaml").read_text())
+    assert d["frame"] == ["frame.nodebug"] and d["verified"]["issue"] == 9
+    links = issue.working_config_links(g, catalog.to_yaml(e), "works", "played /home/alice fine" + "x" * 20000, env,
+                                       redact.default())
+    assert links.form == issue.working_config_url(g, catalog.to_yaml(e), "works",
+                                                  "played /home/alice fine" + "x" * 20000, env, redact.default())
+    f = _fields(links.plain)
+    assert "template" not in f and f["title"] == "[Working recipe] Example" and f["labels"] == "working-config"
+    assert len(links.plain) <= issue.MAX_URL + 200 and "alice" not in links.plain
+    assert "[... cut" in s.section(f["body"], "Notes")  # notes trimmed first, the recipe never
+    assert s.validate(s.recipe_from_body(f["body"])).package == "com.example.game"
+    assert "x" * 20000 in links.body  # the clipboard copy isn't trimmed
+
+
+def test_problem_links(tmp_path):
+    g = _game(tmp_path)
+    links = issue.problem_links(g, "crashes", {"app": "x"}, "FramePort-diag-a.zip", "package: com.example.game\n")
+    f = _fields(links.plain)
+    assert f["labels"] == "bug" and f["body"] == links.body
+    assert "### What happens?\n\ncrashes" in links.body and "FramePort-diag-a.zip" in links.body
+    assert "### Recipe\n\n```yaml\npackage: com.example.game\n```" in links.body
+
+
 def test_entry_from_library_matches_save_known_good_shape(tmp_path):
     g = _game(tmp_path)
     d = catalog.entry_from_library(g).to_dict()

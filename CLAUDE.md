@@ -249,8 +249,12 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
   - `diag/` — user feedback without tokens (docs/DIAGNOSTICS.md): `redact.py` (every file/issue text: IPs, hosts,
     home dirs, Steam ids, dump folders → placeholders), `bundle.py` (redacted diagnostics zip; agent v21
     `collect_diag`; `frameport diag collect|inspect|report`), `issue.py` (prefilled GitHub issue-form links, ≤7.5k
-    chars). "Share working config" → `working-config.yml` issue → maintainer label `catalog-accepted` →
-    `catalog-from-issue.yml` workflow (`scripts/catalog_from_issue.py` validates) opens a catalog PR. App log:
+    chars; `*_links` = `IssueLinks(form, plain, body)`: body = the Markdown the form writes (`### <label>`, recipe in
+    a ```yaml block; labels checked against the templates), plain = `?title=&body=` link. GitHub #167: some (Flatpak)
+    browsers opened the form with empty fields → `app.open_issue` copies the body to the clipboard and offers "Form
+    empty? Open a plain issue"; keep the templates valid YAML, quote `: ` in descriptions). "Share working config" →
+    `working-config.yml` issue → maintainer label `catalog-accepted` (a plain issue needs `working-config` added by
+    hand) → `catalog-from-issue.yml` workflow (`scripts/catalog_from_issue.py` validates) opens a catalog PR. App log:
     `core/applog.py` (`<data>/logs/app.log`, finished GUI jobs in `<data>/logs/jobs/`).
   - Self-update (docs/ARCHITECTURE.md "Self-update", docs/INSTALL.md "Updating"): `_version.py` = the only version
     (`frameport.__version__`; pyproject reads it via hatch `dynamic`; app log, diagnostics, User-Agent, Settings use

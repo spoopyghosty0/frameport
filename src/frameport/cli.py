@@ -855,7 +855,9 @@ def diag_report(package: Optional[str] = typer.Argument(None, help="the game (om
     typer.echo(f"wrote {path} — attach it to the issue")
     if browser:
         winhost.open_folder(path, select=True)
-    _open(pipeline.problem_report(pkgs[0] if pkgs else None, description, path, info), browser)
+    links = pipeline.problem_report_links(pkgs[0] if pkgs else None, description, path, info)
+    _open(links.form, browser)
+    typer.echo(f"If the form's fields are empty, open a plain issue instead:\n{links.plain}")
 
 
 @app.command("share-recipe")
@@ -870,7 +872,9 @@ def share_recipe(package: str, status: str = typer.Option("works", help="works o
     info = None
     if frame:
         info = _target(frame).describe()
-    _open(pipeline.share_working_config(pkg, status, notes, info), browser)
+    links = pipeline.share_working_config_links(pkg, status, notes, info)
+    _open(links.form, browser)
+    typer.echo(f"If the form's fields are empty, open a plain issue instead:\n{links.plain}")
 
 
 def main() -> None:
