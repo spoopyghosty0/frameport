@@ -99,7 +99,7 @@ const groups = [...new Set(DOCS.map((d) => d.group))];
   @media (max-width: 1180px) { .docs { grid-template-columns: 210px minmax(0, 1fr); } .dtoc { display: none; } }
   @media (max-width: 900px) {
     .docs { grid-template-columns: minmax(0, 1fr); gap: 16px; padding-top: 20px; }
-    .dnav { position: relative; z-index: 20; max-height: none; overflow: visible; }
+    .dnav { position: relative; top: auto; z-index: 20; max-height: none; overflow: visible; }
     .dnav summary { cursor: pointer; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
     .dnav summary::after { content: " ▾"; }
     .keys { display: none; }

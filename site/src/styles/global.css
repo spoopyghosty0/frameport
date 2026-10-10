@@ -361,3 +361,36 @@ dialog.zoom::backdrop { background: rgba(5, 6, 8, .86); backdrop-filter: blur(4p
 dialog.zoom img { display: block; max-width: 96vw; max-height: 88vh; border-radius: var(--radius-md); }
 dialog.zoom p { margin: 10px 0 0; text-align: center; color: var(--text-2); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .prose :is(h2, h3).flash, .done > .tick svg { animation: none; } .prose a.playable:hover img { transform: none; } }
+
+/* docs: folder layouts (```tree blocks, scripts/filetree.ts) */
+.prose .ftree { margin: 0 0 16px; padding: 16px 18px; border-radius: var(--radius-md); background: var(--surface-2);
+  border: 1px solid var(--border); overflow-x: auto; }
+.prose .ftree ul { list-style: none; margin: 0; padding: 0; }
+.prose .ftree li { margin: 0; }
+.prose .ftree li ul { margin-left: 9px; padding-left: 18px; border-left: 1px solid var(--border-strong); }
+.prose .ftree .ft-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 5px 0; position: relative; }
+.prose .ftree li li > .ft-row::before { content: ""; position: absolute; left: -18px; top: 50%; width: 12px; height: 1px;
+  background: var(--border-strong); }
+.prose .ftree svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linejoin: round; color: var(--text-3); }
+.prose .ftree .ft-dir > .ft-row svg { color: var(--secondary); fill: rgba(58, 168, 255, 0.14); }
+.prose .ftree [data-kind="apk"] > .ft-row svg { color: var(--accent); fill: rgba(255, 138, 31, 0.12); }
+.prose .ftree [data-kind="obb"] > .ft-row svg { color: var(--warn); }
+.prose .ftree .ft-name { padding: 0; background: none; font-size: 14px; color: var(--text); white-space: nowrap; }
+.prose .ftree .ft-dir > .ft-row .ft-name { font-weight: 600; }
+.prose .ftree .ft-note { font-size: 13.5px; color: var(--text-2); }
+.prose .ftree .ft-note::before { content: "— "; color: var(--text-3); }
+
+/* docs: diagrams (SVG images) */
+.prose .diagram { margin: 0 0 20px; }
+.prose .diagram-scroll { overflow-x: auto; border-radius: 18px; }
+.prose .diagram img { display: block; width: 100%; height: auto; border-radius: 18px; }
+.prose .diagram figcaption { display: none; margin-top: 6px; font-size: 12.5px; color: var(--text-3); }
+@media (max-width: 760px) {
+  .prose .diagram img { width: 760px; max-width: none; }
+  .prose .diagram figcaption { display: block; }
+  .prose .ftree .ft-name { font-size: 13px; }
+  .prose .ftree .ft-row { display: grid; grid-template-columns: 18px auto; column-gap: 8px; row-gap: 0; }
+  .prose .ftree .ft-note { grid-column: 2; font-size: 12.5px; white-space: normal; }
+  .prose .ftree .ft-note::before { content: none; }
+}

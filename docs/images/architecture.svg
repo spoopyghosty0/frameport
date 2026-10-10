@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 660" width="1120" height="660" role="img" aria-labelledby="t d">
+  <title id="t">FramePort architecture</title>
+  <desc id="d">The desktop app (ui/) and the command line (cli.py) both drive pipeline.py: add, suggest, build, install, test. The pipeline uses sources/, analysis/, recommend/, build.py, targets/ and validate/. Builds use the patches/ registry and the tools/ toolchain; targets reach the Steam Frame through frame/ and install/, which talk to the agent on the Frame over SSH.</desc>
+  <defs>
+    <linearGradient id="portal" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#3aa8ff"/>
+      <stop offset="1" stop-color="#ff8a1f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.25" r="0.75">
+      <stop offset="0" stop-color="#3aa8ff" stop-opacity="0.10"/>
+      <stop offset="0.5" stop-color="#ff8a1f" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#0d0e12" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="frameglow" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#ff8a1f" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ff8a1f" stop-opacity="0"/>
+    </radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#717583"/>
+    </marker>
+    <marker id="arrow-o" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#ff8a1f"/>
+    </marker>
+    <style>
+      .t { font: 700 16px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; fill: #edeef2; }
+      .s { font: 400 13px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; fill: #a7abb7; }
+      .m { font: 500 12.5px ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; fill: #a7abb7; }
+      .mt { font: 700 15px ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace; fill: #edeef2; }
+      .k { font: 600 11px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.12em; fill: #717583; }
+      .card { fill: #16181e; stroke: #2a2d37; stroke-width: 1.5; }
+      .pc { fill: #16181e; stroke: #3aa8ff; stroke-opacity: 0.55; stroke-width: 1.5; }
+      .line { stroke: #4a4e5c; stroke-width: 1.8; fill: none; }
+      .chip { fill: #1d1f27; stroke: #393d49; stroke-width: 1; }
+      .ct { font: 600 13px "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; fill: #edeef2; }
+    </style>
+  </defs>
+
+  <rect width="1120" height="660" rx="18" fill="#0d0e12"/>
+  <rect width="1120" height="660" rx="18" fill="url(#glow)"/>
+
+  <!-- entry points -->
+  <text class="k" x="40" y="34">ON YOUR PC</text>
+  <rect class="pc" x="250" y="48" width="300" height="70" rx="12"/>
+  <text class="t" x="400" y="78" text-anchor="middle">Desktop app</text>
+  <text class="m" x="400" y="100" text-anchor="middle">ui/ · Flet · shell + views</text>
+  <rect class="pc" x="590" y="48" width="280" height="70" rx="12"/>
+  <text class="t" x="730" y="78" text-anchor="middle">Command line</text>
+  <text class="m" x="730" y="100" text-anchor="middle">cli.py</text>
+  <path class="line" d="M400 118 V150" marker-end="url(#arrow)"/>
+  <path class="line" d="M730 118 V150" marker-end="url(#arrow)"/>
+
+  <!-- the pipeline -->
+  <rect x="40" y="156" width="1040" height="78" rx="14" fill="#16181e" stroke="url(#portal)" stroke-width="2"/>
+  <text class="mt" x="66" y="190">pipeline.py</text>
+  <text class="s" x="66" y="212">one API for the app and the CLI</text>
+  <g>
+    <rect class="chip" x="352" y="177" width="92" height="36" rx="18"/>
+    <text class="ct" x="398" y="200" text-anchor="middle">add</text>
+    <path class="line" d="M448 195 H480" marker-end="url(#arrow)"/>
+    <rect class="chip" x="486" y="177" width="112" height="36" rx="18"/>
+    <text class="ct" x="542" y="200" text-anchor="middle">suggest</text>
+    <path class="line" d="M602 195 H634" marker-end="url(#arrow)"/>
+    <rect class="chip" x="640" y="177" width="96" height="36" rx="18"/>
+    <text class="ct" x="688" y="200" text-anchor="middle">build</text>
+    <path class="line" d="M740 195 H772" marker-end="url(#arrow)"/>
+    <rect class="chip" x="778" y="177" width="104" height="36" rx="18"/>
+    <text class="ct" x="830" y="200" text-anchor="middle">install</text>
+    <path class="line" d="M886 195 H918" marker-end="url(#arrow)"/>
+    <rect x="924" y="177" width="132" height="36" rx="18" fill="#3a2512" stroke="#ff8a1f" stroke-opacity="0.6"/>
+    <text class="ct" x="990" y="200" text-anchor="middle">launch test</text>
+  </g>
+
+  <!-- connectors to the modules -->
+  <path class="line" d="M120 234 V284" marker-end="url(#arrow)"/>
+  <path class="line" d="M296 234 V284" marker-end="url(#arrow)"/>
+  <path class="line" d="M472 234 V284" marker-end="url(#arrow)"/>
+  <path class="line" d="M648 234 V284" marker-end="url(#arrow)"/>
+  <path class="line" d="M824 234 V284" marker-end="url(#arrow)"/>
+  <path class="line" d="M1000 234 V284" marker-end="url(#arrow)"/>
+
+  <!-- the modules -->
+  <g>
+    <rect class="card" x="40" y="290" width="160" height="128" rx="12"/>
+    <text class="mt" x="58" y="320">sources/</text>
+    <text class="s" x="58" y="342">finds games</text>
+    <text class="m" x="58" y="370">quest_dump</text>
+    <text class="m" x="58" y="390">rift_dump</text>
+
+    <rect class="card" x="216" y="290" width="160" height="128" rx="12"/>
+    <text class="mt" x="234" y="320">analysis/</text>
+    <text class="s" x="234" y="342">reads the game</text>
+    <text class="m" x="234" y="370">detect · elf</text>
+    <text class="m" x="234" y="390">stubgen · rift</text>
+
+    <rect class="card" x="392" y="290" width="160" height="128" rx="12"/>
+    <text class="mt" x="410" y="320">recommend/</text>
+    <text class="s" x="410" y="342">picks the recipe</text>
+    <text class="m" x="410" y="370">catalog · engine</text>
+    <text class="m" x="410" y="390">catalog/*.yaml</text>
+
+    <rect class="card" x="568" y="290" width="160" height="128" rx="12"/>
+    <text class="mt" x="586" y="320">build.py</text>
+    <text class="s" x="586" y="342">makes the build</text>
+    <text class="m" x="586" y="370">OVRPort → patches</text>
+    <text class="m" x="586" y="390">→ apk/sign</text>
+
+    <rect class="card" x="744" y="290" width="160" height="128" rx="12"/>
+    <text class="mt" x="762" y="320">targets/</text>
+    <text class="s" x="762" y="342">where it runs</text>
+    <text class="m" x="762" y="370">frame_lepton</text>
+    <text class="m" x="762" y="390">pc_revive</text>
+
+    <rect class="card" x="920" y="290" width="160" height="128" rx="12"/>
+    <text class="mt" x="938" y="320">validate/</text>
+    <text class="s" x="938" y="342">checks the result</text>
+    <text class="m" x="938" y="370">static · device</text>
+    <text class="m" x="938" y="390">triage.yaml</text>
+  </g>
+
+  <!-- what the build and the targets use -->
+  <path class="line" d="M612 418 V448 H464 V484" marker-end="url(#arrow)"/>
+  <path class="line" d="M648 418 V484" marker-end="url(#arrow)"/>
+  <path class="line" d="M824 418 V484" marker-end="url(#arrow)"/>
+
+  <rect class="card" x="216" y="490" width="336" height="118" rx="12"/>
+  <text class="mt" x="234" y="520">patches/</text>
+  <text class="s" x="234" y="542">the registry: one module per patch</text>
+  <text class="m" x="234" y="570">overport · frame/* · settings</text>
+  <text class="m" x="234" y="590">pcvr · upstream</text>
+
+  <rect class="card" x="568" y="490" width="160" height="118" rx="12"/>
+  <text class="mt" x="586" y="520">tools/</text>
+  <text class="s" x="586" y="542">fetched on demand</text>
+  <text class="m" x="586" y="570">Java · OVRPort</text>
+  <text class="m" x="586" y="590">apksigner · Revive</text>
+
+  <rect class="card" x="744" y="490" width="160" height="118" rx="12"/>
+  <text class="mt" x="762" y="520">frame/</text>
+  <text class="s" x="762" y="542">+ install/installer</text>
+  <text class="m" x="762" y="570">ssh · pairing</text>
+  <text class="m" x="762" y="590">discovery</text>
+
+  <!-- the Steam Frame -->
+  <rect x="926" y="448" width="160" height="196" rx="16" fill="url(#frameglow)" stroke="#ff8a1f" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="6 6"/>
+  <text class="k" x="1006" y="470" text-anchor="middle" style="fill:#ff8a1f">STEAM FRAME</text>
+  <path d="M904 549 H932" stroke="#ff8a1f" stroke-width="2" fill="none" marker-end="url(#arrow-o)"/>
+  <text class="m" x="915" y="538" text-anchor="middle" style="fill:#ff8a1f;font-size:10px">SSH</text>
+  <rect x="936" y="490" width="140" height="118" rx="12" fill="#1d150d" stroke="#ff8a1f" stroke-width="1.5"/>
+  <text class="mt" x="952" y="520">agent</text>
+  <text class="s" x="952" y="542">runs on the Frame</text>
+  <text class="m" x="952" y="570">install · Steam</text>
+  <text class="m" x="952" y="590">tests · logs</text>
+</svg>

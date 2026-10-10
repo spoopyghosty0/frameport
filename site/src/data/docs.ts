@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Marked, type Tokens } from 'marked';
 import { REPO, url } from './site';
+import { fileTree } from '../scripts/filetree';
 
 export interface DocInfo { file: string; slug: string; name: string; group: string; blurb: string; summary: string }
 export const DOCS: DocInfo[] = [
@@ -89,6 +90,17 @@ export function loadDoc(info: DocInfo): Doc {
       }
     },
     renderer: {
+      // ```tree blocks (folder layouts) become a real file tree; every other code block stays as it is
+      code({ text, lang }) {
+        return lang === 'tree' ? fileTree(text) : false;
+      },
+      // diagrams (SVG) keep a readable size on phones: they scroll sideways there (and still open large on a tap)
+      image({ href, text }) {
+        if (!/\.svg$/i.test(href)) return false;
+        const alt = text.replace(/"/g, '&quot;');
+        return `<figure class="diagram"><div class="diagram-scroll"><img src="${href}" alt="${alt}" loading="lazy" /></div>`
+          + '<figcaption>Scroll sideways or tap to enlarge.</figcaption></figure>';
+      },
       heading({ tokens, depth, text }) {
         const id = slug(text);
         if (depth <= 3) toc.push({ id, text: text.replace(/[`*_]/g, ''), depth });
