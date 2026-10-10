@@ -11,6 +11,9 @@ def launch_test(frame: Frame, package: str, reporter: Reporter, seconds: int = 4
     reporter.log(f"starting {package} for {seconds}s; without the headset worn the game can't reach FOCUSED, "
                  "so this checks startup, not the picture")
     res = frame.agent("launch_test", timeout=seconds + 120, package=package, seconds=seconds)
+    if res.get("skipped"):  # agent >= 75: SteamVR overlay apps show nothing without a game
+        reporter.check("Launch test", None, f"skipped ({res['skipped']})")
+        return TriageResult("UNKNOWN", None), ""
     log = frame.get_text(res["log"]) if res.get("log_size") else ""
     crash = frame.get_text(res["crash_log"]) if res.get("crash_log") else ""  # tombstones (backtraces), agent >= 23
     result = triage(log, res["state"], package, crash=crash[-256 * 1024:])

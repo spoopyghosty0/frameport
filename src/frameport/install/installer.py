@@ -141,6 +141,7 @@ class PcvrPlan:
     revive_version: str | None = None
     art_lookup: str | None = None  # package whose store art to use
     dest: str | None = None
+    overlay: dict | None = None  # a SteamVR overlay app: the agent's overlay argument (analysis/vroverlay.py)
 
 
 def install_pcvr(frame: Frame, plan: PcvrPlan, reporter: Reporter) -> dict:
@@ -211,10 +212,25 @@ def install_pcvr(frame: Frame, plan: PcvrPlan, reporter: Reporter) -> dict:
         game_args=game_args(plan.recipe), no_crash_reporter="pcvr.no_crash_reporter" in plan.recipe.patches,
         libovr_redirect="pcvr.libovr_redirect" in plan.recipe.patches,
         exe_sha256=plan.exe_sha256, revive_version=plan.revive_version, vr=not is_flat_windows(plan.package),
-        recipe={"patches": sorted(plan.recipe.patches), "source": plan.recipe.source},
+        recipe={"patches": sorted(plan.recipe.patches), "source": plan.recipe.source}, overlay=plan.overlay,
     )
     reporter.log(f"installed at {result['base']} (Proton {result['proton']}, Steam shortcut id {result['appid']})")
+    log_overlay(result.get("overlay"), reporter)
     return result
+
+
+def log_overlay(overlay: dict | None, reporter: Reporter) -> None:
+    """Outcome of registering a SteamVR overlay app on the Frame (agent register_vr_overlay)."""
+    if not overlay:
+        return
+    if overlay.get("registered"):
+        reporter.check("SteamVR overlay app", True, f"registered with SteamVR as {overlay.get('key')}"
+                       + (", starts with SteamVR" if overlay.get("autostart") else ""))
+    elif overlay.get("error") == "steamvr":
+        reporter.check("SteamVR overlay app", None, "SteamVR isn't running on the Frame: registered at the next "
+                                                    "connection")
+    else:
+        reporter.check("SteamVR overlay app", False, f"SteamVR didn't take it: {overlay.get('error')}")
 
 
 @dataclass
@@ -229,6 +245,7 @@ class LinuxPlan:
     x86_64: bool = False  # runs through FEX (installed on the Frame first, like Proton)
     dest: str | None = None  # a drive's install dir for a new install (GitHub #90); None = internal storage
     desktop_entry: bool = True  # an entry in Desktop Mode's menu and on its desktop (GitHub #84)
+    overlay: dict | None = None  # a SteamVR overlay app: the agent's overlay argument (analysis/vroverlay.py)
 
 
 def install_linux(frame: Frame, plan: LinuxPlan, reporter: Reporter) -> dict:
@@ -261,8 +278,9 @@ def install_linux(frame: Frame, plan: LinuxPlan, reporter: Reporter) -> dict:
     result = frame.agent("finalize_linux", package=plan.package, title=plan.title, exe=plan.exe,
                          appimage=plan.appimage, openxr=plan.openxr, x86_64=plan.x86_64, manifests={"app": manifest},
                          executables=executables, tags=_tags(plan.package), dest=plan.dest,
-                         desktop_entry=plan.desktop_entry, timeout=900)
+                         desktop_entry=plan.desktop_entry, overlay=plan.overlay, timeout=900)
     reporter.log(f"installed at {result['base']} (Steam shortcut id {result['appid']})")
+    log_overlay(result.get("overlay"), reporter)
     apply_app_icon(frame, plan.package, prep.get("anchor"), result, reporter)
     if result.get("desktop_entry"):
         reporter.check("Desktop Mode entry", True, "in the application menu"

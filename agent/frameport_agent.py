@@ -44,7 +44,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 74
+AGENT_VERSION = 75
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -731,6 +731,12 @@ def ensure_host_fixes():
         entries = []
     if entries:
         changed.append(f"Desktop Mode entries ({len(entries)})")
+    try:
+        overlays = overlay_registrations()
+    except Exception:  # noqa: BLE001
+        overlays = []
+    if overlays:
+        changed.append(f"SteamVR overlay apps registered ({len(overlays)})")
     return changed
 
 
@@ -1134,7 +1140,9 @@ def game_running():
     names = run(["podman", "ps", "--format", "{{.Names}}"]).stdout.split()
     if any(n.startswith("lepton-steamlaunch-") for n in names):
         return True
-    return any(pcvr_pids(d["base"]) for d in cmd_list_installed({})["games"] if d.get("kind") in ("pcvr", "linux"))
+    # overlay apps (fpsVR & co.) run next to games, often all the time: they don't hold up installs
+    return any(pcvr_pids(d["base"]) for d in cmd_list_installed({})["games"]
+               if d.get("kind") in ("pcvr", "linux") and not is_overlay(d))
 
 
 def shortcuts_worker(payload):
@@ -1453,6 +1461,18 @@ def deployment(pkg):
     dep.setdefault("base", os.path.dirname(path))
     dep.setdefault("title", pkg)
     return dep
+
+
+def write_deployment(pkg, dep):
+    path = os.path.join(ANCHORS, pkg, "deployment.json")
+    with open(path + ".tmp", "w") as f:
+        json.dump(dep, f, indent=2)
+    os.replace(path + ".tmp", path)
+
+
+def is_overlay(dep):
+    """An installed SteamVR overlay app (runs next to games: no launch test, not a "running game")."""
+    return bool(isinstance(dep, dict) and dep.get("overlay"))
 
 
 def cmd_list_installed(args):
@@ -2283,6 +2303,284 @@ def cmd_take_screenshot(args):
     return {"taken": False, "path": None, "reason": reason, "hmd": hmd_state()}
 
 
+# ------------------------------------------------------------------------------------------ SteamVR overlay apps (v75)
+# OpenVR overlay applications (VRApplication_Overlay: fpsVR, wrist watches, ...) draw no scene; SteamVR's compositor
+# draws their overlays over whatever runs, Lepton (Quest) games and Proton (PC VR) games included (verified on the
+# device 2026-10-10, docs/FRAME_RUNTIME.md "Overlay apps"). FramePort installs one like a PC VR game (Proton) or a
+# Linux app and registers an application manifest with SteamVR (IVRApplications, live: SteamVR keeps the path in its
+# appconfig.json) whose binary is the app's launch.sh, so SteamVR can start it, also at every SteamVR start
+# ("autostart" = SteamVR's own auto-launch flag). The app's Steam shortcut still starts it from the library.
+OVERLAY_MANIFEST = "frameport-overlay.vrmanifest"
+VR_APP_UTILITY = 4
+# openvr_capi.h VR_IVRApplications_FnTable (IVRApplications_007) slots used here
+VR_APPS = {"AddApplicationManifest": 0, "RemoveApplicationManifest": 1, "IsApplicationInstalled": 2,
+           "LaunchApplication": 6, "GetApplicationProcessId": 12, "GetApplicationsErrorNameFromEnum": 13,
+           "SetApplicationAutoLaunch": 17, "GetApplicationAutoLaunch": 18}
+
+
+def overlay_key(pkg, app=None):
+    """The overlay's SteamVR application key: the app's own (from its bundled manifest, so registering it by hand
+    too can't make a second entry), else "frameport.<package>"."""
+    key = (app or {}).get("app_key")
+    if isinstance(key, str) and re.fullmatch(r"[A-Za-z0-9_.-]{3,100}", key):
+        return key
+    return "frameport." + re.sub(r"[^a-z0-9_.-]", "_", pkg.lower())
+
+
+def overlay_app_dir(dep):
+    """Where the app's files are on the Frame (its bundled manifest's paths are relative to manifest_dir there)."""
+    tree = "app" if dep.get("kind") == "linux" else "game"
+    rel = os.path.normpath((dep.get("overlay") or {}).get("manifest_dir") or ".")
+    if rel.startswith("..") or os.path.isabs(rel):
+        rel = "."
+    return os.path.normpath(os.path.join(dep["base"], tree, rel))
+
+
+def overlay_manifest(anchor, pkg, dep):
+    """SteamVR application manifest for an installed overlay app: the app's own bundled manifest entry (key, name,
+    image) when it has one, with its binary replaced by FramePort's launch.sh (Proton or the Linux launcher, which
+    set up the environment) and every path absolute."""
+    title = dep.get("title") or pkg
+    app = dict((dep.get("overlay") or {}).get("app") or {})
+    src = overlay_app_dir(dep)
+    image = app.get("image_path")
+    image = os.path.join(src, image) if isinstance(image, str) and image else ""
+    if not (image and os.path.isfile(image)):
+        image = os.path.join(anchor, "artwork", "icon.png")
+    strings = app.get("strings") if isinstance(app.get("strings"), dict) else \
+        {"en_us": {"name": title, "description": f"{title} (installed by FramePort)"}}
+    # SteamVR on the Frame (linuxarm64) only reads binary_path_linux_arm ("must specify binary_path for launch_type
+    # binary. Skipping" for a manifest with binary_path_linux alone); both for SteamVR builds that read the other
+    launcher = os.path.join(anchor, "launch.sh")
+    entry = {"app_key": overlay_key(pkg, app), "launch_type": "binary",
+             "binary_path_linux_arm": launcher, "binary_path_linux": launcher, "working_directory": anchor,
+             "is_dashboard_overlay": True, "image_path": image, "strings": strings}
+    if dep.get("kind") == "linux" and app.get("arguments"):  # the Linux launcher passes them on ("$@")
+        entry["arguments"] = app["arguments"]
+    return {"source": "builtin", "applications": [entry]}
+
+
+class SteamVRApps:
+    """IVRApplications of the running SteamVR, through its libopenvr_api.so (ctypes) as a utility app (never starts
+    SteamVR). `None` from open() = SteamVR isn't running."""
+
+    @classmethod
+    def open(cls):
+        import ctypes
+
+        lib = next((p for p in OPENVR_LIBS if os.path.isfile(p)), None)
+        if lib is None:
+            return None
+        vr = ctypes.CDLL(lib)
+        vr.VR_InitInternal2.restype = ctypes.c_uint32
+        vr.VR_InitInternal2.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_char_p]
+        vr.VR_GetGenericInterface.restype = ctypes.c_void_p
+        vr.VR_GetGenericInterface.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int)]
+        vr.VR_IsRuntimeInstalled.restype = ctypes.c_bool
+        vr.VR_ShutdownInternal.restype = None
+        err = ctypes.c_int(0)
+        vr.VR_InitInternal2(ctypes.byref(err), VR_APP_UTILITY, None)
+        if err.value:
+            return None
+        ptr = vr.VR_GetGenericInterface(b"FnTable:IVRApplications_007", ctypes.byref(err))
+        if not ptr:
+            vr.VR_ShutdownInternal()
+            return None
+        self = cls()
+        self.vr, self.ct = vr, ctypes
+        self.table = (ctypes.c_void_p * 31).from_address(ptr)
+        return self
+
+    def fn(self, name, restype, *argtypes):
+        return self.ct.CFUNCTYPE(restype, *argtypes)(self.table[VR_APPS[name]])
+
+    def error(self, code):
+        if not code:
+            return None
+        name = self.fn("GetApplicationsErrorNameFromEnum", self.ct.c_char_p, self.ct.c_int)(code)
+        return (name or b"").decode() or str(code)
+
+    def add(self, path):
+        return self.error(self.fn("AddApplicationManifest", self.ct.c_int, self.ct.c_char_p, self.ct.c_bool)(
+            path.encode(), False))
+
+    def remove(self, path):
+        return self.error(self.fn("RemoveApplicationManifest", self.ct.c_int, self.ct.c_char_p)(path.encode()))
+
+    def installed(self, key):
+        return bool(self.fn("IsApplicationInstalled", self.ct.c_bool, self.ct.c_char_p)(key.encode()))
+
+    def set_autolaunch(self, key, on):
+        return self.error(self.fn("SetApplicationAutoLaunch", self.ct.c_int, self.ct.c_char_p, self.ct.c_bool)(
+            key.encode(), bool(on)))
+
+    def autolaunch(self, key):
+        return bool(self.fn("GetApplicationAutoLaunch", self.ct.c_bool, self.ct.c_char_p)(key.encode()))
+
+    def launch(self, key):
+        return self.error(self.fn("LaunchApplication", self.ct.c_int, self.ct.c_char_p)(key.encode()))
+
+    def pid(self, key):
+        return int(self.fn("GetApplicationProcessId", self.ct.c_uint32, self.ct.c_char_p)(key.encode()))
+
+    def close(self):
+        self.vr.VR_ShutdownInternal()
+
+
+def register_overlay(pkg, autostart=False):
+    """Write the overlay app's manifest next to its launcher and register it with SteamVR (live). Returns
+    {key, manifest, registered, autostart, error}; registered False + error "steamvr" = SteamVR isn't running (the
+    deployment keeps "overlay" and ensure_host_fixes registers it at the next connection)."""
+    dep = deployment(pkg)
+    if not dep:
+        raise AgentError(f"{pkg} is not installed")
+    anchor = os.path.join(ANCHORS, pkg)
+    path = os.path.join(anchor, OVERLAY_MANIFEST)
+    manifest = overlay_manifest(anchor, pkg, dep)
+    with open(path + ".tmp", "w") as f:
+        json.dump(manifest, f, indent=2)
+    os.replace(path + ".tmp", path)
+    key = manifest["applications"][0]["app_key"]
+    out = {"key": key, "manifest": path, "registered": False, "autostart": False, "error": None}
+    apps = SteamVRApps.open()
+    if apps is None:
+        out["error"] = "steamvr"
+        return out
+    try:
+        out["error"] = apps.add(path)
+        out["registered"] = apps.installed(key)
+        if out["registered"]:
+            out["error"] = apps.set_autolaunch(key, autostart) or out["error"]
+            out["autostart"] = apps.autolaunch(key)
+    finally:
+        apps.close()
+    return out
+
+
+def dep_overlay_key(pkg, dep=None):
+    dep = dep if dep is not None else deployment(pkg)
+    return overlay_key(pkg, ((dep or {}).get("overlay") or {}).get("app"))
+
+
+def unregister_overlay(pkg):
+    """Remove the overlay app's manifest from SteamVR (and the file). True when SteamVR was reached."""
+    anchor = os.path.join(ANCHORS, pkg)
+    path = os.path.join(anchor, OVERLAY_MANIFEST)
+    key = None
+    try:
+        key = json.load(open(path))["applications"][0]["app_key"]
+    except (OSError, ValueError, KeyError, IndexError, TypeError):
+        key = dep_overlay_key(pkg)
+    apps = SteamVRApps.open()
+    reached = apps is not None
+    if apps is not None:
+        try:
+            apps.set_autolaunch(key, False)
+            apps.remove(path)
+        finally:
+            apps.close()
+    if os.path.exists(path):
+        os.remove(path)
+    return reached
+
+
+def overlay_entry(app):
+    """The overlay application entry of an app's bundled .vrmanifest (validated; None if there is none)."""
+    if not isinstance(app, dict):
+        return None
+    keep = {k: app[k] for k in ("app_key", "image_path", "strings", "arguments") if k in app}
+    if not isinstance(keep.get("image_path", ""), str) or not isinstance(keep.get("arguments", ""), str):
+        return None
+    return keep
+
+
+def cmd_register_vr_overlay(args):
+    """Register an installed app as a SteamVR overlay app: {package, autostart, app (its bundled manifest's overlay
+    entry, optional), manifest_dir (that manifest's folder in the app's files)} → register_overlay()'s result. The
+    deployment records it (overlay apps skip launch tests and don't count as a running game)."""
+    pkg = check_pkg(args["package"])
+    dep = deployment(pkg)
+    if not dep:
+        raise AgentError(f"{pkg} is not installed")
+    old = dep.get("overlay") or {}
+    app = overlay_entry(args["app"]) if "app" in args else old.get("app")
+    dep["overlay"] = {"autostart": bool(args.get("autostart")), "app": app,
+                      "manifest_dir": args.get("manifest_dir", old.get("manifest_dir")) or ".", "registered": False}
+    dep["overlay"]["key"] = overlay_key(pkg, app)
+    if old.get("key") and old["key"] != dep["overlay"]["key"]:
+        unregister_overlay(pkg)
+    write_deployment(pkg, dep)
+    out = register_overlay(pkg, bool(args.get("autostart")))
+    dep["overlay"]["registered"] = out["registered"]
+    write_deployment(pkg, dep)
+    return out
+
+
+def cmd_unregister_vr_overlay(args):
+    pkg = check_pkg(args["package"])
+    reached = unregister_overlay(pkg)
+    dep = deployment(pkg)
+    if dep and "overlay" in dep:
+        dep.pop("overlay")
+        write_deployment(pkg, dep)
+    return {"unregistered": True, "steamvr": reached}
+
+
+def cmd_launch_vr_overlay(args):
+    """Start an installed overlay app through SteamVR (LaunchApplication of its manifest), not as a Steam game, so a
+    game can be played next to it. {started, pid, error}."""
+    pkg = check_pkg(args["package"])
+    dep = deployment(pkg)
+    if not dep or not dep.get("overlay"):
+        raise AgentError(f"{pkg} is not installed as an overlay app")
+    if not dep["overlay"].get("registered"):
+        register_overlay(pkg, dep["overlay"].get("autostart"))
+    apps = SteamVRApps.open()
+    if apps is None:
+        raise AgentError("SteamVR isn't running on the Frame")
+    try:
+        key = dep_overlay_key(pkg, dep)
+        if not apps.installed(key):
+            apps.add(os.path.join(ANCHORS, pkg, OVERLAY_MANIFEST))
+        err = apps.launch(key)
+        pid = 0
+        for _ in range(20):
+            pid = apps.pid(key)
+            if pid or err:
+                break
+            time.sleep(0.5)
+    finally:
+        apps.close()
+    return {"started": not err, "pid": pid or None, "error": err}
+
+
+def overlay_registrations():
+    """Register overlay apps whose registration is missing (SteamVR wasn't running at install, or forgot it)."""
+    done = []
+    for dep_path in glob.glob(os.path.join(ANCHORS, "*/deployment.json")):
+        try:
+            dep = json.load(open(dep_path))
+        except (OSError, ValueError):
+            continue
+        ov = dep.get("overlay") if isinstance(dep, dict) else None
+        if not ov or not dep.get("package"):
+            continue
+        apps = SteamVRApps.open()
+        if apps is None:
+            return done
+        try:
+            ok = apps.installed(dep_overlay_key(dep["package"], dep))
+        finally:
+            apps.close()
+        if not ok:
+            r = register_overlay(dep["package"], ov.get("autostart"))
+            if r["registered"]:
+                ov["registered"] = True
+                write_deployment(dep["package"], dep)
+                done.append(dep["package"])
+    return done
+
+
 def cmd_prepare(args):
     """Where to upload, and what the Frame already has (so unchanged data is not re-sent)."""
     pkg = check_pkg(args["package"])
@@ -2776,7 +3074,7 @@ def upgrade_linux_launcher(text):
         text = text.replace(old_if, 'if [[ -z "${FRAMEPORT_DESKTOP:-}" && -z "${DISPLAY:-}" ]]; then', 1)
     if "\nparent=$PPID\n" in text:
         text = text.replace("\nparent=$PPID\n",
-                            '\nparent=$PPID\n[[ -n "${FRAMEPORT_DESKTOP:-}" ]] && parent=1\n', 1)
+                            '\nparent=$PPID\n[[ -n "${FRAMEPORT_DESKTOP:-}${FRAMEPORT_OVERLAY:-}" ]] && parent=1\n', 1)
     return text
 
 
@@ -3579,7 +3877,19 @@ def cmd_finalize_pcvr(args):
            "agent_version": AGENT_VERSION, "time": time.time()}
     with open(os.path.join(anchor, "deployment.json"), "w") as f:
         json.dump(dep, f, indent=2)
-    return {"ok": True, "base": base, "appid": appid, "moved_files": moved, "proton": tool["name"]}
+    overlay = finalize_overlay(pkg, args.get("overlay"))
+    return {"ok": True, "base": base, "appid": appid, "moved_files": moved, "proton": tool["name"], "overlay": overlay}
+
+
+def finalize_overlay(pkg, overlay):
+    """An install's overlay choice ({autostart, app, manifest_dir} = a SteamVR overlay app, None = not one):
+    register or unregister it with SteamVR. Returns register_vr_overlay's result, or None."""
+    if overlay:
+        return cmd_register_vr_overlay({"package": pkg, "autostart": bool(overlay.get("autostart")),
+                                        "app": overlay.get("app"), "manifest_dir": overlay.get("manifest_dir")})
+    if os.path.exists(os.path.join(ANCHORS, pkg, OVERLAY_MANIFEST)):  # no longer one (the user turned it off)
+        cmd_unregister_vr_overlay({"package": pkg})
+    return None
 
 
 # ------------------------------------------------------------------------------------------ Linux apps (arm64)
@@ -3603,8 +3913,9 @@ if [[ -z "${{FRAMEPORT_DESKTOP:-}}" && -z "${{DISPLAY:-}}" ]]; then
     fi
 fi
 {extra_env}parent=$PPID
-# Desktop Mode's launcher exits right after starting this: no Steam parent to watch
-[[ -n "${{FRAMEPORT_DESKTOP:-}}" ]] && parent=1
+# Desktop Mode's launcher exits right after starting this: no Steam parent to watch; SteamVR overlay apps
+# (FRAMEPORT_OVERLAY) are started by SteamVR and run next to games
+[[ -n "${{FRAMEPORT_DESKTOP:-}}${{FRAMEPORT_OVERLAY:-}}" ]] && parent=1
 {exe_q} "$@" >{log_q} 2>&1 &
 child=$!
 trap 'kill -TERM $child 2>/dev/null' INT TERM
@@ -3736,7 +4047,10 @@ def cmd_finalize_linux(args):
     # ldd can't read x86_64 programs here: their libraries come from FEX's x86 root (/usr/share/guestos/fex-mesa)
     missing = [] if x86 else missing_libraries(app, appimage_programs(run_dir) if appimage else [exe])
     os.makedirs(anchor, exist_ok=True)
-    write_linux_launcher(anchor, base, pkg, title, exe_rel, appimage, prefix, args.get("env"))
+    env = dict(args.get("env") or {})
+    if args.get("overlay"):
+        env["FRAMEPORT_OVERLAY"] = "1"
+    write_linux_launcher(anchor, base, pkg, title, exe_rel, appimage, prefix, env)
     art_in = os.path.join(base, "incoming-artwork")
     if os.path.isdir(art_in):
         shutil.rmtree(os.path.join(anchor, "artwork"), ignore_errors=True)
@@ -3762,8 +4076,9 @@ def cmd_finalize_linux(args):
             remove_desktop_entries(pkg)
     except OSError:
         pass
+    overlay = finalize_overlay(pkg, args.get("overlay"))
     return {"ok": True, "base": base, "appid": appid, "moved_files": moved, "missing_libraries": missing,
-            "desktop_entry": desktop, "app_icon": app_icon_result(own_icon)}
+            "desktop_entry": desktop, "app_icon": app_icon_result(own_icon), "overlay": overlay}
 
 
 def write_linux_launcher(anchor, base, pkg, title, exe_rel, appimage, prefix, env):
@@ -4259,6 +4574,8 @@ def cmd_uninstall(args):
     linux = dep.get("kind") == "linux"
     if (pcvr_pids(base) if pcvr or linux else container_running(dep["appid"])):
         raise AgentError("the game is running")
+    if is_overlay(dep) or os.path.exists(os.path.join(ANCHORS, pkg, OVERLAY_MANIFEST)):
+        unregister_overlay(pkg)  # SteamVR forgets the overlay app (before its manifest's folder goes)
     keep_data = args.get("keep_data", True)
     names = ("game", "revive", "xrlayer", "shadercache", "incoming", "incoming-artwork") if pcvr else \
         ("app", "incoming", "incoming-artwork", "launch.log", "session.log") if linux else \
@@ -4713,6 +5030,9 @@ def cmd_launch_test(args):
     anchor = os.path.join(ANCHORS, pkg)
     log = os.path.join(dep["base"], "launch.log")
     appid = dep["appid"]
+    if is_overlay(dep):  # nothing to see without a game; register_vr_overlay's SteamVR check is the test
+        return {"state": "SKIPPED", "skipped": "overlay app", "elapsed": 0, "log": None, "log_size": 0,
+                "crash_log": None, "kind": dep.get("kind")}
     if dep.get("kind") == "pcvr":
         return launch_test_pcvr(dep, anchor, log, seconds)
     if dep.get("kind") == "linux":
@@ -5233,6 +5553,13 @@ def purge_worker(payload):
     try:
         games = cmd_list_installed({})["games"]
         users = steam_users()
+        for d in games:  # SteamVR overlay apps: SteamVR forgets their manifests (while it still runs)
+            if is_overlay(d) or os.path.exists(os.path.join(ANCHORS, d["package"], OVERLAY_MANIFEST)):
+                try:
+                    unregister_overlay(d["package"])
+                    result["removed"].append(f"SteamVR overlay: {d.get('title')}")
+                except Exception as exc:  # noqa: BLE001
+                    result["errors"].append(f"{d.get('title')}: {exc}")
         try:
             service = stop_steam()
         except AgentError as exc:

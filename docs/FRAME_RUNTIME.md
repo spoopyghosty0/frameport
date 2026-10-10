@@ -178,6 +178,48 @@
   sha256, no `.picked`); folder apps get it on the PC at add time (`analysis/linux.find_icon`). Not yet seen in
   Desktop Mode on the device.
 
+## Overlay apps (SteamVR / OpenVR overlays, checked 2026-10-10 on the dev Frame, SteamOS 0.4.5)
+OpenVR overlay applications (`VRApplication_Overlay`: fpsVR, wrist watches, ...) work on the Frame itself, also
+over Quest games.
+- The Frame's host SteamVR (`/opt/steamvr/bin/linuxarm64`, always running in the VR session) serves `IVROverlay`
+  010-028 / `IVRApplications_007` to native Linux arm64 clients through its own `libopenvr_api.so` (ctypes is
+  enough: `native/vroverlay_probe/vroverlay_probe.py`). Overlay apps connect from SSH; vrserver logs
+  `New Connect message from … (VRApplication_Overlay)`, `vrcmd --overlays` (`/opt/steamvr/bin/linuxarm64/vrcmd`,
+  LD_LIBRARY_PATH=that dir) lists them `visible`, Steam's VR UI logs `[Overlays] Created: <key>` and loads a
+  dashboard overlay's thumbnail.
+- **Composited over Lepton (Quest) games**: with 4XVR running headless (FrameBridge 72 fps), the probe's head-locked
+  overlay appeared in the headset view (`/dev/video99`, see "Video of the headset view") on top of 4XVR's theatre.
+  The Android SteamVR runtime inside Lepton submits to the same host compositor, which draws host overlays on top.
+- Seeing pixels without a worn headset: the compositor pauses in standby (headset view = black) and fades to a
+  solid colour without tracking. For a few seconds after setting `power/pauseCompositorOnStandby` and
+  `steamvr/forceFadeOnBadTracking` to false (IVRSettings; neither key is in the user's steamvr.vrsettings, so
+  `RemoveKeyInSection` restores the default) the headset view shows the real composition (2 fps grabs: frames 7-10
+  of 16 had the picture, the rest the fade colour). Restore both keys afterwards.
+- **Windows overlay apps under Proton (ARM64)**: Temporal Reality's Windows build (Python/pyopenvr, x64) under
+  Proton 11 (SteamGameId set, FramePort's timefix layer) created its overlays on the Frame's SteamVR (`vrcmd
+  --overlays`: `temporalreality.watch`, `.settings` dashboard + 512x512 thumbnail), so Proton's vrclient bridges
+  `VRApplication_Overlay` too. Not seen as pixels (that watch only shows on a tracked left controller). fpsVR (.NET,
+  wine-mono) ran 60 s under Proton (SteamAPI ok: "Game process added: AppID 908520") but never loaded
+  openvr_api.dll and quit by itself (presumably it waits for a Windows SteamVR process). A freestanding CRT-less x64
+  exe (`native/vroverlay_probe/fp_vroverlay_probe.c`) died at its first kernel32 call (`c000001d` in the x64
+  emulation thunk); a normal MSVC/MinGW build should be used for Windows probes.
+- **Registration** (what SteamVR honours on the Frame): `IVRApplications::AddApplicationManifest(path, false)` from
+  a utility client, live; the path is kept in `~/.config/openvr/config/appconfig.json` `manifest_paths`.
+  `SetApplicationAutoLaunch` is accepted (GetApplicationAutoLaunch → true; vrserver has
+  `CAppInfoManager::StartAutolaunchOverlays`) but wasn't written to `steamvr.vrsettings` right away; whether it
+  starts the app at the next SteamVR start is **not yet verified**. The linuxarm64 vrserver only reads
+  **`binary_path_linux_arm`**: a manifest with `binary_path_linux` alone is skipped ("must specify binary_path for
+  launch_type binary. Skipping"; Steam's own steamapps.vrmanifest entries are skipped the same way), so an app's
+  own Linux manifest/`--install` that only writes binary_path_linux can't be launched by SteamVR on the Frame.
+  `LaunchApplication(key)` then starts the binary (Temporal Reality's launch.sh: process up, overlays created).
+- A Steam shortcut of an overlay app and a game shortcut run at the same time (Temporal Reality, then 4XVR, both
+  through `steam://rungameid`: both "Game process added", both kept running).
+- FramePort (agent v75): `register_vr_overlay` writes `<anchor>/frameport-overlay.vrmanifest` (the app's own key,
+  name and image from its bundled manifest, binary = launch.sh in `binary_path_linux_arm` + `binary_path_linux`,
+  absolute paths) and registers it; `unregister_vr_overlay`, uninstall and purge remove it; `ensure_host_fixes`
+  registers ones SteamVR missed (it wasn't running). Overlay apps skip launch tests, the Linux launcher's
+  Steam-parent watchdog (`FRAMEPORT_OVERLAY=1`) and don't count as a running game.
+
 ## Video of the headset view (surveyed 2026-10-05; used by the Live view tab)
 - `steamvr-v4l2cam.service` (user unit, part of gamescope-session.target, `Restart=always`) runs SteamVR's
   `/opt/steamvr/bin/linuxarm64/v4l2cam --output=99`: it reads the compositor's "Headset View" (IVRHeadsetView) and

@@ -1483,6 +1483,10 @@ class FramePortApp:
                 return tr("{get} is installed on this PC — start it with Play or from your Steam library").format(
                     get=g.get('title'))
             rep.check_cancel()
+            if pipeline.is_overlay_app(library.game(pkg) or {}):  # nothing to see without a game: no launch test
+                rep.stage("Installed")
+                return tr("{get} is installed on {where}: SteamVR shows it over your games").format(
+                    get=g.get('title'), where=where)
             if not library.setting("install.launch_test", True):  # Settings → Installing
                 rep.stage("Installed")
                 return tr("{get} is installed on {where}: put the headset on and launch it from your Steam "

@@ -230,7 +230,8 @@ def inspect(path: Path) -> dict:
         appimage = is_appimage(path)
         return {"root": str(path.parent), "exe": path.name, "files": [path.name], "appimage": appimage,
                 "machine": machine, "arch_ok": machine == EM_AARCH64, "openxr": uses_openxr([path]),
-                "title": title, "candidates": [path.name]}
+                "title": title, "candidates": [path.name],
+                "vr_overlay": False, "vr_overlay_app": None, "vr_overlay_from": ""}
     programs = rank_programs(root)
     if not programs:
         raise ValueError(f"no Linux program found in {path.name}")
@@ -246,4 +247,18 @@ def inspect(path: Path) -> dict:
     return {"root": str(root), "exe": exe.relative_to(root).as_posix(), "files": None,
             "appimage": is_appimage(exe), "machine": machine, "arch_ok": machine == EM_AARCH64,
             "openxr": uses_openxr([exe] + libs), "title": title,
-            "candidates": [p.relative_to(root).as_posix() for p, m in programs[:20] if m == machine]}
+            "candidates": [p.relative_to(root).as_posix() for p, m in programs[:20] if m == machine],
+            **overlay_info(root, exe, libs)}
+
+
+def overlay_info(root: Path, exe: Path, libs: list[Path]) -> dict:
+    """A SteamVR overlay app (analysis/vroverlay.py): a bundled .vrmanifest, or an OpenVR program using IVROverlay."""
+    from . import vroverlay
+
+    openvr = any(p.name.startswith(("libopenvr_api", "openvr_api")) for p in libs) or \
+        any(p.name.startswith("libopenvr_api") for p in root.rglob("libopenvr_api*.so"))
+    try:
+        data = exe.read_bytes() if exe.stat().st_size <= MAX_SCAN else b""
+    except OSError:
+        data = b""
+    return vroverlay.detect(root, exe, data, openvr)

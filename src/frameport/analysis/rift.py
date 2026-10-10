@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..core.models import Analysis
+from . import vroverlay
 
 MACHINES = {0x14C: "x86", 0x8664: "x86_64", 0xAA64: "arm64"}
 GUI_SUBSYSTEM = 2
@@ -39,11 +40,16 @@ PLATFORM_DLLS = ("libovrplatform64_1.dll", "libovrplatform32_1.dll")
 # engine DLLs that wrap the Platform SDK (Ready At Dawn's platform services: Lone Echo, Echo Arena)
 PLATFORM_WRAPPERS = ("pnsovr.dll",)
 GRAPHICS = (("d3d12.dll", "D3D12"), ("d3d11.dll", "D3D11"), ("vulkan-1.dll", "Vulkan"), ("opengl32.dll", "OpenGL"))
+# bump when analyze() learns something new: folders analysed by an older version are analysed again at the next scan
+# (part of the fingerprint). 2: vr_overlay (SteamVR overlay apps), pyopenvr's libopenvr_api_64.dll
+RIFT_ANALYSIS = 2
 AMBIGUITY = 15  # a runner-up within this many points means "ask the user"
 # repacks start their bundled Revive through a proxy DLL next to the exe (Windows loads DLLs from the exe's folder
 # first)
 LOADER_DLLS = ("xinput1_3.dll", "xinput1_4.dll", "xinput9_1_0.dll", "dinput8.dll", "version.dll", "winmm.dll")
 REVIVE_DLLS = ("librevive64.dll", "librevive32.dll", "librevivexr64.dll", "librevivexr32.dll")
+# OpenVR's client library under its usual names (games ship openvr_api.dll; pyopenvr apps libopenvr_api_64.dll)
+OPENVR_DLLS = ("openvr_api64.dll", "openvr_api32.dll", "openvr_api.dll", "libopenvr_api_64.dll", "libopenvr_api_32.dll")
 
 
 class PEError(Exception):
@@ -379,7 +385,7 @@ def fingerprint(folder: Path, exe_rel: str) -> str:
     p = Path(folder) / exe_rel
     try:
         st = p.stat()
-        return f"{exe_rel}:{st.st_size}:{int(st.st_mtime)}"
+        return f"{exe_rel}:{st.st_size}:{int(st.st_mtime)}:{RIFT_ANALYSIS}"
     except OSError:
         return ""
 
@@ -423,7 +429,7 @@ def analyze(folder: Path, exe: str | None = None, tree: Tree | None = None) -> A
     # whether or not it uses them, so this alone does NOT prove the game runs on SteamVR — it only matters for routing
     # when the game has NO Oculus/LibOVR code (see frame_native below). We ignore the (universal in UE) IVRSystem/
     # VR_InitInternal string markers for exactly this reason.
-    openvr = any(d in info.imports or d in names for d in ("openvr_api64.dll", "openvr_api32.dll", "openvr_api.dll"))
+    openvr = any(d in info.imports or d in names for d in OPENVR_DLLS)
     xr = "+".join(n for n, on in (("LibOVR", libovr), ("OpenXR", openxr), ("OpenVR", openvr)) if on) or "?"
     gfx_imports = set(info.imports)
     up = exe_path.parent / "UnityPlayer.dll"
@@ -453,6 +459,7 @@ def analyze(folder: Path, exe: str | None = None, tree: Tree | None = None) -> A
         exe_dir = set()
     loader = sorted(n for n in exe_dir if n in LOADER_DLLS) if exe_dir & set(REVIVE_DLLS) else []
     mode, args, args_from = launch_mode(folder, chosen, engine, libovr, openxr, openvr, loader)
+    overlay = vroverlay.detect(folder, exe_path, data, openvr, engine)  # a SteamVR overlay app (pcvr.vr_overlay)
     canonical_hint = next((part for part in exe_path.relative_to(folder).parts[:-1]
                            if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+){2,}", part)), None)  # Oculus Software dir name
     title = (manifest or {}).get("displayName") or clean_title(folder.name)
@@ -473,6 +480,7 @@ def analyze(folder: Path, exe: str | None = None, tree: Tree | None = None) -> A
                # (SteamVR/OpenXR: run the exe directly, with launch_args) or "revive" (inject FramePort's Revive)
                "launch": mode, "loader_dlls": loader, "launch_args": args, "launch_args_from": args_from,
                "frame_native": mode == "native",
+               **overlay,
                "needs_revive": mode == "revive",
                "vr_found": xr != "?", "data_bytes": tree.size, "files": tree.files,
                # a LibRevive*.dll anywhere in the folder (see "launch" for whether the game actually starts it)

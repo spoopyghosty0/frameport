@@ -450,13 +450,44 @@ def add_from_link(manifest, path: Path, reporter: Reporter | None = None, icon: 
     return library.game(pkg)
 
 
+def is_overlay_app(entry: dict) -> bool:
+    """A SteamVR overlay app (fpsVR & co.): installed for SteamVR to draw over games; no launch test."""
+    if is_linux(entry):
+        return linux_overlay(entry) is not None
+    if not is_rift(entry) or not entry.get("recipe"):
+        return False
+    return "pcvr.vr_overlay" in library.recipe_from_dict(entry["recipe"]).patches
+
+
+def linux_overlay(entry: dict) -> dict | None:
+    """A Linux app that is a SteamVR overlay app (analysis "vr_overlay"; the entry's "vr_overlay" field turns it off,
+    "vr_overlay_autostart" = start with SteamVR, default on): the agent's overlay argument, else None."""
+    from .analysis import vroverlay
+
+    extra = (entry.get("analysis") or {}).get("extra") or {}
+    if not extra.get("vr_overlay") or entry.get("vr_overlay", True) is False:
+        return None
+    return vroverlay.install_args(extra, entry.get("vr_overlay_autostart", True) is not False)
+
+
+def rift_overlay(entry: dict, recipe) -> dict | None:
+    """pcvr.vr_overlay → the agent's overlay argument (None: not an overlay app)."""
+    from .analysis import vroverlay
+
+    if "pcvr.vr_overlay" not in recipe.patches:
+        return None
+    extra = (entry.get("analysis") or {}).get("extra") or {}
+    return vroverlay.install_args(extra, recipe.params("pcvr.vr_overlay").get("autostart", True) is not False)
+
+
 def install_linux(package: str, target: Target, reporter: Reporter, add_to_library: bool = True) -> dict:
     entry = library.game(package)
     extra = (entry.get("analysis") or {}).get("extra") or {}
     result = target.install_linux(package, steam_title(entry), Path(entry["game_dir"]), entry["exe"],
                                   extra.get("files"), bool(extra.get("appimage")), bool(extra.get("openxr")),
                                   reporter, x86_64=bool(extra.get("x86_64")),
-                                  desktop_entry=entry.get("desktop_entry", True) is not False)
+                                  desktop_entry=entry.get("desktop_entry", True) is not False,
+                                  overlay=linux_overlay(entry))
     if extra.get("x86_64"):
         reporter.check("x86 translation", True, "runs through FEX on SteamOS's x86 system (its libraries come from "
                                                  "there; not checked ahead)")
@@ -914,7 +945,8 @@ def install_rift(package: str, target: Target, reporter: Reporter, add_to_librar
     rdir = revive.revive_dir() if "pcvr.revive" in recipe.patches else None
     result = target.install_pcvr(package, title, Path(entry["game_dir"]), entry["exe"], recipe, reporter,
                                  revive_dir=rdir, revive_version=revive.installed_version() if rdir else None,
-                                 exe_sha256=entry["build"].get("sha256"), art_lookup=entry.get("quest_package"))
+                                 exe_sha256=entry["build"].get("sha256"), art_lookup=entry.get("quest_package"),
+                                 overlay=rift_overlay(entry, recipe))
     if add_to_library:
         target.add_to_library([package], reporter)
     _record_install(package, target.label, {"exe": entry["exe"], "result": result, "time": time.time()})

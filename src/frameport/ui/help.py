@@ -119,6 +119,9 @@ HELP: dict[str, str] = _Translated({
                      "Move to… moves one. Cards formatted as FAT, exFAT or NTFS can't hold games.",
     "move_game": "Copies the game and its saves to the other drive, checks the copy, then removes the old one. The "
                  "game must be closed. A game on a microSD card only starts while the card is in.",
+    "vr_overlay": "A SteamVR overlay app: SteamVR on the Frame draws it over whatever you play, Quest and PC VR "
+                  "games alike. With 'Start with SteamVR' on, SteamVR starts it by itself; otherwise start it from "
+                  "the library before the game.",
     "desktop_entry": "Adds the app to Desktop Mode's app menu and desktop. Some apps work better there with a mouse "
                      "and keyboard.",
     "adapter_settings": "Sharpness, refresh rate, controllers, menus and more for this game. Changes take effect the "

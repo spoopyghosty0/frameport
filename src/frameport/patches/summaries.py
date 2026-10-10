@@ -122,6 +122,7 @@ SUMMARIES = {
     "pcvr.oculus_unreal": "Lets Unreal games accept a headset that isn't an Oculus Rift.",
     "pcvr.revive_openvr": "On this PC, runs Revive through SteamVR (works with more headsets).",
     "pcvr.xr_timefix": "Lets games written for newer OpenXR versions run on the Frame.",
+    "pcvr.vr_overlay": "Lets SteamVR on the Frame show this overlay app over your games (and start it with SteamVR).",
     "pcvr.proton_log": "Writes a detailed Proton log for troubleshooting.",
     "pcvr.proton_tool": "Which Proton runs the game on the Frame. Stable is smoother; try Experimental if the game "
                         "doesn't start or runs badly.",

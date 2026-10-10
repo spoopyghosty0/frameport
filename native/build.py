@@ -10,7 +10,7 @@ timefix OpenXR layer for Proton games (linux-arm64, glibc; the NDK's clang build
 OculusHMDConnected helper for Rift games under Proton (win-x64 PE; the NDK's clang + lld-link, no Windows SDK), the
 live view's hardware H.264 encoder fp_venc (linux-arm64-bin, static freestanding executable), and rewrites artifacts/SHA256SUMS. Run `frameport parity` afterwards to see which games change.
 
-    python native/build.py [--only adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrshim,vkshim,zinkfix,ovrpshim,vrsettings,venc] [--ndk PATH]
+    python native/build.py [--only adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrshim,vkshim,zinkfix,ovrpshim,vrsettings,venc,vroverlay_probe] [--ndk PATH]
 """
 from __future__ import annotations
 
@@ -227,6 +227,25 @@ def build_vrsettings(tc: Path):
          f"/out:{out / 'fp_vrsettings.exe'}"])
 
 
+VROVERLAY_IMPORTS = VRSETTINGS_IMPORTS + ("Sleep",)
+
+
+def build_vroverlay_probe(tc: Path):
+    """fp_vroverlay_probe.exe (Windows x64 diagnostic, run under Proton on the Frame): does an OpenVR overlay app show
+    up? Not shipped: written to native/.cache/vroverlay_probe/ (opt-in: --only vroverlay_probe)."""
+    src = HERE / "vroverlay_probe"
+    work = CACHE / "vroverlay_probe"
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "kernel32.def").write_text("LIBRARY kernel32.dll\nEXPORTS\n" + "".join(f"    {n}\n" for n in VROVERLAY_IMPORTS))
+    run([tc / "bin/llvm-dlltool", "-m", "i386:x86-64", "-d", work / "kernel32.def", "-l", work / "kernel32.lib"])
+    run([tc / "bin/clang", "--target=x86_64-pc-windows-msvc", "-ffreestanding", "-nostdlibinc", "-fno-stack-protector",
+         "-fno-builtin", "-O2", "-Wall", "-Wextra", "-Werror", f"-ffile-prefix-map={HERE}=native", "-c",
+         "fp_vroverlay_probe.c", "-o", work / "fp_vroverlay_probe.obj"], cwd=src)
+    run([tc / "bin/lld-link", "/nologo", "/Brepro", "/nodefaultlib", "/entry:start", "/subsystem:console",
+         "/dynamicbase", "/highentropyva", "/nxcompat", work / "fp_vroverlay_probe.obj", work / "kernel32.lib",
+         f"/out:{work / 'fp_vroverlay_probe.exe'}"])
+
+
 def build_bridge(tc: Path):
     src = HERE / "vrapi-bridge"
     inc = openxr_include("bridge")
@@ -384,8 +403,10 @@ def main():
              "oculushmd": lambda: build_oculushmd(tc), "vkshim": lambda: build_vkshim(tc),
              "zinkfix": lambda: build_zinkfix(tc),
              "ovrpshim": lambda: build_ovrpshim(tc),
-             "vrsettings": lambda: build_vrsettings(tc), "venc": lambda: build_venc(tc)}
-    for name in ("adapter", "bridge", "compat", "langpack", "glshim", "eglfmt", "glmv", "ovrtrace", "xrshim", "vkshim", "zinkfix", "ovrpshim", "dex", "xrlayer", "oculushmd", "vrsettings", "venc"):
+             "vrsettings": lambda: build_vrsettings(tc), "venc": lambda: build_venc(tc),
+             "vroverlay_probe": lambda: build_vroverlay_probe(tc)}
+    for name in ("adapter", "bridge", "compat", "langpack", "glshim", "eglfmt", "glmv", "ovrtrace", "xrshim", "vkshim", "zinkfix", "ovrpshim", "dex", "xrlayer", "oculushmd", "vrsettings", "venc",
+                 "vroverlay_probe"):
         if name in parts:
             log(f"build {name}")
             steps[name]()

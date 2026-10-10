@@ -383,10 +383,10 @@ def test_linux_launcher_from_desktop_mode(monkeypatch, tmp_path):
     a = load(monkeypatch, tmp_path)
     prep, _ = linux_install(a, tmp_path)
     text = (Path(prep["anchor"]) / "launch.sh").read_text()
-    assert '[[ -n "${FRAMEPORT_DESKTOP:-}" ]] && parent=1' in text
+    assert '[[ -n "${FRAMEPORT_DESKTOP:-}${FRAMEPORT_OVERLAY:-}" ]] && parent=1' in text
     assert 'if [[ -z "${FRAMEPORT_DESKTOP:-}" && -z "${DISPLAY:-}" ]]; then' in text
     # older launchers are upgraded in place
-    old = text.replace('[[ -n "${FRAMEPORT_DESKTOP:-}" ]] && parent=1\n', "").replace(
+    old = text.replace('[[ -n "${FRAMEPORT_DESKTOP:-}${FRAMEPORT_OVERLAY:-}" ]] && parent=1\n', "").replace(
         'if [[ -z "${FRAMEPORT_DESKTOP:-}" && -z "${DISPLAY:-}" ]]; then', 'if [[ -z "${DISPLAY:-}" ]]; then')
     old = old.replace("# Started from Desktop Mode's menu (FRAMEPORT_DESKTOP=1, GitHub #84) the desktop's own session "
                       "is used.\n", "")
@@ -394,7 +394,8 @@ def test_linux_launcher_from_desktop_mode(monkeypatch, tmp_path):
     (Path(prep["anchor"]) / "launch.sh").write_text(old)
     assert "linux.true" in a.upgrade_launchers()
     new = (Path(prep["anchor"]) / "launch.sh").read_text()
-    assert '[[ -n "${FRAMEPORT_DESKTOP:-}" ]] && parent=1' in new and "FRAMEPORT_DESKTOP:-}\" && -z" in new
+    assert '[[ -n "${FRAMEPORT_DESKTOP:-}${FRAMEPORT_OVERLAY:-}" ]] && parent=1' in new
+    assert "FRAMEPORT_DESKTOP:-}\" && -z" in new
     assert subprocess.run(["bash", "-n", str(Path(prep["anchor"]) / "launch.sh")]).returncode == 0
     # the watchdog: a parent that exits ends the app, unless started from the desktop
     script = tmp_path / "app.sh"

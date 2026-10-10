@@ -579,6 +579,10 @@ class GameView:
                                               value=g.get("desktop_entry", True) is not False,
                                               on_change=self.set_desktop_entry), "desktop_entry"),
         ]
+        if extra.get("vr_overlay"):  # a SteamVR overlay app (wrist watch, fps counter, ...)
+            rows.append(C.kv(tr("SteamVR overlay"), C.switch(
+                tr("Start with SteamVR"), value=g.get("vr_overlay_autostart", True) is not False,
+                on_change=self.set_overlay_autostart), "vr_overlay"))
         return C.section(tr("What FramePort will do"), C.card(ft.Column([
             ft.Row([ft.Icon(ft.Icons.TERMINAL_ROUNDED, color=T.PC, size=T.px(18)),
                     C.body(lead, T.TEXT, weight=ft.FontWeight.W_500, expand=True)], spacing=T.S2),
@@ -595,6 +599,19 @@ class GameView:
                     C.install_state(self.g, app.frame_info) in ("installed", "outdated"):
                 app.target.set_desktop_entry(pkg, on)
             app.toast(tr("Added to Desktop Mode") if on else tr("Removed from Desktop Mode"))
+        app.run_bg(work)
+
+    def set_overlay_autostart(self, e) -> None:
+        """A Linux overlay app started by SteamVR itself (SteamVR's auto-launch): kept with the game, applied on the
+        Frame at once when it's installed there."""
+        app, pkg, on = self.app, self.package, bool(e.control.value)
+
+        def work():
+            library.upsert_game(pkg, vr_overlay_autostart=on)
+            if app.frame_state == "connected" and app.target and \
+                    C.install_state(self.g, app.frame_info) in ("installed", "outdated"):
+                app.target.set_vr_overlay(pkg, on)
+            app.toast(tr("Starts with SteamVR") if on else tr("Start it from the library"))
         app.run_bg(work)
 
     def recipe_summary(self) -> ft.Control:

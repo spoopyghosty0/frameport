@@ -237,8 +237,29 @@ class SteamvrTuning(_PcvrPatch):
         return None
 
 
-for _cls in (RepackLauncher, LaunchArgs, Revive, ReviveOpenVR, LibovrRedirect, NoCrashReporter, OculusUnreal, XrTimefix,
-             ProtonLog, ProtonTool, ProtonEnv, SteamvrTuning):
+class VrOverlay(_PcvrPatch):
+    id = "pcvr.vr_overlay"
+    title = "SteamVR overlay app (Frame)"
+    description = ("For overlay apps (fpsVR, wrist watches and other SteamVR add-ons that draw over games instead of "
+                   "being a game): FramePort registers the app with the Frame's SteamVR, which draws its overlays "
+                   "over whatever you play there, Quest and PC VR games alike. With 'start with SteamVR' on, SteamVR "
+                   "starts it by itself (also after a restart); otherwise start it from the library. It isn't "
+                   "launch-tested (it shows nothing without a game). Ignored on this PC.")
+    order = 5
+    params = [Param("autostart", "bool", True, "start with SteamVR")]
+
+    def detect(self, analysis):
+        x = analysis.extra or {}
+        if _rift(analysis) and x.get("vr_overlay"):
+            return Suggestion(True, x.get("vr_overlay_from") or "A SteamVR overlay app.", {"autostart": True})
+        return None
+
+    def applies(self, analysis) -> bool:
+        return _rift(analysis) and "OpenVR" in (analysis.xr or "")
+
+
+for _cls in (VrOverlay, RepackLauncher, LaunchArgs, Revive, ReviveOpenVR, LibovrRedirect, NoCrashReporter, OculusUnreal,
+             XrTimefix, ProtonLog, ProtonTool, ProtonEnv, SteamvrTuning):
     register(_cls)
 
 

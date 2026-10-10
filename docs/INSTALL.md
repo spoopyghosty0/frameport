@@ -190,6 +190,11 @@ the Steam library.
 - If the app needs libraries the Frame doesn't have, the game page lists them: look for a build that includes them.
 - Linux apps also appear in **Desktop Mode**'s app menu. Turn this off on the game
   page (**Desktop Mode**).
+- **SteamVR overlay apps** (a wrist watch, a performance display: programs that draw over games instead of being
+  one) are registered with the Frame's SteamVR, which shows them over whatever you play, Quest and PC VR games
+  alike. FramePort recognises them by the `.vrmanifest` file they ship. By default SteamVR starts them by itself
+  (**SteamVR overlay → Start with SteamVR** on the game page); otherwise start the app from your library before the
+  game. Windows overlay apps get the patch **SteamVR overlay app (Frame)**.
 
 ## Files on the Frame
 
