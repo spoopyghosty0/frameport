@@ -320,6 +320,11 @@ const ICON: Record<string, string> = {
   .layer :global(.cmdl) { padding: 12px 14px; border-radius: var(--radius-sm); background: #08090c; border: 1px solid var(--border);
     font: 400 13.5px/1.4 var(--font-mono); color: var(--text); overflow-x: auto; white-space: nowrap; }
   .layer :global(.small) { font-size: 12px; }
+  .layer :global(.ask) { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: var(--radius-sm);
+    background: rgba(92, 208, 230, .08); border: 1px solid rgba(92, 208, 230, .35); animation: pop .3s var(--ease-out); }
+  .layer :global(.ask div) { display: grid; gap: 2px; margin-right: auto; font-size: 13px; }
+  .layer :global(.ask div span) { color: var(--text-2); font-size: 12px; }
+  .layer :global(.ask .digits) { font: 700 22px/1 var(--font-mono); color: var(--accent); }
   .layer :global(.row) { display: flex; gap: 8px; flex-wrap: wrap; }
   .coach { position: absolute; z-index: 30; width: min(300px, calc(100% - 24px)); display: grid; gap: 8px; padding: 16px; border-radius: var(--radius-md);
     background: #1a1d26; border: 1px solid rgba(255, 138, 31, .55); box-shadow: 0 20px 50px rgba(0, 0, 0, .65), 0 0 0 4px rgba(255, 138, 31, .08);

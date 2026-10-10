@@ -226,9 +226,9 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
         + `<p class="note">Battery 82 % · ${plural(s.onFrame.size, 'game')} installed by FramePort</p>`
       : `<header class="vh"><div><h3>Connect your Steam Frame</h3><p>Once. After that FramePort finds it by itself.</p></div></header>`
         + `<div class="ways" role="radiogroup" aria-label="How to connect">`
-        + `<button class="way" data-link="wifi" aria-checked="${s.link === 'wifi'}" role="radio"><b>Wi-Fi</b><span>Same network as this PC, or the Frame’s own hotspot.</span></button>`
+        + `<button class="way" data-link="wifi" aria-checked="${s.link === 'wifi'}" role="radio"><b>Setup page</b><span>The same line on every Frame: it finds this PC on your Wi-Fi.</span></button>`
         + `<button class="way" data-link="usb" aria-checked="${s.link === 'usb'}" role="radio"><b>USB cable</b><span>A USB-C data cable. Turn on Developer Mode on the Frame first.</span></button></div>`
-        + `<button class="btn-p" data-act="show-command">Show setup command</button>`,
+        + `<button class="btn-p" data-act="show-command">Start setup</button>`,
     files: () => {
       const locs = Object.keys(s.files);
       if (!locs.includes(s.location)) s.location = locs[0];
@@ -365,7 +365,17 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
   function closeDialog() { layer.hidden = true; layer.innerHTML = ''; }
 
   function showCommand() {
-    const addr = s.link === 'usb' ? '10.86.200.234' : '192.0.2.10';
+    if (s.link !== 'usb') {  // the setup page's line: the same everywhere, the Frame finds this PC and asks
+      dialog(`<h4>Set up your Steam Frame</h4>`
+        + `<p>On the Frame: open the SteamVR dashboard → <b>Desktop</b>, then <b>Konsole</b>, and run (the same line on every Frame):</p>`
+        + `<div class="cmdl"><code>curl -sL spoopyghosty0.github.io/frameport/s | bash</code></div>`
+        + `<p class="small">It finds FramePort on your network and asks; you allow it here. This PC is “amber-otter”.</p>`
+        + `<div data-ask></div><ul class="progress" data-prog></ul>`
+        + `<div class="row"><button class="btn-p" data-act="ran">I ran it on the Frame</button><button class="btn-s" data-act="close">Close</button></div>`);
+      emit('command');
+      return;
+    }
+    const addr = '10.86.200.234';
     dialog(`<h4>Set up your Steam Frame</h4>`
       + (s.link === 'usb' ? '<p>Found the Frame on the USB cable.</p>' : '')
       + `<p>On the Frame: open the SteamVR dashboard → <b>Desktop</b>, then <b>Konsole</b>, and type:</p>`
@@ -376,7 +386,21 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
     emit('command');
   }
 
+  /** The Frame ran the setup line: it found this PC and asks; both sides show the same code. */
+  function frameAsks() {
+    const btn = layer.querySelector<HTMLButtonElement>('[data-act="ran"]');
+    if (btn) btn.disabled = true;
+    const digits = String(1000 + Math.floor(Math.random() * 9000));
+    later(() => {
+      const box = layer.querySelector('[data-ask]');
+      if (box) box.innerHTML = `<div class="ask"><div><b>steamframe wants to be set up</b><span>Allow it if the Frame shows the code ${digits}</span></div>`
+        + `<span class="digits">${digits}</span><button class="btn-p" data-act="allow-ask">Allow</button><button class="btn-s" data-act="deny-ask">Deny</button></div>`;
+      coachUpdate();
+    }, 900);
+  }
+
   function connect() {
+    layer.querySelector('[data-ask]')?.replaceChildren();
     const items = ['Frame answered the setup server', 'Developer Mode on (Steam restarts once)', 'Lepton installed', 'SSH key added'];
     const prog = layer.querySelector('[data-prog]');
     const btn = layer.querySelector<HTMLButtonElement>('[data-act="ran"]');
@@ -514,7 +538,9 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
       case 'uninstall': if (s.current) { s.onFrame.delete(s.current); toast(`${s.current} removed from the Frame (saves kept)`, 'info'); render(); } break;
       case 'endgame': endGame(); break;
       case 'show-command': showCommand(); break;
-      case 'ran': connect(); break;
+      case 'ran': if (s.link === 'usb') connect(); else frameAsks(); break;
+      case 'allow-ask': connect(); break;
+      case 'deny-ask': toast('Denied: nothing changed on the Frame', 'info'); closeDialog(); break;
       case 'close': closeDialog(); break;
       case 'live': s.live = !s.live; render(); break;
       case 'check': toast('You have the latest version', 'info'); break;
@@ -609,9 +635,9 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
   const STEPS: Step[] = [
     { title: 'You just started FramePort', text: 'The library is empty and no Frame is connected. Set up the Frame first: click <b>Steam Frame</b>.',
       target: '[data-sidebar] [data-route="frame"]', wait: 'route:frame' },
-    { title: 'Wi-Fi or a cable', text: 'Pick how the Frame connects (either works), then click <b>Show setup command</b>.',
+    { title: 'One line for every Frame', text: '<b>Setup page</b> (or a USB cable), then <b>Start setup</b>.',
       target: '[data-act="show-command"]', wait: 'command' },
-    { title: 'Type it on the Frame', text: 'On the Frame: SteamVR dashboard → Desktop → Konsole. Type the command, press Enter. Then click the button.',
+    { title: 'Run it, allow it', text: 'On the Frame: Desktop → Konsole, run the line (or paste it from the setup page). Click the button, then <b>Allow</b> when the codes match.',
       target: '.dlg', wait: 'connected' },
     { title: 'Connected', text: 'The Frame card shows the battery, the connection and later what is playing. FramePort finds the Frame again by itself.',
       target: '[data-framecard]', next: 'Next' },

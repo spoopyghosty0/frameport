@@ -28,3 +28,5 @@ site/.astro/
 site/public/media/
 site/src/assets/media/
 site/media-hq/
+site/public/s
+site/public/setup.sh

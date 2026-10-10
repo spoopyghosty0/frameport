@@ -1,0 +1,178 @@
+---
+// The setup URL's page: what to run on a new Frame, how, and what it does. The script itself is bootstrap/setup.sh
+// (served here as /s and /setup.sh by the site build); it finds FramePort, asks you to allow it, then runs the same
+// bootstrap.sh as the typed setup command.
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import { RELEASES, url } from '../../data/site';
+
+const line = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
+---
+<Layout title="Set up your Steam Frame · FramePort"
+  description="Connect a Steam Frame to FramePort: one line in the Frame's terminal finds FramePort on your PC; allow it there and the setup finishes on its own.">
+  <Nav home={false} />
+  <main class="setup">
+    <div class="wrap inner">
+      <p class="label"><b>Setup</b> Steam Frame</p>
+      <h1>Connect your Steam Frame</h1>
+      <p class="lead">Once per Frame. The same line works for every Frame and every PC: it finds FramePort on your
+        network, you allow it on the PC, and the setup finishes on its own. No address or code to type, no password.</p>
+
+      <ol class="steps">
+        <li class="st pc">
+          <span class="n">1</span>
+          <div>
+            <h2>On your PC</h2>
+            <p>Open FramePort (<a href={RELEASES}>download</a>) and click <b>Steam Frame → Start setup</b>. Keep it open:
+              it tells the network where it is while that page is open.</p>
+          </div>
+        </li>
+        <li class="st fr">
+          <span class="n">2</span>
+          <div>
+            <h2>On the Frame</h2>
+            <p>Open the <b>SteamVR dashboard → Launch a program → Desktop</b>, then the app menu → <b>System → Konsole</b>,
+              and run:</p>
+            <div class="cmd big" data-cmd>
+              <code><span class="prompt">$</span>{line}</code>
+              <button type="button" class="copy" data-copy={line}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg> <span>Copy</span></button>
+            </div>
+            <p class="small">No keyboard at hand? On the Frame, open this page in Chromium (in Steam, the <b>+</b> on the
+              taskbar installs it), tap <b>Copy</b>, then in Konsole right-click → <b>Paste</b>.</p>
+          </div>
+        </li>
+        <li class="st ok">
+          <span class="n">3</span>
+          <div>
+            <h2>Allow it on the PC</h2>
+            <p>The terminal shows a 4-digit code; FramePort shows the same one with <b>Allow</b>. Click it. The Frame
+              then turns on Developer Mode by itself (Steam restarts once) and FramePort connects within a minute.</p>
+          </div>
+        </li>
+      </ol>
+
+      <section class="term" aria-label="What the terminal shows">
+        <div class="tbar"><i></i><i></i><i></i><span>Konsole · what you'll see</span><button type="button" data-replay>↻ Replay</button></div>
+        <pre data-term></pre>
+      </section>
+
+      <section class="what">
+        <h2>What it changes on the Frame</h2>
+        <ul>
+          <li>Nothing until you click <b>Allow</b> on the PC.</li>
+          <li>Then FramePort's own setup script, the one the typed setup command runs: it lets FramePort's key in (SSH),
+            configures podman for Lepton, turns on Developer Mode with Valve's helper (no password) and asks Steam to
+            install Lepton.</li>
+          <li><a href={url('docs/frame-setup/')}>Everything it changes, and how to undo it</a> · <a href={url('setup.sh')}>Read the
+            script</a></li>
+        </ul>
+      </section>
+
+      <section class="other">
+        <h2>Other ways</h2>
+        <div class="ways">
+          <div><h3>Setup command</h3><p>FramePort → Steam Frame → <b>Use the setup command</b> shows a line with your PC's address
+            and a one-time code. Works without the project page or a network search.</p></div>
+          <div><h3>USB cable</h3><p>Turn on Developer Mode on the Frame (Steam button → Settings → System), plug it into the PC,
+            then <b>Set up with a USB cable</b>. No Wi-Fi involved.</p></div>
+          <div><h3>Valve's pairing</h3><p>With Developer Mode on, open Settings → Developer → <b>Pair new host</b> on the
+            Frame, then click <b>Connect</b> next to it in FramePort (under <b>Already set up</b>) and approve it in the
+            headset.</p></div>
+          <div><h3>Address and password</h3><p>Know the Frame's address and its desktop password? Enter them under
+            <b>Enter the address</b>.</p></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <Footer credits={false} />
+</Layout>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+    const label = b.querySelector('span')!;
+    try { await navigator.clipboard.writeText(b.dataset.copy!); label.textContent = 'Copied'; b.classList.add('done'); }
+    catch { label.textContent = 'Select and copy'; }
+    setTimeout(() => { label.textContent = 'Copy'; b.classList.remove('done'); }, 1800);
+  }));
+  // the terminal plays what setup.sh prints, so people know what to expect
+  const term = document.querySelector<HTMLElement>('[data-term]');
+  const digits = String(1000 + Math.floor(Math.random() * 9000));
+  const LINES: [number, string, string?][] = [
+    [0, '$ curl -sL spoopyghosty0.github.io/frameport/s | bash', 'tcmd'],
+    [600, '==> FramePort setup for steamframe', 'h'],
+    [300, 'Looking for FramePort on your network...'],
+    [1400, 'Found FramePort on DESKTOP-PC (192.168.1.20:8765), PC words: amber-otter'],
+    [500, '==> On your PC, FramePort asks whether to set up this Frame', 'h'],
+    [300, `   Click Allow there if it shows the code  ${digits}  (this PC: amber-otter)`, 'code'],
+    [2400, '==> Allowed. Running FramePort\'s setup from 192.168.1.20:8765', 'h'],
+    [500, '==> Authorizing the FramePort app\'s key', 'h'],
+    [400, '==> Configuring podman for Lepton', 'h'],
+    [400, '==> Turning on Developer Mode', 'h'],
+    [400, 'Steam restarts to turn it on. That closes the desktop in a few seconds...'],
+  ];
+  let timers: number[] = [];
+  const play = () => {
+    if (!term) return;
+    timers.forEach(clearTimeout); timers = [];
+    term.textContent = '';
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let t = 0;
+    for (const [delay, text, kind] of LINES) {
+      t += reduce ? 0 : delay;
+      timers.push(window.setTimeout(() => {
+        const row = document.createElement('div');
+        row.className = kind ?? '';
+        row.textContent = text;
+        term.append(row);
+      }, t));
+    }
+  };
+  document.querySelector('[data-replay]')?.addEventListener('click', play);
+  if (term) new IntersectionObserver((es, io) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); play(); } }, { threshold: .4 }).observe(term);
+</script>
+
+<style>
+  .setup { background: var(--portal-glow); padding-block: clamp(40px, 7vw, 80px) 80px; }
+  .inner { max-width: 880px; display: grid; gap: 28px; }
+  h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.05; font-weight: 800; letter-spacing: -0.03em; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .st { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 18px; padding: 22px; border-radius: var(--radius-md);
+    background: var(--surface); border: 1px solid var(--border); }
+  .st .n { font: 800 44px/0.9 var(--font-display); }
+  .pc .n { color: var(--secondary); } .fr .n { background: var(--portal); -webkit-background-clip: text; background-clip: text; color: transparent; } .ok .n { color: var(--accent); }
+  .st > div { display: grid; gap: 10px; min-width: 0; }
+  .st h2 { font-size: 22px; }
+  .st p { color: var(--text-2); }
+  .st b { color: var(--text); }
+  .small { font-size: 14px; }
+  .cmd.big code { font-size: 15px; }
+  .copy { all: unset; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); cursor: pointer;
+    background: var(--accent); color: var(--on-accent); font: 600 14px/1 var(--font-sans); transition: filter 200ms, transform 300ms var(--ease-back); }
+  .copy:hover { filter: brightness(1.08); }
+  .copy:active { transform: scale(.95); }
+  .copy.done { background: var(--ok); }
+  .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .term { border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-strong); background: #07080b; }
+  .tbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--sidebar); border-bottom: 1px solid var(--border);
+    font: 500 12px/1 var(--font-mono); color: var(--text-2); }
+  .tbar i { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-3); }
+  .tbar span { margin-left: 8px; }
+  .tbar button { all: unset; margin-left: auto; cursor: pointer; padding: 4px 8px; border-radius: 6px; color: var(--text-2); }
+  .tbar button:hover { color: var(--text); background: rgba(237, 238, 242, .06); }
+  .term pre { margin: 0; min-height: 280px; padding: 16px; font: 400 13px/1.7 var(--font-mono); color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .term :global(.tcmd) { color: var(--text); }
+  .term :global(.h) { color: #4dd2e8; font-weight: 600; }
+  .term :global(.code) { color: var(--warn); font-weight: 600; }
+  .term :global(div) { animation: tline .25s var(--ease-out); }
+  @keyframes tline { from { opacity: 0; transform: translateY(4px); } }
+  .what h2, .other h2 { font-size: 24px; margin-bottom: 10px; }
+  .what ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--text-2); }
+  .what b { color: var(--text); }
+  .ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .ways > div { padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); display: grid; gap: 6px; }
+  .ways h3 { font-size: 16px; }
+  .ways p { font-size: 14px; color: var(--text-2); }
+  .ways b { color: var(--text); }
+  @media (max-width: 600px) { .st { grid-template-columns: 1fr; gap: 8px; padding: 18px; } .cmd.big { flex-wrap: wrap; } }
+</style>

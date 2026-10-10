@@ -44,6 +44,10 @@ for (const [id, from] of [['tour', 18], ['install', 28]]) {
   console.log(r.status === 0 ? `preview ${id}` : `no preview for ${id} (ffmpeg missing or failed)`);
 }
 
+// the setup URL: bootstrap/setup.sh (tested with the app) served as /s and /setup.sh, one source for both
+copy(join(repo, 'bootstrap/setup.sh'), join(site, 'public/s'));
+copy(join(repo, 'bootstrap/setup.sh'), join(site, 'public/setup.sh'));
+
 // every image the docs pages show (docs/images → media/docs)
 let docImages = 0;
 for (const name of readdirSync(join(repo, 'docs/images'))) {

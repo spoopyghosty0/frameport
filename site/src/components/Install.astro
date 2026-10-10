@@ -48,26 +48,38 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
         <div class="body with-model">
           <div class="model"><HeadsetModel size="320px" aspect="1 / 1" /></div>
           <h3>Connect the Frame: wirelessly or with a cable</h3>
-          <div class="conn" data-conn="wifi">
+          <div class="conn" data-conn="url">
             <div class="seg" role="tablist" aria-label="How to connect">
-              <button type="button" role="tab" aria-selected="true" data-conn-btn="wifi">
+              <button type="button" role="tab" aria-selected="true" data-conn-btn="url">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1 1M14 10a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1-1"/></svg>
+                Setup page</button>
+              <button type="button" role="tab" aria-selected="false" data-conn-btn="wifi">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0M12 19h.01"/></svg>
                 Wi-Fi</button>
               <button type="button" role="tab" aria-selected="false" data-conn-btn="usb">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v14M8 7l4-4 4 4M7 11v2a2 2 0 0 0 2 2h3M17 9v4a2 2 0 0 1-2 2h-3"/><circle cx="12" cy="19" r="2"/></svg>
                 USB cable</button>
             </div>
+            <div class="for-url">
+              <p>In FramePort click <b>Steam Frame → Start setup</b>. On the Frame open the <b>SteamVR dashboard →
+                Desktop</b>, then <b>Konsole</b>, and run the same line on every Frame: it finds FramePort on your network
+                (Wi-Fi or a USB cable) and asks you to allow it on the PC.</p>
+              <div class="cmd static"><code><span class="prompt">$</span>curl -sL spoopyghosty0.github.io/frameport/s | bash</code>
+                <button type="button" class="btn btn-ghost btn-small" data-copy-line="curl -sL spoopyghosty0.github.io/frameport/s | bash">Copy</button></div>
+              <p class="small-p">No address or code to type. <a href={url('setup/')}>The setup page</a>, with copy-paste from the
+                Frame's own browser and every other way.</p>
+            </div>
             <p class="for-wifi">Keep the Frame and this computer on the same Wi-Fi, or join the Frame's own hotspot. In
               FramePort click <b>Steam Frame → Show setup command</b>.</p>
             <p class="for-usb">On the Frame turn on Developer Mode (<b>Steam button → Settings → System → Enable Developer
               Mode</b>) and connect its USB-C port to this computer with a data cable. In FramePort click <b>Steam Frame →
               Set up with a USB cable</b>; it finds the Frame on the cable by itself. No router, no firewall question.</p>
-            <p>On the Frame open the <b>SteamVR dashboard → Desktop</b>, then <b>Konsole</b>, and type the command FramePort
+            <p class="for-line">On the Frame open the <b>SteamVR dashboard → Desktop</b>, then <b>Konsole</b>, and type the command FramePort
               shows:</p>
-            <div class="cmd explain" data-cmd>
+            <div class="cmd explain for-line" data-cmd>
               <code><span class="prompt">$</span><span class="tok" tabindex="0" data-tip="Downloads the setup script from FramePort on your computer.">curl</span> <span class="tok" tabindex="0" data-tip="Quietly, and stops on any error instead of running half a script.">-fsS</span> <span class="tok ph" tabindex="0" data-tip="Your computer on the network. Over the cable it is always 10.86.200.234."><span class="for-wifi">&lt;pc-address&gt;</span><span class="for-usb">10.86.200.234</span></span><span class="tok" tabindex="0" data-tip="The port of FramePort's setup server, open only while the setup command is shown.">:8765</span><span class="tok ph" tabindex="0" data-tip="A one-time code: the server answers only this Frame, once.">/&lt;code&gt;</span> <span class="tok" tabindex="0" data-tip="Runs it: SSH key, Developer Mode, Lepton. Read it in bootstrap/bootstrap.sh.">| bash</span></code>
             </div>
-            <p class="tip" data-tip-out aria-live="polite">Point at a part of the command to see what it does.</p>
+            <p class="tip for-line" data-tip-out aria-live="polite">Point at a part of the command to see what it does.</p>
             <p class="small-p">No root, no <code>sudo</code>, no password. <a href={url('docs/frame-setup/')}>What it changes on
               the Frame</a> · <a href={blob('bootstrap/bootstrap.sh')}>The script</a></p>
           </div>
@@ -116,7 +128,11 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
     d.addEventListener('pointerenter', () => setFirst(d)); d.addEventListener('focus', () => setFirst(d));
     d.addEventListener('pointerleave', () => setFirst(mine()));
   });
-  // Wi-Fi or USB cable
+  document.querySelectorAll<HTMLButtonElement>('[data-copy-line]').forEach((b) => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copyLine!); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy'; }
+    setTimeout(() => { b.textContent = 'Copy'; }, 1600);
+  }));
+  // setup page, Wi-Fi command or USB cable
   const conn = document.querySelector<HTMLElement>('[data-conn]');
   conn?.querySelectorAll<HTMLButtonElement>('[data-conn-btn]').forEach((b) => b.addEventListener('click', () => {
     conn.dataset.conn = b.dataset.connBtn!;
@@ -164,7 +180,10 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
     font: 600 14px/1 var(--font-sans); color: var(--text-2); transition: background-color 220ms, color 220ms; }
   .seg button[aria-selected="true"] { color: var(--on-accent); background: var(--accent); }
   .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  [data-conn="wifi"] .for-usb, [data-conn="usb"] .for-wifi { display: none; }
+  [data-conn="wifi"] .for-usb, [data-conn="usb"] .for-wifi, [data-conn="url"] :is(.for-wifi, .for-usb, .for-line),
+  :not([data-conn="url"]) > .for-url { display: none; }
+  .for-url { display: grid; gap: 12px; }
+  .cmd.static code { font-size: 14px; }
   .explain code { white-space: nowrap; }
   .tok { border-radius: 4px; padding: 1px 2px; cursor: help; transition: background-color 150ms, color 150ms, box-shadow 150ms; }
   .tok:hover, .tok:focus-visible, .tok.lit { outline: none; background: rgba(255, 138, 31, .18); color: var(--text); box-shadow: 0 0 0 1px rgba(255, 138, 31, .5); }

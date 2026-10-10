@@ -10,6 +10,7 @@ on:
     paths:
       - 'site/**'
       - 'catalog/games/**'
+      - 'bootstrap/setup.sh'
       - 'docs/images/**'
       - 'docs/media/**'
       - 'docs/badges/**'
