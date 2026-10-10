@@ -586,6 +586,10 @@ class FramePortApp:
             self.stop_keyboard()  # leaving the tab removes the virtual keyboard from the Frame
         if self.route[0] == "monitor" and route != "monitor":
             self.stop_monitor()  # leaving the tab ends the Frame's monitor stream
+        if route == "frame" and self.route[0] != "frame":
+            from ..frame import autopair
+
+            autopair.rescan_soon()  # the user looks for a Frame: the automatic pairing's scan stops backing off
         self.route = (route, *args)
         self.render()
 
