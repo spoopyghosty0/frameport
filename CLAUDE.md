@@ -491,6 +491,15 @@ fail-fasts without it), Wine's DeviceWatcher add/remove_Updated/Removed implemen
 (`\\?\Volume{...0043}`) linked in dosdevices. Copying the logged-in `sessions/` + CoreData to the Frame prefix kept the
 login. **Oculus First Contact then ran in VR on the Frame** (Revive in OpenVR mode; `/openxr` failed in wineopenxr):
 scene app at 72 Hz target, but 92 % of frames "timed out" (game CPU-bound under FEX) → stutter/flicker/lag.
+Performance (2026-10-10, headless with patched Revive visibility + SteamVR `pauseCompositorOnStandby=false`, numbers from
+`IVRCompositor::GetFrameTimings`): the frame loop waited on sync round trips through the FEX-run x86_64 wineserver.
+`native/fexwine/`: a **native aarch64 wineserver** built from GE's exact source (protocol 938) + **ntsync** (works once
+OVRLibrarian is ended) took hitches 17 → 0-4 per 20 s. The rest were Unreal's large-block allocator committing,
+filling (one `rep stos`) and freeing 514 MB every 1-8 s: ~130k 4 KB page faults each under FEX. `fp_mem.so`
+(`FP_BIGCACHE_MB=256`, guest preload via `FEX_ENV=LD_PRELOAD=…`: fex-compat-tool deletes LD_PRELOAD) keeps that block
+→ 0 hitches, steady 36 fps + motion smoothing, ~5.5 % timed out. 72 fps would need ~30 % less GPU (game ~55 % busy
+at 36 fps); THP (fragmentation), MSAA off, Turnip gmem don't help. Also needed: Unreal's
+`Slate.DeferWindowsMessageProcessing` = 0 (exe patch; the default deadlocks Wine's IME window ~1/3 of starts).
 Uninstall (Quest, saves kept) used to leave `deployment.json` → still "installed"; fixed (agent v16).
 
 **Discovery/network:** Developer-Mode SteamOS devices announce `_steamos-devkit._tcp` (TXT `login=steamos`) — use it;
