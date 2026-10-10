@@ -24,6 +24,8 @@ FramePort's own native code (the FrameBridge adapter, GL/Vulkan/OpenXR shims, th
 | Eclipse Temurin JRE | api.adoptium.net | GPL-2.0 with Classpath Exception |
 | apksigner (Android build-tools) | dl.google.com Android repository | Apache-2.0 |
 | Revive (portable copy, only if Revive isn't installed) | github.com/LibreVR/Revive releases | GPL-3.0 |
+| AXRB / Android XR Bridge (official installer, only when a Quest game is installed on this PC; run unmodified) | github.com/Android-XR-Bridge/AXRB releases | mixed: launcher GPL-3.0-or-later, host/clock code AXRB Source-Available License 1.0, other parts MIT (AXRB's `LICENSE`) |
+| Android Emulator, platform-tools, build-tools, Android 16 system image (pinned by AXRB) | dl.google.com Android repository | Android SDK License |
 
 Valve's Lepton, Proton and SteamVR, and Meta's software, are used on your devices as installed by Steam / Meta;
 FramePort doesn't distribute them.

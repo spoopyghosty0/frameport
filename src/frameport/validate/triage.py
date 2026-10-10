@@ -94,11 +94,13 @@ def split_suggestion(s: str) -> tuple[str, str | None]:
 
 
 def triage(log: str, state: str = "UNKNOWN", package: str | None = None, crash: str = "",
-           kernel: str = "") -> TriageResult:
+           kernel: str = "", kind: str | None = None) -> TriageResult:
     """`crash` = the container's crash logcat (tombstones come from crash_dump's pid, so it isn't pid-filtered);
-    `kernel` = kernel log lines of a play session ("kernel: …", GPU hangs; agent session_log)."""
+    `kernel` = kernel log lines of a play session ("kernel: …", GPU hangs; agent session_log). `kind`: which
+    signatures apply ("quest" Lepton logcat, "pcvr" Proton/Revive, "axrb" a Quest game on this PC); default from
+    the package."""
     db = database()
-    kind = "pcvr" if package and package.startswith("rift.") else "quest"  # Proton/Revive logs vs Lepton logcat
+    kind = kind or ("pcvr" if package and package.startswith("rift.") else "quest")
     lines = game_lines(log, package) if kind == "quest" else [ANSI.sub("", ln) for ln in log.splitlines()]
     lines += [ANSI.sub("", ln) for ln in crash.splitlines()]
     lines += [ANSI.sub("", ln) for ln in kernel.splitlines()]

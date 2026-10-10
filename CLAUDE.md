@@ -79,6 +79,23 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     `launcher` field, else text swap), list_installed `drive`/`drive_missing` (install_state keeps such games
     "installed"). PC: `install/drives.py`, library setting `install.drive` (Frame page → Storage), game menu
     "Move to…" (job kind tool-frame), CLI `frame drives`/`frame move`/`install --dest`. Untested on the device.
+  - **Quest games on this PC via AXRB** (experimental, branch `worktree-pc-android-axrb`, docs/PC_ANDROID.md): the
+    "This PC" target (`PcReviveTarget`) installs APKs through `targets/pc_android.py` + `tools/axrb.py`. AXRB
+    (Android-XR-Bridge/AXRB, Windows: x86_64 Android 16 emulator + libndk_translation + its own OpenXR runtime →
+    `axrb-host-bridge.exe` → SteamVR) is downloaded only on first use (`AXRB-Setup-<v>.exe /S`, SHA256SUMS, per user
+    → `%LOCALAPPDATA%\Programs\axrb-launcher`), never bundled/modified (host code: AXRB Source-Available License).
+    Its runtime setup lives only in AXRB's Electron JS, so FramePort repeats it (pins read from the installed
+    `app.asar` `core/components.json`, AVD `axrb-managed-api36` port 5584, adb `-P 5038`, receipts `ready.json`/
+    `license-acceptance.json`, so AXRB's own launcher shares it). Spike 2026-10-10 (headless): **unconverted APKs
+    abort** (Meta platform loader) → PC build = OVRPort patches + `Patch.on_pc` APK fixes (`base.pc_selection`,
+    `build(pc=True)`, library `build_pc`, `pc_recipe_fingerprint`); Lucky's Tale ran a full OpenXR session in AXRB's
+    runtime; Pinball FX VR crashed in gfxstream vkAllocateMemory (AXRB's layer). SteamVR can't stand in for a headset
+    (null driver: no D3D11 adapter; vrlink without a Frame: no instance) → frames need the owner. Play = Steam
+    shortcut `powershell.exe -File %LOCALAPPDATA%\FramePort\axrb\fp-axrb-run.ps1 -Package …` → AXRB's
+    `run_windows_game.ps1`; all such shortcuts share Exe, so agent v71 `upsert/remove_shortcut(options_key=
+    "-Package <pkg> ")`. AXRB scripts start through WMI (`axrb.spawn_detached`): QEMU/adb inherit any handle, and
+    even /dev/null through WSL interop kept the call hanging; PowerShell 5.1 `*>>` logs are UTF-16 (`read_log`). Triage
+    `kind: axrb`. Full uninstall in AXRB deletes OBB + saves; a signature change needs one.
   - **PC VR repacks are pre-patched to run directly** (proven: Rick and Morty, Vader Immortal run when the exe is
     launched directly; Revive breaks them). So Rift games default to `as_is` = install the copy unchanged and launch
     the exe directly (`pcvr.xr_timefix` for the Frame OpenXR-1.1→1.0 fix, `pcvr.no_crash_reporter` for Unreal).

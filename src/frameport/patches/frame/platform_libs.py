@@ -29,6 +29,7 @@ class PlatformCompat(Patch):
                    "skipped.")
     order = 30
     default_on = True
+    on_pc = True
 
     def detect(self, a):
         return Suggestion(True, "Applied automatically when the OVRPort build needs it.")
@@ -52,6 +53,7 @@ class OvrStubs(Patch):
                    "'cannot locate symbol ovr_...'. Online/store features stay unavailable.")
     order = 31
     default_on = True
+    on_pc = True  # missing Meta platform symbols crash the game in any Android, not only on the Frame
 
     def detect(self, a):
         return Suggestion(True, "Applied automatically when the OVRPort build needs it.")

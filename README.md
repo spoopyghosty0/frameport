@@ -117,7 +117,8 @@ recipe for you) or **Report a problem…** (attaches a diagnostics zip with pers
 
 [OVRPort](https://github.com/Android-XR-Bridge/OVRPort) (Quest → OpenXR, originally
 [ovrport/app](https://github.com/ovrport/app)) · Valve Lepton, Proton and SteamVR ·
-[Revive](https://github.com/LibreVR/Revive) · Mesa (Zink) · [Khronos OpenXR SDK](https://github.com/KhronosGroup/OpenXR-SDK)
+[Revive](https://github.com/LibreVR/Revive) · [AXRB](https://github.com/Android-XR-Bridge/AXRB) (Quest games on a PC,
+experimental) · Mesa (Zink) · [Khronos OpenXR SDK](https://github.com/KhronosGroup/OpenXR-SDK)
 · Eclipse Temurin, Android apksigner and NDK · [Flet](https://flet.dev) · OculusDB and Steam store data.
 What FramePort adds itself: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

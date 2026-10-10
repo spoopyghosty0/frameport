@@ -1,5 +1,6 @@
-"""PC VR target: Oculus Rift games run on this Windows PC through Revive (LibOVR -> OpenXR/SteamVR), with a non-Steam
-shortcut in the local Steam library (play on the Frame by streaming from Steam/SteamVR).
+"""PC target ("This PC"): Oculus Rift games run on this Windows PC through Revive (LibOVR -> OpenXR/SteamVR), Quest
+games through AXRB (targets/pc_android.py), each with a non-Steam shortcut in the local Steam library (play on the
+Frame by streaming from Steam/SteamVR).
 
 Works on native Windows and from WSL (Windows programs via interop). Revive is FramePort's portable copy
 (tools/revive.py), so nothing is installed system-wide. Nothing is copied: the shortcut points at the game folder.
@@ -18,7 +19,9 @@ from ..core.events import Reporter
 from ..core.models import Recipe
 from ..core.paths import agent_file, user_data_dir
 from ..patches.pcvr import game_args
+from ..tools import axrb
 from ..validate.triage import triage
+from . import pc_android
 from .base import Target
 
 TAG = "FramePort PC VR"  # marks the Steam shortcuts FramePort made (for updates and cleanup)
@@ -61,8 +64,20 @@ def pc_dir() -> Path:
     return path
 
 
+def is_android(dep: dict) -> bool:
+    """A Quest game installed on this PC (AXRB), not a Rift game."""
+    return dep.get("kind") == pc_android.KIND
+
+
+def options_key(dep: dict) -> str | None:
+    """Quest games on this PC share their shortcut Exe (powershell.exe): their shortcut is also matched by this."""
+    return f"-Package {dep['package']} " if is_android(dep) else None
+
+
 def shortcut_fields(dep: dict) -> tuple[str, str, str]:
     """(Exe, StartDir, LaunchOptions) for the Steam shortcut of an installed game."""
+    if is_android(dep):
+        return pc_android.shortcut_fields(dep)
     exe_win = dep["exe_win"]
     start = '"' + exe_win.rsplit("\\", 1)[0] + '\\"'
     extra = " ".join(dep.get("game_args") or [])
@@ -106,6 +121,7 @@ class PcReviveTarget(Target):
             "steamvr": bool(root and winhost.app_installed(root, winhost.STEAMVR_APPID)),
             "revive": str(revive.revive_dir()) if revive.revive_dir() else None,
             "revive_version": revive.installed_version(),
+            "axrb": axrb.status(),
             "installed": self.installed(),
         }
 
@@ -116,7 +132,7 @@ class PcReviveTarget(Target):
                 dep = json.loads(f.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
-            dep["apk_present"] = Path(dep.get("exe_local", "")).exists()
+            dep["apk_present"] = True if is_android(dep) else Path(dep.get("exe_local", "")).exists()
             out.append(dep)
         return out
 
@@ -131,7 +147,8 @@ class PcReviveTarget(Target):
         log_path = (winhost.env_path("LOCALAPPDATA") or Path("/nonexistent")) / REVIVE_LOG
         if log_path.exists():
             files["ReviveInjector.txt"] = log_path.read_text(encoding="utf-8", errors="replace")[-(2 << 20):]
-        out = {"host": {"steamvr_running": winhost.steamvr_running()}, "files": files}
+        files.update({f"axrb/{name}": text for name, text in pc_android.game_logs().items()})
+        out = {"host": {"steamvr_running": winhost.steamvr_running(), "axrb": axrb.status()}, "files": files}
         if package:
             try:
                 files["deployment.json"] = json.dumps(self._dep(package), indent=1)
@@ -142,7 +159,12 @@ class PcReviveTarget(Target):
 
     # ------------------------------------------------------------------ install
     def install(self, package, title, apk, data_dir, recipe, reporter, apk_only=False, data_files=None):
-        raise NotImplementedError("Quest (APK) games install on the Steam Frame, not on the PC")
+        """A Quest game (its build for this PC) into AXRB's Android emulator."""
+        if not self.steam:
+            raise RuntimeError("Steam for Windows was not found on this PC")
+        return pc_android.install(package, title, Path(apk), Path(data_dir) if data_dir else None, recipe, reporter,
+                                  apk_only, data_files, record_dir=pc_dir() / package,
+                                  appid=_vdf().shortcut_appid)
 
     def install_pcvr(self, package, title, game_dir, exe, recipe: Recipe, reporter: Reporter, **extra):
         from ..tools import revive
@@ -204,7 +226,7 @@ class PcReviveTarget(Target):
                 try:
                     dep = self._dep(pkg)
                     exe, start, opts = shortcut_fields(dep)
-                    entry = library.game(pkg) or {"kind": "rift"}
+                    entry = library.game(pkg) or ({"package": pkg} if is_android(dep) else {"kind": "rift"})
                     if not sources.has_art(pkg):
                         artwork.fetch(pkg, lookup=dep.get("art_lookup"))
                     art = steam_set_for(pkg)
@@ -215,13 +237,13 @@ class PcReviveTarget(Target):
                             old.unlink(missing_ok=True)
                         reporter.log(f"removed the old Steam entry for {dep['title']} (its launch command changed)")
                     ident = vdf_mod.shortcut_appid(exe, dep["title"])
-                    icon = dep["exe_win"]
+                    icon = dep.get("exe_win") or ""
                     if "icon" in art:  # Steam wants a local path for the shortcut icon
                         icon_path = grid / f"{ident}_icon.png"
                         shutil.copy(art["icon"], icon_path)
                         icon = winhost.to_windows(icon_path)
                     got = vdf_mod.upsert_shortcut(str(vdf), exe, dep["title"], start, icon, TAG, opts,
-                                                  tags=steam_tags(entry, "pc"))
+                                                  tags=steam_tags(entry, "pc"), options_key=options_key(dep))
                     for kind, f in art.items():
                         suffix = {"portrait": "p", "landscape": "", "hero": "_hero", "logo": "_logo"}.get(kind)
                         if suffix is None:
@@ -248,7 +270,7 @@ class PcReviveTarget(Target):
         if not root or not dep.get("appid"):
             raise RuntimeError("Steam or the game's Steam shortcut wasn't found on this PC")
         vr = winhost.start_steamvr(root)  # Revive binds to SteamVR; without it the game falls back to flatscreen
-        tuning = self._tune(root, dep) if vr else None
+        tuning = self._tune(root, dep) if vr and not is_android(dep) else None
         winhost.start_detached(root / "steam.exe", [f"steam://rungameid/{(int(dep['appid']) << 32) | 0x02000000}"])
         return {"package": package, "title": dep.get("title"), "steamvr": vr, "tuning": tuning}
 
@@ -267,8 +289,10 @@ class PcReviveTarget(Target):
         return result
 
     def launch_test(self, package, reporter, seconds=45):
-        reporter.stage("Launch test (this PC)")
         dep = self._dep(package)
+        if is_android(dep):
+            return pc_android.launch_test(dep, reporter, seconds, triage)
+        reporter.stage("Launch test (this PC)")
         image = Path(dep["exe_local"]).name
         if winhost.process_running(image):
             raise RuntimeError(f"{dep['title']} is already running")
@@ -320,9 +344,11 @@ class PcReviveTarget(Target):
             vdf = root / "userdata" / user / "config" / "shortcuts.vdf"
             was_running = winhost.stop_steam(root)
             try:
-                removed = _vdf().remove_shortcut(str(vdf), shortcut_fields(dep)[0])
+                removed = _vdf().remove_shortcut(str(vdf), shortcut_fields(dep)[0], options_key(dep))
             finally:
                 if was_running:
                     winhost.start_steam(root)
+        android_removed = pc_android.uninstall(dep, keep_data) if is_android(dep) else None
         shutil.rmtree(pc_dir() / package, ignore_errors=True)
-        return {"removed": True, "shortcut_removed": removed, "kept_saves": True}
+        return {"removed": True, "shortcut_removed": removed, "kept_saves": keep_data or not is_android(dep),
+                **({"android_removed": android_removed} if is_android(dep) else {})}

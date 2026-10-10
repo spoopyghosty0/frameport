@@ -456,7 +456,38 @@ signatures:
     diagnosis: FrameBridge couldn't emulate an Android video panel (XR_KHR_android_surface_swapchain); the panel stays
       empty, and a game waiting for its intro video may stay black (e.g. I Am Monkey's intro).
     suggest: []
+  # ---- Quest games on this PC (AXRB, docs/PC_ANDROID.md): AXRB's host.err/session.json + guest log
+  - id: axrb-no-headset
+    kind: axrb
+    pattern: 'failed to find D3D11 adapter requested by OpenXR runtime|xrCreateInstance failed: XR_ERROR_RUNTIME_FAILURE'
+    severity: fatal
+    diagnosis: The PC's OpenXR runtime (SteamVR) has no headset to show the game on, so AXRB's bridge couldn't open its VR session. Connect the headset (Steam Link / cable) and let SteamVR show it before starting the game.
+    suggest: []
+  - id: axrb-host-not-ready
+    kind: axrb
+    pattern: 'Host pose server did not become ready|Host failed to start'
+    severity: fatal
+    diagnosis: AXRB's Windows bridge (axrb-host-bridge.exe) didn't start, so the game was never launched. Its reason is in host.err (diagnostics); a missing headset is the usual one.
+    suggest: []
+    report: true
+  - id: axrb-gfxstream-crash
+    kind: axrb
+    pattern: 'vulkan\.ranchu\.so \(gfxstream::vk::'
+    severity: fatal
+    diagnosis: The game crashed inside the Android emulator's Vulkan driver (gfxstream), reached through AXRB's runtime layer (e.g. Pinball FX VR at its first Vulkan allocations). That's AXRB's GPU path, not FramePort's build - report it to AXRB with the diagnostics.
+    suggest: []
+    report: true
+  - id: axrb-translation-crash
+    kind: axrb
+    pattern: 'libndk_translation\.so \(berberis::|DEBUG\s*:.*#00 pc \S+\s+/system/lib64/libndk_translation\.so'
+    severity: fatal
+    diagnosis: The game crashed in Android's ARM translation (libndk_translation), which runs Quest games' arm64 code on the PC's x86 CPU (known for some Unity games, AXRB issue #9). Nothing to patch in the game; AXRB plans another translator.
+    suggest: []
 milestones:  # progress markers, in order; the furthest one reached is reported
+  - {id: axrb-host, kind: axrb, pattern: 'AXRB TCP: listening', label: AXRB bridge started}
+  - {id: axrb-runtime, kind: axrb, pattern: 'AXRB\.PoseClient|Got runtime: package: com\.axrb\.openxrruntime', label: AXRB's OpenXR runtime loaded}
+  - {id: axrb-instance, kind: axrb, pattern: 'xrCreateInstance\(\) succeeded|LoaderInstance::CreateInstance succeeded', label: OpenXR instance created}
+  - {id: axrb-frames, kind: axrb, pattern: 'AXRB\.Perf end-frame', label: Submitting frames}
   - {id: pcvr-launch, kind: pcvr, pattern: 'FramePort: launching|Launched injector with', label: Launcher started}
   - {id: pcvr-oculus-hmd, kind: pcvr, pattern: 'FramePort oculushmd: OculusHMDConnected event ready', label: Oculus headset event provided}
   - {id: pcvr-inject, kind: pcvr, pattern: 'Succesfully injected|Successfully injected', label: Revive injected into the game}

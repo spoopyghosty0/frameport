@@ -635,10 +635,11 @@ class FramePortApp:
         frame_opt = (frame_label, ft.Icons.VIEW_IN_AR_ROUNDED, lambda e: self.install(pkg, "frame"), False, None) \
             if connected else (tr("Connect your Frame"), ft.Icons.LINK_ROUNDED, lambda e: self.go("frame"), False,
                                tr("Set up the connection to your Steam Frame first"))
-        if g.get("kind") != "rift":
+        if not pipeline.pc_installable(g):
             return [frame_opt]
         from ..core import winhost
 
+        rift = g.get("kind") == "rift"
         on_pc = pkg in self.pc_installs()
         stale = on_pc and C.pc_outdated(g, self.pc_installs()[pkg])
         pc_label = (tr("Update on this PC") if stale else tr("Reinstall on this PC") if on_pc
@@ -646,8 +647,11 @@ class FramePortApp:
         pc_opt = (pc_label,
                   ft.Icons.COMPUTER_ROUNDED, lambda e: self.install(pkg, "pc"), not winhost.available(),
                   tr("The launch settings changed since it was installed: update the Steam shortcut") if stale else
-                  None if winhost.available() else tr("Needs Windows (or WSL on Windows)"))
-        return [frame_opt, pc_opt] if connected or not winhost.available() else [pc_opt, frame_opt]
+                  tr("Needs Windows (or WSL on Windows)") if not winhost.available() else
+                  None if rift else C.HELP["pc_android"])
+        # Quest games: the Frame stays the main place (the PC path through AXRB is experimental)
+        pc_first = not connected and winhost.available() and (rift or on_pc)
+        return [pc_opt, frame_opt] if pc_first else [frame_opt, pc_opt]
 
     def play_options(self, g: dict) -> list[tuple]:
         """[(label, icon, on_click, disabled, tooltip)] for where the game is installed and can be started now."""
@@ -656,10 +660,11 @@ class FramePortApp:
         if self.frame_state == "connected" and C.install_state(g, self.frame_info) in ("installed", "outdated"):
             out.append((tr("Play on Frame"), ft.Icons.PLAY_ARROW_ROUNDED, lambda e: self.play(pkg, "frame"), False,
                         tr("Starts the game through the Frame's Steam — put the headset on")))
-        if g.get("kind") == "rift" and pkg in self.pc_installs() and \
+        if pipeline.pc_installable(g) and pkg in self.pc_installs() and \
                 not ((g.get("analysis") or {}).get("extra") or {}).get("flat"):
             out.append((tr("Play on this PC"), ft.Icons.PLAY_ARROW_ROUNDED, lambda e: self.play(pkg, "pc"), False,
-                        tr("Starts the game through Steam on this PC (SteamVR + Revive)")))
+                        tr("Starts the game through Steam on this PC (SteamVR + Revive)") if g.get("kind") == "rift"
+                        else tr("Starts the game through Steam on this PC (SteamVR + AXRB's Android)")))
         return out
 
     PLAY_COOLDOWN = 20  # s: a second Play while Steam/Lepton still start the game only gets Steam's AppError_16
@@ -779,7 +784,7 @@ class FramePortApp:
                         self.play_options(g) + self.install_options(g) if handler and not disabled]
                 on_frame = self.frame_state == "connected" and \
                     C.install_state(g, self.frame_info) in ("installed", "outdated")
-                on_pc = rift and pkg in self.pc_installs()
+                on_pc = pipeline.pc_installable(g) and pkg in self.pc_installs()
                 if on_frame:
                     out.append((tr("Launch test on Frame"), ft.Icons.SCIENCE_OUTLINED,
                                 lambda e: self.test_game(pkg, "frame")))
@@ -896,7 +901,7 @@ class FramePortApp:
 
         games = [library.game(p) for p in pkgs]
         games = [g for g in games if g and not self.jobs.busy_with(g["package"])]
-        skipped = [g for g in games if to == "pc" and g.get("kind") != "rift" or
+        skipped = [g for g in games if to == "pc" and not pipeline.pc_installable(g) or
                    not allow_blocked and g.get("kind") != "rift"
                    and (g.get("recipe") or {}).get("status") == "unsupported"]
         games = [g for g in games if g not in skipped]
@@ -913,10 +918,40 @@ class FramePortApp:
             else:
                 ask_frame_oculus()
 
+        def ask_axrb():
+            # Quest games on this PC: AXRB (+ its Android) is downloaded on first use only, after asking
+            quest = [g for g in games if g.get("kind") != "rift"]
+            if not quest:
+                return ask_obb()
+            from ..tools import axrb
+
+            try:
+                ready = bool(axrb.app_dir()) and axrb.setup_state()["ready"]
+            except Exception:  # noqa: BLE001 - unknown: ask
+                ready = False
+            if ready:
+                return ask_obb()
+            pick = C.one_choice()
+
+            def ok(e):
+                self.page.pop_dialog()
+                ask_obb()
+            self.page.show_dialog(ft.AlertDialog(
+                title=ft.Text(tr("Set up Quest games on this PC?"), weight=ft.FontWeight.W_600),
+                content=ft.Container(C.body(
+                    C.HELP["pc_android"] + "\n\n" +
+                    tr("FramePort installs AXRB from its official release (per user, no administrator rights) and "
+                       "Google's Android emulator files. AXRB is a separate program with its own licence; "
+                       "you can remove it later from Windows' app list.")), width=T.px(520)),
+                bgcolor=T.SURFACE_2, shape=ft.RoundedRectangleBorder(radius=T.RADIUS),
+                modal=True, on_dismiss=pick(closed),
+                actions=[C.ghost(tr("Cancel"), on_click=pick(cancel)),
+                         C.primary(tr("Download and install"), on_click=pick(ok))]))
+
         def ask_frame_oculus():
             # Installing an Oculus/LibOVR Rift game on the Frame: warn that it needs Revive (which can't run there)
             if to != "frame":
-                return ask_obb()
+                return ask_axrb()
             oculus = [g for g in games if g.get("kind") == "rift"
                       and "pcvr.revive" in (g.get("recipe") or {}).get("patches", {})]
             if not oculus:
@@ -1164,7 +1199,7 @@ class FramePortApp:
             self._record(pkg, to=to, state="running")
             as_is = library.recipe_from_dict(library.game(pkg)["recipe"]).as_is
             rep.stage("Checking the game" if rift or as_is else "Patching the game")
-            info = pipeline.build_game(pkg, rep)
+            info = pipeline.build_game(pkg, rep, pc=to == "pc")
             if not info["ok"]:
                 raise RuntimeError(tr("the game didn't pass its checks (see the list above)"))
             rep.check_cancel()
@@ -1198,7 +1233,7 @@ class FramePortApp:
         """[(package, "frame" | "pc")] installs with an update ready (a newer build or changed patch settings)."""
         out = []
         frame_ok = self.frame_state == "connected"
-        pc = self.pc_installs() if any(g.get("kind") == "rift" for g in library.games()) else {}
+        pc = self.pc_installs()
         for g in library.games():
             pkg = g["package"]
             if self.jobs.busy_with(pkg):
@@ -1421,7 +1456,7 @@ class FramePortApp:
 
     def _diag_target(self, pkg: str | None):
         g = library.game(pkg) if pkg else None
-        if g and g.get("kind") == "rift" and pkg in self.pc_installs() and \
+        if g and pipeline.pc_installable(g) and pkg in self.pc_installs() and \
                 C.install_state(g, self.frame_info) not in ("installed", "outdated"):
             return self._target_for("pc")
         return self.target if self.frame_state == "connected" else None

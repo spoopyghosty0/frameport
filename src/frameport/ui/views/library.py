@@ -480,7 +480,7 @@ class LibraryView:
         has_rift = any(g.get("kind") == "rift" for g in games)
         platforms = platform_filter_options(games)
         where = [("all", tr("All")), ("frame", tr("On Frame")), ("none", tr("Not installed"))]
-        if has_rift:
+        if has_rift or n_pc:  # Quest games can be on this PC too (AXRB)
             where.insert(2, ("pc", tr("On this PC")))
         # the filters wrap onto a second line in a narrow window; count and sort stay on the right
         left = ft.Row([

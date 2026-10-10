@@ -45,6 +45,7 @@ class SwapchainLimit(Patch):
                    "the Frame's runtime (8192 px max) decides instead.")
     order = 45
     default_on = True
+    on_pc = True  # the guard is in OVRPort's dispatcher, which every OVRPort build carries
 
     def detect(self, a):
         video = sorted(lib for lib in a.libs if lib.lower().startswith(VIDEO_LIBS))

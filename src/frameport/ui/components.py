@@ -131,9 +131,14 @@ def recipe_changed(game: dict) -> bool:
 
 
 def pc_outdated(g: dict, dep: dict) -> bool:
-    """A PC install whose launch settings (pcvr patches + their parameters) differ from the game's recipe now."""
+    """A PC install whose launch settings (pcvr patches + their parameters) differ from the game's recipe now. Quest
+    games (AXRB): the patches of their build for this PC."""
     installed = set((dep.get("recipe") or {}).get("patches") or [])
     want = set((g.get("recipe") or {}).get("patches") or {})
+    if dep.get("kind") == "android":
+        from ..patches.base import pc_selection
+
+        return installed != set(pc_selection({p: {} for p in want}))
     from ..core.library import recipe_from_dict
     from ..patches.pcvr import game_args
 

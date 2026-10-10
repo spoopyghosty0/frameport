@@ -74,6 +74,7 @@ class Patch:
     default_on: bool = False  # part of the always-recommended baseline
     experimental: bool = False
     needs_vr: bool = True  # only matters for VR apps (hidden for Android apps without VR)
+    on_pc: bool = False  # also in the build for this PC (AXRB): a fix of the APK itself, not of the Frame/Lepton
     revision: int = 1  # bump when apply() writes something different: installed builds then show "Update on Frame"
     package_revisions: dict[str, int] = {}  # narrower updates to otherwise shared patches
 
@@ -137,6 +138,14 @@ def for_game(patch: Patch, analysis: Analysis) -> bool:
     """Quest patches only for Quest games, PC VR (Revive) patches only for Rift games."""
     rift = (analysis.extra or {}).get("kind") == "rift"
     return (patch.category == "pcvr") == rift
+
+
+def pc_selection(patches: dict) -> dict:
+    """The part of a Quest recipe that goes into the build for this PC (AXRB): OVRPort's patches and the APK fixes
+    marked on_pc. Steam Frame fixes (FrameBridge, Lepton workarounds) stay out; AXRB has its own OpenXR runtime."""
+    load_all()
+    return {pid: params for pid, params in patches.items()
+            if pid in REGISTRY and (REGISTRY[pid].category == "overport" or REGISTRY[pid].on_pc)}
 
 
 def all_patches() -> list[Patch]:

@@ -39,7 +39,7 @@ import zipfile
 import zlib
 from types import SimpleNamespace
 
-AGENT_VERSION = 70
+AGENT_VERSION = 71  # v71: upsert/remove_shortcut options_key (the PC's Quest games share powershell.exe as Exe)
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -887,15 +887,21 @@ def vdf_encode(obj):
     return bytes(out) + bytes([TYPE_END])
 
 
+def _shortcut_matches(v, exe, options_key=None):
+    """A shortcut is the game's when its Exe matches; with options_key (games sharing one Exe, e.g. Quest games on a
+    PC all start powershell.exe) its LaunchOptions must also contain that key."""
+    return isinstance(v, dict) and v.get("Exe") == exe and (not options_key or options_key in v.get("LaunchOptions", ""))
+
+
 def upsert_shortcut(vdf_path, exe, title, start_dir, icon="", tag="Quest on Frame", launch_options="", tags=None,
-                    openvr=True, write=True):
+                    openvr=True, write=True, options_key=None):
     """Add/update a non-Steam shortcut (matched by Exe, so its appid never changes). `tags` (genres, the user's tags)
     are merged with tags already on the shortcut, so ones set in Steam are kept. write=False: change nothing, return
     (appid, whether shortcuts.vdf would change)."""
     data = open(vdf_path, "rb").read() if os.path.exists(vdf_path) else b""
     root = vdf_decode(data) if data else {"shortcuts": {}}
     shortcuts = root.setdefault("shortcuts", {})
-    entry = next((v for v in shortcuts.values() if isinstance(v, dict) and v.get("Exe") == exe), None)
+    entry = next((v for v in shortcuts.values() if _shortcut_matches(v, exe, options_key)), None)
     ident = entry["appid"] if entry else shortcut_appid(exe, title)
     if entry is None:
         entry = {"appid": ident, "LastPlayTime": 0, "tags": {"0": tag}}
@@ -989,12 +995,12 @@ def grid_files(grid, appid):
         return []
 
 
-def remove_shortcut(vdf_path, exe):
+def remove_shortcut(vdf_path, exe, options_key=None):
     if not os.path.exists(vdf_path):
         return False
     root = vdf_decode(open(vdf_path, "rb").read())
     sc = root.get("shortcuts", {})
-    keep = [v for v in sc.values() if not (isinstance(v, dict) and v.get("Exe") == exe)]
+    keep = [v for v in sc.values() if not _shortcut_matches(v, exe, options_key)]
     if len(keep) == len(sc):
         return False
     root["shortcuts"] = {str(i): v for i, v in enumerate(keep)}

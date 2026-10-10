@@ -421,13 +421,14 @@ def install(package: Optional[str] = typer.Argument(None), all_: bool = typer.Op
             password: Optional[str] = typer.Option(None, help="the Frame's password (first connection only)"),
             apk_only: bool = typer.Option(False, help="reuse game data already on the Frame"),
             no_library: bool = typer.Option(False, help="don't add to the Steam library now"),
-            to: str = typer.Option("frame", help="frame, or pc (PC VR games only: install on this PC)"),
+            to: str = typer.Option("frame", help="frame, or pc (install on this PC: PC VR games through Revive, "
+                                                 "Quest games through AXRB, experimental)"),
             apk: Optional[Path] = typer.Option(None, help="install this APK instead of the last build (one game; e.g. "
                                                           "a test build signed with the game's key)"),
             dest: Optional[str] = typer.Option(None, help="drive for new installs: 'internal' or a drive's path from "
                                                           "'frameport frame drives' (default: the app's setting); "
                                                           "installed games stay where they are")):
-    """Install games on the Frame (or PC VR games on this PC) and add them to the Steam library."""
+    """Install games on the Frame (or on this PC) and add them to the Steam library."""
     target = _target(frame, password, to)
     if dest is not None and hasattr(target, "dest"):
         target.dest = "" if dest == "internal" else dest
@@ -446,7 +447,7 @@ def install(package: Optional[str] = typer.Argument(None), all_: bool = typer.Op
 def test(package: Optional[str] = typer.Argument(None), all_: bool = typer.Option(False, "--all", help=ALL_HELP),
          frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
          seconds: int = typer.Option(45, help="how long the game runs before it's stopped"),
-         to: str = typer.Option("frame", help="frame, or pc (PC VR games installed on this PC)")):
+         to: str = typer.Option("frame", help="frame, or pc (games installed on this PC)")):
     """Headless launch on the Frame (or this PC) + log triage."""
     target = _target(frame, to=to)
     installed = {g["package"] for g in target.installed()}
@@ -692,8 +693,20 @@ def frame_proton(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
 # ------------------------------------------------------------------------------------------ pc (Revive)
 @pc_app.command("info")
 def pc_info():
-    """Steam, SteamVR and Revive on this PC (JSON)."""
+    """Steam, SteamVR, Revive and AXRB on this PC (JSON)."""
     typer.echo(json.dumps(_target(None, to="pc").describe(), indent=1, default=str))
+
+
+@pc_app.command("install-axrb")
+def pc_install_axrb():
+    """Install AXRB (Android XR Bridge, for Quest games on this PC) and set up its Android runtime. Normally done by
+    the first `frameport install <quest game> --to pc`. Downloads AXRB's official installer plus Google's Android
+    emulator pieces (about 2.5 GB)."""
+    from .targets import pc_android
+    from .tools import axrb
+
+    pc_android.ensure_axrb(printing_reporter(False))
+    typer.echo(json.dumps(axrb.status(), indent=1, default=str))
 
 
 @pc_app.command("install-revive")

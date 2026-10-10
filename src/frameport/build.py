@@ -1,6 +1,7 @@
 """Build stage: OVRPort → Frame fixes (apk-stage patches) → sign → static validation."""
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import shutil
 from pathlib import Path
@@ -61,8 +62,11 @@ def apply_frame_fixes(apk_in: Path, apk_out_unsigned: Path, analysis: Analysis, 
 
 
 def build(source: SourceGame, analysis: Analysis, recipe: Recipe, outdir: Path, reporter: Reporter,
-          keep_work: bool = False) -> BuildResult:
+          keep_work: bool = False, pc: bool = False) -> BuildResult:
+    """pc: the build for this PC (AXRB): only OVRPort's patches and the on_pc APK fixes (base.pc_selection)."""
     pkg = analysis.package
+    if pc:
+        recipe = dataclasses.replace(recipe, patches=base.pc_selection(recipe.patches))
     work = work_dir() / pkg
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
@@ -73,6 +77,9 @@ def build(source: SourceGame, analysis: Analysis, recipe: Recipe, outdir: Path, 
     # Frame patches are applied on top. Its alternate build is the copy saved next to it, or (no copy) one more
     # OVRPort run for the alternate patches; the stand-ins patch relinks what that drops.
     converted = recipe.overport and analysis.is_overport_output
+    if pc and converted:
+        reporter.check("Original APK", None, "this copy was already converted for the Steam Frame and keeps its Frame "
+                                             "fixes; add the game's original APK for a clean build for this PC")
     variants = [("primary", False)] + ([("alt", True)] if recipe.alt_patches and recipe.overport else [])
     alt_copy = Path(source.apk).with_name(f"{pkg}.alt-noforcequit.apk")
     results = {}
@@ -100,7 +107,7 @@ def build(source: SourceGame, analysis: Analysis, recipe: Recipe, outdir: Path, 
             sign.sign(unsigned, final, pkg)
             unsigned.unlink(missing_ok=True)
             reporter.stage(f"validate ({variant})")
-            checks += check_apk(final, pkg, expect_adapter=recipe.overport)
+            checks += check_apk(final, pkg, expect_adapter=recipe.overport and not pc)
             for c in checks:
                 reporter.check(c["name"], c["ok"], c["detail"])
             results[variant] = final

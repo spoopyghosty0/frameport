@@ -148,6 +148,10 @@ HELP: dict[str, str] = _Translated({
                         "next time it starts.",
     "frame_summary": "Quest ✓: Lepton is installed, so Quest games can run. PC VR ✓: Proton is installed, so PC VR "
                      "games can run on the Frame.",
+    "pc_android": "Experimental: runs the game on this PC in AXRB (Android XR Bridge), an Android emulator that shows "
+                  "Android VR games through SteamVR. The first install downloads AXRB and its Android (about 2.5 GB) "
+                  "and needs Windows Hypervisor Platform, an NVIDIA or AMD graphics card and 12 GB of memory. Many "
+                  "games don't work in AXRB yet.",
     # ---- settings
     "data_folder": "FramePort's tools, library, artwork and the signing keys of your rebuilt games. Back it up: an "
                    "update must be signed with the same key, or the game (and its saves) has to be reinstalled.",

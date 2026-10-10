@@ -220,3 +220,14 @@ Scan a folder with Rift game dumps (Windows game folders) like Quest dumps; they
 | Proton game hangs at start in a headless/SSH launch; log `no driver could be loaded` / `explorer process failed to start` | no display session (DISPLAY/GAMESCOPE_WAYLAND_DISPLAY) | the Proton launch.sh takes them from the running Steam (built in) |
 | Unreal game starts (window created) then `CrashReportClient` runs | the game crashed under Proton; often no VR runtime reached it (Revive off) | keep `pcvr.revive` on (repacks' bundled LibRevive64.dll isn't loaded by itself); read the game log + crash summary in the launch log |
 | `VK_ERROR_DEVICE_LOST` under DXVK | freedreno GPU hang | `pcvr.proton_log` to capture; PC mode |
+
+## Quest games on this PC (AXRB, `docs/PC_ANDROID.md`)
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Unconverted Quest APK in AXRB: no launcher activity, SIGABRT ~0.3 s after `libovrplatformloader.so` loads | Meta's platform loader aborts outside a Quest | FramePort always gives AXRB its OVRPort build (the PC build: OVRPort + `on_pc` APK fixes, no Steam Frame fixes) |
+| `axrb-no-headset`: host.err `failed to find D3D11 adapter requested by OpenXR runtime` / `xrCreateInstance failed: XR_ERROR_RUNTIME_FAILURE` | SteamVR has no headset (null driver: no D3D11 adapter; vrlink with no Frame connected: no instance) | connect the headset and let SteamVR show it first; headless checks can only go as far as the guest log (`am start`, logcat) |
+| `axrb-gfxstream-crash`: SIGSEGV in `vulkan.ranchu.so (gfxstream::vk::ResourceTracker::on_vkAllocateMemory)` from `libVkLayer_AXRB_runtime.so` (Pinball FX VR, UE5 Vulkan, headless) | the emulator's Vulkan path through AXRB's runtime layer | report to AXRB with diagnostics (`axrb/*` logs); recheck with the host attached |
+| `axrb-translation-crash`: crash in `libndk_translation.so (berberis::…)` | Android's ARM translation (AXRB issue #9, some Unity games) | nothing to patch; wait for AXRB's other translator |
+| Reinstall fails `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, or the game data must be copied again | a copy signed with another key was installed in AXRB (e.g. by AXRB's own launcher); a full uninstall deletes the OBB folder and saves | uninstall it in AXRB first; FramePort keeps one key per game, so its own updates keep data |
+| A FramePort call that runs an AXRB script never returns although the script ended (emulator already up) | QEMU (`Start-Process`) and the adb server inherit the caller's handles; through WSL interop even a file or /dev/null keeps the relay open | `axrb.spawn_detached` starts the script through WMI (`Win32_Process.Create`, nothing inherited) and polls its PID; exit code from the log's `FP_EXIT` line |

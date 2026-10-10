@@ -90,7 +90,7 @@ class GameView:
         st = C.install_state(g, app.frame_info)
         if st in ("installed", "outdated"):
             chips.append(C.install_badge(st))
-        if self.rift and pkg in app.pc_installs():
+        if pkg in app.pc_installs():
             chips.append(C.install_badge("on_pc"))
         actions = self.actions()
         return ft.Container(
@@ -203,6 +203,18 @@ class GameView:
                             lambda e: app.test_game(pkg, "pc")),
                  C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Remove from this PC's Steam library"),
                             lambda e: app.uninstall(pkg, "pc"))] if dep else []))
+        elif app.pc_installs().get(pkg):  # a Quest game also installed on this PC (AXRB, experimental)
+            dep = app.pc_installs()[pkg]
+            stale = C.pc_outdated(g, dep)
+            cards.append(self.target_card(
+                ft.Icons.COMPUTER_ROUNDED, tr("This PC (AXRB, experimental)"),
+                tr("In your Steam library · patches changed — update it") if stale else tr("In your Steam library"),
+                T.WARN if stale else T.PC, tr("AXRB {value} · Android emulator").format(
+                    value=dep.get("axrb_version") or ""),
+                [C.icon_btn(ft.Icons.SCIENCE_OUTLINED, tr("Launch test on this PC"),
+                            lambda e: app.test_game(pkg, "pc")),
+                 C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Remove from this PC"),
+                            lambda e: app.uninstall(pkg, "pc"))]))
         return C.section(tr("Where it's installed"), ft.Row(cards, spacing=T.S3), help="where")
 
     def target_card(self, icon, name, line, color, sub, buttons) -> ft.Control:
