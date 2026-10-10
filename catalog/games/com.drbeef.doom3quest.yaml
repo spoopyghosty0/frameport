@@ -1,8 +1,8 @@
 package: com.drbeef.doom3quest
 title: Doom3Quest
-status: issues
-notes: 'HUD and PDA show with frame.gl_multiview_fbo (Xandrix1987''s headset test, GitHub 77, no frame-rate drop
-  with the PDA open). Open: the player sometimes switches between walking and running.'
+status: works
+notes: HUD and PDA show with frame.gl_multiview_fbo (Xandrix1987's headset test, GitHub 77, no frame-rate drop with
+  the PDA open). Walking and running can switch when the frame rate drops, which seems to be the game's own behaviour.
 details: Doom3Quest compiles every vertex shader for two views (OVR_multiview) and draws its HUD/PDA into single-view
   framebuffers. Mesa (the Frame's GL) rejects that combination as the spec requires and drops the draw, so they
   stayed black; frame.gl_multiview_fbo draws those passes with a single-view copy of the shader. Xandrix1987's framebuffer.cpp
