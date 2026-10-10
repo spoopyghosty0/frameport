@@ -29,6 +29,24 @@
    "total": 39
   },
   {
+   "login": "Genosystem",
+   "avatar": "https://avatars.githubusercontent.com/u/40860703?v=4",
+   "url": "https://github.com/Genosystem",
+   "commits": 0,
+   "issues": 8,
+   "prs": 0,
+   "total": 24
+  },
+  {
+   "login": "StevenPartridge",
+   "avatar": "https://avatars.githubusercontent.com/u/22158507?v=4",
+   "url": "https://github.com/StevenPartridge",
+   "commits": 0,
+   "issues": 8,
+   "prs": 0,
+   "total": 24
+  },
+  {
    "login": "UnicronNL",
    "avatar": "https://avatars.githubusercontent.com/u/1267745?v=4",
    "url": "https://github.com/UnicronNL",
@@ -45,15 +63,6 @@
    "issues": 0,
    "prs": 3,
    "total": 22
-  },
-  {
-   "login": "Genosystem",
-   "avatar": "https://avatars.githubusercontent.com/u/40860703?v=4",
-   "url": "https://github.com/Genosystem",
-   "commits": 0,
-   "issues": 6,
-   "prs": 0,
-   "total": 18
   },
   {
    "login": "inseend",
@@ -356,15 +365,6 @@
    "login": "Sidilium",
    "avatar": "https://avatars.githubusercontent.com/u/44266441?v=4",
    "url": "https://github.com/Sidilium",
-   "commits": 0,
-   "issues": 1,
-   "prs": 0,
-   "total": 3
-  },
-  {
-   "login": "StevenPartridge",
-   "avatar": "https://avatars.githubusercontent.com/u/22158507?v=4",
-   "url": "https://github.com/StevenPartridge",
    "commits": 0,
    "issues": 1,
    "prs": 0,

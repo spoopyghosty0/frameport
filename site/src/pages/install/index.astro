@@ -6,7 +6,7 @@ import Nav from '../../components/Nav.astro';
 import Footer from '../../components/Footer.astro';
 import Glyph from '../../components/Glyph.astro';
 import InstallBadge from '../../components/InstallBadge.astro';
-import { DOWNLOADS, RELEASES, downloadUrl, url } from '../../data/site';
+import { DOWNLOADS, RELEASES, downloadPage, url } from '../../data/site';
 ---
 <Layout
   title="Install with FramePort"
@@ -47,8 +47,8 @@ import { DOWNLOADS, RELEASES, downloadUrl, url } from '../../data/site';
             <div>
               <h3>Get FramePort</h3>
               <div class="dls">
-                <a class="btn btn-primary" href={RELEASES} data-download><Glyph name="frame-solid" size={18} /><span data-download-label>Download FramePort</span></a>
-                {DOWNLOADS.map((d) => <a class="other" href={downloadUrl(d.asset)} data-os={d.os}>{d.label}</a>)}
+                <a class="btn btn-primary" href={downloadPage()} data-download><Glyph name="frame-solid" size={18} /><span data-download-label>Download FramePort</span></a>
+                {DOWNLOADS.map((d) => <a class="other" href={downloadPage(d.os)} data-os={d.os}>{d.label}</a>)}
               </div>
               <p class="muted small">Unzip it and start FramePort. The first time, it shows how to connect your Frame
                 (<a href={url('#install')}>one command on the Frame</a>).</p>
@@ -80,7 +80,7 @@ import { DOWNLOADS, RELEASES, downloadUrl, url } from '../../data/site';
 
       <noscript>
         <p class="muted">This page needs JavaScript to read the link. Without it:
-          <a href={RELEASES}>download FramePort</a>, then paste the address that follows <code>manifest=</code> or
+          <a href={downloadPage()}>download FramePort</a>, then paste the address that follows <code>manifest=</code> or
           <code>url=</code> in this page's address into FramePort → <b>Add games → Install from a link…</b></p>
       </noscript>
 

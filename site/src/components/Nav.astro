@@ -1,6 +1,6 @@
 ---
 import Wordmark from './Wordmark.astro';
-import { REPO, RELEASES, url } from '../data/site';
+import { REPO, downloadPage, url } from '../data/site';
 
 interface Props { home?: boolean }
 const { home = true } = Astro.props;
@@ -21,7 +21,7 @@ const at = (hash: string) => (home ? hash : url(hash));
       <a href={url('docs/')}>Docs</a>
       <a href={REPO}>GitHub</a>
     </nav>
-    <a class="btn btn-primary btn-small" href={RELEASES} data-download><span data-download-label>Download</span></a>
+    <a class="btn btn-primary btn-small" href={downloadPage()} data-download><span data-download-label>Download</span></a>
   </div>
 </header>
 

@@ -52,11 +52,10 @@ export const ROWS: Row[] = [
     y('All three: Android apps in a window, Linux arm64 and x86_64, Windows programs through Proton (installed for you)'),
     y('All three: Lepton Flatscreen, Linux arm64 zips, Windows .exe through Proton (install Proton first)'),
     p('Through the Devkit Client; 2D Android apps need a marker file')] },
-  { label: 'PC VR (Rift) games?', cells: [y('On your PC through Revive; SteamVR and OpenXR ones on the Frame through Proton'), u(), u()] },
+  { label: 'PC VR (Rift) games?', cells: [y('On your PC through Revive; SteamVR and OpenXR ones on the Frame through Proton'), n('Not supported'), n('Not supported')] },
   { label: 'Do “Install with …” buttons on websites work?', cells: [y('Its own and FrameDrop’s'), y('FrameDrop’s (it defined them)'), n('No')] },
   { label: 'What if a game doesn’t start?', cells: [y('A launch test reads the logs and names the likely fix'), p('A log viewer pulls the headset log'), n('No help')] },
   { label: 'Can I see and use the Frame from my computer?', cells: [y('Live view, Monitor, Files, Screenshots, Type on Frame'), u(), n('No')] },
-  { label: 'Does it update itself?', cells: [y('Yes'), p('Run the new installer (automatic updates not stated)'), p('Per tool')] },
 ];
 
 export const SOURCES = [

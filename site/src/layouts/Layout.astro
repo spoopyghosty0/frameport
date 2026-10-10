@@ -1,6 +1,6 @@
 ---
 import '../styles/global.css';
-import { DOWNLOADS, downloadUrl, url } from '../data/site';
+import { DOWNLOADS, downloadPage, url } from '../data/site';
 
 interface Props { title: string; description: string; noindex?: boolean }
 const { title, description, noindex = false } = Astro.props;
@@ -29,7 +29,7 @@ const poster = new URL(url('media/frameport-tour.jpg'), Astro.site);
   </head>
   <body>
     <slot />
-    <script define:vars={{ downloads: DOWNLOADS.map((d) => ({ ...d, href: downloadUrl(d.asset) })) }}>
+    <script define:vars={{ downloads: DOWNLOADS.map((d) => ({ os: d.os, label: d.label, href: downloadPage(d.os) })) }}>
       // The download buttons offer the build for this computer; the other platforms stay listed next to them.
       const ua = navigator.userAgent;
       const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';

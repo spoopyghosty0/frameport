@@ -1,0 +1,45 @@
+---
+// Search across every docs page (scripts/docs-ui.ts fills the results from /docs/search.json).
+interface Props { big?: boolean }
+const { big = false } = Astro.props;
+const id = big ? 'docsearch-big' : 'docsearch';
+---
+<div class:list={['dsearch', { big }]} data-docsearch role="search">
+  <label for={id}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></svg>
+    <span class="sr-only">Search the docs</span>
+  </label>
+  <input id={id} type="search" autocomplete="off" spellcheck="false" placeholder={big ? 'Search every page: “OBB”, “USB cable”, “black screen”…' : 'Search the docs'}
+    role="combobox" aria-expanded="false" aria-controls={`${id}-r`} aria-autocomplete="list" />
+  <kbd aria-hidden="true" data-keyhint>/</kbd>
+  <div class="results" id={`${id}-r`} role="listbox" data-results hidden></div>
+</div>
+
+<style>
+  .dsearch { position: relative; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 10px; margin-bottom: 14px;
+    border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); transition: border-color 160ms, box-shadow 160ms; }
+  .dsearch:focus-within { border-color: var(--secondary-line); box-shadow: 0 0 0 3px rgba(58, 168, 255, .12); }
+  .dsearch label { display: grid; color: var(--text-3); }
+  .dsearch svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .dsearch input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 14px; outline: none; }
+  .dsearch input::-webkit-search-cancel-button { display: none; }
+  .dsearch kbd { font: 500 11px/1 var(--font-mono); padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border-strong); color: var(--text-3); }
+  .dsearch:focus-within kbd { visibility: hidden; }
+  .big { height: 52px; padding: 0 16px; margin: 22px 0 6px; border-radius: var(--radius-md); background: var(--surface-2); }
+  .big input { font-size: 16px; }
+  .big svg { width: 20px; height: 20px; }
+  .results { position: absolute; z-index: 30; left: 0; top: calc(100% + 6px); width: min(460px, calc(100vw - 32px)); max-height: min(70vh, 520px);
+    overflow: auto; padding: 6px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: var(--surface-2);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .55); scrollbar-width: thin; }
+  /* the sidebar scrolls (overflow), so its results stay inside the column */
+  .results { width: 100%; }
+  .results :global(b) { overflow-wrap: anywhere; }
+  .results :global(p) { margin: 6px 10px; font-size: 12px; color: var(--text-3); }
+  .results :global(a) { display: grid; gap: 3px; padding: 9px 10px; border-radius: var(--radius-sm); text-decoration: none; color: var(--text); }
+  .results :global(a.on) { background: linear-gradient(90deg, rgba(58, 168, 255, .16), rgba(255, 138, 31, .12)); }
+  .results :global(small) { font: 500 10.5px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--secondary); }
+  .results :global(b) { font-size: 14px; font-weight: 600; }
+  .results :global(span) { font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
+  .results :global(mark) { background: transparent; color: var(--accent); font-weight: 600; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>

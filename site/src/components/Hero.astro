@@ -1,7 +1,7 @@
 ---
 import Crossing, { type CrossingGame } from './Crossing.astro';
 import Glyph from './Glyph.astro';
-import { DOWNLOADS, RELEASES, downloadUrl } from '../data/site';
+import { DOWNLOADS, RELEASES, downloadPage } from '../data/site';
 
 interface Props { games: CrossingGame[] }
 const { games } = Astro.props;
@@ -16,7 +16,7 @@ const { games } = Astro.props;
         them to your Steam library. Connect the Frame once, over Wi-Fi or a USB cable; after that it's one click per game.
       </p>
       <div class="ctas">
-        <a class="btn btn-primary" href={RELEASES} data-download>
+        <a class="btn btn-primary" href={downloadPage()} data-download>
           <Glyph name="frame-solid" size={20} />
           <span data-download-label>Download FramePort</span>
         </a>
@@ -24,7 +24,7 @@ const { games } = Astro.props;
       </div>
       <ul class="platforms" aria-label="All downloads">
         {DOWNLOADS.map((d) => (
-          <li><a href={downloadUrl(d.asset)} data-os={d.os}>{d.label}</a></li>
+          <li><a href={downloadPage(d.os)} data-os={d.os}>{d.label}</a></li>
         ))}
         <li><a href={RELEASES}>All releases</a></li>
       </ul>

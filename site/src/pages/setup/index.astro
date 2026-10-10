@@ -5,7 +5,7 @@
 import Layout from '../../layouts/Layout.astro';
 import Nav from '../../components/Nav.astro';
 import Footer from '../../components/Footer.astro';
-import { RELEASES, url } from '../../data/site';
+import { downloadPage, url } from '../../data/site';
 
 const line = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
 ---
@@ -24,7 +24,7 @@ const line = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
           <span class="n">1</span>
           <div>
             <h2>On your PC</h2>
-            <p>Open FramePort (<a href={RELEASES}>download</a>) and click <b>Steam Frame → Start setup</b>. Keep it open:
+            <p>Open FramePort (<a href={downloadPage()}>download</a>) and click <b>Steam Frame → Start setup</b>. Keep it open:
               it tells the network where it is while that page is open.</p>
           </div>
         </li>

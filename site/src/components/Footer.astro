@@ -5,16 +5,23 @@ import { REPO, RELEASES, REPORT_PROBLEM, url } from '../data/site';
 
 interface Props { credits?: boolean }
 const { credits = true } = Astro.props;
-const builtOn = [
-  { name: 'OVRPort', href: 'https://github.com/Android-XR-Bridge/OVRPort', what: 'Quest → OpenXR (originally ovrport/app)' },
-  { name: 'Valve Lepton, Proton and SteamVR', what: "the Frame's Android container, Windows layer and VR runtime" },
-  { name: 'Revive', href: 'https://github.com/LibreVR/Revive', what: 'Oculus PC games on SteamVR' },
-  { name: 'Mesa (Zink)', what: 'OpenGL on Vulkan' },
-  { name: 'Khronos OpenXR SDK', href: 'https://github.com/KhronosGroup/OpenXR-SDK', what: 'the OpenXR loader and headers' },
-  { name: 'Eclipse Temurin, Android apksigner and NDK', what: 'the build tools' },
-  { name: 'Flet', href: 'https://flet.dev', what: "the app's interface" },
-  { name: 'OculusDB and Steam store data', what: 'artwork and game details' },
+// each project named links to its own page (Lepton has none of its own: it links to Waydroid, which it is built on)
+type Part = [name: string, href?: string];
+const builtOn: { parts: Part[]; what: string }[] = [
+  { parts: [['OVRPort', 'https://github.com/Android-XR-Bridge/OVRPort']], what: 'Quest → OpenXR (originally ovrport/app)' },
+  { parts: [['Valve Lepton'], ['Waydroid', 'https://waydro.id'], ['Proton', 'https://github.com/ValveSoftware/Proton'],
+    ['SteamVR', 'https://store.steampowered.com/app/250820/SteamVR/']],
+    what: "the Frame's Android container (built on Waydroid), Windows layer and VR runtime" },
+  { parts: [['Revive', 'https://github.com/LibreVR/Revive']], what: 'Oculus PC games on SteamVR' },
+  { parts: [['Mesa (Zink)', 'https://docs.mesa3d.org/drivers/zink.html']], what: 'OpenGL on Vulkan' },
+  { parts: [['Khronos OpenXR SDK', 'https://github.com/KhronosGroup/OpenXR-SDK']], what: 'the OpenXR loader and headers' },
+  { parts: [['Eclipse Temurin', 'https://adoptium.net'], ['Android apksigner', 'https://developer.android.com/tools/apksigner'],
+    ['NDK', 'https://developer.android.com/ndk']], what: 'the build tools' },
+  { parts: [['Flet', 'https://flet.dev']], what: "the app's interface" },
+  { parts: [['OculusDB', 'https://oculusdb.rui2015.me'], ['Steam store data', 'https://store.steampowered.com']], what: 'artwork and game details' },
 ];
+/** "a", "a and b", "a, b and c" */
+const joiner = (i: number, n: number) => (i === 0 ? '' : i === n - 1 ? ' and ' : ', ');
 ---
 {credits && (
   <section class="section credits" id="credits">
@@ -27,7 +34,9 @@ const builtOn = [
       </div>
       <ul class="built reveal">
         {builtOn.map((b) => (
-          <li>{b.href ? <a href={b.href}>{b.name}</a> : <span class="n">{b.name}</span>} <span class="w">{b.what}</span></li>
+          <li><span class="ns">{b.parts.map(([name, href], i) => (
+            <>{joiner(i, b.parts.length)}{href ? <a href={href}>{name}</a> : <span class="n">{name}</span>}</>
+          ))}</span> <span class="w">{b.what}</span></li>
         ))}
       </ul>
       <Contributors />
@@ -58,6 +67,7 @@ const builtOn = [
   .built li { display: grid; gap: 2px; padding: 14px 0; border-top: 1px solid var(--border); }
   .built a, .built .n { font-weight: 600; color: var(--text); text-decoration-color: rgba(255, 138, 31, 0.5); }
   .built a:hover { color: var(--accent); }
+  .built .ns { color: var(--text-2); }
   .built .w { color: var(--text-2); font-size: 14px; }
 
   .footer { position: relative; background: var(--sidebar); padding: 40px 0 48px; }

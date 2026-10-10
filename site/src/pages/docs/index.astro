@@ -3,11 +3,20 @@ import Layout from '../../layouts/Layout.astro';
 import Nav from '../../components/Nav.astro';
 import Footer from '../../components/Footer.astro';
 import DocsShell from '../../components/DocsShell.astro';
-import { DOCS, loadDoc } from '../../data/docs';
+import DocSearch from '../../components/DocSearch.astro';
+import { DOCS, loadDoc, minutes } from '../../data/docs';
 import { url } from '../../data/site';
 
 const docs = DOCS.map(loadDoc);
 const groups = [...new Set(docs.map((d) => d.group))];
+// what people come for → the pages to read, in order (docs-ui.ts lights them up)
+const paths = [
+  { key: 'first', label: 'Get my first game running', say: 'From the download to playing, in this order:', docs: ['install', 'frame-setup', 'compatibility', 'faq'] },
+  { key: 'broken', label: 'A game won’t start or looks wrong', say: 'Check whether it can run, then report it or look up the symptom:', docs: ['compatibility', 'diagnostics', 'playbook', 'frame-runtime'] },
+  { key: 'button', label: 'Add an install button to my site', say: 'The button, then what your players will see:', docs: ['install-button', 'install'] },
+  { key: 'how', label: 'Understand how it works', say: 'The big picture first, then what the Frame taught us:', docs: ['architecture', 'frame-runtime', 'playbook'] },
+  { key: 'look', label: 'Make it look my way', say: 'Colour themes, and how to share your own:', docs: ['themes'] },
+];
 ---
 <Layout title="Documentation · FramePort" description="How to install FramePort, connect a Steam Frame, and everything else in FramePort's documentation.">
   <Nav home={false} />
@@ -18,14 +27,23 @@ const groups = [...new Set(docs.map((d) => d.group))];
         <p class="intro">From the first download to the details of the Frame's runtime. The same pages are in the
           repository's <code>docs/</code> folder.</p>
       </div>
+      <DocSearch big />
+      <section class="why" aria-labelledby="why-h">
+        <h2 id="why-h">What brings you here?</h2>
+        <div class="chips">
+          {paths.map((p) => <button type="button" class="chip" aria-pressed="false" data-path={p.docs.join(',')} data-key={p.key} data-say={p.say}>{p.label}</button>)}
+        </div>
+        <div class="strip" data-path-strip hidden></div>
+      </section>
       {groups.map((g) => (
         <section class="dg">
           <h2>{g}</h2>
           <div class="cards">
             {docs.filter((d) => d.group === g).map((d) => (
-              <a class="dc" href={url(`docs/${d.slug}/`)}>
+              <a class="dc" href={url(`docs/${d.slug}/`)} data-doc-card={d.slug} data-doc-link={d.slug}>
                 <b>{d.title}</b>
                 <span>{d.blurb}</span>
+                <small><span class="mins">{minutes(d)} min read</span><span class="seen">Read</span></small>
                 <i aria-hidden="true">→</i>
               </a>
             ))}
@@ -39,14 +57,44 @@ const groups = [...new Set(docs.map((d) => d.group))];
 
 <style>
   .intro { color: var(--text-2); }
+  .why { margin-top: 26px; }
+  .why h2 { font: 600 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); margin: 0 0 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { all: unset; cursor: pointer; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border-strong); font-size: 14px; color: var(--text-2);
+    transition: color 160ms, border-color 160ms, background-color 160ms; }
+  .chip:hover { color: var(--text); border-color: var(--secondary-line); }
+  .chip:focus-visible { outline: 2px solid var(--secondary); outline-offset: 2px; }
+  .chip[aria-pressed="true"] { color: var(--text); border-color: transparent; background: linear-gradient(90deg, rgba(58, 168, 255, .28), rgba(255, 138, 31, .28)); }
+  .strip { margin-top: 14px; padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); }
+  .strip :global(p) { margin: 0 0 10px; font-size: 14px; color: var(--text-2); }
+  .strip :global(ol) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
+  .strip :global(li) { counter-increment: s; display: flex; align-items: center; gap: 4px; }
+  .strip :global(li + li)::before { content: "→"; color: var(--text-3); margin: 0 6px; }
+  .strip :global(a) { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--surface-2);
+    color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; transition: background-color 160ms; }
+  .strip :global(a)::before { content: counter(s); display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); color: var(--on-accent); font: 700 12px/1 var(--font-mono); }
+  .strip :global(a.read)::before { content: "✓"; background: var(--ok); color: #0b1a12; }
+  .strip :global(a:hover) { background: var(--surface-3); }
   .dg { margin-top: 36px; }
   .dg h2 { font-size: 22px; margin-bottom: 14px; }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-  .dc { position: relative; display: grid; gap: 6px; padding: 18px 40px 18px 18px; border-radius: var(--radius-md); border: 1px solid var(--border);
-    background: var(--surface); text-decoration: none; color: var(--text); transition: border-color 220ms, transform 220ms var(--ease-out), box-shadow 220ms; }
+  .dc { position: relative; display: grid; gap: 6px; padding: 18px 40px 16px 18px; border-radius: var(--radius-md); border: 1px solid var(--border);
+    background: var(--surface); text-decoration: none; color: var(--text);
+    transition: border-color 220ms, transform 220ms var(--ease-out), box-shadow 220ms, opacity 260ms, filter 260ms; }
   .dc:hover { border-color: rgba(255, 138, 31, .5); transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0, 0, 0, .4); }
   .dc b { font: 700 16px/1.25 var(--font-display); }
-  .dc span { font-size: 14px; color: var(--text-2); }
+  .dc > span { font-size: 14px; color: var(--text-2); }
+  .dc small { display: flex; gap: 10px; margin-top: 4px; font: 500 11.5px/1 var(--font-mono); color: var(--text-3); }
+  .dc .seen { display: none; color: var(--ok); }
+  .dc .seen::before { content: "✓ "; }
+  .dc:global(.read) .seen { display: inline; }
   .dc i { position: absolute; right: 16px; top: 18px; font-style: normal; color: var(--accent); transition: transform 220ms var(--ease-out); }
   .dc:hover i { transform: translateX(4px); }
+  .dc:global(.dim) { opacity: .38; filter: saturate(.4); }
+  .dc:global(.dim:hover) { opacity: .85; filter: none; }
+  .dc:global(.in-path) { border-color: rgba(255, 138, 31, .55); box-shadow: 0 0 0 1px rgba(255, 138, 31, .25), 0 10px 28px rgba(255, 138, 31, .08); }
+  .dc:global(.in-path)::before { content: attr(data-step); position: absolute; left: -9px; top: -9px; width: 24px; height: 24px; display: grid;
+    place-items: center; border-radius: 50%; background: var(--accent); color: var(--on-accent); font: 700 12px/1 var(--font-mono); }
+  @media (prefers-reduced-motion: reduce) { .dc { transition: none; } }
 </style>

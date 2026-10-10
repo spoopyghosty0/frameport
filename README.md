@@ -145,11 +145,10 @@ FrameDrop and Valve's own tools install an app as it is. FramePort differs in fo
 | Does it know which fixes a game needs? | A tested recipe for 100+ games, updated without an app update | Not stated | No |
 | Will the game be in my Steam library? | Yes, with artwork and tags | As a "Devkit Game" shortcut | As "Devkit Game: &lt;title&gt;" (Devkit Client); not with adb |
 | Android apps, Linux apps, Windows programs? | All three: Android apps in a window, Linux arm64 and x86_64, Windows programs through Proton (installed for you) | All three: Lepton Flatscreen, Linux arm64 zips, Windows .exe through Proton (install Proton first) | Through the Devkit Client; 2D Android apps need a marker file |
-| PC VR (Rift) games? | On your PC through Revive; SteamVR and OpenXR ones on the Frame through Proton | Not stated | Not stated |
+| PC VR (Rift) games? | On your PC through Revive; SteamVR and OpenXR ones on the Frame through Proton | Not supported | Not supported |
 | Do "Install with …" buttons on websites work? | Its own and FrameDrop's | FrameDrop's (it defined them) | No |
 | What if a game doesn't start? | A launch test reads the logs and names the likely fix | A log viewer pulls the headset log | No help |
 | Can I see and use the Frame from my computer? | Live view, Monitor, Files, Screenshots, Type on Frame | Not stated | No |
-| Does it update itself? | Yes | Run the new installer (automatic updates not stated) | Per tool |
 
 </details>
 

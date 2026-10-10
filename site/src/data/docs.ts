@@ -89,3 +89,23 @@ export function loadDoc(info: DocInfo): Doc {
   const description = first.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[*_`>]/g, '').replace(/\s+/g, ' ').slice(0, 200);
   return { ...info, title, html, toc, description };
 }
+
+/** Words → minutes at an unhurried 220 words a minute (tables and code count too: they're what people read here). */
+export const minutes = (doc: Doc) => Math.max(1, Math.round(plain(doc.html).split(/\s+/).length / 220));
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
+/** HTML → text for the search index (good enough for our own rendered markdown). */
+export function plain(html: string): string {
+  return html.replace(/<a class="anchor"[^>]*>#<\/a>/g, '').replace(/<[^>]+>/g, ' ')
+    .replace(/&(#?\w+);/g, (m, e) => ENTITIES[e] ?? (e.startsWith('#') ? String.fromCodePoint(Number(e.slice(1))) : m))
+    .replace(/\s+/g, ' ').trim();
+}
+
+export interface Section { slug: string; doc: string; id: string; heading: string; text: string }
+/** One search entry per h2/h3 section (the part before the first heading belongs to the page itself). */
+export function sections(doc: Doc): Section[] {
+  return doc.html.split(/(?=<h[23] id=")/).map((p) => {
+    const m = p.match(/^<h[23] id="([^"]+)">([\s\S]*?)<\/h[23]>/);
+    return { slug: doc.slug, doc: doc.title, id: m ? m[1] : '', heading: m ? plain(m[2]) : doc.title, text: plain(m ? p.slice(m[0].length) : p) };
+  }).filter((s) => s.text || s.id);
+}

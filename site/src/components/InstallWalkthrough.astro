@@ -3,14 +3,9 @@
 // setup line (or Developer Mode pairing) on the Frame, Allow on the PC, the Frame finishes by itself, add a game.
 // Each step has a small live scene; clicking Allow in step 4 moves on, like in the app.
 import HeadsetModel from './HeadsetModel.astro';
-import { DOWNLOADS, RELEASES, downloadUrl, url } from '../data/site';
+import { DOWNLOADS, RELEASES, downloadPage, url } from '../data/site';
 
-const FIRST: Record<string, string> = {
-  windows: 'open FramePort.exe. At “Windows protected your PC” choose More info → Run anyway (the app is signed with a free certificate).',
-  macos: 'right-click FramePort.app → Open → Open (macOS asks once for apps from outside the App Store).',
-  linux: 'run FramePort/FramePort from the unpacked folder.',
-  'linux-arm64': 'run FramePort/FramePort from the unpacked folder.',
-};
+const FIRST = Object.fromEntries(DOWNLOADS.map((d) => [d.os, d.first]));
 const LINE = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
 const steps = [
   { side: 'pc', where: 'On your PC', title: 'Download FramePort' },
@@ -40,7 +35,7 @@ const steps = [
         <p>Windows, macOS or Linux. Unzip it anywhere and start it: no installer, no admin rights. It updates itself after that.</p>
         <div class="dls">
           {DOWNLOADS.map((d) => (
-            <a class="dl" href={downloadUrl(d.asset)} data-os={d.os} data-first={FIRST[d.os]}>
+            <a class="dl" href={downloadPage(d.os)} data-os={d.os} data-first={FIRST[d.os]}>
               <strong>{d.label}</strong><span>{d.detail}</span>
             </a>
           ))}

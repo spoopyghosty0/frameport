@@ -1,0 +1,338 @@
+---
+// The download page every "Download" button leads to (?os=windows|macos|linux|linux-arm64, else detected): a short
+// countdown while the package is pulled through the portal, then the download starts by itself. The manual button
+// stays for when it doesn't (blocked, cancelled, an old browser). Version, size and SHA-256 come live from the
+// GitHub release; without JavaScript the page is a plain list of the four downloads.
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import { DOWNLOADS, RELEASES, downloadPage, downloadUrl, url } from '../../data/site';
+
+const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detail, asset: d.asset, first: d.first, href: downloadUrl(d.asset) }));
+---
+<Layout title="Download FramePort" description="Download FramePort for Windows, macOS or Linux. The download starts by itself; a button stays here in case it doesn't.">
+  <Nav home={false} />
+  <main class="dlp" data-dl data-state="choose" data-builds={JSON.stringify(builds)} data-releases={RELEASES}>
+    <section class="stage" aria-hidden="true">
+      <canvas class="warp" data-warp></canvas>
+      <div class="portal">
+        <i class="halo"></i>
+        <i class="swirl"></i>
+        <i class="rim"></i>
+        <svg class="count" viewBox="0 0 200 200"><circle class="track" cx="100" cy="100" r="94" /><circle class="arc" cx="100" cy="100" r="94" pathLength="100" data-arc /></svg>
+        <b class="num" data-n></b>
+      </div>
+      <div class="pkg" data-pkg>
+        <img src={url('favicon.svg')} alt="" width="44" height="44" />
+        <div><b data-file>FramePort</b><span data-meta>Windows · macOS · Linux</span></div>
+      </div>
+      <div class="arrive" data-arrive><span>✓</span></div>
+      <i class="flare" data-flare></i>
+    </section>
+
+    <section class="wrap copy">
+      <p class="label"><b>Download</b> <span data-for>FramePort</span></p>
+      <h1 data-title>Download FramePort</h1>
+      <p class="status" data-status aria-live="polite">Pick your computer. FramePort runs on Windows, macOS and Linux; nothing to install, just unpack it.</p>
+
+      <div class="acts" data-acts hidden>
+        <a class="btn btn-primary big" href={RELEASES} data-manual>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19.5h14" /></svg>
+          <span data-manual-label>Download manually</span>
+        </a>
+        <button type="button" class="btn ghost" data-cancel>Cancel</button>
+        <button type="button" class="btn ghost" data-copylink hidden>Copy link to this page</button>
+      </div>
+
+      <ul class="builds" data-list>
+        {builds.map((b) => (
+          <li><a href={downloadPage(b.os)} data-os={b.os} data-direct={b.href}><b>{b.label}</b><span>{b.detail}</span></a></li>
+        ))}
+      </ul>
+
+      <p class="facts" data-facts hidden>
+        <span data-version></span><span data-size></span><span data-date></span>
+        <span class="sha" data-sha-wrap hidden>SHA-256 <code data-sha></code><button type="button" data-copysha>Copy</button></span>
+        <a href={RELEASES}>Release notes</a>
+      </p>
+    </section>
+
+    <section class="wrap next" aria-labelledby="next-h">
+      <h2 id="next-h">Then</h2>
+      <ol>
+        <li><span class="n">1</span><div><h3>Unpack it</h3><p>Anywhere you like. No installer and no admin rights: FramePort keeps everything in its own data folder.</p></div></li>
+        <li><span class="n">2</span><div><h3>Start FramePort</h3><p data-first>Open FramePort. The first start downloads the tools it uses (about a minute).</p></div></li>
+        <li><span class="n">3</span><div><h3>Connect your Frame</h3><p>One line in the Frame's terminal, then click Allow on your PC. <a href={url('setup/')}>How the setup works</a></p></div></li>
+      </ol>
+    </section>
+  </main>
+  <Footer credits={false} />
+</Layout>
+
+<script>
+  import { startWarp } from '../../scripts/warp';
+
+  interface Build { os: string; label: string; detail: string; asset: string; first: string; href: string }
+  const root = document.querySelector<HTMLElement>('[data-dl]')!;
+  const builds: Build[] = JSON.parse(root.dataset.builds!);
+  const $ = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const COUNT = reduce ? 600 : 3000;
+
+  // which build: the button that sent you, else this computer
+  function detect(): string | null {
+    const ua = navigator.userAgent;
+    const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform || '';
+    if (/Android|iPhone|iPad|Mobile/i.test(ua)) return 'phone';
+    if (/Win/i.test(platform) || /Windows/.test(ua)) return 'windows';
+    if (/Mac/i.test(platform) || /Mac OS X/.test(ua)) return 'macos';
+    if (/Linux/i.test(platform)) return /aarch64|arm64/i.test(platform + ua) ? 'linux-arm64' : 'linux';
+    return null;
+  }
+  const asked = new URLSearchParams(location.search).get('os');
+  const chosen = builds.find((b) => b.os === asked) ?? null;
+  const detected = detect();
+  const build = chosen ?? builds.find((b) => b.os === detected) ?? null;
+
+  const warp = startWarp($<HTMLCanvasElement>('[data-warp]'), { still: reduce });
+  const set = (state: string) => { root.dataset.state = state; };
+  const title = $('[data-title]'), status = $('[data-status]'), num = $('[data-n]'), arc = $<SVGCircleElement & HTMLElement>('[data-arc]');
+
+  // this page's links pick a build without leaving the page
+  root.querySelectorAll<HTMLAnchorElement>('[data-list] a').forEach((a) => {
+    a.toggleAttribute('aria-current', a.dataset.os === build?.os);
+  });
+
+  if (!build) {
+    if (detected === 'phone') {
+      title.textContent = 'FramePort runs on your computer';
+      status.textContent = 'Not on a phone: open this page on the Windows, macOS or Linux computer you’ll connect the Frame to. Copy the link and send it to yourself.';
+      $('[data-acts]').hidden = false;
+      $('[data-manual]').hidden = true;
+      $('[data-cancel]').hidden = true;
+      const copy = $<HTMLButtonElement>('[data-copylink]');
+      copy.hidden = false;
+      copy.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(location.origin + location.pathname); copy.textContent = 'Link copied'; } catch { copy.textContent = location.origin + location.pathname; }
+      });
+    }
+  } else {
+    begin(build);
+  }
+
+  function begin(b: Build) {
+    const manual = $<HTMLAnchorElement>('[data-manual]');
+    manual.href = b.href;
+    $('[data-acts]').hidden = false;
+    $('[data-for]').textContent = `for ${b.label}`;
+    $('[data-file]').textContent = b.asset;
+    $('[data-meta]').textContent = b.detail;
+    $('[data-first]').textContent = `On ${b.label}: ${b.first}`;
+    document.title = `Download FramePort for ${b.label}`;
+    facts(b);
+
+    // a reload or the back button right after the download doesn't start it a second time
+    const KEY = `frameport.dl.${b.os}`;
+    let recent = false;
+    try { recent = Date.now() - Number(sessionStorage.getItem(KEY) || 0) < 60_000; } catch { /* no storage */ }
+    if (recent) { sent(b, true); return; }
+
+    set('counting');
+    title.innerHTML = `Your download starts in <span class="t-n">3</span>`;
+    status.textContent = `FramePort for ${b.label} (${b.detail}).`;
+    const t0 = performance.now();
+    let raf = 0, cancelled = false;
+    const tick = (now: number) => {
+      if (cancelled) return;
+      const left = Math.max(0, COUNT - (now - t0));
+      const n = String(Math.ceil(left / 1000) || 1);
+      num.textContent = n;
+      const tn = title.querySelector('.t-n');
+      if (tn && tn.textContent !== n) tn.textContent = n;
+      arc.style.strokeDashoffset = String(100 * (left / COUNT));
+      warp.speed(1 + 2.5 * (1 - left / COUNT));
+      if (left > 0) raf = requestAnimationFrame(tick);
+      else go();
+    };
+    const go = () => {
+      try { sessionStorage.setItem(KEY, String(Date.now())); } catch { /* no storage */ }
+      sent(b, false);
+      // the download itself: the release asset answers with an attachment, so this page stays
+      setTimeout(() => location.assign(b.href), reduce ? 0 : 520);
+    };
+    raf = requestAnimationFrame(tick);
+    $<HTMLButtonElement>('[data-cancel]').addEventListener('click', () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      warp.speed(0.4);
+      set('cancelled');
+      title.textContent = 'Download cancelled';
+      status.textContent = 'Nothing was downloaded. The button still works, or pick another computer below.';
+      $('[data-cancel]').hidden = true;
+      $('[data-manual-label]').textContent = `Download for ${b.label}`;
+    }, { once: true });
+  }
+
+  function sent(b: Build, earlier: boolean) {
+    set('sent');
+    warp.burst();
+    title.textContent = earlier ? 'Your download started a moment ago' : 'Your download has started';
+    status.innerHTML = `Didn’t get <b>${b.asset}</b>? Your browser may have blocked it: use the button.`;
+    $('[data-cancel]').hidden = true;
+    $('[data-manual-label]').textContent = 'Download manually';
+    setTimeout(() => warp.speed(0.6), 1400);
+  }
+
+  // version, size, date and checksum from the release (cached for the tab; quietly absent offline)
+  async function facts(b: Build) {
+    type Asset = { name: string; size: number; digest?: string };
+    type Release = { tag_name: string; published_at: string; assets: Asset[] };
+    let rel: Release | null = null;
+    try { rel = JSON.parse(sessionStorage.getItem('frameport.release') || 'null'); } catch { /* no storage */ }
+    if (!rel) {
+      try {
+        const r = await fetch('https://api.github.com/repos/spoopyghosty0/frameport/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+        if (!r.ok) return;
+        const j = await r.json();
+        rel = { tag_name: j.tag_name, published_at: j.published_at, assets: j.assets.map((a: Asset) => ({ name: a.name, size: a.size, digest: a.digest })) };
+        try { sessionStorage.setItem('frameport.release', JSON.stringify(rel)); } catch { /* no storage */ }
+      } catch { return; }
+    }
+    const a = rel!.assets.find((x) => x.name === b.asset);
+    $('[data-version]').textContent = rel!.tag_name;
+    $('[data-date]').textContent = new Date(rel!.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    if (a) {
+      $('[data-size]').textContent = `${Math.round(a.size / 1e6)} MB`;
+      $('[data-meta]').textContent = `${rel!.tag_name} · ${Math.round(a.size / 1e6)} MB`;
+      const sha = a.digest?.startsWith('sha256:') ? a.digest.slice(7) : '';
+      if (sha) {
+        $('[data-sha]').textContent = `${sha.slice(0, 16)}…`;
+        $('[data-sha]').title = sha;
+        $('[data-sha-wrap]').hidden = false;
+        const btn = $<HTMLButtonElement>('[data-copysha]');
+        btn.addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(sha); btn.textContent = 'Copied'; } catch { btn.textContent = 'Select it'; $('[data-sha]').textContent = sha; }
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1600);
+        });
+      }
+    }
+    $('[data-facts]').hidden = false;
+  }
+</script>
+
+<style>
+  .dlp { position: relative; overflow: hidden; }
+  /* ------------------------------------------------ the stage: the package goes through the portal */
+  .stage { position: relative; height: clamp(300px, 46vh, 460px); display: grid; place-items: center; isolation: isolate;
+    background: radial-gradient(60% 70% at 50% 55%, rgba(58, 168, 255, .10), rgba(255, 138, 31, .06) 45%, transparent 75%); }
+  .stage::after { content: ""; position: absolute; inset: auto 0 0; height: 40%; background: linear-gradient(transparent, var(--bg)); pointer-events: none; }
+  .warp { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
+  .portal { position: relative; width: clamp(150px, 20vw, 210px); aspect-ratio: 1; display: grid; place-items: center; }
+  .portal i { position: absolute; border-radius: 50%; }
+  .halo { inset: -40%; background: radial-gradient(circle, rgba(58, 168, 255, .25), rgba(255, 138, 31, .15) 40%, transparent 70%); filter: blur(10px);
+    animation: breathe 3.6s ease-in-out infinite; }
+  .rim { inset: 6%; transform: rotate(var(--tilt)) scaleX(.62); border: 5px solid transparent;
+    background: linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(90deg, var(--secondary), var(--accent)) border-box;
+    box-shadow: -14px 0 34px rgba(58, 168, 255, .45), 14px 0 34px rgba(255, 138, 31, .45); }
+  .swirl { inset: 9%; transform: rotate(var(--tilt)) scaleX(.62); overflow: hidden;
+    background: conic-gradient(from var(--sw), rgba(58, 168, 255, .55), transparent 25%, rgba(255, 138, 31, .55) 50%, transparent 75%, rgba(58, 168, 255, .55));
+    mask: radial-gradient(circle, transparent 18%, #000 70%); animation: spin 5s linear infinite; opacity: .55; }
+  @property --sw { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+  .count { position: absolute; inset: -14%; width: 128%; height: 128%; transform: rotate(-90deg); overflow: visible; }
+  .count circle { fill: none; stroke-width: 2.5; }
+  .track { stroke: rgba(237, 238, 242, .07); }
+  .arc { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100;
+    filter: drop-shadow(0 0 6px rgba(255, 138, 31, .8)); opacity: 0; transition: opacity 300ms; }
+  .num { position: relative; font: 800 clamp(34px, 4.4vw, 46px)/1 var(--font-display); color: var(--text); opacity: 0;
+    text-shadow: 0 0 24px rgba(255, 138, 31, .7); transition: opacity 300ms; }
+  [data-state="counting"] .arc, [data-state="counting"] .num { opacity: 1; }
+
+  .pkg { position: absolute; left: 50%; top: 50%; display: flex; align-items: center; gap: 12px; padding: 12px 18px 12px 12px;
+    border-radius: 14px; background: rgba(22, 24, 30, .82); border: 1px solid var(--secondary-line); backdrop-filter: blur(8px);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .5), 0 0 30px rgba(58, 168, 255, .18);
+    transform: translate(calc(-50% - clamp(170px, 22vw, 300px)), -50%); animation: float 3.2s ease-in-out infinite; z-index: 2; }
+  .pkg img { border-radius: 10px; }
+  .pkg div { display: grid; gap: 3px; }
+  .pkg b { font: 600 14px/1.2 var(--font-mono); color: var(--text); white-space: nowrap; }
+  .pkg span { font-size: 12.5px; color: var(--text-2); }
+  [data-state="choose"] .pkg { opacity: .55; }
+  [data-state="sent"] .pkg { animation: through 900ms cubic-bezier(.55, 0, .8, .35) forwards; }
+  .arrive { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px; display: grid; place-items: center; border-radius: 50%;
+    background: var(--accent); color: var(--on-accent); font: 800 24px/1 var(--font-display); box-shadow: 0 0 40px rgba(255, 138, 31, .7);
+    transform: translateX(clamp(150px, 19vw, 260px)) scale(0); opacity: 0; z-index: 2; }
+  [data-state="sent"] .arrive { animation: arrive 700ms 780ms var(--ease-back) forwards; }
+  .flare { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; opacity: 0; z-index: 1;
+    background: radial-gradient(circle, #fff, rgba(255, 138, 31, .8) 30%, transparent 70%); }
+  [data-state="sent"] .flare { animation: flare 900ms 560ms ease-out forwards; }
+  [data-state="sent"] .rim { animation: kick 900ms 560ms ease-out; }
+
+  @keyframes float { 50% { margin-top: -8px; } }
+  @keyframes spin { to { --sw: 360deg; } }
+  @keyframes breathe { 50% { opacity: .65; scale: 1.06; } }
+  @keyframes through {
+    0% { transform: translate(calc(-50% - clamp(170px, 22vw, 300px)), -50%); }
+    30% { transform: translate(calc(-50% - clamp(190px, 24vw, 320px)), -50%) scale(1.04); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(.08) rotate(18deg); opacity: 0; filter: blur(2px); }
+  }
+  @keyframes arrive { from { transform: translateX(0) scale(0); opacity: 0; } to { transform: translateX(clamp(150px, 19vw, 260px)) scale(1); opacity: 1; } }
+  @keyframes flare { 0% { opacity: 0; scale: .2; } 25% { opacity: 1; scale: 6; } 100% { opacity: 0; scale: 12; } }
+  @keyframes kick { 30% { box-shadow: -20px 0 60px rgba(58, 168, 255, .9), 20px 0 60px rgba(255, 138, 31, .9); } }
+
+  /* ------------------------------------------------ the words and buttons */
+  .copy { position: relative; text-align: center; display: grid; justify-items: center; margin-top: -24px; }
+  .copy .label { width: min(520px, 100%); }
+  h1 { font: 800 clamp(32px, 5vw, 54px)/1.05 var(--font-display); letter-spacing: -.02em; margin: 6px 0 12px; }
+  h1 :global(.t-n) { display: inline-block; min-width: .7em; color: var(--accent); }
+  .status { max-width: 56ch; color: var(--text-2); font-size: 17px; margin: 0 0 22px; }
+  .status :global(b) { color: var(--text); font-family: var(--font-mono); font-size: .9em; font-weight: 500; }
+  .acts { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 26px; }
+  .acts[hidden], .acts [hidden] { display: none !important; }
+  .big { padding: 15px 26px; font-size: 16px; display: inline-flex; align-items: center; gap: 10px; }
+  .big svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  [data-state="sent"] .big { animation: nudge 2.4s 2.2s ease-in-out 2; }
+  @keyframes nudge { 10%, 30% { transform: translateY(-3px); } 20% { transform: translateY(1px); } }
+  .ghost { background: transparent; border: 1px solid var(--border-strong); color: var(--text-2); }
+  .ghost:hover { color: var(--text); border-color: var(--secondary-line); }
+  .builds { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 0; margin: 0 0 18px; }
+  .builds a { display: grid; gap: 2px; min-width: 128px; padding: 10px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);
+    background: var(--surface); text-decoration: none; color: var(--text); transition: border-color 160ms, transform 200ms var(--ease-out); }
+  .builds a:hover { border-color: var(--secondary-line); transform: translateY(-2px); }
+  .builds a[aria-current] { border-color: rgba(255, 138, 31, .6); box-shadow: 0 0 0 1px rgba(255, 138, 31, .25); }
+  .builds b { font-size: 14px; }
+  .builds span { font-size: 12px; color: var(--text-2); }
+  [data-state="counting"] .builds, [data-state="sent"] .builds { opacity: .7; }
+  .facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; font-size: 13px; color: var(--text-3); margin: 0; }
+  .facts[hidden], .sha[hidden] { display: none; }
+  .facts > span:empty { display: none; }
+  .sha code { font-size: 12px; color: var(--text-2); }
+  .sha button { all: unset; cursor: pointer; margin-left: 6px; color: var(--secondary); }
+  .sha button:hover { text-decoration: underline; }
+
+  /* ------------------------------------------------ then */
+  .next { padding-block: 56px 80px; }
+  .next h2 { font: 600 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); text-align: center; margin: 0 0 18px; }
+  .next ol { list-style: none; padding: 0; margin: 0 auto; max-width: 980px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .next li { display: flex; gap: 14px; padding: 18px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); }
+  .next .n { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; font: 700 13px/1 var(--font-mono);
+    background: var(--surface-3); color: var(--text); }
+  .next li:last-child .n { background: var(--accent); color: var(--on-accent); }
+  .next h3 { font-size: 16px; margin: 3px 0 6px; }
+  .next p { margin: 0; font-size: 14px; color: var(--text-2); }
+
+  @media (max-width: 760px) {
+    .pkg { transform: translate(-50%, calc(-50% + 132px)); padding: 9px 14px 9px 9px; }
+    .pkg img { width: 34px; height: 34px; }
+    .pkg b { font-size: 12px; }
+    @keyframes through { 0% { transform: translate(-50%, calc(-50% + 132px)); } 100% { transform: translate(-50%, -50%) scale(.08); opacity: 0; } }
+    .arrive { transform: translateY(-110px) scale(0); }
+    @keyframes arrive { from { transform: translateY(0) scale(0); opacity: 0; } to { transform: translateY(-110px) scale(1); opacity: 1; } }
+    .stage { height: 400px; }
+    .next ol { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .halo, .swirl, .pkg, .big { animation: none !important; }
+    [data-state="sent"] .pkg { opacity: 0; }
+    [data-state="sent"] .arrive { animation: none; opacity: 1; transform: translateX(clamp(150px, 19vw, 260px)); }
+    [data-state="sent"] .flare, [data-state="sent"] .rim { animation: none; }
+  }
+</style>

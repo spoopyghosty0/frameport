@@ -4,11 +4,16 @@
 //   grid    — a neon grid terrain flying toward the viewer between ridges, a sun with a ring, floating shapes
 //   islands — dusk over a reflective sea: low-poly islands (some floating), a low sun with rays, clouds, lanterns
 //   space   — a ringed planet in a nebula, an asteroid field, an orbiting wireframe station, drifting star dust
+//   aurora  — a frozen night: aurora curtains over snowy peaks, mirrored in a frozen lake, ice shards (envs-more.ts)
+//   reef    — under water: light shafts, caustics on the sand, kelp, glowing jellyfish, fish, bubbles (envs-more.ts)
 import * as THREE from 'three';
 import { palette, rng } from './types';
+import { canvasTexture, disposeAll, glowTexture, hsl, mergeGeometries, moveCorners, NOISE, SKY_VERT } from './envkit';
+export { hsl } from './envkit';
+import { aurora, reef } from './envs-more';
 
-export type EnvKind = 'grid' | 'islands' | 'space';
-export const ENV_KINDS: EnvKind[] = ['grid', 'islands', 'space'];
+export type EnvKind = 'grid' | 'islands' | 'space' | 'aurora' | 'reef';
+export const ENV_KINDS: EnvKind[] = ['grid', 'islands', 'space', 'aurora', 'reef'];
 
 /** How far the world is: open (0..1, fades everything), reveal (0..1, how far out the ground has lit up), grow (0..1,
  * the objects' size), still (reduced motion: no movement, one fixed moment). */
@@ -32,50 +37,12 @@ export function envKindFor(title: string): EnvKind {
 export function buildEnv(kind: EnvKind, scene: THREE.Scene, opts: { small: boolean }): Env {
   if (kind === 'islands') return islands(scene, opts);
   if (kind === 'space') return space(scene, opts);
+  if (kind === 'aurora') return aurora(scene, opts);
+  if (kind === 'reef') return reef(scene, opts);
   return grid(scene, opts);
 }
 
 // ------------------------------------------------------------------ shared pieces
-export const hsl = (h: number, s: number, l: number) => new THREE.Color().setHSL(((h % 360) + 360) % 360 / 360, s, l);
-
-function canvasTexture(size: number, draw: (g: CanvasRenderingContext2D, n: number) => void) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  draw(c.getContext('2d')!, size);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-const glowTexture = () => canvasTexture(128, (g, n) => {
-  const r = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
-  r.addColorStop(0, 'rgba(255,255,255,1)');
-  r.addColorStop(0.22, 'rgba(255,255,255,0.85)');
-  r.addColorStop(0.5, 'rgba(255,255,255,0.18)');
-  r.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = r;
-  g.fillRect(0, 0, n, n);
-});
-
-/** Everything under `root`, and the extra textures, freed. */
-function disposeAll(root: THREE.Object3D, textures: THREE.Texture[]) {
-  root.traverse((o) => {
-    const m = o as THREE.Mesh;
-    m.geometry?.dispose();
-    const mat = m.material as THREE.Material | THREE.Material[] | undefined;
-    if (Array.isArray(mat)) mat.forEach((x) => x.dispose()); else mat?.dispose?.();
-  });
-  root.parent?.remove(root);
-  textures.forEach((t) => t.dispose());
-}
-
-const SKY_VERT = /* glsl */ `
-  varying vec3 vDir;
-  void main() {
-    vDir = normalize(position);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }`;
-
 // ------------------------------------------------------------------ grid
 const GRID_SKY = /* glsl */ `
   uniform vec3 uTop; uniform vec3 uHorizon; uniform vec3 uBottom; uniform float uOpen;
@@ -425,22 +392,16 @@ function islands(scene: THREE.Scene, opts: { small: boolean }): Env {
 
   function islandGeometry(r: () => number, rock: THREE.Color, top: THREE.Color, float: boolean) {
     // a jittered low-poly lump, flattened; floating ones get a rocky cone beneath
-    const geo = new THREE.IcosahedronGeometry(1, 1);              // polyhedra are non-indexed already
-    const p = geo.attributes.position as THREE.BufferAttribute;
-    const seen = new Map<string, [number, number, number]>();
-    for (let i = 0; i < p.count; i++) {
-      const key = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
-      if (!seen.has(key)) seen.set(key, [1 + (r() - 0.5) * 0.35, 1 + (r() - 0.5) * 0.35, 1 + (r() - 0.5) * 0.35]);
-      const j = seen.get(key)!;
-      p.setXYZ(i, p.getX(i) * j[0], Math.max(p.getY(i), float ? -0.15 : -0.6) * j[1] * 0.55, p.getZ(i) * j[2]);
-    }
+    const geo = moveCorners(new THREE.IcosahedronGeometry(1, 1), (x, y, z) => {
+      const j = [1 + (r() - 0.5) * 0.35, 1 + (r() - 0.5) * 0.35, 1 + (r() - 0.5) * 0.35];
+      return [x * j[0], Math.max(y, float ? -0.15 : -0.6) * j[1] * 0.55, z * j[2]];
+    });
     const parts: THREE.BufferGeometry[] = [geo];
     if (float) {
       const cone = new THREE.ConeGeometry(0.95, 2.2, 7, 2).toNonIndexed();
       cone.rotateX(Math.PI);
-      cone.translate(0, -1.2, 0);
-      const cp = cone.attributes.position as THREE.BufferAttribute;
-      for (let i = 0; i < cp.count; i++) cp.setX(i, cp.getX(i) * (1 + (r() - 0.5) * 0.3));
+      cone.translate(0, -1.1, 0);                                  // its base sits inside the lump: no gap between them
+      moveCorners(cone, (x, y, z) => { const k = 1 + (r() - 0.5) * 0.3; return [x * k, y, z * k]; });
       parts.push(cone);
     }
     const merged = mergeGeometries(parts);
@@ -553,28 +514,7 @@ function islands(scene: THREE.Scene, opts: { small: boolean }): Env {
 }
 
 /** Non-indexed geometries with the same attributes, joined (enough for our low-poly pieces). */
-function mergeGeometries(parts: THREE.BufferGeometry[]) {
-  const pos: number[] = [];
-  for (const g of parts) {
-    const p = (g.index ? g.toNonIndexed() : g).attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < p.count; i++) pos.push(p.getX(i), p.getY(i), p.getZ(i));
-    g.dispose();
-  }
-  const out = new THREE.BufferGeometry();
-  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  return out;
-}
-
 // ------------------------------------------------------------------ space
-const NOISE = /* glsl */ `
-  float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-  float noise(vec3 x) {
-    vec3 i = floor(x), f = fract(x);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
-               mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
-  }
-  float fbm(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * noise(p); p *= 2.03; a *= 0.5; } return s; }`;
 const NEBULA = /* glsl */ `
   uniform vec3 uA; uniform vec3 uB; uniform vec3 uDark; uniform float uOpen; uniform float uSeed;
   ${NOISE}
@@ -700,8 +640,7 @@ function space(scene: THREE.Scene, opts: { small: boolean }): Env {
 
   // asteroids: one jittered rock, many instances
   const rockGeo = new THREE.DodecahedronGeometry(1, 0);
-  const rp = rockGeo.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < rp.count; i++) rp.setXYZ(i, rp.getX(i) * (0.75 + r0() * 0.5), rp.getY(i) * (0.65 + r0() * 0.5), rp.getZ(i) * (0.75 + r0() * 0.5));
+  moveCorners(rockGeo, (x, y, z) => [x * (0.75 + r0() * 0.5), y * (0.65 + r0() * 0.5), z * (0.75 + r0() * 0.5)]);
   rockGeo.computeVertexNormals();
   const rockMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 1, metalness: 0.05 });
   const nRocks = opts.small ? 55 : 140;
