@@ -53,21 +53,29 @@ def _no_auth_methods(exc: BaseException) -> bool:
     return isinstance(exc, paramiko.SSHException) and "no authentication methods available" in str(exc).lower()
 
 
+_KEY_LOCK = threading.Lock()  # first start: the setup page's announcement and its text both ask for the key at once
+
+
 def app_key() -> paramiko.Ed25519Key:
     path = ssh_dir() / "id_ed25519"
-    if not path.exists():
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
-        key = Ed25519PrivateKey.generate()
-        data = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH,
-                                 serialization.NoEncryption())
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # private from the first byte
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
-        pub = key.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH)
-        (ssh_dir() / "id_ed25519.pub").write_text(pub.decode() + " frameport\n")
+    with _KEY_LOCK:
+        if not path.exists():
+            _create_app_key(path)
     return paramiko.Ed25519Key.from_private_key_file(str(path))
+
+
+def _create_app_key(path: Path) -> None:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    key = Ed25519PrivateKey.generate()
+    data = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH,
+                             serialization.NoEncryption())
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # private from the first byte
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    pub = key.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH)
+    (ssh_dir() / "id_ed25519.pub").write_text(pub.decode() + " frameport\n")
 
 
 def app_public_key() -> str:

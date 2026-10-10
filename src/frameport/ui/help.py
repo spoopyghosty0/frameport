@@ -102,7 +102,9 @@ HELP: dict[str, str] = _Translated({
                       "for you. With Developer Mode on you can also pair without the setup command: on the Frame open "
                       "Settings → Developer → Pair new host, click Connect there and approve FramePort. That way needs "
                       "no connection from the Frame into this PC.",
-    "first_time_setup": "The command fetches a small setup script from this app over your local network. It turns on "
+    "first_time_setup": "The command finds this app on your local network (it announces itself while this page is "
+                        "open) and asks to set up the Frame; you allow it here when both show the same code. Then "
+                        "it fetches a small setup script from this app. It turns on "
                         "Developer Mode (which includes SSH), lets this app's key in and installs Lepton if needed. "
                         "Turning on Developer Mode closes the Frame's desktop; the setup finishes on its own and "
                         "FramePort connects by itself. No password needed.",

@@ -2,7 +2,8 @@
 
 Sources, merged per device:
   1. mDNS `_steamos-devkit._tcp` — every SteamOS device in Developer Mode announces itself (name, login user).
-  2. mDNS `_frameport._tcp` — published by the FramePort bootstrap script.
+  2. mDNS `_frameport._tcp` — reserved for a FramePort service on the Frame (nothing publishes it yet; the PC side
+     announces `_frameport-pair._tcp` while its setup page is open, see pairing.py).
   3. Remembered Frames (frames.json).
   4. Fallback: a quick TCP scan of the PC's local /24 subnets for SSH (port 22), for Frames without Developer Mode.
 A Frame can have several addresses (home Wi-Fi, its own hotspot `wlanap` 10.35.78.1, USB `usb0` 10.86.200.x); each

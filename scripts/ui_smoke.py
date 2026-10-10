@@ -106,6 +106,8 @@ def main() -> int:
     ap.add_argument("--install-questions", nargs="+", metavar="PKG", default=None,
                     help="open the install questions for these games, then click each dialog's main button twice "
                          "(a double click must not duplicate dialogs); nothing is installed")
+    ap.add_argument("--setup-url", action="store_true", help="the connect page's setup URL flow: Start setup, a "
+                    "pretend Frame asks (/hello), click Allow, check /wait hands over the code")
     ap.add_argument("--usb-setup", action="store_true", help="click 'Set up with a USB cable' on the connect page "
                     "(a Frame cabled to this PC) and screenshot what follows")
     ap.add_argument("--docs", action="store_true", help="only the screens used in the docs (Library, --game, Frame)")
@@ -344,6 +346,52 @@ def main() -> int:
             button.on_click(None)
         steps = [("usb-explain", click_usb_setup), ("usb-continue", continue_usb),
                  ("usb-wait", lambda a: time.sleep(8)), ("usb-after", lambda a: time.sleep(10))]
+    if args.setup_url:
+        import json as _json
+        import secrets as _secrets
+        import urllib.request as _url
+
+        got: dict = {}
+
+        def start_setup(a):
+            from frameport.frame import pairing as _pairing
+
+            _pairing.ensure_reachable = lambda server: "ok"  # never an admin prompt from a smoke test
+            a.navigate(1)
+            time.sleep(2)
+            button = find_button(a.body, "Start setup")
+            print(f"start button found: {button is not None}", flush=True)
+            button.on_click(None)
+
+        def frame_asks(a):
+            """What bootstrap/setup.sh does on the Frame: /hello, then /wait (in the background, until allowed)."""
+            base = f"http://127.0.0.1:{a.pairing.port}"
+            nonce = _secrets.token_hex(12)
+            with _url.urlopen(f"{base}/hello?host=steamframe&nonce={nonce}", timeout=10) as r:
+                got["hello"] = _json.load(r)
+
+            def wait():
+                with _url.urlopen(f"{base}/wait?id={got['hello']['id']}", timeout=120) as r:
+                    got["wait"] = (r.status, _json.load(r))
+            threading.Thread(target=wait, daemon=True).start()
+            time.sleep(2)
+
+        def allow(a):
+            button = find_button(a.body, "Allow")
+            print(f"allow button found: {button is not None}", flush=True)
+            button.on_click(None)
+            time.sleep(2)
+            ok = got.get("wait", (0, {}))[1].get("code") == a.pairing.code
+            print(f"setup-url: digits {got['hello']['digits']}, words {got['hello']['words']}, code handed over: "
+                  f"{ok}", flush=True)
+            if not ok:
+                ERRORS.append(f"setup-url: /wait gave {got.get('wait')}")
+
+        def line(a):
+            button = find_button(a.body, "Use the setup command")
+            button.on_click(None)
+        steps = [("setup-url", start_setup), ("setup-ask", frame_asks), ("setup-allowed", allow),
+                 ("setup-line", line)]
     if args.install_questions:
         queued: list[str] = []
 

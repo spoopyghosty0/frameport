@@ -277,7 +277,9 @@ class FrameView:
 
         pair_box = ft.Column(spacing=T.S3)
 
-        def pair(e, host: str = ""):
+        def pair(e, host: str = "", mode: str = "url"):
+            """mode "url": the Frame runs the setup URL's script, finds this PC and asks (Allow / Deny here);
+            mode "line": the typed line with this PC's address and the code (offline, as before)."""
             from ...frame.connection import FrameTarget
             from ...frame.pairing import PairingServer
 
@@ -286,7 +288,17 @@ class FrameView:
 
             def on_paired(info):
                 app.connect(FrameTarget(info["host"], info["user"], 22, info["name"]))
-            server = app.pairing = PairingServer(on_paired=on_paired, host=host).start()
+
+            def on_ask(ask):
+                def show():
+                    show_command()
+                    if app.route[0] != "frame":  # elsewhere in the app: a toast to allow it from there
+                        app.toast(tr("{frame} wants to be set up with FramePort (code {digits}).").format(
+                            frame=ask.frame, digits=ask.digits), action=tr("Allow"),
+                            on_action=lambda e: server.decide(ask.id, True))
+                app.page.run_thread(show)
+            server = app.pairing = PairingServer(on_paired=on_paired, host=host, on_ask=on_ask).start()
+            app.pairing_mode = mode
             show_command()
 
             def check_network():
@@ -379,17 +391,37 @@ class FrameView:
                     return
                 except Exception:  # noqa: BLE001 - not set up yet: show the setup command for the cable
                     pass
-                app.page.run_thread(lambda: pair(None, host=usb.PC_USB_IP))
+                app.page.run_thread(lambda: pair(None, host=usb.PC_USB_IP, mode="line"))
             app.run_bg(watch)
 
         def show_command(update=True):
             """The setup command of the running pairing server: also when the page is redrawn (connection checks,
             discovery), which used to close it."""
-            line = app.pairing.one_liner
+            from ...frame.pairing import SETUP_LINE, SETUP_PAGE, pc_words
+
+            by_url = getattr(app, "pairing_mode", "line") == "url"
+            line = SETUP_LINE if by_url else app.pairing.one_liner
             over_usb = bool(getattr(app.pairing, "host", ""))
+            server = app.pairing
+
+            def ask_card(ask):
+                decide = lambda allow: (server.decide(ask.id, allow), show_command())  # noqa: E731
+                return C.callout(ft.Row([
+                    ft.Column([C.body(tr("{frame} wants to be set up").format(frame=ask.frame), T.TEXT,
+                                      weight=ft.FontWeight.W_600),
+                               C.meta(tr("Allow it if the Frame shows the code {digits} ({address})").format(
+                                   digits=ask.digits, address=ask.address))], spacing=T.px(2), expand=True),
+                    ft.Text(ask.digits, font_family="monospace", size=T.px(22), weight=ft.FontWeight.W_700,
+                            color=T.ACCENT),
+                    C.primary(tr("Allow"), ft.Icons.CHECK_ROUNDED, lambda e: decide(True)),
+                    C.ghost(tr("Deny"), on_click=lambda e: decide(False)),
+                ], spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER), "info")
+
             pair_box.controls = [
                 C.body(tr("On the Frame: SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
-                          "Konsole, and run (it reaches this PC over the USB cable):") if over_usb else
+                          "Konsole, and run (it reaches this PC over the USB cable):") if over_usb and not by_url else
+                       tr("On the Frame: SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
+                          "Konsole, and run (the same line for every Frame; it finds this PC):") if by_url else
                        tr("On the Frame: SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
                           "Konsole, and run:"), T.TEXT),
                 ft.Container(ft.Row([ft.Text(line, font_family="monospace", selectable=True, size=T.px(12),
@@ -397,8 +429,13 @@ class FrameView:
                                      C.icon_btn(ft.Icons.CONTENT_COPY_ROUNDED, tr("Copy"), lambda e: app.copy(line))]),
                              padding=ft.Padding(T.S3, T.S2, T.S2, T.S2), bgcolor=T.BG, border_radius=T.RADIUS_SM,
                              border=ft.Border.all(1, T.BORDER)),
+                *([C.meta(tr("No keyboard? Open {page} in Chromium on the Frame (Steam's + on the taskbar installs "
+                             "it), copy the line there and paste it into Konsole. This PC shows up there as "
+                             "“{words}”.").format(page=SETUP_PAGE, words=pc_words()))] if by_url else []),
+                *[ask_card(a) for a in server.asks if a.state == "open"],
                 ft.Row([C.spinner(),
-                        C.meta(tr("Waiting for your Frame… (code {code})").format(code=app.pairing.code))],
+                        C.meta(tr("Waiting for your Frame to ask…") if by_url else
+                               tr("Waiting for your Frame… (code {code})").format(code=app.pairing.code))],
                        spacing=T.S2),
                 ft.Row([C.meta(tr("You only do this once: FramePort connects by itself when the setup has finished."),
                                expand=True), C.help_icon("first_time_setup")], spacing=T.px(4)),
@@ -456,14 +493,19 @@ class FrameView:
         return ft.Column([
             app.top_bar(tr("Connect your Steam Frame"), tr("FramePort installs games on the Frame over your network")),
             *([offline] if offline else []),
-            step(1, tr("First-time setup"), tr("New Frame? Run one command on it and FramePort does the rest. Did this "
-                                               "once already? Your Frame appears under step 2."),
-                 ft.Row([C.primary(tr("Show setup command"), ft.Icons.TERMINAL_ROUNDED, pair),
+            step(1, tr("First-time setup"), tr("New Frame? Run FramePort's setup on it, allow it here, and FramePort "
+                                               "does the rest. Did this once already? Your Frame appears under "
+                                               "step 2."),
+                 ft.Row([C.primary(tr("Start setup"), ft.Icons.TERMINAL_ROUNDED, pair),
                          C.meta(tr("OR"), weight=ft.FontWeight.W_600),
                          C.secondary(tr("Set up with a USB cable"), ft.Icons.USB_ROUNDED, usb_explain,
                                      tooltip=tr("No Wi-Fi needed: for networks that block the setup, and faster "
-                                                "game uploads"))], wrap=True, spacing=T.S3,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                                                "game uploads")),
+                         C.ghost(tr("Use the setup command"), ft.Icons.KEYBOARD_ROUNDED,
+                                 lambda e: pair(e, mode="line"),
+                                 tooltip=tr("The line with this PC's address and a one-time code, without the "
+                                            "search: for networks that block it"))],
+                        wrap=True, spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                  pair_box,
                  help="first_time_setup"),
             step(2, tr("Already set up: on your network"), tr("Frames in Developer Mode show up here."), found,
