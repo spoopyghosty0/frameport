@@ -1,5 +1,5 @@
 name: Working recipe
-description: Share a recipe that works on the Steam Frame (FramePort fills this in: game menu → "Share working recipe…").
+description: 'Share a recipe that works on the Steam Frame (FramePort fills this in: game menu → "Share working recipe…").'
 title: "[Working recipe] "
 labels: ["working-config"]
 body:

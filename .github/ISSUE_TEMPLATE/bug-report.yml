@@ -1,5 +1,5 @@
 name: Problem report
-description: A game or FramePort doesn't work (FramePort fills this in: "Report a problem…").
+description: 'A game or FramePort doesn''t work (FramePort fills this in: "Report a problem…").'
 title: "[Problem] "
 labels: ["bug"]
 body:
