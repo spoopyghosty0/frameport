@@ -237,3 +237,20 @@ def test_fps_target():
     assert M.fps_target([]) is None and M.fps_target([None]) is None
     assert M.fps_target([50.0, 71.9, 72.4]) == 72 and M.fps_target([88.0, 90.1]) == 90
     assert M.fps_target([200]) == 144
+
+
+def test_modules_need_the_agent_that_has_them():
+    """Per-module collection came to main with agent 73 (main's 72 had `_monitor` without it): an older agent would
+    ignore {"modules": …} and keep sending everything, so the client must not count on it."""
+    import ast
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "agent" / "frameport_agent.py").read_text()
+    version = next(n.value.value for n in ast.parse(src).body if isinstance(n, ast.Assign)
+                   and getattr(n.targets[0], "id", "") == "AGENT_VERSION")
+    assert "def set_modules" in src and M.MIN_AGENT_MODULES <= version
+    assert M.MIN_AGENT_MODULES == 73
+    s = SimpleNamespace(static={"agent": 72})
+    assert not M.MonitorSession.supports_modules.fget(s)
+    s.static["agent"] = 73
+    assert M.MonitorSession.supports_modules.fget(s)

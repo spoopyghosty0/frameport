@@ -15,7 +15,7 @@ from collections.abc import Callable
 from ..core import applog
 
 MIN_AGENT = 62  # first agent with `_monitor`
-MIN_AGENT_MODULES = 65  # first agent that takes {"modules": [...]} (collects only what's asked for)
+MIN_AGENT_MODULES = 73  # first agent that takes {"modules": [...]} (collects only what's asked for)
 MODULES = ("games", "procs", "cpu", "gpu", "mem", "temps", "power", "battery", "net", "disk")  # agent MON_MODULES
 HISTORY = 120   # points per sparkline (2 min at 1 s)
 REPLY_TIMEOUT = 15.0

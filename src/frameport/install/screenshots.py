@@ -152,7 +152,7 @@ def delete(frame, shots: list[dict]) -> int:
 
 
 def take(frame, wait: float = 8) -> dict:
-    """Take a headset screenshot on the Frame (agent v66 `take_screenshot`: OpenVR's RequestScreenshot +
+    """Take a headset screenshot on the Frame (agent v73 `take_screenshot`: OpenVR's RequestScreenshot +
     SubmitScreenshot, saved by Steam under SteamVR like one taken in the headset): {taken, path, reason, hmd}.
     reason "steamvr" = SteamVR isn't running, "capture" = nothing captured (the headset sleeps)."""
     return frame.agent("take_screenshot", wait=wait)
