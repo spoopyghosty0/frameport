@@ -172,6 +172,17 @@ def _art(pkg: str, refresh: bool, offline: bool, log, pick: bool = False) -> str
 
 PROFILES = ("demo", "fresh")
 SCAN_FILE = "showcase-scan.json"  # the fresh profile's games, found by the pretend folder scan (fakes.scan_job)
+# a launch log as the demo shows it (made up, shaped like the real ones; no device data)
+DEMO_LOG = """launch test {pkg} (45 s, headset not worn)
+I lepton: Boot complete!
+I lepton: starting {pkg}
+I FrameBridge: OpenXR instance created (SteamVR, Android runtime)
+I FrameBridge: session state READY -> SYNCHRONIZED
+I FrameBridge: new layer: projection 2 views
+I FrameBridge: pacing: 72.0 fps (72 Hz), 0 late frames
+milestone: {milestone}
+verdict: pass
+"""
 
 
 def build(home: Path, offline: bool = False, refresh: bool = False, log=print, profile: str = "demo") -> dict:
@@ -203,6 +214,15 @@ def build(home: Path, offline: bool = False, refresh: bool = False, log=print, p
         raise SystemExit(f"demo-analyses.json has no analysis for {missing}")
     for spec in fixture["games"]:
         library.upsert_game(spec["package"], **_entry(spec, tech[spec["package"]], now))
+    # each passed launch test keeps its log (the game page's log button opens it): a short made-up one
+    logs = home / "logs"
+    logs.mkdir()
+    for g in library.games():
+        pkg, test = g["package"], g.get("last_test")
+        if test:
+            path = logs / f"{pkg}-demo.log"
+            path.write_text(DEMO_LOG.format(pkg=pkg, milestone=test.get("milestone") or ""), encoding="utf-8")
+            library.upsert_game(pkg, last_test={**test, "log_path": str(path)})
     # settings: what a first start would set (no welcome, no migrations or catalog refresh, no update nags)
     from frameport import __version__
 

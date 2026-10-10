@@ -221,6 +221,14 @@ class GameView:
                                    .format(changed=changed) if diff else tr("Installed · a newer build is ready")),
                       "missing": tr("Not installed"), None: tr("Frame not connected")}[st]
         frame_ok = st in ("installed", "outdated")
+
+        def log_button(on_pc: bool) -> list[ft.Control]:
+            # the last launch test's full log, on the card of the place it ran
+            path = last.get("log_path")
+            if not path or (last.get("target") == "This PC") != on_pc:
+                return []
+            return [C.icon_btn(ft.Icons.DESCRIPTION_OUTLINED, tr("Last launch test's log"),
+                               lambda e: app.show_log_file(path, app._title(pkg)))]
         # Oculus/LibOVR Rift games need Revive, which can't run on the Frame — be honest about it
         patches = (g.get("recipe") or {}).get("patches", {})
         rift_oculus = self.rift and "pcvr.revive" in patches
@@ -243,10 +251,11 @@ class GameView:
                      tr("Runs natively on SteamOS, started from the Frame's Steam library") if self.linux else "")
         cards.append(self.target_card(
             G.FRAME, tr("Steam Frame"), frame_line, frame_color, frame_sub,
-            [C.icon_btn(G.TEST, C.tip(tr("Launch test on the Frame. ") + HELP["launch_test"]),
-                        lambda e: app.test_game(pkg, "frame"), not frame_ok),
-             C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, C.tip(tr("Uninstall from the Frame. ") + HELP["uninstall"]),
-                        lambda e: app.uninstall(pkg, "frame"), not frame_ok)] if frame_ok else []))
+            log_button(False) + ([
+                C.icon_btn(G.TEST, C.tip(tr("Launch test on the Frame. ") + HELP["launch_test"]),
+                           lambda e: app.test_game(pkg, "frame"), not frame_ok),
+                C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, C.tip(tr("Uninstall from the Frame. ") + HELP["uninstall"]),
+                           lambda e: app.uninstall(pkg, "frame"), not frame_ok)] if frame_ok else [])))
         if self.rift:
             dep = app.pc_installs().get(pkg)
             cards.append(self.target_card(
@@ -258,10 +267,10 @@ class GameView:
                  .format(value=dep.get('revive_version') or '', value2=dep.get('backend') or 'openxr')
                  if dep.get("revive_win") else tr("The repack's own Revive · runs the game directly")
                  if dep.get("launch") == "repack" else tr("Runs the game directly")) if dep else "",
-                [C.icon_btn(G.TEST, tr("Launch test on this PC"),
-                            lambda e: app.test_game(pkg, "pc")),
-                 C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Uninstall from this PC…"),
-                            lambda e: app.uninstall(pkg, "pc"))] if dep else []))
+                log_button(True) + ([C.icon_btn(G.TEST, tr("Launch test on this PC"),
+                                                lambda e: app.test_game(pkg, "pc")),
+                                     C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Uninstall from this PC…"),
+                                                lambda e: app.uninstall(pkg, "pc"))] if dep else [])))
         return C.section(tr("Where it's installed"), ft.Row(cards, spacing=T.S3), help="where")
 
     def target_card(self, icon, name, line, color, sub, buttons) -> ft.Control:
