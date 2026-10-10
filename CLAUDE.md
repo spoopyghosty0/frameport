@@ -277,7 +277,12 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
     by hand: the "Update now" button path (same apply(), called from the running app). macOS: CI smoke only.
 - `agent/frameport_agent.py` — runs **on the Frame** (python3 stdlib only), JSON over SSH. Owns the install layout,
   launch.sh template, Steam shortcuts (binary VDF), launch tests. Bump `AGENT_VERSION` when changing it.
-- `bootstrap/bootstrap.sh` — one-time Frame setup served by the pairing server (sshd, app key, avahi service, Lepton).
+- `bootstrap/bootstrap.sh` — one-time Frame setup served by the pairing server (app key, podman fix, Developer Mode, Lepton).
+  `bootstrap/setup.sh` — the setup URL (`curl -sL spoopyghosty0.github.io/frameport/s | bash`, copied to the site by
+  `site/scripts/sync-media.mjs`): finds the PC (stdlib mDNS on 5353 for `_frameport-pair._tcp`, which the pairing
+  server announces while open; else the USB address and a /24 scan of `/ping`), `/hello` → the user clicks Allow (4
+  digits on both sides, `ask_digits`) → `/wait` hands over the code → runs bootstrap.sh exactly like the typed line.
+  Checked on the dev Frame 2026-10-10 (mDNS and scan paths) with a stub bootstrap; tests/test_setup_url.py.
 - `catalog/games/<package>.yaml` (installed apps also fetch these from GitHub `main`, see "Catalog updates") — 38 recipes (34 verified 2026-09-28; Deadpool VR, 4XVR, NEX Player and AC Nexus's
   90 Hz default confirmed later by the owner); `catalog/triage.yaml` — log signatures → fixes.
 - `native/` — sources of the prebuilt binaries in `artifacts/` (adapter, VrApi bridge patches, GL shim, stubs).

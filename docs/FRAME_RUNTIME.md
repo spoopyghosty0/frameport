@@ -1,5 +1,20 @@
 # Steam Frame runtime reference (SteamOS 0.3.0, build 20260922)
 
+## Setup from the project page (checked 2026-10-10, dev Frame, SteamOS build 20260922)
+
+- Factory Frames have no browser; Steam's taskbar **+** offers Chromium as a Flatpak (`org.chromium.Chromium`,
+  flathub is configured as a system remote). It is the default handler for https links once installed.
+- Desktop Mode has `curl`, `wget`, `python3` 3.12, `konsole`, `kdialog`, `xdg-open`, `avahi-browse`, `systemd-run`;
+  no `wl-copy`/`xclip`.
+- avahi-daemon runs, but `avahi-browse` from an SSH session fails ("Daemon not running": no system D-Bus access
+  there). A stdlib-Python mDNS query works when it listens on port 5353 in the 224.0.0.251 group (like avahi):
+  replies to a random source port are dropped by the Frame's firewall. `bootstrap/setup.sh` does exactly that.
+- The Frame reaches the PC's port 8765 over the home Wi-Fi without any firewall change on the PC side here (WSL in
+  mirrored mode with the earlier FramePort rule state). The PC is also visible through the Frame's hotspot
+  (`wlanap`, 10.35.78.x): the script lists one PC once, by name and words.
+- Dolphin's "executable scripts" setting is the default (ask); `.sh` files open with a `bash.desktop` handler that
+  runs them in a terminal. Not used by the setup (a pasted line is simpler and needs no download prompt).
+
 ## Lepton (Android container)
 - Steam app **3029110 "Lepton"** (runtime) and **3056000 "Lepton Development"** (needs Developer Mode). The binary
   is `<Steam library>/steamapps/common/Lepton/lepton`; FramePort finds it via the appmanifests.

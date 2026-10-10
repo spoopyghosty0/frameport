@@ -32,22 +32,34 @@ start shows a warning:
 
 ## Connecting the Steam Frame
 
-The Frame and the computer must be on the same network.
+The Frame and the computer must be on the same network (or connected with a USB cable, below).
 
-1. In FramePort open **Steam Frame** and click **Show setup command**.
+1. In FramePort open **Steam Frame** and click **Start setup**. Keep that page open: FramePort announces itself on
+   your network while it is.
 2. First time only, on the Frame:
    1. Open the **SteamVR dashboard → Launch a program → Desktop**: the Linux desktop opens on a virtual screen.
    2. Open the app menu (bottom-left corner of that desktop) → **System → Konsole** (or search for Konsole).
-   3. Type the command FramePort shows exactly as shown (on-screen keyboard or any USB/Bluetooth keyboard) and press
-      **Enter**. It looks like `curl -fsS 192.168.1.20:8765/1a2b3c4d | bash`: your computer's address, then a
-      one-time code.
-   4. After a few seconds the desktop closes by itself (Steam restarts once); that's expected. If
+   3. Run the same line on every Frame (on-screen keyboard or any USB/Bluetooth keyboard), then press **Enter**:
+
+      ```
+      curl -sL spoopyghosty0.github.io/frameport/s | bash
+      ```
+
+      No keyboard at hand? Open [the setup page](https://spoopyghosty0.github.io/frameport/setup/) in Chromium on the
+      Frame (in Steam, the **+** on the taskbar installs it), tap **Copy**, then paste it into Konsole.
+   4. The terminal finds FramePort and shows a 4-digit code. FramePort shows the same code with **Allow**: click it.
+      Nothing changes on the Frame before that.
+   5. After a few seconds the desktop closes by itself (Steam restarts once); that's expected. If
       Steam asks to install **Lepton** (Valve's Android runtime), confirm it.
 
    FramePort connects by itself within a minute. No password is needed. The command lets FramePort in and turns on
    **Developer Mode** (which includes SSH); everything it changes is listed in [FRAME_SETUP.md](FRAME_SETUP.md).
 3. Later starts: a Frame in Developer Mode appears in the list and FramePort connects to it automatically. (If you
    turn Developer Mode off in Settings → System → Developer, turn it on again there.)
+
+**The setup command (no search):** **Use the setup command** shows a line with your computer's address and a one-time
+code instead, such as `curl -fsS 192.168.1.20:8765/1a2b3c4d | bash`. It needs neither the project page nor the
+network search (for networks that block mDNS); it runs the same setup.
 
 **Without Konsole:** turn on Developer Mode yourself (Settings → System → Developer). The Frame then appears under
 **On your network**. On the Frame open Settings → Developer → **Pair new host**, then click **Connect** in FramePort

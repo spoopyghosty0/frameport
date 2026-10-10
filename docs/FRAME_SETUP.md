@@ -35,8 +35,14 @@ and Proton stay. Undo them as shown above or in Steam.
 
 ## Network and firewalls
 
-The setup command is the only time the Frame connects to your computer: it downloads the script from FramePort on
-TCP port 8765 (8766/8767 if taken), only while the setup command is shown and for at most 30 minutes. Everything
+The setup is the only time the Frame connects to your computer: it downloads the script from FramePort on TCP port
+8765 (8766/8767 if taken), only while the setup page is open and for at most 30 minutes. With the setup line from
+the project page (`curl -sL spoopyghosty0.github.io/frameport/s | bash`, the script is
+[bootstrap/setup.sh](../bootstrap/setup.sh)) the Frame first finds FramePort: FramePort announces itself over mDNS
+(`_frameport-pair._tcp`, with this computer's name and two words, never the code) while that page is open; without
+an answer the script tries the USB cable's address and the Frame's network on port 8765. It then asks FramePort, and
+only after you click **Allow** (both sides show the same 4 digits) does FramePort hand over the one-time code, which
+fetches the same setup script as the typed command. Everything
 else goes from the computer to the Frame. If the command just says "timed out", the setup page shows what is likely
 blocking it after about 45 seconds:
 
