@@ -28,7 +28,9 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 # 6: gl_multiview_libs (own-engine libraries with OVR_multiview GLSL: frame.gl_multiview_fbo) (2026-10)
 # 7: unreal_thumb_touch (UE4 OculusInput's ThumbUp from near-touch, matched exactly: frame.unreal_thumb_touch)
 # 8: media_codec (plays video through Android's decoders: MediaCodec/ExoPlayer/Media3 or VLC: frame.hw_video_decode)
-ANALYSIS_VERSION = 8
+# 9: gamepad (the manifest declares gamepad support: android.hardware.gamepad / Android TV's LEANBACK_LAUNCHER:
+#    device.steam_gamepad) (2026-10)
+ANALYSIS_VERSION = 9
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
@@ -294,6 +296,8 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             "sdl_java": sdl_java,
             "vivox_api31": vivox_api31,
             "media_codec": media_codec,
+            # declares gamepad support (SDL's manifest template has both): device.steam_gamepad
+            "gamepad": "android.hardware.gamepad" in features or axml.LEANBACK_LAUNCHER in cats,
             "oculus_xr_plugin": bool(il2cpp_meta) and b"\0m_StereoRenderingModeAndroid\0" in il2cpp_meta,
             # Unity's built-in Oculus support checks for Meta's system apps before VR (frame.unity_oculus_check)
             "unity_oculus_check": b"\0com.oculus.systemactivities\0" in lib_bytes.get("libunity.so", b""),

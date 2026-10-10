@@ -106,6 +106,8 @@ SUMMARIES = {
                                 "(VR is unaffected).",
     "device.display_mode": "Choose \"Flat window\" if a phone/tablet app shows nothing in the headset, \"VR\" if a VR "
                            "app opens as a flat window.",
+    "device.steam_gamepad": "Lets the game use your controllers as a gamepad instead of a pointer (2D games that "
+                            "show touch controls, e.g. SDL games).",
     "device.lepton_env": "Extra settings for the Android container (for testing).",
     "device.foveation": "Try \"Fixed\" or \"Off\" if one eye shimmers or jitters while menus look fine.",
     # PC VR
