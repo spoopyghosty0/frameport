@@ -83,10 +83,15 @@ dev Frame, 2026-10-09), so a refused session is retried every 250 ms until 20 s
 after the plugin loaded (later: for 2 s); initialization then falls back to
 FFmpeg software decoding inside the already-selected component. VP9 is limited
 to 4096x2304 (codec list and component; larger VP9 decodes in software): at
-7680x3840 Iris accepted the session but never returned a picture. Iris returned
-pictures for hidden VP9 frames too (304 for 300 packets); the split hidden
-frames carry no timestamp (picture time 0), and the component drops as many of
-those as the submitted superframes held hidden frames. This preserves the client's
+7680x3840 Iris accepted the session but never returned a picture. For every
+VP9 frame that isn't shown (alt-ref/hidden frames split from superframes) Iris
+returns an empty capture buffer (bytesused 0, no LAST flag, time 0). FFmpeg's
+wrapper returned those as pictures and, during the EOS drain, took the first one
+for the end of the stream, losing the pictures still in the driver (two-pass
+VP9 at 4K: 573 of 600 frames, measured 2026-10-10). `build.py` makes the wrapper
+requeue empty non-LAST buffers instead; the drain ends at the LAST buffer, or
+after a skipped empty buffer at one silent second, so a driver that ends a drain
+with an empty unflagged buffer cannot block. This preserves the client's
 buffer/surface contract without requiring the app to retry another codec.
 
 During hardware playback, bounded references to two GOPs of compressed packets
@@ -177,7 +182,9 @@ The builder downloads the pinned FFmpeg 7.1.1 archive from
 https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz and verifies SHA256
 `733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1`.
 `build.py` applies explicit wrapper changes: VP9 V4L2 uses the same
-`vp9_superframe_split` input filter as the software decoder, and the V4L2
+`vp9_superframe_split` input filter as the software decoder, empty non-LAST
+capture buffers (hidden VP9 frames) are requeued rather than output or taken
+for the end of a drain, and the V4L2
 decoder gains a flush callback that restarts a drained decoder in place
 (`V4L2_DEC_CMD_START` with both queues still streaming). Its read-only
 `frameport_flush_error` option reports failed or premature restarts to the

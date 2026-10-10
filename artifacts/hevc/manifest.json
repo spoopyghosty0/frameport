@@ -1,8 +1,8 @@
 {
-  "revision": 7,
+  "revision": 8,
   "runtime_sha256": "456e912c75cd389abcf6a63bc80e2a53bdc334371d00b200c93680388ae955e2",
   "files": {
-    "libstagefrighthw.so": "a776c951f288f77a46f54717672bff07a14586f3c366c133a8765f4e55c05a38",
+    "libstagefrighthw.so": "141de01f0d40b97d4f9a720db5ab8ea442f6aa35db5272048899292884994a1c",
     "podman.py": "529ea35d5d82474afe9e09ad1216d269317f56dd24a05fb100fced52b7b4dbca",
     "media_codecs_frameport.xml": "46c3dcad2c43cc30bea3b3680b362ed84a99c15d60714bbbbb422c80ecf90405",
     "COPYING.FFmpeg": "b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe"

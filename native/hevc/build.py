@@ -48,6 +48,57 @@ FLUSH_SOURCE = r"""static void v4l2_flush(AVCodecContext *avctx)
 """
 
 
+# Iris returns an empty capture buffer (bytesused 0, no LAST flag) for every
+# VP9 frame that isn't shown (alt-ref/hidden frames split from superframes).
+# FFmpeg's wrapper took any empty buffer during a drain for the end of the
+# stream, so the pictures still in the driver after EOS were lost (two-pass VP9:
+# 573 of 600), and outside a drain it returned them as pictures without content.
+# Requeue them instead; the drain still ends at the LAST buffer (or EPIPE), and
+# after a skipped empty buffer a silent second ends it too, so a driver that
+# ends a drain with an empty buffer and no LAST flag cannot block the caller.
+EMPTY_DECLARE = "        .fd = ctx_to_m2mctx(ctx)->fd,\n    };\n    int i, ret;\n"
+EMPTY_POLL = """    for (;;) {
+        ret = poll(&pfd, 1, timeout);
+        if (ret > 0)
+            break;
+        if (errno == EINTR)
+            continue;
+        return NULL;
+    }
+"""
+EMPTY_DRAIN = """        if (ctx_to_m2mctx(ctx)->draining && !V4L2_TYPE_IS_OUTPUT(ctx->type)) {
+            int bytesused"""
+EMPTY_SKIP = """        if (!V4L2_TYPE_IS_OUTPUT(ctx->type) && ctx->buffers && buf.index < ctx->num_buffers &&
+            !(V4L2_TYPE_IS_MULTIPLANAR(buf.type) ? buf.m.planes[0].bytesused : buf.bytesused) &&
+            !(buf.flags & (V4L2_BUF_FLAG_LAST | V4L2_BUF_FLAG_ERROR))) {
+            /* an empty picture that doesn't end the stream (Iris: a hidden VP9 frame) */
+            if (ff_v4l2_buffer_enqueue(&ctx->buffers[buf.index]) < 0) {
+                ctx->done = 1;
+                return NULL;
+            }
+            skipped_empty = 1;
+            goto start;
+        }
+
+"""
+
+
+def skip_empty_pictures(context_text: str) -> str:
+    """libavcodec/v4l2_context.c with empty non-LAST capture buffers requeued (see EMPTY_SKIP)."""
+    if any(context_text.count(text) != 1 for text in (EMPTY_DECLARE, EMPTY_POLL, EMPTY_DRAIN)):
+        raise RuntimeError("unexpected FFmpeg V4L2 context source")
+    return (context_text
+        .replace(EMPTY_DECLARE, EMPTY_DECLARE.replace("int i, ret;", "int i, ret, skipped_empty = 0;"))
+        .replace(EMPTY_POLL, EMPTY_POLL.replace(
+            "        ret = poll(&pfd, 1, timeout);\n        if (ret > 0)\n            break;\n",
+            "        ret = poll(&pfd, 1, skipped_empty && ctx_to_m2mctx(ctx)->draining &&\n"
+            "                   (timeout < 0 || timeout > 1000) ? 1000 : timeout);\n"
+            "        if (ret > 0)\n            break;\n"
+            "        if (!ret && skipped_empty && ctx_to_m2mctx(ctx)->draining) {\n"
+            "            ctx->done = 1;\n            return NULL;\n        }\n"))
+        .replace(EMPTY_DRAIN, EMPTY_SKIP + EMPTY_DRAIN))
+
+
 def run(args, cwd=None, env=None):
     # PWD keeps the shell's (and FFmpeg configure's) idea of the directory on the space-free link path
     env = dict(env or os.environ, **({"PWD": str(cwd)} if cwd else {}))
@@ -140,6 +191,8 @@ def build(parser, repo: Path, ndk_root: Path, runtime: Path):
         '    { "frameport_flush_error", "Last drained-session restart error",\n'
         '        OFFSET(frameport_flush_error), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, 0,\n'
         '        FLAGS | AV_OPT_FLAG_READONLY },\n' + option_end))
+    context_source = source / "libavcodec/v4l2_context.c"
+    context_source.write_text(skip_empty_pictures(context_source.read_text()))
     buffers_source = source / "libavcodec/v4l2_buffers.c"
     buffers_source.write_text(buffers_source.read_text() + (here / "v4l2_export.c.inc").read_text())
     env = dict(os.environ, PATH=str(ndk / "bin") + os.pathsep + os.environ["PATH"])
@@ -199,7 +252,7 @@ def build(parser, repo: Path, ndk_root: Path, runtime: Path):
         path = artifacts / (name + ".txt" if name == "podman.py" else name)
         files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     # bump the revision with every change: a Frame keeps an installed codec of the same or a newer revision
-    manifest = {"revision": 7, "runtime_sha256": RUNTIME_SHA, "files": files,
+    manifest = {"revision": 8, "runtime_sha256": RUNTIME_SHA, "files": files,
                 "codecs": ["video/hevc", "video/avc", "video/x-vnd.on2.vp9"],
                 "build": {"ndk_revision": NDK_REVISION, "ffmpeg_source_sha256": FFMPEG_SHA}}
     (artifacts / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

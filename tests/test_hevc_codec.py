@@ -224,3 +224,23 @@ def test_switched_off_wrapper_runs_stock_podman_untouched(tmp_path, monkeypatch,
     monkeypatch.setenv("FRAMEPORT_NO_HW_VIDEO", "0")
     (tmp_path / "video-codec/disabled").unlink(missing_ok=True)
     assert not wrapper.switched_off(directory)
+
+
+def test_empty_capture_buffers_are_requeued_not_taken_for_the_end():
+    """Iris returns an empty capture buffer (no LAST flag) for each hidden VP9 frame. FFmpeg's wrapper ended the EOS
+    drain at the first one and lost the pictures still in the driver (two-pass VP9 4K: 573 of 600, 2026-10-10)."""
+    build = load_module(ROOT / "native/hevc/build.py", "hevc_build")
+    stand_in = ("static V4L2Buffer* v4l2_dequeue_v4l2buf(V4L2Context *ctx, int timeout)\n{\n    struct pollfd pfd = {\n"
+                + build.EMPTY_DECLARE + "start:\n" + build.EMPTY_POLL + "dequeue:\n"
+                + build.EMPTY_DRAIN + " = 0;\n        }\n}\n")
+    patched = build.skip_empty_pictures(stand_in)
+    assert "int i, ret, skipped_empty = 0;" in patched
+    # empty buffers are skipped before the drain's "empty buffer = end" check, unless LAST/ERROR is set
+    assert patched.index("ff_v4l2_buffer_enqueue(&ctx->buffers[buf.index])") < patched.index(build.EMPTY_DRAIN)
+    assert "!(buf.flags & (V4L2_BUF_FLAG_LAST | V4L2_BUF_FLAG_ERROR))" in patched
+    # a drain can't block forever after a skipped empty buffer
+    assert "if (!ret && skipped_empty && ctx_to_m2mctx(ctx)->draining) {" in patched
+    with pytest.raises(RuntimeError):
+        build.skip_empty_pictures(stand_in.replace(build.EMPTY_POLL, ""))
+    # the component no longer guesses which pictures belong to hidden frames
+    assert "vp9Hidden" not in (ROOT / "native/hevc/frameport_hevc.cpp").read_text()

@@ -666,8 +666,11 @@ converts agent ≤70 launchers (Batman's `<base>/frameport-codec` → keeps the 
 + migration `batman_video_patches` (`frame.hw_video_decode` + hidden adapter setting `surface_native`). Iris: 8K
 refused (ENOMEM) while any other decoder session is open; SteamVR's vrlinkrunthread holds one ~12 s at game start →
 refused opens retry until 20 s after the plugin loaded (else 2 s), then software; VP9 7680x3840 never returned a
-picture → VP9 ≤4096x2304; hidden VP9 frames' pictures (time 0) dropped. Rebuilds are deterministic (ext4 + NTFS path
-with spaces, two NDK copies → same a776c951…; PR #128's own sources → its 27a2d749…). Not yet run on the device.
+picture → VP9 ≤4096x2304; hidden VP9 frames come back as empty capture buffers (bytesused 0, no LAST):
+FFmpeg's wrapper ended the EOS drain at the first one (two-pass VP9 lost its last ~25 frames) → build.py requeues
+them (codec revision 8; drain ends at LAST, or 1 s after a skipped empty buffer; dev Frame 2026-10-10: 600/600 =
+OMX.google.vp9 Y hashes). Rebuilds are deterministic (ext4 + NTFS path
+with spaces, two NDK copies → same; rev 8 141de01f…; PR #128's own sources → its 27a2d749…). Not yet run on the device.
 **Vivox API 31 (GitHub #101, 2026-10-09):** newer Vivox builds (Green Hell VR) call Android 12 AudioManager
 communication-device methods from `com.vivox.sdk.AudioChangeListener` with no SDK check → NoSuchMethodError on Lepton's
 Android 11. `frame.vivox_audio_route` (analysis `vivox_api31`, ANALYSIS_VERSION 4) makes every such method return at
