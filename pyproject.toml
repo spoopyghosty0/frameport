@@ -8,7 +8,7 @@ license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [{ name = "spoopyghosty0" }]
 keywords = ["steam-frame", "vr", "openxr", "meta-quest", "android", "lepton", "proton", "revive"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: X11 Applications",
     "Intended Audience :: End Users/Desktop",
     "Operating System :: Microsoft :: Windows",
