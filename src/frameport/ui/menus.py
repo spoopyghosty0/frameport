@@ -56,7 +56,7 @@ def menu_sections(g: dict, st: MenuState, act: Callable[[str], Callable]) -> lis
     artwork = [(tr("Find artwork…"), ft.Icons.IMAGE_SEARCH_ROUNDED, act("find_art")),
                (tr("Use your own artwork…"), ft.Icons.UPLOAD_FILE_OUTLINED, act("custom_art"))]
     if not job and st.on_frame:
-        artwork.append((tr("Update Steam art on Frame"), ft.Icons.WALLPAPER_ROUNDED, act("steam_art")))
+        artwork.append((tr("Update art on Frame"), ft.Icons.WALLPAPER_ROUNDED, act("steam_art")))
 
     recipe = [] if linux else [
         (tr("Reset to suggested recipe…"), ft.Icons.SETTINGS_BACKUP_RESTORE_ROUNDED, act("reset_recipe")),
@@ -67,7 +67,7 @@ def menu_sections(g: dict, st: MenuState, act: Callable[[str], Callable]) -> lis
     if not job and not rift and not linux:
         trouble.append((tr("Analyze again"), ft.Icons.MANAGE_SEARCH_ROUNDED, act("analyze")))
     if not job and not linux:
-        trouble.append((tr("Check game files") if rift else tr("Rebuild only (no install)"), G.PORT, act("build")))
+        trouble.append((tr("Check game files") if rift else tr("Rebuild only"), G.PORT, act("build")))
     if st.programs:
         trouble.append((tr("Change program…"), ft.Icons.SWAP_HORIZ_ROUNDED, act("program")))
     trouble += [(tr("Refresh store details"), ft.Icons.PUBLISHED_WITH_CHANGES_ROUNDED, act("details")),

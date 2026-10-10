@@ -57,6 +57,26 @@ def drive_note(drive: dict | None) -> str:
     return tr(" · on {label}").format(label=drive.get("label") or "")
 
 
+def test_result(verdict: str | None, milestone: str | None) -> tuple[str, str]:
+    """(result, furthest step) of a launch test in plain words for display. The milestone labels come from
+    catalog/triage.yaml and stay as they are there (triage and tests use them); only the shown text changes."""
+    result = {"pass": tr("passed"), "fail": tr("failed")}.get(verdict or "", tr("unclear"))
+    steps = {
+        "Launcher started": tr("launcher started"),
+        "Oculus headset event provided": tr("headset found"),
+        "Revive injected into the game": tr("Revive loaded"),
+        "Game window created": tr("game window opened"),
+        "OpenXR reached": tr("VR started"),
+        "OpenXR session created": tr("VR session started"),
+        "Lepton container started": tr("Android layer started"),
+        "App process started": tr("game started"),
+        "FrameBridge adapter loaded": tr("VR layer loaded"),
+        "OpenXR instance created": tr("VR runtime found"),
+        "Submitting frames": tr("drawing frames"),
+    }
+    return result, steps.get(milestone or "", milestone or tr("nothing yet"))
+
+
 def settings_diff(game: dict, frame_info: dict | None) -> tuple[list[str], list[str]] | None:
     """(patches turned on, patches turned off) in the app since the Frame's copy was installed; None if the same (or
     unknown: installs from before FramePort recorded their recipe)."""
@@ -79,7 +99,7 @@ def platform(g: dict) -> tuple[str, str, str]:
         return tr("PC VR"), tr("PC VR · Oculus") if oculus else tr("PC VR"), "platform_pcvr"
     if g.get("kind") == "linux":
         vr = (((g.get("analysis") or {}).get("extra") or {}).get("openxr"))
-        return tr("Linux"), tr("Linux VR app · OpenXR") if vr else tr("Linux app (arm64)"), "platform_linux"
+        return tr("Linux"), tr("Linux VR app · OpenXR") if vr else tr("Linux app"), "platform_linux"
     kind = (((g.get("analysis") or {}).get("extra") or {}).get("vr_kind")) or "quest"
     if kind == "quest":
         return tr("Quest"), tr("Meta Quest"), "platform_quest"

@@ -97,10 +97,10 @@ def show_exe_dialog(app: FramePortApp, package: str, remaining: int = 0,
 
     pick = C.one_choice()
     title = tr("Which program starts {get}?").format(get=g.get('title'))
-    lead = (tr("FramePort found more than one arm64 program in this app. Pick the one that starts it (helpers such "
-               "as crash reporters or updaters are the wrong choice).") if linux else
-            tr("FramePort found more than one program that could start this game. Pick the one you'd double-click to "
-               "play it. Oculus builds usually work better with Revive than Steam builds."))
+    lead = (tr("FramePort found more than one program in this app. Pick the one that starts it, not a helper "
+               "like a crash reporter or updater.") if linux else
+            tr("Pick the program you'd double-click to play. Oculus builds usually work better than Steam "
+               "builds."))
     app.page.show_dialog(C.dialog(
         title, ft.Column([C.body(lead), group], spacing=T.S4, scroll=ft.ScrollMode.AUTO, tight=True),
         title_actions=[C.meta(tr("{remaining} more after this").format(remaining=remaining))] if remaining else None,

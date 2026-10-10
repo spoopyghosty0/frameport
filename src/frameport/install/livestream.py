@@ -627,8 +627,8 @@ def start(frame, quality: str = DEFAULT_QUALITY) -> LiveStream:
     if transport is None or not transport.is_active():
         # (e.g. the Frame slept: without this, the helper upload failed with "'NoneType' object has no attribute
         # 'exec_command'" and the start went on with the software encoder)
-        raise ConnectionError("The Frame isn't connected (it may be asleep): connect it again on the Steam Frame "
-                              "page, then start the live view")
+        raise ConnectionError("The Frame isn't connected (it may be asleep). Connect it on the Steam Frame page, "
+                              "then start the live view.")
     src = FrameSource(frame, quality)
     live = LiveStream(src.open, src.close)
     live.relay.on_join = src.request_keyframe

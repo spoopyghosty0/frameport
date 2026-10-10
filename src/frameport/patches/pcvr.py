@@ -95,10 +95,10 @@ class RepackLauncher(_PcvrPatch):
     id = "pcvr.repack_launcher"
     title = "Use the repack's launcher (bundled Revive)"
     description = ("Some game folders are already set up for SteamVR: a Revive copy (LibRevive64.dll) next to the "
-                   "game, started by a small loader DLL (e.g. xinput1_3.dll) that Windows loads from the game's "
+                   "game, started by a small loader DLL (for example xinput1_3.dll) that Windows loads from the game's "
                    "folder. Then FramePort starts the game program directly — like double-clicking it — instead of "
-                   "through its own Revive (two Revives conflict; e.g. the Oculus Platform check then fails). On the "
-                   "Frame, Wine is told to use those loader DLLs from the game folder instead of its own.")
+                   "through its own Revive (two Revives conflict; for example the Oculus Platform check then fails). "
+                   "On the Frame, Wine is told to use those loader DLLs from the game folder instead of its own.")
     order = 8
     conflicts = ("pcvr.revive",)
     params = [Param("dlls", "str", "", "loader DLLs next to the exe (comma-separated)")]
@@ -118,13 +118,13 @@ class RepackLauncher(_PcvrPatch):
 
 class LaunchArgs(_PcvrPatch):
     id = "pcvr.launch_args"
-    title = "Game arguments (select SteamVR / OpenXR)"
+    title = "Launch options (SteamVR or OpenXR)"
     description = ("Command-line arguments for the game program. Games that support several VR runtimes pick one "
-                   "with an argument, e.g. Unreal's -hmd=OpenXR or -hmd=SteamVR, Unity's -vrmode OpenVR, or a "
+                   "with an argument, for example Unreal's -hmd=OpenXR or -hmd=SteamVR, Unity's -vrmode OpenVR, or a "
                    "game's own switch (-Runtime=OpenXRHMD). FramePort fills them in from the game files (the "
                    "repack's VD.bat with the Oculus module swapped for OpenXR, else the engine's usual switch).")
     order = 9
-    params = [Param("args", "str", "", "arguments, e.g. -hmd=OpenXR")]
+    params = [Param("args", "str", "", "arguments, for example -hmd=OpenXR")]
 
     def detect(self, analysis):
         if not _rift(analysis):
@@ -212,9 +212,9 @@ class ProtonTool(_PcvrPatch):
 
 class ProtonEnv(_PcvrPatch):
     id = "pcvr.proton_env"
-    title = "Extra launch environment (Frame)"
-    description = ("Environment variables for the Proton launcher on the Frame (e.g. DXVK_HUD=fps), one KEY=value "
-                   "per line.")
+    title = "Extra Proton settings (Frame)"
+    description = ("Environment variables for the Proton launcher on the Frame (for example DXVK_HUD=fps), one "
+                   "KEY=value per line.")
     order = 50
     params = [Param("env", "text", "", "KEY=value lines")]
 
@@ -224,9 +224,9 @@ class SteamvrTuning(_PcvrPatch):
     title = "Automatic SteamVR performance settings (this PC)"
     description = ("Before each Play on this PC, FramePort reads SteamVR's record of the game's last session (frames "
                    "dropped; frame times from fpsVR if installed). If it dropped frames, it lowers the game's refresh "
-                   "rate to one whose frame budget fits (e.g. 96 → 90 Hz) and turns motion smoothing on, through "
-                   "SteamVR's per-application settings; each later session can step down again. Set a refresh rate "
-                   "or smoothing mode here to choose yourself. Ignored on the Frame.")
+                   "rate to one whose frame budget fits (for example 96 → 90 Hz) and turns motion smoothing on, "
+                   "through SteamVR's per-application settings; each later session can step down again. Set a refresh "
+                   "rate or smoothing mode here to choose yourself. Ignored on the Frame.")
     order = 45
     params = [Param("refresh", "float", 0.0, "refresh rate in Hz (0 = automatic)", 0, 144),
               Param("smoothing", "str", "auto", "motion smoothing: auto, on, off, always or global")]

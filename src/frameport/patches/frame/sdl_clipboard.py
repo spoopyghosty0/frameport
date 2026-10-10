@@ -14,7 +14,7 @@ LISTENER = ("Landroid/content/ClipboardManager;", "addPrimaryClipChangedListener
 class SdlClipboard(Patch):
     id = "frame.sdl_clipboard"
     title = "SDL apps: start without a clipboard service"
-    description = ("Lepton's Android has no clipboard service, and SDL's Java code (SDL2 and LÖVE games, e.g. "
+    description = ("Lepton's Android has no clipboard service, and SDL's Java code (SDL2 and LÖVE games, for example "
                    "Dramatic Shape) registers a clipboard listener at start without checking, so the app crashes "
                    "with a NullPointerException in SDLClipboardHandler. That call is skipped (an in-place edit of "
                    "classes.dex).")

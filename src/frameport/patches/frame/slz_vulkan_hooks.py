@@ -86,10 +86,10 @@ def find_registrations(data: bytes) -> list[int]:
 class SlzVulkanHooks(Patch):
     id = "frame.slz_vulkan_hooks"
     title = "Stress Level Zero: let Unity start Vulkan itself"
-    description = ("Stress Level Zero's graphics plugin (libSLZQuestNative.so, e.g. BONELAB 1.2974) hooks Unity's "
-                   "Vulkan start-up and its texture samplers. On the Frame the hook calls an invalid function while "
-                   "Vulkan starts, and the game crashes or hangs before the first frame. The plugin's two hooks are "
-                   "switched off, so Unity starts Vulkan itself. Its pipeline cache isn't used: the first start "
+    description = ("Stress Level Zero's graphics plugin (libSLZQuestNative.so, for example BONELAB 1.2974) hooks "
+                   "Unity's Vulkan start-up and its texture samplers. On the Frame the hook calls an invalid function "
+                   "while Vulkan starts, and the game crashes or hangs before the first frame. The plugin's two hooks "
+                   "are switched off, so Unity starts Vulkan itself. Its pipeline cache isn't used: the first start "
                    "spends about half a minute prewarming shaders.")
     order = 47
     revision = 1
@@ -100,7 +100,7 @@ class SlzVulkanHooks(Patch):
     def detect(self, a):
         if self.applies(a):
             return Suggestion(True, "Stress Level Zero's graphics plugin crashes Unity's Vulkan start-up on the Frame "
-                                    "(e.g. BONELAB 1.2974).")
+                                    "(for example BONELAB 1.2974).")
         return None
 
     def apply(self, ctx: ApkContext) -> bool:

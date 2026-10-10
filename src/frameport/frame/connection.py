@@ -44,7 +44,7 @@ class FrameNotPaired(ConnectionError):
         reason = ("the password was refused" if tried_password
                   else "this Frame doesn't know FramePort yet")
         super().__init__(f"SSH authentication failed: {reason}. Run the first-time setup on the Frame (Steam Frame → "
-                         "Show setup command)." + (f" ({'; '.join(details)})" if details else ""))
+                         "Start setup)." + (f" ({'; '.join(details)})" if details else ""))
 
 
 def _no_auth_methods(exc: BaseException) -> bool:

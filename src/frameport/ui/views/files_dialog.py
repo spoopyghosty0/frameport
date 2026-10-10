@@ -34,10 +34,10 @@ def folder_note(path: str) -> str:
     """What a well-known entry of an install is (shown next to it, in plain words)."""
     notes = {
         "lepton-app": tr("the installed game (APK and its data)"),
-        "lepton-data": tr("saves and settings (the app's Android storage)"),
-        "lepton-shaders": tr("shader cache: makes later starts load faster; rebuilt if deleted"),
+        "lepton-data": tr("saves and settings"),
+        "lepton-shaders": tr("shader cache: faster starts; rebuilt if deleted"),
         "artwork": tr("pictures for the Steam library"),
-        "previous-game.apk": tr("the previous version, kept for one rollback"),
+        "previous-game.apk": tr("the previous version, kept as a backup"),
         "launch.log": tr("the log of the last start"),
     }
     return notes.get(path, "")
@@ -177,10 +177,10 @@ def show_files_dialog(app: FramePortApp, package: str, title: str) -> None:
             lines = "\n".join(f"{rel}: " + ("missing" if actual is None else f"{human(actual)} of {human(size)}")
                               for rel, size, actual in missing[:8])
             more = tr_n("\n… and {n} more", "\n… and {n} more", len(missing) - 8) if len(missing) > 8 else ""
-            head.append(C.callout(tr_n("{n} file is missing or incomplete compared to what was uploaded. "
-                                       "Install the game again to re-send it.\n{lines}{more}",
-                                       "{n} files are missing or incomplete compared to what was uploaded. "
-                                       "Install the game again to re-send them.\n{lines}{more}",
+            head.append(C.callout(tr_n("{n} file is missing or incomplete. Install the game again to send it "
+                                       "again.\n{lines}{more}",
+                                       "{n} files are missing or incomplete. Install the game again to send them "
+                                       "again.\n{lines}{more}",
                                        len(missing), lines=lines, more=more), "warn"))
         elif result.get("kind") == "pcvr":
             head.append(C.callout(tr("Every uploaded file is present with the right size."), "ok"))

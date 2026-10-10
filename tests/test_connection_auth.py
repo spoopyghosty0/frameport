@@ -60,7 +60,7 @@ def test_unpaired_frame_without_password_explains_the_setup(fake_ssh):
     with pytest.raises(C.FrameNotPaired) as err:
         C.Frame(C.FrameTarget("10.0.0.2")).connect()
     assert "authentication failed" in str(err.value).lower()  # app.connect's devkit fallback looks for this
-    assert "first-time setup" in explain(err.value) and "isn't set up" in explain(err.value)
+    assert "Start setup" in explain(err.value) and "isn't set up" in explain(err.value)
     assert explain(NO_METHODS).startswith("This Frame isn't set up")
 
 

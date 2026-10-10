@@ -23,9 +23,9 @@ from ..help import HELP
 if TYPE_CHECKING:
     from ..app import FramePortApp
 
-CATEGORY_TITLES = {"frame": tr("Steam Frame patches"), "overport": tr("OVRPort patches"),
-                   "adapter": tr("Game settings"), "device": tr("Files and environment on the Frame"),
-                   "pcvr": tr("PC VR (Revive / Proton)")}
+CATEGORY_TITLES = {"frame": tr("Steam Frame patches"), "overport": tr("Patches from OVRPort"),
+                   "adapter": tr("Game settings"), "device": tr("Files and settings on the Frame"),
+                   "pcvr": tr("PC VR (Proton and Revive)")}
 
 
 def plain_reason(reason: str, default_on: bool = False) -> str:
@@ -168,8 +168,7 @@ class GameView:
                 C.install_state(g, app.frame_info) in ("installed", "outdated"):
             buttons.append(C.secondary(tr("Add videos"), ft.Icons.VIDEO_LIBRARY_OUTLINED,
                                        lambda e: app.go("files", pkg), False,
-                                       tr("Opens this player's storage on the Frame (Files tab): upload videos "
-                                          "into the folder it lists")))
+                                       tr("Upload videos into this player's storage on the Frame.")))
         more = C.menu_button(C.menu_items(app.game_actions(pkg, quick=False)), icon=ft.Icons.MORE_HORIZ_ROUNDED,
                              icon_color=T.TEXT_2, tooltip=tr("More actions"))
         # the same menu, opened from code (Library right-click → "More actions…", app.open_game_menu): a
@@ -217,7 +216,7 @@ class GameView:
             changed = "; ".join(filter(None, [tr("on: {names}").format(names=names(diff[0])) if diff[0] else "",
                                               tr("off: {names}").format(names=names(diff[1])) if diff[1] else ""]))
         frame_line = {"installed": tr("Installed"),
-                      "outdated": (tr("Installed · patch settings changed since ({changed}) — update to apply")
+                      "outdated": (tr("Installed · patches changed ({changed}) — update to apply")
                                    .format(changed=changed) if diff else tr("Installed · a newer build is ready")),
                       "missing": tr("Not installed"), None: tr("Frame not connected")}[st]
         frame_ok = st in ("installed", "outdated")
@@ -240,15 +239,16 @@ class GameView:
         frame_line += C.drive_note(drive)
         if drive and drive.get("missing"):
             frame_color = T.WARN
-        frame_sub = (tr("Oculus game — needs Revive, which doesn't run on the Frame. Play it on this PC (SteamVR).")
+        frame_sub = (tr("Oculus game: it needs Revive, which doesn't run on the Frame. Play it on this PC.")
                      if rift_oculus else
-                     tr("Needs the Oculus Platform (Meta Horizon app) for its license check, which the Frame doesn't "
-                     "have — it crashes at startup there. Play it on this PC.") if rift_platform else
-                     tr("Uses the repack's bundled Revive — experimental on the Frame") if rift_repack and not last else
-                     tr("Last launch test: {get} · furthest: {value}")
-                     .format(get=last.get('verdict'), value=last.get('milestone') or '—') if last
+                     tr("Needs the Meta Horizon app for its license check, so it crashes on the Frame. Play it on "
+                     "this PC.") if rift_platform else
+                     tr("Uses its own Revive — experimental on the Frame") if rift_repack and not last else
+                     tr("Last launch test: {get} · furthest step: {value}")
+                     .format(get=C.test_result(last.get("verdict"), last.get("milestone"))[0],
+                             value=C.test_result(last.get("verdict"), last.get("milestone"))[1]) if last
                      else tr("Runs directly — no Revive needed") if self.rift else
-                     tr("Runs natively on SteamOS, started from the Frame's Steam library") if self.linux else "")
+                     tr("Runs directly on SteamOS, from the Frame's Steam library") if self.linux else "")
         cards.append(self.target_card(
             G.FRAME, tr("Steam Frame"), frame_line, frame_color, frame_sub,
             log_button(False) + ([
@@ -259,13 +259,13 @@ class GameView:
         if self.rift:
             dep = app.pc_installs().get(pkg)
             cards.append(self.target_card(
-                G.PC, tr("This PC (Steam + Revive)"),
+                G.PC, tr("This PC (Steam and Revive)"),
                 (tr("In your Steam library · launch settings changed — update it") if C.pc_outdated(g, dep) else
                  tr("In your Steam library")) if dep else tr("Not installed"),
                 (T.WARN if C.pc_outdated(g, dep) else T.PC) if dep else T.TEXT_3,
                 (tr("Revive {value} · {value2} backend")
                  .format(value=dep.get('revive_version') or '', value2=dep.get('backend') or 'openxr')
-                 if dep.get("revive_win") else tr("The repack's own Revive · runs the game directly")
+                 if dep.get("revive_win") else tr("Its own Revive · runs the game directly")
                  if dep.get("launch") == "repack" else tr("Runs the game directly")) if dep else "",
                 log_button(True) + ([C.icon_btn(G.TEST, tr("Launch test on this PC"),
                                                 lambda e: app.test_game(pkg, "pc")),
@@ -291,21 +291,21 @@ class GameView:
         missing = C.missing_libraries(g, self.app.frame_info) if self.linux else []
         if missing:
             out.append(C.callout(ft.Column([
-                C.body(tr("It won't start on the Frame: SteamOS doesn't have these libraries and the app doesn't bring "
-                          "them. Look for a build of the app that includes them, then install that one."),
+                C.body(tr("It won't start on the Frame: SteamOS lacks these libraries and the app doesn't include "
+                          "them. Install a build that includes them."),
                        T.TEXT),
                 C.meta(", ".join(missing), T.TEXT_2, selectable=True)], spacing=T.px(4)), "error",
                 ft.Icons.EXTENSION_OFF_OUTLINED))
         if self.rift and g.get("exe_confirmed") is False:
             out.append(C.callout(ft.Row([
-                C.body(tr("FramePort picked {value} to start this game, but there are other candidates. "
-                          "Check it before installing.").format(value=g.get('exe', '').rsplit('/', 1)[-1]),
+                C.body(tr("FramePort picked {value} to start this game, but isn't sure. Check it before "
+                          "installing.").format(value=g.get('exe', '').rsplit('/', 1)[-1]),
                        T.TEXT, expand=True),
                 C.secondary(tr("Check…"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.app.choose_exe(pkg))]), "warn",
                 ft.Icons.HELP_OUTLINE_ROUNDED))
         if self.rift and extra.get("platform_sdk"):
-            out.append(C.callout(tr("Uses the Oculus Platform SDK, which checks your Oculus license: it needs the "
-                                    "Oculus app on this PC and may quit right after starting. You can still try it."),
+            out.append(C.callout(tr("It checks your Oculus license: it needs the Oculus app on this PC and may quit "
+                                    "right after starting."),
                                  "warn"))
         installed = C.install_state(g, self.app.frame_info) in ("installed", "outdated")
         if should_ask_to_share(g, installed):
@@ -313,8 +313,8 @@ class GameView:
                 library.upsert_game(pkg, share_dismissed=True)
                 self.app.render()
             out.append(C.callout(ft.Column([
-                C.body(tr("Tried it in the headset? Tell us how it runs: with your recipe it can join FramePort's "
-                          "built-in list, so it works out of the box for everyone."), T.TEXT),
+                C.body(tr("Tried it in the headset? Share how it runs, and your recipe can become the built-in one "
+                          "for everyone."), T.TEXT),
                 ft.Row([
                     C.secondary(tr("It works: share…"), ft.Icons.THUMB_UP_OUTLINED,
                                 lambda e: self.app.share_config_dialog(pkg, "works")),
@@ -330,37 +330,35 @@ class GameView:
                 from ... import pipeline
 
                 pipeline.apply_catalog_update(pkg)
-                self.app.toast(tr("New recipe applied: use Update on Frame to install it"))
+                self.app.toast(tr("New recipe applied. Click Update on Frame to install it."))
                 self.app.render()
             out.append(C.callout(ft.Row([
-                C.body(tr("A newer known-good recipe for this game is available (you changed this game's settings, "
-                          "so it wasn't applied by itself)."), T.TEXT, expand=True),
+                C.body(tr("A newer tested recipe is available. It wasn't applied because you changed this game's "
+                          "settings."), T.TEXT, expand=True),
                 C.secondary(tr("Use the new recipe"), ft.Icons.AUTO_FIX_HIGH_ROUNDED, take_update)],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER), "info", ft.Icons.NEW_RELEASES_OUTLINED))
         if g.get("steam_art_stale") and installed:
             out.append(C.callout(ft.Row([
                 C.body(tr("The Frame's Steam library still shows the old artwork."), T.TEXT, expand=True),
-                C.secondary(tr("Update Steam art on Frame"), ft.Icons.IMAGE_OUTLINED,
+                C.secondary(tr("Update art on Frame"), ft.Icons.IMAGE_OUTLINED,
                             lambda e: self.app.update_steam_art(pkg))]), "info", ft.Icons.IMAGE_OUTLINED))
         min_sdk = extra.get("min_sdk")
         too_new = not self.rift and not self.linux and too_new_android(min_sdk)
         if too_new:
             # whatever the recipe says: the manifest asks for a newer Android (a warning only, a launch test decides)
-            out.append(C.callout(tr("Its manifest asks for Android {version} (API {api}); the Frame's Android is 11 "
-                                    "(API 30). Apps like this often crash at start, but not always: try it, a "
-                                    "launch test tells.").format(version=android_version(min_sdk), api=min_sdk),
+            out.append(C.callout(tr("It needs Android {version}; the Frame has Android 11. Such apps often crash at "
+                                    "start, but not always: a launch test tells.").format(
+                                        version=android_version(min_sdk), api=min_sdk),
                                  "warn", ft.Icons.PHONELINK_ERASE_ROUNDED))
         if pipeline.missing_obb(g):
-            out.append(C.callout(tr("This game's data file (.obb) wasn't found next to the APK. Put the .obb files "
-                                    "in a folder named {package} (or obb/) next to the APK and add the folder again; "
-                                    "without it the game hangs at start.").format(package=pkg), "error",
+            out.append(C.callout(tr("Game data (.obb) is missing. Put it in a folder named {package} next to the APK "
+                                    "and add the folder again.").format(package=pkg), "error",
                                  ft.Icons.FOLDER_OFF_OUTLINED))
         web = (extra.get("web_wrapper") or None) if not self.rift and not self.linux else None
         if web:
             out.append(C.callout(ft.Column([
-                C.body(tr("This app looks like a website in an Android wrapper: it opens the site in Meta's "
-                          "browser, which the Frame doesn't have. If nothing opens, use the website in a browser "
-                          "instead."), T.TEXT)]
+                C.body(tr("This is a website in an app: it opens in Meta's browser, which the Frame doesn't "
+                          "have. If nothing opens, visit the website in a browser."), T.TEXT)]
                 + ([C.meta(web["url"], T.TEXT_2, selectable=True)] if web.get("url") else []), spacing=T.px(4)),
                 "warn", ft.Icons.LANGUAGE_ROUNDED))
         static = " ".join(engine.blocker_notes(library.analysis_from_dict(g["analysis"]))) \
@@ -500,7 +498,7 @@ class GameView:
                      for t in mine]
             chips += [ft.Container(C.meta(t), border=ft.Border.all(1, T.BORDER), border_radius=T.px(20),
                                    padding=ft.Padding(T.px(10), T.px(5), T.px(10), T.px(5)),
-                                  tooltip=tr("Added automatically (engine, VR API or store genre)"))
+                                  tooltip=tr("Added automatically from the engine, VR API or store genre."))
                       for t in auto_tags(self.g) if t.lower() not in {m.lower() for m in mine}]
             used = {x for g in self.games for x in user_tags(g)}
             suggestions = [t for t in all_tags(self.games) if t in used and t not in mine][:6]
@@ -511,25 +509,24 @@ class GameView:
                       for t in suggestions]
             row.controls = chips
         fill()
-        return C.section(tr("Tags"), row, subtitle=tr("Use tags to group and filter your library"), help="tags")
+        return C.section(tr("Tags"), row, subtitle=tr("Group and filter your library"), help="tags")
 
     def linux_summary(self) -> ft.Control:
         """A Linux app has nothing to patch: what FramePort installs, and how it starts."""
         g, pkg = self.g, self.package
         extra = (g.get("analysis") or {}).get("extra") or {}
         vr = bool(extra.get("openxr"))
-        lead = tr("Installs the app as it is, unpacked on the Frame, with an entry in its Steam library") \
-            if extra.get("appimage") else tr("Installs the app as it is, with an entry in the Frame's Steam library")
+        lead = tr("Installs the app unchanged, unpacked on the Frame, with an entry in its Steam library") \
+            if extra.get("appimage") else tr("Installs the app unchanged, with an entry in the Frame's Steam library")
         change = C.ghost(tr("Change…"), ft.Icons.TERMINAL_ROUNDED, lambda e: self.app.choose_exe(pkg)) \
             if self.app.linux_programs(g) else None
         rows = [
             C.kv(tr("Program"), ft.Row([C.body(g.get("exe") or "", T.TEXT, selectable=True)]
                                        + ([change] if change else []), spacing=T.S2, wrap=True)),
             C.kv(tr("AppImage"), tr("Yes") if extra.get("appimage") else tr("No"), "appimage"),
-            C.kv(tr("CPU"), tr("x86_64: runs through FEX (x86 translation, slower; FramePort installs FEX on the "
-                               "Frame)") if extra.get("x86_64") else tr("arm64 (runs natively)"), "linux_x86"),
-            C.kv(tr("VR (OpenXR)"), tr("Yes: uses the Frame's OpenXR runtime") if vr else
-                 tr("No: a 2D app")),
+            C.kv(tr("Processor"), tr("Built for PCs (x86_64): runs through a translator, slower")
+                 if extra.get("x86_64") else tr("Built for the Frame (arm64)"), "linux_x86"),
+            C.kv(tr("VR"), tr("Yes") if vr else tr("No: a 2D app")),
             C.kv(tr("Source"), extra.get("source") or g.get("game_dir") or ""),
             C.kv(tr("Desktop Mode"), C.switch(tr("In the menu and on the desktop"),
                                               value=g.get("desktop_entry", True) is not False,
@@ -566,7 +563,7 @@ class GameView:
         elif recipe.source == "user":
             lead, icon, color = tr("Your custom recipe"), ft.Icons.TUNE_ROUNDED, T.ACCENT
         else:
-            lead, icon, color = tr("Suggested by FramePort from the game's engine and APIs"), \
+            lead, icon, color = tr("Suggested by FramePort from the game's engine"), \
                 ft.Icons.AUTO_AWESOME_ROUNDED, T.ACCENT
         chips = [ft.Container(C.body(tr(p.title), T.TEXT, size=T.T_META),
                               tooltip=C.tip(tr(recipe.reasons.get(p.id) or p.description)),
@@ -585,12 +582,12 @@ class GameView:
                 ft.Icons.TABLET_ANDROID_ROUNDED, T.PC
         elif as_is and self.rift:
             # a pre-patched Rift copy still needs a VR runtime on the Frame: Revive is added at launch, not to its files
-            lead, icon, color = (tr("Your copy is used as it is (only the Frame's copy gets launch patches)") +
+            lead, icon, color = (tr("Your copy is installed unchanged (the Frame's copy gets launch patches)") +
                                  (tr(" · Revive provides the Oculus runtime") if "pcvr.revive" in recipe.patches
                                   else "")), \
                 ft.Icons.INVENTORY_2_ROUNDED, T.PC
         elif as_is:
-            lead, icon, color = tr("Installs the game exactly as it is: no patches (your copy is already patched)"), \
+            lead, icon, color = tr("Installs the game unchanged: your copy is already patched"), \
                 ft.Icons.INVENTORY_2_ROUNDED, T.PC
             chips = []
 
@@ -602,19 +599,19 @@ class GameView:
             self.app.open_game(self.package, advanced=self.advanced)
         switch = C.with_help(C.switch(value=as_is, active_color=T.PC, on_change=toggle_as_is,
                                        label=(tr("Already patched: don't change the game's files") if self.rift else
-                                              tr("Already patched: install as is (skip patching)"))), "as_is")
+                                              tr("Already patched: install unchanged"))), "as_is")
         return C.section(
             tr("What FramePort will do"),
             C.card(ft.Column([
                 ft.Row([C.as_icon(icon, T.px(18), color), C.body(lead, T.TEXT, weight=ft.FontWeight.W_500,
                                                                      expand=True)], spacing=T.S2),
                 ft.Row(chips, spacing=T.S2, run_spacing=T.S2, wrap=True) if chips else
-                (ft.Container() if as_is else C.meta(tr("Nothing to patch: it runs as is."))),
+                (ft.Container() if as_is else C.meta(tr("Nothing to patch: it runs unchanged."))),
                 *([] if flat else [ft.Divider(), switch]),
             ], spacing=T.S3)),
             action=C.ghost(tr("Hide patches") if self.advanced else tr("Customize"), ft.Icons.TUNE_ROUNDED,
                            lambda e: self.app.open_game(self.package, advanced=not self.advanced),
-                           tooltip=None if self.advanced else tr("See every patch and turn them on or off")),
+                           tooltip=None if self.advanced else tr("See every patch and turn them on or off.")),
             help="recipe")
 
     def advanced_panel(self) -> ft.Control:
@@ -628,7 +625,7 @@ class GameView:
         technical = bool(library.setting("ui.patch_details", False))  # remembered for every game
         # workarounds the last build left out because OVRPort's output already had the fix (patches/upstream.py)
         superseded = (g.get("build") or {}).get("superseded") or {}
-        upstream_note = tr("Not needed in the last build: OVRPort fixed this itself.")
+        upstream_note = tr("Left out of the last build: OVRPort now does this itself.")
 
         def save(r):
             r.source = "user"
@@ -689,7 +686,7 @@ class GameView:
                     vals = recipe_values(g)
                     changed = sum(1 for k, v in vals.items() if v != default(k))
                     fixed = [base.get(pid).title for pid in superseded if pid.startswith("adapter.")]
-                    fixed_note = [C.meta(tr("Not needed in the last build, OVRPort fixed it itself: {names}").format(
+                    fixed_note = [C.meta(tr("Left out of the last build, OVRPort now does it itself: {names}").format(
                         names=", ".join(tr(t) for t in fixed)), T.TEXT_3)] if fixed else []
                     sections.append(C.card(ft.Row([
                         ft.Column([ft.Row([C.body(CATEGORY_TITLES[cat], T.TEXT, weight=ft.FontWeight.W_600),
@@ -769,12 +766,12 @@ class GameView:
         def set_technical(e):
             library.set_setting("ui.patch_details", bool(e.control.value))
             app.open_game(package, advanced=True, show_all=self.show_all)
-        top = [C.with_help(C.switch(tr("Show technical details (patch ids, exact effects, parameters)"),
+        top = [C.with_help(C.switch(tr("Show technical details"),
                                     value=technical, on_change=set_technical), "patch_details")]
         if recipe.alt_patches:
             alt = ", ".join(recipe.alt_patches if technical else
                             [tr(base.get(p).title) if p in base.REGISTRY else p for p in recipe.alt_patches])
-            top.append(C.with_help(C.switch(label=tr("Install the alternate build (") + alt
+            top.append(C.with_help(C.switch(label=tr("Install the second build (") + alt
                                              + ")", value=recipe.use_alt, on_change=set_alt, active_color=T.ACCENT),
                                    "alt_build"))
         if hidden:
@@ -785,7 +782,7 @@ class GameView:
                                                                          show_all=e.control.value)), "show_all"))
         warn.value = "\n".join(engine.warnings(recipe))
         return C.section(tr("Patches"), *top, warn, *sections,
-                         subtitle=tr("Changes apply to the next install. Hover a chip above for why it was suggested."))
+                         subtitle=tr("Changes apply to the next install. Hover a patch above to see why it's there."))
 
     def details(self) -> ft.Control:
         g, a = self.g, self.g["analysis"]
@@ -805,7 +802,7 @@ class GameView:
                           .format(value=(a.get('extra', {}).get('data_bytes') or 0) / 2**30))]
         else:
             rows += [C.kv(tr("Version"), a.get("version") or ""),
-                     C.kv(tr("ABIs"), ", ".join(a.get("abis") or []), "abis"),
+                     C.kv(tr("Processor"), ", ".join(a.get("abis") or []), "abis"),
                      C.kv(tr("Graphics"), a.get("graphics") or "", "graphics"), C.kv(tr("APK"), g.get("apk") or ""),
                      C.kv(tr("Data"), tr("{value:.1f} GiB").format(value=(g.get('data_bytes') or 0) / 2**30)
                           + (f" · {g.get('data_dir')}" if g.get("data_dir") else ""))]

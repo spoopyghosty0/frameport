@@ -403,17 +403,17 @@ class LibraryView:
             if not games:
                 self.body.content = C.empty_state(
                     ft.Icons.LIBRARY_ADD_OUTLINED, tr("Add your games"),
-                    tr("Point FramePort at a folder with Quest or Android games (APK + OBB) or PC VR games. It "
-                       "finds them, works out what each needs and fetches artwork."),
+                    tr("Choose a folder with Quest, Android or PC VR games. FramePort finds them and gets them "
+                       "ready."),
                     C.primary(tr("Scan a folder…"), ft.Icons.FOLDER_OPEN_ROUNDED, self.app.pick_folder, big=True),
-                    C.secondary(tr("Add an APK file…"), ft.Icons.ANDROID_ROUNDED, self.app.pick_apk),
+                    C.secondary(tr("Add an APK…"), ft.Icons.ANDROID_ROUNDED, self.app.pick_apk),
                     features=[
                         (G.FRAME, tr("Quest games"),
-                         tr("Converted for the Steam Frame, then installed over Wi-Fi or USB.")),
+                         tr("Patched for the Steam Frame and installed over Wi-Fi or USB.")),
                         (G.PC, tr("PC VR games"),
-                         tr("Rift games on the Frame through Proton, or on this PC.")),
+                         tr("Windows VR games, on the Frame or on this PC.")),
                         (ft.Icons.APPS_ROUNDED, tr("Android and Linux apps"),
-                         tr("Ordinary Android apps and Linux programs run there too.")),
+                         tr("They run on the Frame too.")),
                     ])
                 self.cards.clear()
                 C.update(self.root)
@@ -503,7 +503,7 @@ class LibraryView:
                       G.FRAME,
                       lambda e: app.install_many(sorted(self.selected), "frame"),
                       disabled=not n or app.frame_state != "connected",
-                      tooltip=None if app.frame_state == "connected" else tr("Connect your Frame first")),
+                      tooltip=None if app.frame_state == "connected" else tr("Connect your Frame first.")),
             C.ghost(tr("Done"), on_click=lambda e: self.set_select_mode(False)),
         ], spacing=T.S2), bgcolor=T.SURFACE_2, border_radius=T.RADIUS, padding=ft.Padding(T.S4, T.S2, T.S2, T.S2),
             border=ft.Border.all(1, T.ACCENT))
@@ -525,10 +525,8 @@ class LibraryView:
         if pending:
             names = ", ".join(app._title(p) for p in list(pending)[:3]) + ("…" if len(pending) > 3 else "")
             self.resume_bar.content = C.callout(ft.Row([
-                C.body(tr_n("{n} install didn't finish: {names}. What was already copied is kept, so resuming "
-                            "continues where it stopped.",
-                            "{n} installs didn't finish: {names}. What was already copied is kept, so resuming "
-                            "continues where it stopped.",
+                C.body(tr_n("{n} install didn't finish: {names}. Resume continues where it stopped.",
+                            "{n} installs didn't finish: {names}. Resume continues where it stopped.",
                             len(pending), names=names), T.TEXT, expand=True),
                 C.primary(tr("Resume"), ft.Icons.PLAY_ARROW_ROUNDED, lambda e: app.resume_installs()),
                 C.ghost(tr("Dismiss"), on_click=lambda e: app.forget_installs()),

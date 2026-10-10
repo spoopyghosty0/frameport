@@ -107,7 +107,7 @@ def test_sections_and_conditions():
     heads = [e.label for e in entries if isinstance(e, Header)]
     assert heads == ["Artwork", "Recipe", "Troubleshoot"]
     assert _section_of(entries, "Analyze again") == "Troubleshoot"
-    assert _section_of(entries, "Update Steam art on Frame") == "Artwork"
+    assert _section_of(entries, "Update art on Frame") == "Artwork"
     assert _section_of(entries, "Share working recipe…") == "Recipe"
     linux_st = _states()[3][2]
     linux_st.quick = False

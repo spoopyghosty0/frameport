@@ -14,8 +14,8 @@ class VrApiBridge(Patch):
     description = (
         "Replaces libvrapi.so with a VrApi→OpenXR bridge (Android-XR-Bridge/OVRPort fork, GPL-3.0, patched for the "
         "Frame: GLES sessions, cylinder→quad layers, sRGB format fallback, 30 s VR-mode deadline, emulated time "
-        "conversion). Needed when the engine calls VrApi itself instead of through OVRPlugin (e.g. The Climb 2, Path "
-        "of the Warrior); OVRPort cannot translate those."
+        "conversion). Needed when the engine calls VrApi itself instead of through OVRPlugin (for example The Climb "
+        "2, Path of the Warrior); OVRPort cannot translate those."
     )
     order = 60
     experimental = True
@@ -92,8 +92,8 @@ class UnityGlShim(GlShim):
         "Loads the GL shim into a Unity GLES game and hides GL_EXT_multisampled_render_to_texture (and the multiview "
         "variant). Some Unity games switch their eye buffer to 4x MSAA at runtime; the Frame only gives single-sampled "
         "swapchains, Unity then renders through multisampled render-to-texture and Mesa/Zink crashes (SIGSEGV in "
-        "libgallium_dri.so on the render thread: grey or frozen screen, e.g. The Room VR). Hidden, Unity uses an "
-        "ordinary MSAA buffer and resolves it. Unity's multiview stays on (gl_hide_multiview defaults to 0 here).")
+        "libgallium_dri.so on the render thread: gray or frozen screen, for example The Room VR). Hidden, Unity uses "
+        "an ordinary MSAA buffer and resolves it. Unity's multiview stays on (gl_hide_multiview defaults to 0 here).")
     order = 62
     requires = ()
     experimental = False
@@ -101,7 +101,7 @@ class UnityGlShim(GlShim):
     def detect(self, a):
         if self.applies(a) and ((a.extra or {}).get("ovr_runtime_msaa") or a.unity_msaa_levels):
             return Suggestion(True, "Unity GLES game that may switch to MSAA at runtime: hide multisampled "
-                                    "render-to-texture, which crashes the Frame's GL driver (e.g. The Room VR).")
+                                    "render-to-texture, which crashes the Frame's GL driver (for example The Room VR).")
         return None
 
     def applies(self, a):
@@ -115,10 +115,10 @@ class UnrealGlShim(GlShim):
         "Loads the GL shim into an Unreal GLES game and hides GL_EXT_multisampled_render_to_texture. Unreal's mobile "
         "MSAA renders through multisampled render-to-texture, and the Frame's GL driver (Mesa/Zink) can crash on it: "
         "SIGSEGV with fault address 0x10000 in libgallium_dri.so on the RHIThread a few seconds after start (Zink "
-        "looks up a render-pass cache slot past its end, e.g. Star Wars Pinball VR). Hidden, Unreal renders without "
-        "that path. Unreal's multiview stays on: Unreal only uses it when GL_OVR_multiview_multisampled_render_to_"
-        "texture is listed too, so for Unreal the shim keeps that one visible and draws its multiview MSAA "
-        "attachments single-sampled (glFramebufferTextureMultiviewOVR).")
+        "looks up a render-pass cache slot past its end, for example Star Wars Pinball VR). Hidden, Unreal renders "
+        "without that path. Unreal's multiview stays on: Unreal only uses it when "
+        "GL_OVR_multiview_multisampled_render_to_texture is listed too, so for Unreal the shim keeps that one visible "
+        "and draws its multiview MSAA attachments single-sampled (glFramebufferTextureMultiviewOVR).")
     order = 62
     requires = ()
     experimental = False

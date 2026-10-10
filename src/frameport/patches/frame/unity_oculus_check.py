@@ -76,15 +76,15 @@ class UnityOculusCheck(Patch):
     title = "Unity: start VR without Meta's system apps"
     description = ("Unity's built-in Oculus support (Unity 2017–2019) only starts VR when Android has Meta's "
                    "com.oculus.systemactivities package; without it the game runs as a 2D app (the Android home "
-                   "screen or a black window, e.g. Accounting+, BattleSisters). Points that package name in "
+                   "screen or a black window, for example Accounting+, BattleSisters). Points that package name in "
                    "libunity.so at \"android\", which always exists. Games on Unity's built-in VR (2017–2018, and 2019 "
                    "without the Oculus XR Plugin) also get the frame wait their legacy frame loop never makes "
                    "(libfp_ovrp.so calls ovrp_WaitToBeginFrame before ovrp_Update2; without it no frame starts, the "
                    "dashboard freezes or the GPU hangs). Per game, the settings ovrp_begin_gate (a freeze at the first "
                    "scene switch) and ovrp_hold_physics (hands trailing the controllers) switch on two more frame-loop "
-                   "fixes (e.g. Sniper Elite VR). The shim also "
+                   "fixes (for example Sniper Elite VR). The shim also "
                    "counts a newly pressed trigger or A/B/X/Y as a mouse click (Input.GetMouseButtonDown), which "
-                   "Go-era screens wait for (e.g. Accounting+'s motion "
+                   "Go-era screens wait for (for example Accounting+'s motion "
                    "warning) and which Lepton never delivers.")
     order = 45
     # 2: frame wait also for Unity 2019 without the Oculus XR Plugin; 3: controller presses as mouse clicks
@@ -102,7 +102,7 @@ class UnityOculusCheck(Patch):
     def legacy_loop(cls, a) -> bool:
         """Unity's built-in Oculus VR drives OVRPlugin without waiting for frames: Unity 2017-2018, and 2019 games
         without the Oculus XR Plugin (BattleSisters flooded "outside of frame bounds" and hung the GPU). With
-        libOculusXRPlugin.so (XR Plugin Management, e.g. Lucky's Tale) the plugin waits itself."""
+        libOculusXRPlugin.so (XR Plugin Management, for example Lucky's Tale) the plugin waits itself."""
         major = cls._major(a)
         return 0 < major < 2019 or (major == 2019 and "libOculusXRPlugin.so" not in a.libs)
 
@@ -114,7 +114,7 @@ class UnityOculusCheck(Patch):
     def detect(self, a):
         if self.applies(a):
             return Suggestion(True, "Unity with built-in Oculus support: it checks for Meta's system apps before "
-                                    "starting VR, else it runs as a 2D app (e.g. Accounting+, BattleSisters).")
+                                    "starting VR, else it runs as a 2D app (for example Accounting+, BattleSisters).")
         return None
 
     def apply(self, ctx: ApkContext) -> bool:

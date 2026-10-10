@@ -33,12 +33,12 @@ Probe = Callable[["ApkWorkspace"], "bool | None"]
 
 @dataclass(frozen=True)
 class UpstreamFix:
-    id: str  # e.g. "ovrport.haptic_envelope"
-    workaround: str  # the patch id this fix makes unnecessary, e.g. "adapter.haptic_fix"
+    id: str  # for example "ovrport.haptic_envelope"
+    workaround: str  # the patch id this fix makes unnecessary, for example "adapter.haptic_fix"
     title: str  # what upstream fixed, for the build log
-    upstream: str  # where it was fixed, e.g. "ovrport/app#73 (runtime 3.4.3-aa54c3f)"
+    upstream: str  # where it was fixed, for example "ovrport/app#73 (runtime 3.4.3-aa54c3f)"
     probe: Probe
-    tracker: str = ""  # our tracking issue, e.g. "#74"
+    tracker: str = ""  # our tracking issue, for example "#74"
 
 
 REGISTRY: dict[str, UpstreamFix] = {}

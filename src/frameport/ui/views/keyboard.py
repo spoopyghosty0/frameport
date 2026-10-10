@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 def keyboard_tips() -> list[tuple[str, str, str]]:
     """How typing on the Frame works (its empty state, and tips under the typing box)."""
     return [(ft.Icons.TOUCH_APP_ROUNDED, tr("Pick the field in the headset"),
-             tr("Select a text field in the game first: typing goes where it has focus.")),
+             tr("Select a text field in the game first.")),
             (G.KEYS, tr("Every key goes through"),
              tr("Letters, Enter, Backspace, arrows, Esc and shortcuts reach the headset.")),
             (ft.Icons.CONTENT_PASTE_ROUNDED, tr("Paste long text"),
@@ -44,7 +44,7 @@ class KeyboardView:
         from .. import easter
 
         self._typed = easter.Typed()  # (easter egg: type "hello" and a little headset waves back)
-        hint = C.body(tr("Click here, then type. Everything you type goes to the Frame (Esc and shortcuts too)."),
+        hint = C.body(tr("Click here, then type. Every key goes to the Frame."),
                       T.TEXT)
         self.pad = ft.Container(ft.Column([hint, self.last], spacing=T.S2,
                                           horizontal_alignment=ft.CrossAxisAlignment.CENTER),

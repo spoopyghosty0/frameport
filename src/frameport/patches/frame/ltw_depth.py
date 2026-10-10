@@ -28,7 +28,7 @@ class LtwDepthFormats(Patch):
     def detect(self, a):
         if self.applies(a):
             return Suggestion(True, "Ships LTW (Minecraft's OpenGL-to-OpenGL ES wrapper): Minecraft's 32-bit depth "
-                                    "textures need the OpenGL ES format on the Frame (e.g. QuestCraft).")
+                                    "textures need the OpenGL ES format on the Frame (for example QuestCraft).")
         return None
 
     def apply(self, ctx: ApkContext) -> bool:

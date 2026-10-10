@@ -26,7 +26,7 @@ class OvrTrace(Patch):
     title = "Trace Meta platform requests (diagnostics)"
     description = ("Logs every Meta Platform SDK request the game makes (user, entitlement, cloud saves, ...) and the "
                    "messages that answer them, and every 10 s the requests that never got an answer (logcat tag "
-                   "fp_ovrtrace, in launch.log). For games that wait forever on a loading screen (e.g. Vader "
+                   "fp_ovrtrace, in launch.log). For games that wait forever on a loading screen (for example Vader "
                    "Immortal after its intro). Changes nothing: every call goes to the real function.")
     order = 95
     needs_vr = False

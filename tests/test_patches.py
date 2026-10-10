@@ -469,10 +469,11 @@ def test_saving_a_recipe_keeps_works_with_issues():
 
 
 def test_every_patch_has_a_plain_summary():
-    """The game page shows patch.summary by default (plain words); adapter settings use the Game settings dialog."""
+    """The game page shows patch.summary by default (plain words); Game settings (adapter.*) use their help line
+    from the Game settings dialog (patches/settings.UI), else patches/summaries.py."""
     from frameport.patches import base
 
-    missing = [p.id for p in base.all_patches() if p.category != "adapter" and not p.summary]
+    missing = [p.id for p in base.all_patches() if not p.summary]
     assert not missing, f"add plain summaries to patches/summaries.py: {missing}"
 
 

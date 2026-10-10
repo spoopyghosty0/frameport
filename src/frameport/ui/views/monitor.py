@@ -80,7 +80,7 @@ class ProcRow:
     def __init__(self, view: MonitorView):
         self.view, self.proc = view, None
         self.lock = ft.Icon(ft.Icons.LOCK_OUTLINE_ROUNDED, size=T.px(14), color=T.WARN, visible=False,
-                            tooltip=tr("Ending this stops Steam, SteamVR or the desktop"))
+                            tooltip=tr("Ending this stops Steam, SteamVR or the desktop."))
         self.chevron = ft.Icon(ft.Icons.CHEVRON_RIGHT_ROUNDED, size=T.px(16), color=T.TEXT_2, visible=False)
         self.indent = ft.Container(width=T.px(22), visible=False)
         self.name = ft.Text("", size=T.T_BODY, color=T.TEXT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
@@ -169,7 +169,7 @@ class MonitorView:
         self.interval = C.dropdown(value=f"{M.DEFAULT_INTERVAL:g}", width=T.px(150),
                                     options=[ft.DropdownOption(f"{s:g}", tr("Every {n}").format(n=M.fmt_interval(s)))
                                              for s in M.INTERVALS],
-                                    on_select=self._set_interval, tooltip=tr("How often the Frame sends new numbers"))
+                                    on_select=self._set_interval, tooltip=tr("How often the Frame sends new numbers."))
         self.pause_btn = C.icon_btn(ft.Icons.PAUSE_ROUNDED, tr("Pause"), lambda e: self.toggle_pause())
         self.reconnect = C.secondary(tr("Reconnect"), ft.Icons.REFRESH_ROUNDED, lambda e: self.start())
         self.reconnect.visible = False
@@ -246,7 +246,7 @@ class MonitorView:
         self.details_btn = C.ghost(tr("Show details"), ft.Icons.EXPAND_MORE_ROUNDED, lambda e: self.toggle_details())
 
         # processes
-        self.filter = C.segmented([("game", tr("Game")), ("steam", tr("Steam & SteamVR")), ("all", tr("All"))],
+        self.filter = C.segmented([("game", tr("Game")), ("steam", tr("Steam and SteamVR")), ("all", tr("All"))],
                                   "game", self._set_filter)  # .data = the selected filter
         self.search = C.search(hint_text=tr("Search name, PID or game"), width=T.px(240),
                                on_change=lambda e: self._bind_rows(update=True))
@@ -264,8 +264,7 @@ class MonitorView:
                                    border=ft.Border(bottom=ft.BorderSide(1, T.BORDER)))
         self.rows = [ProcRow(self) for _ in range(ROWS)]
         self.proc_note = C.meta("")
-        self.no_game = C.callout(tr("No FramePort game is running. Start one in the headset or with Play, or switch "
-                                    "the filter to see everything on the Frame."),
+        self.no_game = C.callout(tr("No FramePort game is running. Start one, or switch the filter to see everything."),
                                  icon=ft.Icons.SPORTS_ESPORTS_OUTLINED)
         self.no_game.visible = False
         self.menu = ft.ContextMenu(content=C.card(ft.Column(
@@ -462,7 +461,7 @@ class MonitorView:
             changed.append(self._bind_rows(update=False))
         cpu_share = (s.get("self_ms") or 0) / 10 / max(1.0, s.get("dt") or 1.0) / max(1, self.static.get("cores", 1))
         self.overhead.value = tr("Monitor is using {pct}% of the Frame's CPU").format(pct=f"{cpu_share:.2f}")
-        self.overhead.tooltip = tr("The time the Frame spends collecting these numbers")
+        self.overhead.tooltip = tr("The time the Frame spends collecting these numbers.")
         self._updater()(self.overhead, *[c for group in changed for c in group])
 
     def _apply_tiles(self, s: dict) -> list:
@@ -647,7 +646,7 @@ class MonitorView:
             row.bind(p)
         total = len(self.procs)
         if len(rows) > ROWS:
-            self.proc_note.value = tr("Showing the top {shown} of {n} rows: search to find others.").format(
+            self.proc_note.value = tr("Showing {shown} of {n}. Search to find others.").format(
                 shown=ROWS, n=len(rows))
         elif self.search.value and not procs:
             self.proc_note.value = tr("No process matches.")
@@ -688,15 +687,14 @@ class MonitorView:
                 n=n, name=name)
             text = tr("{n} processes named {name} with the same parent are ended.").format(n=n, name=name)
             if p.get("critical"):
-                text += " " + tr("They are part of Steam, SteamVR or the desktop: the headset view or Steam may "
-                                 "restart, and anything running in the headset may stop.")
+                text += " " + tr("They're part of SteamOS. Ending them may restart Steam and stop the running game.")
             C.confirm(self.app.page, heading, text, tr("Force quit all") if sig == "KILL" else tr("End all"),
                       lambda: self.app.run_bg(self._kill, p, sig), danger=True)
             return
         if p.get("critical"):
             heading = tr("End {name}?").format(name=name)
-            text = tr("{name} is part of Steam, SteamVR or the desktop. Ending it can close the headset view or "
-                      "restart Steam, and anything running in the headset may stop.").format(name=name)
+            text = tr("{name} is part of SteamOS. Ending it may restart Steam and stop the running game.").format(
+                name=name)
         elif sig == "KILL":
             heading = tr("Force quit {name}?").format(name=name)
             text = tr("{name} (PID {pid}) stops at once without saving anything.").format(name=name, pid=pid)
@@ -749,8 +747,7 @@ class MonitorView:
             return
         title = next((g.get("title") for g in self.last_games if g.get("package") == pkg), None) or pkg
         C.confirm(self.app.page, tr("End {title}?").format(title=title),
-                  tr("The game is closed the way Steam's Exit game does it; if it doesn't stop, FramePort stops it. "
-                     "Progress that the game hasn't saved is lost."),
+                  tr("Closes the game like Steam's Exit game. Unsaved progress is lost."),
                   tr("End game"), lambda: self.app.run_bg(self._end_game, pkg, title), danger=True)
 
     def _end_game(self, pkg: str, title: str) -> None:

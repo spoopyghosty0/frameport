@@ -25,8 +25,8 @@ class PlatformCompat(Patch):
     id = "frame.ovrplatformcompat"
     title = "Platform compat (ovrMessageType_ToString)"
     description = ("Adds a real ovrMessageType_ToString (OVRPort's platform compat library) for games whose platform "
-                   "loader lacks it (e.g. The Climb 2). OVRPort 1.2.5+ adds the same library itself; then this is "
-                   "skipped.")
+                   "loader lacks it (for example The Climb 2). OVRPort 1.2.5+ adds the same library itself; then this "
+                   "is skipped.")
     order = 30
     default_on = True
 
@@ -48,7 +48,7 @@ class OvrStubs(Patch):
     id = "frame.ovrstubs"
     title = "Stub missing Meta platform functions"
     description = ("Generates no-op stubs for ovr_* functions the game imports but OVRPort's platform loader "
-                   "lacks (e.g. Espire 1/2, Wallace & Gromit, The Climb 2). Symptom: UnsatisfiedLinkError / "
+                   "lacks (for example Espire 1/2, Wallace & Gromit, The Climb 2). Symptom: UnsatisfiedLinkError / "
                    "'cannot locate symbol ovr_...'. Online/store features stay unavailable.")
     order = 31
     default_on = True
@@ -64,7 +64,7 @@ class OvrStubs(Patch):
         if ws.has(ws.lib(STUBS)):
             if STUBS in elf.needed(loader):
                 return False  # already linked (an earlier build)
-            # the stand-ins exist but nothing loads them (the loader was replaced, e.g. a converted APK converted
+            # the stand-ins exist but nothing loads them (the loader was replaced, for example a converted APK converted
             # again): link them again
             ws.put(ws.lib(LOADER), elf.add_needed(loader, STUBS))
             ctx.notes.append("linked the existing stand-ins again")

@@ -17,7 +17,7 @@ class AvatarStub(Patch):
     id = "frame.avatar_stub"
     title = "Skip Meta avatars"
     description = ("Meta's avatar library needs Meta's Horizon app, which the Frame doesn't have; it then stops the "
-                   "game at start (\"Failed to launch SystemActivities\", e.g. BlazeRush). Replaces it with a "
+                   "game at start (\"Failed to launch SystemActivities\", for example BlazeRush). Replaces it with a "
                    "library that does nothing, so the game runs without Meta avatars.")
     order = 58
 

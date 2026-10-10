@@ -29,8 +29,8 @@ def show_art_dialog(app: FramePortApp, package: str) -> None:
 
         def work():
             if not sources.apply_choice(package, choice):
-                app.toast(tr("No artwork could be downloaded from that {source} result; the current artwork stays. "
-                             "Try another one.").format(source=choice['source']), error=True)
+                app.toast(tr("Couldn't download artwork from that {source} result. Try another one.")
+                          .format(source=choice['source']), error=True)
                 return
             thumbs.prewarm(package)
             installed = C.install_state(library.game(package), app.frame_info) in ("installed", "outdated")
@@ -41,7 +41,7 @@ def show_art_dialog(app: FramePortApp, package: str) -> None:
             if installed:
                 app.toast(tr("Artwork updated for {get}. The Frame's Steam library still shows the old art.")
                           .format(get=g.get('title')),
-                          action=tr("Update Steam art on Frame"), on_action=lambda e: app.update_steam_art(package))
+                          action=tr("Update art on Frame"), on_action=lambda e: app.update_steam_art(package))
             else:
                 app.toast(tr("Artwork updated for {get}").format(get=g.get('title')))
         app.run_bg(work)
@@ -78,7 +78,7 @@ def show_art_dialog(app: FramePortApp, package: str) -> None:
             if src and src != "none" and installed:
                 app.toast(tr("Artwork updated ({src}). The Frame's Steam library still shows the old art.")
                           .format(src=src),
-                          action=tr("Update Steam art on Frame"), on_action=lambda e: app.update_steam_art(package))
+                          action=tr("Update art on Frame"), on_action=lambda e: app.update_steam_art(package))
             else:
                 app.toast(tr("Artwork: {value}").format(value=src or 'none found'))
         app.run_bg(work)
@@ -90,7 +90,7 @@ def show_art_dialog(app: FramePortApp, package: str) -> None:
             ft.Row([term, C.secondary(tr("Search"), ft.Icons.SEARCH_ROUNDED, search)], spacing=T.S2),
             status, results,
         ], spacing=T.S3, tight=True),
-        actions=[C.ghost(tr("Use your own images…"), ft.Icons.UPLOAD_FILE_OUTLINED,
+        actions=[C.ghost(tr("Use your own artwork…"), ft.Icons.UPLOAD_FILE_OUTLINED,
                          lambda e: (app.page.pop_dialog(), show_custom_art_dialog(app, package))),
                  C.ghost(tr("Find automatically"), ft.Icons.AUTO_AWESOME_ROUNDED, auto),
                  C.ghost(tr("Close"), on_click=lambda e: app.page.pop_dialog())]))
@@ -122,7 +122,7 @@ def show_custom_art_dialog(app: FramePortApp, package: str) -> None:
         app.refresh_view()
         if installed:
             app.toast(tr("{message} The Frame's Steam library still shows the old art.").format(message=message),
-                      action=tr("Update Steam art on Frame"), on_action=lambda e: app.update_steam_art(package))
+                      action=tr("Update art on Frame"), on_action=lambda e: app.update_steam_art(package))
         else:
             app.toast(message)
 
@@ -178,8 +178,8 @@ def show_custom_art_dialog(app: FramePortApp, package: str) -> None:
     app.page.show_dialog(C.dialog(
         tr("Your own artwork for {title}").format(title=g.get("title")),
         ft.Column([
-            C.body(tr("Choose PNG, JPEG or WebP images. Steam fills any missing shape from the ones you choose; "
-                      "FramePort never replaces your images automatically.")),
+            C.body(tr("Choose PNG, JPEG or WebP images. Missing shapes are made from the ones you choose, and "
+                      "FramePort never replaces them.")),
             grid,
         ], spacing=T.S3, tight=True),
         actions=[C.ghost(tr("Search the stores instead"), ft.Icons.IMAGE_SEARCH_ROUNDED,

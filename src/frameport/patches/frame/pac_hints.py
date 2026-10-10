@@ -63,10 +63,11 @@ def unpaired(data: bytes) -> tuple[list[int], list[int]] | None:
 class PacHints(Patch):
     id = "frame.pac_hints"
     title = "Unpaired pointer-authentication checks"
-    description = ("Some engines contain assembly (e.g. OpenSSL's) that checks a return-address signature it never "
-                   "made. The Quest's CPU ignores those checks, the Steam Frame's enforces them: the game crashes with "
-                   "SIGILL as soon as it uses that code, e.g. on its first network connection (Star Wars Pinball "
-                   "VR). In a library with unpaired checks, the signing and checking instructions become no-ops.")
+    description = ("Some engines contain assembly (for example OpenSSL's) that checks a return-address signature it "
+                   "never made. The Quest's CPU ignores those checks, the Steam Frame's enforces them: the game "
+                   "crashes with SIGILL as soon as it uses that code, for example on its first network connection "
+                   "(Star Wars Pinball VR). In a library with unpaired checks, the signing and checking instructions "
+                   "become no-ops.")
     order = 47
     revision = 1
 

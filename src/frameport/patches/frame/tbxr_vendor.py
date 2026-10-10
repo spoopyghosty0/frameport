@@ -26,9 +26,10 @@ VENDOR_LOADER = "libopenxr_loader_valve.so"
 class TbxrVendor(Patch):
     id = "frame.tbxr_vendor"
     title = "Team Beef ports: treat the Frame as a Meta headset"
-    description = ("Team Beef's ports (e.g. Lambda1VR, RTCWQuest) load an OpenXR library named after the headset maker "
-                   "and pick their VR setup by maker; for \"valve\" they stop at start (libopenxr_loader_valve.so not "
-                   "found) or take the Pico path. Adds that library and lets them take the Meta path.")
+    description = ("Team Beef's ports (for example Lambda1VR, RTCWQuest) load an OpenXR library named after the "
+                   "headset maker and pick their VR setup by maker; for \"valve\" they stop at start "
+                   "(libopenxr_loader_valve.so not found) or take the Pico path. Adds that library and lets them take "
+                   "the Meta path.")
     order = 47
 
     def applies(self, a):

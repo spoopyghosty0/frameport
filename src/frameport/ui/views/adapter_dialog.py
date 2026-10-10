@@ -76,7 +76,7 @@ def show_adapter_dialog(app: FramePortApp, package: str) -> None:
     if g is None:  # installed on the Frame but not in this library: read the values there first
         target = app.target
         if target is None:
-            app.toast(tr("Connect your Frame first"), error=True)
+            app.toast(tr("Connect your Frame first."), error=True)
             return
 
         def load():
@@ -181,7 +181,7 @@ def _open(app: FramePortApp, package: str, g: dict | None, values: dict) -> None
         installed = app.target is not None and (g is None or C.install_state(g, app.frame_info) in
                                                 ("installed", "outdated"))
         if not installed:
-            app.toast(tr("Saved. The settings are used when the game is installed."))
+            app.toast(tr("Saved. They apply when the game is installed."))
             app.refresh_view()
             return
         target = app.target
@@ -195,7 +195,7 @@ def _open(app: FramePortApp, package: str, g: dict | None, values: dict) -> None
 
     show_adv = any(UI[k]["level"] == "advanced" for _, _, keys in sections for k in keys)
     content = ft.Column([
-        C.body(tr("Changes are used the next time the game starts. Not sure? Leave a setting as it is."), T.TEXT_2),
+        C.body(tr("Changes take effect the next time the game starts. Not sure? Leave a setting as it is."), T.TEXT_2),
         *body,
         *([C.switch(tr("Show advanced settings"), value=advanced["on"], on_change=toggle_advanced)]
           if show_adv else []),

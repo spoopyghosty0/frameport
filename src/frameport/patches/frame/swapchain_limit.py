@@ -41,8 +41,8 @@ class SwapchainLimit(Patch):
     title = "Allow swapchains larger than 4096 px"
     description = ("OVRPort's OpenXR dispatcher aborts the app ('Wrong createInfo size', SIGABRT in "
                    "libopenxr_loader.so xrCreateSwapchain) when a swapchain is wider or taller than 4096 px, which "
-                   "video players do for 8K video or big theatre textures (e.g. 4XVR). Raises the guard to 16384 px so "
-                   "the Frame's runtime (8192 px max) decides instead.")
+                   "video players do for 8K video or big theater textures (for example 4XVR). Raises the guard to "
+                   "16384 px so the Frame's runtime (8192 px max) decides instead.")
     order = 45
     default_on = True
 
@@ -50,7 +50,7 @@ class SwapchainLimit(Patch):
         video = sorted(lib for lib in a.libs if lib.lower().startswith(VIDEO_LIBS))
         if video:
             return Suggestion(True, f"Video player ({', '.join(video[:2])}): creates swapchains larger than 4096 px "
-                                    "(8K video, theatre textures), which OVRPort's dispatcher aborts on.")
+                                    "(8K video, theater textures), which OVRPort's dispatcher aborts on.")
         return Suggestion(True, "Recommended for every game: OVRPort aborts on swapchains larger than 4096 px; "
                                 "the Frame's runtime handles them.")
 

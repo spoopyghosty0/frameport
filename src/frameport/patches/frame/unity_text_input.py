@@ -147,7 +147,7 @@ class Il2cppReturnPatch(Patch):
 
 class UnityTextInput(Il2cppReturnPatch):
     id = "frame.unity_text_input"
-    title = "Make Unity text fields work without a system keyboard"
+    title = "Make Unity text fields work"
     description = ("Unity's TMP_InputField / InputField wait for Android's on-screen keyboard and close themselves a "
                    "frame later when there is none (Lepton has no on-screen keyboard; Meta's system keyboard does "
                    "this on a Quest), so a selected text field only flashes a caret. Rewrites "

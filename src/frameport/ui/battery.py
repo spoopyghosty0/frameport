@@ -55,10 +55,10 @@ def low(battery: dict | None) -> bool:
 def message(kind: str, battery: dict) -> str:
     pct = battery.get("percent", 0)
     if kind == "pause":
-        return tr("The Frame's battery is at {pct}%: installs paused so it doesn't switch off mid-upload. Plug it "
-                  "in; the queue continues by itself.").format(pct=pct)
+        return tr("The Frame's battery is at {pct}%, so installs are paused. Plug it in and they "
+                  "continue.").format(pct=pct)
     if kind == "warn":
-        return tr("The Frame's battery is at {pct}% and not charging. Plug it in (a strong charger, not a PC "
-                  "port): long installs can drain it, and FramePort pauses them at {pause}%.").format(
+        return tr("The Frame's battery is at {pct}% and not charging. Plug it into a strong charger — "
+                  "installs pause at {pause}%.").format(
             pct=pct, pause=PAUSE_AT)
-    return tr("The Frame is charging: continuing the installs.")
+    return tr("The Frame is charging — installs continue.")

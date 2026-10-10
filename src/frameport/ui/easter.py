@@ -58,7 +58,7 @@ HELLO = "hello"
 def milestone_text(n: int) -> str | None:
     """(Literal tr() calls, so the strings reach the translation template.)"""
     return {1: tr("Your first game is on the Frame. Welcome aboard!"),
-            10: tr("10 games on the Frame. It's getting cosy in there."),
+            10: tr("10 games on the Frame. It's getting cozy in there."),
             100: tr("100 games on the Frame. The Frame thanks you.")}.get(n)
 
 

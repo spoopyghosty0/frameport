@@ -113,7 +113,7 @@ class ScreenshotsView:
     # ---------------------------------------------------------------- building
     def mount(self, package: str | None = None) -> ft.Control:
         app = self.app
-        heading, sub = tr("Screenshots"), tr("Pictures you took in the headset (Steam screenshots on the Frame)")
+        heading, sub = tr("Screenshots"), tr("Pictures you took in the headset")
         if not (app.target and app.frame_state == "connected"):
             self._loaded = False  # load again once connected
             return ft.Column([
@@ -125,7 +125,7 @@ class ScreenshotsView:
                                   (G.SHOT, tr("Sorted by day"),
                                    tr("All of Steam's headset screenshots, newest first.")),
                                   (ft.Icons.VIDEOGAME_ASSET_OUTLINED, tr("Matched to your games"),
-                                   tr("Each shot is labelled with the game you were playing.")),
+                                   tr("Each shot is labeled with the game you were playing.")),
                                   (ft.Icons.DOWNLOAD_ROUNDED, tr("Save them to this PC"),
                                    tr("Download one, a selection or all of them.")),
                               ])], expand=True)
@@ -178,8 +178,8 @@ class ScreenshotsView:
             if not self.shots:
                 empty = C.empty_state(
                     ft.Icons.PHOTO_CAMERA_OUTLINED, tr("No screenshots yet"),
-                    tr("Take one in the headset with Steam's screenshot shortcut; it shows up here. Screenshots "
-                       "are matched to the FramePort game that was running."))
+                    tr("Take one in the headset with Steam's screenshot shortcut. It shows up here, labeled "
+                       "with the game."))
                 empty.expand, empty.padding = False, T.px(48)  # (expand inside a scrolling column: invalid layout)
                 self.grid.controls = [empty]
             self._update_selection(render=False)
@@ -487,7 +487,7 @@ class ScreenshotsView:
             except Exception as exc:  # noqa: BLE001
                 app.toast(tr("Couldn't copy the screenshot: {error}").format(error=explain(exc)), error=True)
                 return
-            app.toast(tr("Screenshot copied: paste it anywhere"))
+            app.toast(tr("Screenshot copied. Paste it anywhere."))
         app.run_bg(work)
 
     async def _copy_web(self, path: Path) -> None:
@@ -496,7 +496,7 @@ class ScreenshotsView:
         except Exception as exc:  # noqa: BLE001
             self.app.toast(tr("Couldn't copy the screenshot: {error}").format(error=explain(exc)), error=True)
             return
-        self.app.toast(tr("Screenshot copied: paste it anywhere"))
+        self.app.toast(tr("Screenshot copied. Paste it anywhere."))
 
     async def _download_all(self, e=None):
         if self.shots:
@@ -535,5 +535,5 @@ class ScreenshotsView:
                 self.load()
             self.app.run_bg(work)
         C.confirm(self.app.page, tr_n("Delete {n} screenshot?", "Delete {n} screenshots?", len(shots)),
-                  tr("They are deleted on the Frame and can't be restored. Steam's own screenshot list may still "
-                     "show them until Steam restarts."), tr("Delete"), go, danger=True)
+                  tr("They're deleted on the Frame for good. Steam's own list may show them until Steam "
+                     "restarts."), tr("Delete"), go, danger=True)

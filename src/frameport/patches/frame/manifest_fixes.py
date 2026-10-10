@@ -37,8 +37,8 @@ class NoDebuggable(Patch):
     needs_vr = False
     title = "Clear android:debuggable"
     description = ("OVRPort marks apps debuggable; that turns on CheckJNI, which aborts some Unreal games on sloppy "
-                   "JNI calls ('JNI DETECTED ERROR', e.g. 'GetStringUTFChars ... NULL' in Time Stall). Clear it for "
-                   "those.")
+                   "JNI calls ('JNI DETECTED ERROR', for example 'GetStringUTFChars ... NULL' in Time Stall). Clear "
+                   "it for those.")
     order = 21
 
     def detect(self, a):
@@ -49,10 +49,10 @@ class NoDebuggable(Patch):
         v = unreal_version(a)
         if v and v < (4, 22):
             return Suggestion(True, f"Unreal Engine {v[0]}.{v[1]}: older UE4 makes JNI calls CheckJNI rejects "
-                                    "(e.g. Time Stall aborted on GetStringUTFChars(NULL)).")
+                                    "(for example Time Stall aborted on GetStringUTFChars(NULL)).")
         if any(lib.startswith("libmetaxraudio") for lib in a.libs):
             return Suggestion(True, "Unreal build of Meta XR Audio: its telemetry lookup leaves a pending JNI "
-                                    "exception that CheckJNI turns into an abort (e.g. NOPE Challenge).")
+                                    "exception that CheckJNI turns into an abort (for example NOPE Challenge).")
         return Suggestion(False, "Enable if the game aborts with 'JNI DETECTED ERROR' (CheckJNI).")
 
     def applies(self, a):
@@ -69,7 +69,8 @@ class MetaPermissions(Patch):
     id = "frame.meta_permissions"
     title = "Declare Meta-only permissions"
     description = ("Declares com.oculus.permission.* / horizonos.permission.* that the app uses, so Android grants "
-                   "them at install (e.g. the 'use spatial data' permission of mixed-reality games like Demeter).")
+                   "them at install (for example the 'use spatial data' permission of mixed-reality games like "
+                   "Demeter).")
     order = 22
 
     def detect(self, a):
@@ -77,7 +78,7 @@ class MetaPermissions(Patch):
 
         if needs_scene(a):
             return Suggestion(True, "Mixed-reality game that needs the room model: its 'use spatial data' "
-                                    "permission must be granted (e.g. Demeter).")
+                                    "permission must be granted (for example Demeter).")
         scene = [p for p in a.meta_permissions if any(k in p for k in ("SCENE", "ANCHOR", "SPATIAL", "BOUNDARY"))]
         if scene:
             names = ", ".join(p.rsplit(".", 1)[-1] for p in scene[:3])
@@ -100,11 +101,12 @@ class StartActivity(Patch):
     id = "frame.start_activity"
     needs_vr = False
     title = "Start straight in VR (skip the 2D launcher)"
-    description = ("Some apps open a flat Android launcher that then starts a separate VR activity (e.g. WiiCompiled). "
-                   "Shown with Lepton's flat window, that window stays in view after the VR part starts. This makes "
-                   "the VR activity the one Lepton starts (its LAUNCHER category), so the app opens in VR with no "
-                   "flat window. Everything only the launcher does (choosing or importing content) is skipped: turn "
-                   "it off for a run when you need the launcher, and turn off \"Show the app's Android window\".")
+    description = ("Some apps open a flat Android launcher that then starts a separate VR activity (for example "
+                   "WiiCompiled). Shown with Lepton's flat window, that window stays in view after the VR part "
+                   "starts. This makes the VR activity the one Lepton starts (its LAUNCHER category), so the app "
+                   "opens in VR with no flat window. Everything only the launcher does (choosing or importing "
+                   "content) is skipped: turn it off for a run when you need the launcher, and turn off \"Show the "
+                   "app's Android window\".")
     order = 22
     params = [Param("activity", "str", "", "Activity to start (empty: the app's VR activity)")]
 

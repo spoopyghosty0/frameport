@@ -38,14 +38,14 @@ OVERPORT_PATCHES = [
      "undoes it."),
     ("patch_mark_allow_backup", "Mark application to allow backup", True, "Allows data backup."),
     ("patch_remove_unreal_force_quit", "Remove Unreal's ForceQuit", False,
-     "For Unreal games that close themselves right after starting (e.g. Phantom: Covert Ops). Also disables the "
+     "For Unreal games that close themselves right after starting (for example Phantom: Covert Ops). Also disables the "
      "in-game Quit."),
     ("patch_force_passthrough", "Force enable passthrough", False,
      "For mixed-reality-only games. On the Frame, passthrough is emulated by the FrameBridge adapter "
-     "(greyscale cameras)."),
+     "(grayscale cameras)."),
     ("patch_disable_space_warp", "Disable application space warp if used", False,
      "For heavy games that use application space warp: it causes artifacts or hangs on non-Quest runtimes "
-     "(e.g. Asgard's Wrath 2, Batman: Arkham Shadow)."),
+     "(for example Asgard's Wrath 2, Batman: Arkham Shadow)."),
     ("patch_disable_controller_offset", "Disable controller tracking offset", False,
      "Removes OVRPort's controller pose offset if controllers look misplaced."),
     ("patch_remove_vrapi", "Remove VrApi library", False,

@@ -76,9 +76,9 @@ class WelcomeView:
                         else [C.secondary(tr("Set up the Frame"), ft.Icons.ARROW_FORWARD_ROUNDED,
                                           lambda e: app.go("frame"))])),
             self.step(3, tr("Add your games"),
-                      tr("A folder with Android games (APK + OBB, for example Quest games) or PC VR games."),
+                      tr("A folder with Quest, Android or PC VR games."),
                       g_state, ft.Row([C.primary(tr("Scan a folder…"), ft.Icons.FOLDER_OPEN_ROUNDED, app.pick_folder),
-                                       C.ghost(tr("Add an APK file…"), ft.Icons.ANDROID_ROUNDED, app.pick_apk)],
+                                       C.ghost(tr("Add an APK…"), ft.Icons.ANDROID_ROUNDED, app.pick_apk)],
                                       spacing=T.S2)),
             ft.Row([ft.Container(expand=True),
                     C.primary(tr("Go to my library"), ft.Icons.ARROW_FORWARD_ROUNDED, lambda e: app.finish_welcome())

@@ -143,7 +143,7 @@ def test_linux_app_menus_have_no_conversion_actions(monkeypatch):
     on_frame = {"installed": [{"package": "linux.tool", "kind": "linux"}]}
     for quick in (True, False):
         labels = _labels(_app(monkeypatch, g, on_frame).game_actions("linux.tool", quick=quick))
-        for gone in ("Analyze again", "Rebuild only (no install)", "Check game files", "Reset to suggested recipe…",
+        for gone in ("Analyze again", "Rebuild only", "Check game files", "Reset to suggested recipe…",
                      "Save as known-good recipe", "Share working recipe…", "Game settings…",
                      "Add videos and files", "Change program…"):
             assert gone not in labels, gone

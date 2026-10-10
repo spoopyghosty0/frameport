@@ -44,7 +44,7 @@ class Updater:
                     ft.Column([C.body(tr("Update available"), T.ON_ACCENT, weight=ft.FontWeight.W_600), self._version],
                               spacing=0, expand=True)], spacing=T.S2),
             padding=T.S3, border_radius=T.RADIUS_SM, bgcolor=T.ACCENT, ink=True, visible=bool(old and old.visible),
-            tooltip=tr("A new FramePort version is ready to install"), on_click=lambda e: self.show_dialog())
+            tooltip=tr("A new FramePort version is ready."), on_click=lambda e: self.show_dialog())
 
     # ---------------------------------------------------------------- checking
     def start(self) -> None:
@@ -106,7 +106,7 @@ class Updater:
         self.preparing = True
         try:
             updates.prepare(up)
-            self.app.toast(tr("FramePort {version} is downloaded and installs the next time FramePort starts")
+            self.app.toast(tr("FramePort {version} is downloaded — it installs at the next start")
                            .format(version=up.version),
                            action=tr("Restart now"), on_action=lambda e: self.install())
         except Exception as exc:  # noqa: BLE001
@@ -121,8 +121,7 @@ class Updater:
             return
         page = self.app.page
         kind = updates.install_kind()
-        how = {"bundle": tr("FramePort downloads it, checks it, closes and opens again as the new version. Your "
-                            "games, settings and Frame connection stay as they are."),
+        how = {"bundle": tr("FramePort downloads it and restarts as the new version. Your games and settings stay."),
                "source": tr("Updates this source checkout (git pull + uv sync), then restarts FramePort."),
                "wheel": tr("Reinstalls FramePort from the release, then restarts it.")}[kind]
         changes = self.changes if self.changes and self.changes[0].version == up.version \
@@ -161,7 +160,7 @@ class Updater:
             entries = updates.recent_history(updates.fetch_changelog(need=__version__))
             page = self.app.page
             if not entries:
-                self.app.toast(tr("The changelog couldn't be loaded (no internet connection?)"), error=True,
+                self.app.toast(tr("Couldn't load the changelog — check the internet connection"), error=True,
                                action=tr("Releases"), on_action=lambda e: page.launch_url(f"{REPO_URL}/releases"))
                 return
             self.app.page.run_thread(lambda: page.show_dialog(_changes_dialog(page, tr("FramePort changelog"),
@@ -193,9 +192,9 @@ class Updater:
             self.found = up
             self.changes = changes
             self.install()
-        warn = C.callout(C.body(tr("Dev builds let you test fixes before they're released. They're less tested "
-                                   "than releases and may have bugs. You get the next release as a normal update "
-                                   "(you have {version}).").format(version=__version__), T.TEXT), "warn")
+        warn = C.callout(C.body(tr("Dev builds are early, less tested versions and may have bugs. You still get "
+                                   "the next release as a normal update (you have {version}).")
+                                .format(version=__version__), T.TEXT), "warn")
         page.show_dialog(C.dialog(
             tr("Install dev build {version}?").format(version=up.version),
             _changes_column(page, changes, warn), size="l", height=_changes_height(changes, 160),
@@ -213,12 +212,12 @@ class Updater:
         if kind == "bundle":
             target = updates.bundle_root()
             if not target or not updates.can_replace(target):
-                self.app.toast(tr("FramePort can't replace itself in {value} (no permission): opening the release "
+                self.app.toast(tr("FramePort can't update itself in {value} (no permission) — opening the release "
                                   "page to download it").format(value=target or 'this folder'), error=True)
                 page.launch_url(up.page)
                 return
         if kind == "source" and updates.source_is_dirty():
-            self.app.toast(tr("This source checkout has uncommitted changes: commit or stash them, then update"),
+            self.app.toast(tr("This source checkout has uncommitted changes — commit or stash them, then update"),
                            error=True)
             return
         if page.web:
@@ -238,7 +237,7 @@ class Updater:
                         out = subprocess.run(cmd, capture_output=True, text=True, timeout=updates.UPGRADE_TIMEOUT,
                                              env=updates.upgrade_env(), stdin=subprocess.DEVNULL)
                     except subprocess.TimeoutExpired:
-                        raise RuntimeError(tr("{value} took too long; update by hand: {join}")
+                        raise RuntimeError(tr("{value} took too long — update by hand: {join}")
                                            .format(value=cmd[0], join=' '.join(cmd))) from None
                     for line in (out.stdout + out.stderr).splitlines()[-20:]:
                         rep.log(line)
@@ -247,7 +246,7 @@ class Updater:
                                            .format(value=cmd[0], returncode=out.returncode))
                 self.restart = self._restart_process
             rep.stage(tr("Restarting"))
-            return tr("FramePort {version} is ready: restarting").format(version=up.version)
+            return tr("FramePort {version} is ready — restarting").format(version=up.version)
         self.app.submit(tr("Update FramePort to {version}").format(version=up.version), run, None, kind="app-update",
                         open_panel=True)
         if self.app.jobs.current() and self.app.jobs.current().kind != "app-update":

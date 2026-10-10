@@ -34,21 +34,22 @@ class VulkanSanitize(Patch):
     description = ("Some engines leave the pNext of unused Vulkan attachment references uninitialized. The Frame's "
                    "driver never reads it, but Lepton always loads Steam's Fossilize shader-cache layer, which follows "
                    "it and crashes on the first frame (SIGSEGV in libVkLayer_fossilize.so from FVulkanRenderPass, "
-                   "e.g. Deadpool VR). Loads Vulkan through a small shim that keeps valid pointers and drops only "
-                   "unreadable ones or ones pointing at the wrong structure type. It also drops a depth resolve "
+                   "for example Deadpool VR). Loads Vulkan through a small shim that keeps valid pointers and drops "
+                   "only unreadable ones or ones pointing at the wrong structure type. It also drops a depth resolve "
                    "named in a subpass without a depth attachment, which crashes the Frame's driver at the first "
-                   "render pass (e.g. Metro Awakening).")
+                   "render pass (for example Metro Awakening).")
     order = 72
     default_on = True
 
     def detect(self, a):
         if a.engine == "Other":  # changes nothing unless one of its libraries loads Vulkan by name
-            return Suggestion(True, "Own-engine game: applied when one of its libraries loads Vulkan by name (e.g. "
-                                    "Roblox); keeps Lepton's Fossilize layer from crashing on uninitialized pointers.")
+            return Suggestion(True, "Own-engine game: applied when one of its libraries loads Vulkan by name (for "
+                                    "example Roblox); keeps Lepton's Fossilize layer from crashing on uninitialized "
+                                    "pointers.")
         if a.engine == "Unreal":
             return Suggestion(True, "Unreal game: applied automatically when the engine loads Vulkan by name; keeps "
                                     "Lepton's Fossilize layer from crashing on uninitialized pointers "
-                                    "(e.g. Deadpool VR).")
+                                    "(for example Deadpool VR).")
         return None
 
     def applies(self, a):

@@ -139,8 +139,7 @@ class ActivityPanel:
     def _paused_notice(self) -> ft.Control:
         return C.callout(ft.Column([
             C.body(tr("Waiting for your Frame"), T.TEXT, weight=ft.FontWeight.W_600),
-            C.body(tr("It can't be reached (asleep, turned off or out of Wi-Fi). Wake it or turn it on: FramePort "
-                      "continues by itself, and uploads pick up where they stopped."), T.TEXT_2),
+            C.body(tr("Can't reach the Frame. Wake it or turn it on; uploads resume by themselves."), T.TEXT_2),
             C.secondary(tr("Try now"), ft.Icons.REFRESH_ROUNDED,
                         lambda e: self.app.run_bg(lambda: self.app.retry_frame())),
         ], spacing=T.S2, horizontal_alignment=ft.CrossAxisAlignment.START), "warn", ft.Icons.WIFI_OFF_ROUNDED)

@@ -20,8 +20,9 @@ class UnityUserPresence(Patch):
     title = "Unity: headset always counts as worn"
     description = ("Unity's Oculus XR Plugin asks OVRPlugin whether the headset is worn; on the Frame the answer "
                    "turns to \"not worn\" a few seconds after start. Games that only move the player while the "
-                   "headset is worn then show a frozen body with no head tracking and no controls (e.g. BONELAB). "
-                   "Reports the headset as worn; taking it off still pauses the game through the session's focus.")
+                   "headset is worn then show a frozen body with no head tracking and no controls (for example "
+                   "BONELAB). Reports the headset as worn; taking it off still pauses the game through the session's "
+                   "focus.")
     order = 46
     revision = 1
 

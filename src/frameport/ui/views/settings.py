@@ -20,9 +20,9 @@ if TYPE_CHECKING:
 
 TOOL_TITLES = {"java": tr("Java runtime"), "overport": "OVRPort", "apksigner": "apksigner", "revive": tr("Revive")}
 TOOL_WHY = {"java": tr("Runs OVRPort and apksigner"), "overport": tr("Converts Quest games to OpenXR"),
-            "apksigner": tr("Signs rebuilt games"), "revive": tr("Runs Oculus PC games on OpenXR")}
+            "apksigner": tr("Signs rebuilt games"), "revive": tr("Runs Oculus PC games on SteamVR")}
 # the page's sections in order (the index on the left lists them): Appearance near the top (it's the most used),
-# "Remove FramePort" last
+# "Uninstall FramePort" last
 SECTIONS = ("appearance", "updates", "links", "installing", "tools", "pc", "data", "feedback", "about", "remove")
 
 
@@ -30,7 +30,7 @@ def section_titles() -> dict[str, str]:
     """Index labels of SECTIONS (the sections' own headings may be longer)."""
     return {"appearance": tr("Appearance"), "updates": tr("Updates"), "links": tr("Install links"),
             "installing": tr("Installing"), "tools": tr("Tools"), "pc": tr("This PC"), "data": tr("Data"),
-            "feedback": tr("Problems and feedback"), "about": tr("About"), "remove": tr("Remove FramePort")}
+            "feedback": tr("Problems and feedback"), "about": tr("About"), "remove": tr("Uninstall FramePort")}
 
 
 def scroll_key(section: str) -> str:
@@ -71,7 +71,7 @@ class SettingsView:
 
         if not winhost.available():
             items = [C.Check("warn", tr("Windows not detected"),
-                             tr("PC VR games can run on this PC only with Windows (or WSL on Windows)"))]
+                             tr("PC VR games run on this PC only on Windows"))]
         else:
             try:
                 from ...targets.pc_revive import PcReviveTarget
@@ -105,11 +105,10 @@ class SettingsView:
                 freed = pipeline.remove_all_converted_copies()
                 self.app.toast(tr("Removed the converted copies ({size})").format(size=fmt_size(freed)))
             self.app.run_bg(work)
-        keep = C.switch(tr("Keep converted copies on this PC after installing (FramePort converts again for every "
-                           "install, so they're only needed for inspecting a build)"),
+        keep = C.switch(tr("Keep converted copies on this PC (only needed to inspect a build)"),
                         value=bool(library.setting("build.keep_copies", False)), on_change=keep_changed)
-        launch = C.switch(tr("Launch test after installing on the Frame (starts the game once without the headset "
-                             "and checks its log)"), value=bool(library.setting("install.launch_test", True)),
+        launch = C.switch(tr("Run a launch test after installing on the Frame"),
+                          value=bool(library.setting("install.launch_test", True)),
                           on_change=changed)
         return ft.Column([launch, keep, C.ghost(tr("Remove converted copies now"), ft.Icons.CLEANING_SERVICES_OUTLINED,
                                                clean, tooltip=tr("Your own game files aren't touched."))],
@@ -130,7 +129,7 @@ class SettingsView:
                                            T.TEXT, expand=True),
                                     C.primary(tr("Update now"), ft.Icons.SYSTEM_UPDATE_ROUNDED,
                                               lambda e: app.updater.install())], spacing=T.S3), "info")
-                  if found else C.meta(tr("You have the latest version as of the last check ({when}).")
+                  if found else C.meta(tr("You have the latest version (checked {when}).")
                                        .format(when=when)))
 
         def auto_check(e):
@@ -139,7 +138,7 @@ class SettingsView:
         def auto_install(e):
             library.set_setting("update.auto_install", bool(e.control.value))
         kind = {"bundle": tr("the downloaded app"), "source": tr("a source checkout (git pull + uv sync)"),
-                "wheel": tr("an installed Python package (reinstalled from the release)")}[updates.install_kind()]
+                "wheel": tr("a Python package")}[updates.install_kind()]
         return ft.Column([
             ft.Row([C.kv(tr("Installed"), tr("FramePort {version} · {kind}").format(version=__version__, kind=kind)),
                     ft.Container(expand=True),
@@ -151,10 +150,10 @@ class SettingsView:
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             C.switch(tr("Check for new versions automatically"), value=bool(library.setting("update.auto_check", True)),
                       on_change=auto_check),
-            C.switch(tr("Install updates automatically (downloads in the background, installs when FramePort "
-                            "next starts)"), value=bool(library.setting("update.auto_install", False)),
+            C.switch(tr("Install updates automatically when FramePort starts"),
+                     value=bool(library.setting("update.auto_install", False)),
                       on_change=auto_install),
-            ft.Row([C.meta(tr("Asked to test a fix? Dev builds come before the next release."), expand=True),
+            ft.Row([C.meta(tr("Asked to test something? Dev builds come before the next release."), expand=True),
                     C.ghost(tr("Install the latest dev build…"), G.TEST,
                             lambda e: app.updater.install_dev())],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -181,8 +180,8 @@ class SettingsView:
                     C.ghost(tr("Check now"), ft.Icons.SYNC_ROUNDED,
                             lambda e: app.run_bg(lambda: app._refresh_catalog(force=True)))],
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            C.switch(tr("Update game recipes from GitHub automatically (confirmed recipes arrive without a "
-                        "FramePort update)"), value=bool(library.setting("catalog.auto_update", True)),
+            C.switch(tr("Update game recipes from GitHub automatically"),
+                     value=bool(library.setting("catalog.auto_update", True)),
                      on_change=toggle),
         ], spacing=T.S2)
 
@@ -201,10 +200,10 @@ class SettingsView:
             for scheme, (_switch, state, take) in rows.items():
                 take.visible = False
                 if not last.get("supported", True):
-                    state.value = tr("This system can't send web links to FramePort: use Add games → Install from a "
-                                     "link…")
+                    state.value = tr("This system can't send web links to FramePort. Use Add games → Add from a "
+                                     "link… instead.")
                 elif not urlhandler.enabled(scheme):
-                    state.value = tr("Off: these links open whatever app is set up for them, if any.")
+                    state.value = tr("Off: these links open whatever app is set up for them.")
                 elif last.get(scheme) == "other":
                     state.value = tr("{app} opens these links on this PC.").format(
                         app=last.get(f"{scheme}_by") or tr("Another app"))
@@ -212,7 +211,7 @@ class SettingsView:
                 elif last.get(scheme) == "ours":
                     state.value = tr("These links open FramePort.")
                 else:
-                    state.value = tr("Not set up yet (FramePort registers itself when it starts).")
+                    state.value = tr("Not set up yet. FramePort sets it up when it starts.")
             C.update(*[c for r in rows.values() for c in r[1:]])
 
         def toggle(scheme):
@@ -225,8 +224,8 @@ class SettingsView:
             def clicked(e):
                 other = last.get(f"{scheme}_by") or tr("the other app")
                 C.confirm(app.page, tr("Open {scheme}:// links with FramePort?").format(scheme=scheme),
-                          tr("These links will open FramePort instead of {app}. You can switch back in {app}, or by "
-                             "turning this setting off.").format(app=other),
+                          tr("These links will open FramePort instead of {app}. Turn this setting off to switch "
+                             "back.").format(app=other),
                           tr("Use FramePort"), lambda: app.run_bg(lambda: show(urlhandler.register([scheme],
                                                                                                     force=True))))
             return clicked
@@ -327,8 +326,8 @@ class SettingsView:
             ft.Row([C.body(tr("Theme"), T.TEXT, weight=ft.FontWeight.W_500), ft.Container(width=T.S4),
                     C.ghost(tr("Copy this theme as a file"), ft.Icons.CONTENT_COPY_ROUNDED,
                             lambda e: (app.copy(T.theme_json(T.THEME)),
-                                       app.toast(tr("Copied: save it as a .json file, change the colors and "
-                                                    "install it")))),
+                                       app.toast(tr("Copied. Save it as a .json file, change the colors and "
+                                                    "install it.")))),
                     C.secondary(tr("Install theme file…"), ft.Icons.FILE_OPEN_OUTLINED, install)],
                    spacing=T.S2, wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Row([card(t) for t in T.THEMES], spacing=T.S3, run_spacing=T.S3, wrap=True,
@@ -356,9 +355,9 @@ class SettingsView:
                          options=options, width=T.px(260), on_select=changed)
         live_card = C.switch(tr("Show the running game on the Frame card"), value=self.app.live_card,
                              on_change=lambda e: self.app.set_live_card(e.control.value))
-        live_note = C.meta(tr("Streams a small sample from the Frame every 5 seconds (game, frame rate, battery). "
-                              "Turn off to save the Frame's processor."))
-        motion = C.switch(tr("Reduce motion (no fades between pages, no portal pulse when the Frame connects)"),
+        live_note = C.meta(tr("Updates the game, frame rate and battery every 5 seconds. Turn off to save the "
+                              "Frame's power."))
+        motion = C.switch(tr("Reduce motion"),
                           value=self.app.reduce_motion, on_change=lambda e: self.app.set_reduce_motion(e.control.value))
         controls = [self.theme_picker(), ft.Container(height=T.S2), dd, note, ft.Container(height=T.S2), live_card,
                     live_note, motion]
@@ -430,7 +429,7 @@ class SettingsView:
             "links": C.section(tr("Install links"), C.card(self.links_card(), padding=T.S4), help="install_links"),
             "installing": C.section(tr("Installing"), C.card(self.installing(), padding=T.S4), help="launch_test"),
             "tools": C.section(tr("Tools"), C.card(self.tools, padding=ft.Padding(T.S4, T.S2, T.S4, T.S2)),
-                               subtitle=tr("FramePort manages its own copies; nothing is installed system-wide"),
+                               subtitle=tr("FramePort keeps its own copies; nothing is installed system-wide"),
                                action=ft.Row([C.ghost(tr("Update tools"), ft.Icons.UPDATE_ROUNDED,
                                                       lambda e: app.update_tools(update=True)),
                                               C.secondary(tr("Install missing"), ft.Icons.DOWNLOAD_ROUNDED,
@@ -441,17 +440,18 @@ class SettingsView:
                 C.kv(tr("Data folder"), ft.Row([C.body(data, T.TEXT, selectable=True, expand=True),
                                             C.icon_btn(ft.Icons.CONTENT_COPY_ROUNDED, tr("Copy path"),
                                                        lambda e: app.copy(data))]), "data_folder"),
-                C.kv(tr("Catalog"), tr("{len} known-good recipes (bundled, remote and yours)")
+                C.kv(tr("Catalog"), tr("{len} tested recipes (built in, online and yours)")
                      .format(len=len(catalog.load())), "catalog"),
                 self.catalog_updates(),
             ], spacing=T.S2))),
             # text above, buttons below (side by side, the buttons squeezed the text in a narrow window)
             "feedback": C.section(tr("Problems and feedback"), C.card(ft.Column([
-                C.body(tr("Something not working? Collect a diagnostics zip (logs, settings, device info; personal "
-                       "data removed) and attach it to a GitHub issue. For one game, use its menu instead.")),
+                C.body(tr("Something not working? Attach a diagnostics zip to a GitHub issue; personal data is "
+                       "removed. For one game, use its menu instead.")),
                 ft.Row([C.secondary(tr("Report a problem…"), ft.Icons.BUG_REPORT_OUTLINED,
                                     lambda e: app.report_problem_dialog()),
-                        C.ghost(tr("Collect app logs"), ft.Icons.FOLDER_ZIP_OUTLINED, lambda e: app.collect_logs())],
+                        C.ghost(tr("Collect FramePort logs"), ft.Icons.FOLDER_ZIP_OUTLINED,
+                                lambda e: app.collect_logs())],
                        spacing=T.S3, run_spacing=T.S2, wrap=True),
             ], spacing=T.S3)), help="diag_bundle"),
             "about": C.section(tr("About"), C.card(ft.Column([
@@ -461,9 +461,9 @@ class SettingsView:
                 C.meta(tr("Uses OVRPort, Revive (LibreVR), Valve's Lepton and Proton. "
                           "Not affiliated with Valve or Meta.")),
             ], spacing=T.S2))),
-            "remove": C.section(tr("Remove FramePort"), C.card(ft.Column([
-                C.body(tr("Removes everything FramePort created: its data and tools on this PC, the Steam entries it "
-                       "added, and (optionally) its games and files on the Frame. Your game dumps aren't touched.")),
+            "remove": C.section(tr("Uninstall FramePort"), C.card(ft.Column([
+                C.body(tr("Removes FramePort's data, tools and Steam entries, and optionally its games on the "
+                       "Frame. Your game files stay.")),
                 C.danger(tr("Uninstall FramePort…"), ft.Icons.DELETE_FOREVER_OUTLINED, lambda e: app.uninstall_app(),
                          outline=True),
             ], spacing=T.S3, horizontal_alignment=ft.CrossAxisAlignment.START))),

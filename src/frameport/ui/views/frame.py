@@ -45,7 +45,7 @@ class FrameView:
             ft.Column([
                 C.secondary(tr("Refresh"), ft.Icons.REFRESH_ROUNDED, lambda e: app.refresh_frame()),
                 C.secondary(tr("Type on Frame"), G.KEYS, lambda e: app.type_on_frame(),
-                            tooltip=tr("Use this PC's keyboard on the Frame")),
+                            tooltip=tr("Use this PC's keyboard on the Frame.")),
                 C.ghost(tr("Switch Frame…"), ft.Icons.SWAP_HORIZ_ROUNDED, lambda e: self.switch_frame()),
                 C.ghost(tr("Disconnect"), ft.Icons.LINK_OFF_ROUNDED, lambda e: app.disconnect()),
             ], spacing=T.S2, horizontal_alignment=ft.CrossAxisAlignment.END),
@@ -91,7 +91,7 @@ class FrameView:
         lepton = info.get("lepton")
         items.append(C.Check(bool(lepton), tr("Quest games (Lepton)"),
                              tr("Ready") if lepton
-                             else tr("Valve's Android runtime isn't installed (needs Developer Mode)"),
+                             else tr("Not installed yet (needs Developer Mode)"),
                              "lepton", (tr("Install"), ft.Icons.DOWNLOAD_ROUNDED, app.install_lepton)))
         pr = info.get("proton") or {}
         ready, sug = pr.get("ready"), pr.get("suggested")
@@ -103,7 +103,7 @@ class FrameView:
                  .format(display_name=sug['display_name']) if sug else
                  tr("Not offered by Steam on this Frame yet")),
                 "proton", (tr("Install…"), ft.Icons.DOWNLOAD_ROUNDED, app.install_proton) if sug else None,
-                C.secondary(tr("Test"), G.TEST, lambda e: app.test_proton()) if ready else None))
+                C.secondary(tr("Test Proton"), G.TEST, lambda e: app.test_proton()) if ready else None))
             xr = (pr.get("openxr") or {}).get("name")
             items.append(C.Check(bool(xr), tr("OpenXR runtime"), xr or tr("None found"), "openxr"))
         keys = info.get("kernel_keys") or {}
@@ -182,7 +182,8 @@ class FrameView:
                          for _ in items[:6]], spacing=T.px(4))
         self.app.run_bg(self._fill_installed, items, col)
         body = C.card(col, padding=T.S2) if items else \
-            C.card(C.body(tr("Nothing installed yet. Pick a game in the Library and click Install.")), padding=T.S5)
+            C.card(C.body(tr("Nothing installed yet. Pick a game in the Library and click Install on Frame.")),
+                   padding=T.S5)
         send = C.ghost(tr("Files"), ft.Icons.FOLDER_OPEN_ROUNDED, lambda e: self.app.go("files"),
                        tooltip=C.tip(HELP["files"]))
         return C.section(tr("Installed games ({len})").format(len=len(items)), body,
@@ -227,10 +228,10 @@ class FrameView:
                 (settings_slot() if pcvr or not app.has_game_settings(games.get(pkg)) else
                  C.icon_btn(ft.Icons.TUNE_ROUNDED, C.tip(tr("Game settings. ") + HELP["adapter_settings"]),
                             lambda e, p=pkg: app.settings_dialog(p))),
-                C.icon_btn(ft.Icons.FOLDER_OPEN_ROUNDED, tr("Files on the Frame: browse what this install contains"),
+                C.icon_btn(ft.Icons.FOLDER_OPEN_ROUNDED, tr("Browse this game's files."),
                            lambda e, p=pkg, t=title: show_files_dialog(app, p, t)),
-                C.icon_btn(ft.Icons.PLAY_ARROW_ROUNDED, tr("Play: starts the game through the Frame's Steam (put the "
-                           "headset on)"), lambda e, p=pkg: app.play(p, "frame"), color=T.ACCENT),
+                C.icon_btn(ft.Icons.PLAY_ARROW_ROUNDED, tr("Play on Frame — put the headset on first."),
+                           lambda e, p=pkg: app.play(p, "frame"), color=T.ACCENT),
                 C.icon_btn(G.TEST, C.tip(tr("Launch test. ") + HELP["launch_test"]),
                            lambda e, p=pkg: app.test_game(p, "frame")),
                 C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, C.tip(tr("Uninstall. ") + HELP["uninstall"]),
@@ -259,7 +260,7 @@ class FrameView:
             items = []
             for f in res:
                 label = {"devkit": tr("SteamOS · Developer Mode"), "frameport": tr("Set up for FramePort"),
-                         "saved": tr("Remembered"), "scan": tr("SSH found by network scan")}.get(f.source, f.source)
+                         "saved": tr("Remembered"), "scan": tr("Found on your network")}.get(f.source, f.source)
                 items.append(ft.Container(ft.Row([
                     C.as_icon(G.FRAME if f.source != "scan" else ft.Icons.DEVICES_OTHER_ROUNDED, T.px(24), T.ACCENT),
                     ft.Column([C.body(f.name if f.source != "scan" else f.host, T.TEXT, weight=ft.FontWeight.W_500),
@@ -268,9 +269,9 @@ class FrameView:
                                                                                    devkit=f.source == "devkit")),
                 ], spacing=T.S3), padding=ft.Padding(T.S3, T.px(8), T.S2, T.px(8)), bgcolor=T.SURFACE_2,
                     border_radius=T.RADIUS_SM))
-            found.controls = items or [ft.Row([C.body(tr("No Frames found. New Frame? Use first-time setup (step "
-                                                         "1). Otherwise turn on Developer Mode and keep the Frame on "
-                                                         "the same network."), expand=True),
+            found.controls = items or [ft.Row([C.body(tr("No Frames found. New Frame? Use step 1. Otherwise turn on "
+                                                         "Developer Mode and keep the Frame on this network."),
+                                                      expand=True),
                                                C.help_icon("developer_mode")], spacing=T.px(4))]
             found.controls.append(C.ghost(tr("Search again"), ft.Icons.REFRESH_ROUNDED, lambda e: app.run_bg(discover)))
             C.update(found)
@@ -306,8 +307,8 @@ class FrameView:
                 from ...frame.pairing import HINT_AFTER, ensure_reachable, firewall_hint
 
                 if winhost.is_wsl() and ensure_reachable(server) == "failed":
-                    app.toast(tr("Windows' firewall for WSL blocks the Frame from reaching FramePort. Open the setup "
-                                 "command again and allow the change when Windows asks (admin)."), error=True)
+                    app.toast(tr("Windows' firewall blocks the Frame from reaching FramePort. Start the setup again "
+                                 "and allow the change when Windows asks."), error=True)
                 for _ in range(HINT_AFTER):
                     time.sleep(1)
                     if server.requests or not server.running or app.pairing is not server:
@@ -330,10 +331,8 @@ class FrameView:
                 usb_setup(ev)
             steps = [
                 tr("On the Frame, open Steam's Settings (Steam button → Settings)."),
-                tr("Go to System and turn on \"Enable Developer Mode\". A Developer page appears in Settings; nothing "
-                   "else changes, your games and data stay as they are."),
-                tr("Connect the Frame's USB-C port to this PC with a USB cable (a data cable, not a charge-only "
-                   "one)."),
+                tr("In System, turn on Enable Developer Mode. Nothing else changes."),
+                tr("Connect the Frame's USB-C port to this PC with a data cable (not a charge-only one)."),
             ]
             dlg = C.dialog(
                 tr("Turn on Developer Mode first"),
@@ -345,10 +344,10 @@ class FrameView:
                               C.body(text, T.TEXT_2, expand=True)], spacing=T.S3,
                              vertical_alignment=ft.CrossAxisAlignment.START)
                       for i, text in enumerate(steps, 1)],
-                    C.meta(tr("FramePort then finds the Frame on the cable by itself.")),
+                    C.meta(tr("FramePort then finds the Frame by itself.")),
                 ], spacing=T.S3, tight=True), size="s",
                 actions=[C.ghost(tr("Cancel"), on_click=lambda ev: close()),
-                         C.primary(tr("Done: look for the cable"), ft.Icons.USB_ROUNDED, go)])
+                         C.primary(tr("Look for the cable"), ft.Icons.USB_ROUNDED, go)])
             app.page.show_dialog(dlg)
 
         def usb_setup(e):
@@ -361,8 +360,7 @@ class FrameView:
             status = ft.Row([C.spinner(),
                              C.meta(tr("Waiting for the cable…"))], spacing=T.S2)
             pair_box.controls = [
-                C.body(tr("Looking for the Frame on a USB cable (Developer Mode on, USB-C port connected to this "
-                          "PC)."), T.TEXT),
+                C.body(tr("Looking for the Frame on the USB cable…"), T.TEXT),
                 status,
             ]
             C.update(pair_box)
@@ -401,7 +399,6 @@ class FrameView:
 
             by_url = getattr(app, "pairing_mode", "line") == "url"
             line = SETUP_LINE if by_url else app.pairing.one_liner
-            over_usb = bool(getattr(app.pairing, "host", ""))
             server = app.pairing
 
             def ask_card(ask):
@@ -409,7 +406,7 @@ class FrameView:
                 return C.callout(ft.Row([
                     ft.Column([C.body(tr("{frame} wants to be set up").format(frame=ask.frame), T.TEXT,
                                       weight=ft.FontWeight.W_600),
-                               C.meta(tr("Allow it if the Frame shows the code {digits} ({address})").format(
+                               C.meta(tr("Allow it if the Frame shows the code {digits} ({address}).").format(
                                    digits=ask.digits, address=ask.address))], spacing=T.px(2), expand=True),
                     ft.Text(ask.digits, font_family="monospace", size=T.px(22), weight=ft.FontWeight.W_700,
                             color=T.ACCENT),
@@ -418,36 +415,32 @@ class FrameView:
                 ], spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER), "info")
 
             pair_box.controls = [
-                C.body(tr("On the Frame: SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
-                          "Konsole, and run (it reaches this PC over the USB cable):") if over_usb and not by_url else
-                       tr("On the Frame: SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
-                          "Konsole, and run (the same line for every Frame; it finds this PC):") if by_url else
-                       tr("On the Frame: SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
-                          "Konsole, and run:"), T.TEXT),
+                C.body(tr("On the Frame, open Konsole (SteamVR dashboard → Launch a program → Desktop, then app menu → "
+                          "System → Konsole) and run:"), T.TEXT),
                 ft.Container(ft.Row([ft.Text(line, font_family="monospace", selectable=True, size=T.px(12),
                                              color=T.TEXT, expand=True),
                                      C.icon_btn(ft.Icons.CONTENT_COPY_ROUNDED, tr("Copy"), lambda e: app.copy(line))]),
                              padding=ft.Padding(T.S3, T.S2, T.S2, T.S2), bgcolor=T.BG, border_radius=T.RADIUS_SM,
                              border=ft.Border.all(1, T.BORDER)),
-                *([C.meta(tr("No keyboard? Open {page} in Chromium on the Frame (Steam's + on the taskbar installs "
-                             "it), copy the line there and paste it into Konsole. This PC shows up there as "
-                             "“{words}”.").format(page=SETUP_PAGE, words=pc_words()))] if by_url else []),
+                *([C.meta(tr("No keyboard? Open {page} in Chromium on the Frame, copy the line and paste it into "
+                             "Konsole. This PC shows there as \"{words}\".").format(page=SETUP_PAGE, words=pc_words()))]
+                  if by_url else []),
                 *[ask_card(a) for a in server.asks if a.state == "open"],
                 ft.Row([C.spinner(),
                         C.meta(tr("Waiting for your Frame to ask…") if by_url else
                                tr("Waiting for your Frame… (code {code})").format(code=app.pairing.code))],
                        spacing=T.S2),
-                ft.Row([C.meta(tr("You only do this once: FramePort connects by itself when the setup has finished."),
+                ft.Row([C.meta(tr("You only do this once. FramePort connects by itself when the setup is done."),
                                expand=True), C.help_icon("first_time_setup")], spacing=T.px(4)),
             ]
             hint = getattr(app.pairing, "hint", "")
             if hint and not app.pairing.requests:  # nothing reached us yet: what may block it, and the other way in
                 pair_box.controls.append(C.callout(ft.Column([
-                    C.body(tr("Nothing has reached FramePort from the Frame yet (curl says “timed out”)?"), T.TEXT,
+                    C.body(tr("Nothing reached FramePort yet (curl says \"timed out\")?"), T.TEXT,
                            weight=ft.FontWeight.W_600),
                     C.body(hint, T.TEXT),
-                    ft.Row([C.meta(tr("Or turn on Developer Mode on the Frame (Settings → System → Enable Developer "
-                                      "Mode) and pair it under step 2: that needs no connection into this PC."),
+                    ft.Row([C.meta(tr("Or turn on Developer Mode on the Frame (Settings → System) and connect it under "
+                                      "step 2."),
                                    expand=True), C.help_icon("developer_mode")], spacing=T.px(4)),
                 ], spacing=T.S2), "warn"))
             if update:
@@ -463,12 +456,12 @@ class FrameView:
         offline = None
         if getattr(app, "_not_paired", False):  # it answered, but doesn't know FramePort yet
             offline = C.callout(ft.Row([
-                C.body(tr("Your Frame isn't set up for FramePort yet. Run the first-time setup once (step 1)."), T.TEXT,
+                C.body(tr("This Frame isn't set up for FramePort yet. Run the setup once (step 1)."), T.TEXT,
                        expand=True),
-                C.primary(tr("Show setup command"), ft.Icons.TERMINAL_ROUNDED, pair)]), "warn")
+                C.primary(tr("Start setup"), ft.Icons.TERMINAL_ROUNDED, pair)]), "warn")
         elif saved and app.frame_state == "offline":
-            unreachable = tr("{label} ({host}) isn't reachable. Make sure it's switched on and on the same "
-                             "network.").format(label=saved[0].label, host=saved[0].host)
+            unreachable = tr("{label} ({host}) isn't reachable. Check that it's on and on the same network.").format(
+                label=saved[0].label, host=saved[0].host)
             offline = C.callout(ft.Row([C.body(unreachable, T.TEXT, expand=True),
                                         C.secondary(tr("Try again"), ft.Icons.REFRESH_ROUNDED,
                                                     lambda e: app.connect(saved[0]))]), "warn")
@@ -494,9 +487,9 @@ class FrameView:
             def toggle(e):
                 lib.set_setting("frame.auto_pair", bool(e.control.value))
                 app.refresh_view()
-            out: list[ft.Control] = [C.switch(tr("Pair Frames in Developer Mode automatically: open Settings → "
-                                                 "Developer → Pair new host on the Frame and approve FramePort "
-                                                 "there; no click here"), value=on, on_change=toggle)]
+            out: list[ft.Control] = [C.with_help(
+                C.switch(tr("Connect Frames in Developer Mode automatically"), value=on, on_change=toggle),
+                tr("On the Frame, open Settings → Developer → Pair new host and approve FramePort there."))]
             status = getattr(app, "auto_pair_status", "")
             if on and status:
                 out.insert(0, C.callout(ft.Row([C.spinner(), C.body(status, T.TEXT, expand=True)], spacing=T.S3),
@@ -511,22 +504,20 @@ class FrameView:
         return ft.Column([
             app.top_bar(tr("Connect your Steam Frame"), tr("FramePort installs games on the Frame over your network")),
             *([offline] if offline else []),
-            step(1, tr("First-time setup"), tr("New Frame? Run FramePort's setup on it, allow it here, and FramePort "
-                                               "does the rest. Did this once already? Your Frame appears under "
-                                               "step 2."),
+            step(1, tr("First-time setup"), tr("New Frame? Run the setup on it and click Allow here. Already set up? "
+                                               "Your Frame shows under step 2."),
                  ft.Row([C.primary(tr("Start setup"), ft.Icons.TERMINAL_ROUNDED, pair),
-                         C.meta(tr("OR"), weight=ft.FontWeight.W_600),
+                         C.meta(tr("or"), weight=ft.FontWeight.W_600),
                          C.secondary(tr("Set up with a USB cable"), ft.Icons.USB_ROUNDED, usb_explain,
-                                     tooltip=tr("No Wi-Fi needed: for networks that block the setup, and faster "
-                                                "game uploads")),
+                                     tooltip=tr("Works without Wi-Fi and uploads games faster.")),
                          C.ghost(tr("Use the setup command"), ft.Icons.KEYBOARD_ROUNDED,
                                  lambda e: pair(e, mode="line"),
-                                 tooltip=tr("The line with this PC's address and a one-time code, without the "
-                                            "search: for networks that block it"))],
+                                 tooltip=tr("A line with this PC's address and a one-time code, for networks "
+                                            "that block the search."))],
                         wrap=True, spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                  pair_box,
                  help="first_time_setup"),
-            step(2, tr("Already set up: on your network"), tr("Frames in Developer Mode show up here."), found,
+            step(2, tr("Already set up"), tr("Frames in Developer Mode show up here."), found,
                  *auto_pair_controls(),
                  help="developer_mode"),
             step(3, tr("Enter the address"), tr("If you know the Frame's address."),
@@ -541,6 +532,6 @@ class FrameView:
         if app.frame_state != "connected" or not info:
             return self.wizard()
         return ft.Column([
-            app.top_bar(tr("Steam Frame"), tr("Your headset, what it's ready for and what's installed")),
+            app.top_bar(tr("Steam Frame"), tr("What your Frame is ready for and what's installed")),
             self.device_card(info), self.readiness(info), self.storage(info), self.installed(info),
         ], spacing=T.S5, scroll=ft.ScrollMode.AUTO, expand=True)

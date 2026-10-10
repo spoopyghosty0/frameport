@@ -3,7 +3,7 @@
 Unreal's Oculus module (FOculusHMDModule::InitializeOculusPluginWrapper) looks up every `ovrp_*` function of the
 OVRPlugin version it was built against with dlsym on libOVRPlugin.so's handle and ANDs the results: one missing name
 and the wrapper fails, OculusHMD never pre-initialises, no OpenXR session starts and the game later crashes without an
-HMD (e.g. Star Wars Pinball VR, UE 4.25 built against OVRPlugin 1.44: OVRPort's OpenXR OVRPlugin has no
+HMD (for example Star Wars Pinball VR, UE 4.25 built against OVRPlugin 1.44: OVRPort's OpenXR OVRPlugin has no
 ovrp_GetPTWNear). OVRPort replaces the plugin, so the names come from the engine library and are compared with the
 plugin the build ships. Each missing one gets a stand-in that returns ovrpFailure (-1000), so callers take their "not
 supported" path and never read untouched output arguments. The stand-ins live in a generated library that
@@ -51,8 +51,8 @@ class UnrealOvrpEntrypoints(Patch):
     id = "frame.unreal_ovrp_entrypoints"
     title = "Unreal: stand-ins for OVRPlugin functions OVRPort lacks"
     description = ("Unreal's Oculus module looks up every OVRPlugin function it was built against and starts no VR "
-                   "when one is missing; OVRPort's OpenXR OVRPlugin lacks some old ones (e.g. ovrp_GetPTWNear, which "
-                   "Unreal 4.25 builds like Star Wars Pinball VR look up). The game then never starts an OpenXR "
+                   "when one is missing; OVRPort's OpenXR OVRPlugin lacks some old ones (for example ovrp_GetPTWNear, "
+                   "which Unreal 4.25 builds like Star Wars Pinball VR look up). The game then never starts an OpenXR "
                    "session and crashes a few seconds in. Adds a generated library to libOVRPlugin.so with a stand-in "
                    "for each missing function that reports failure (ovrpFailure), so Unreal's Oculus support starts. "
                    "The functions OVRPort has are untouched.")

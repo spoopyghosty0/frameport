@@ -1,6 +1,6 @@
 """Meta's own VrApi loader left in an OpenXR game: replaced by a library that answers every VrApi call with 0.
 
-Some Unity games ship Meta's libvrapi.so next to an OpenXR OVRPlugin (e.g. Jurassic World Aftermath, OVRPlugin
+Some Unity games ship Meta's libvrapi.so next to an OpenXR OVRPlugin (for example Jurassic World Aftermath, OVRPlugin
 1.89.1). OVRPlugin runs on OpenXR, but still calls a few VrApi functions (vrapi_SetPropertyInt) without ever calling
 vrapi_Initialize; Meta's loader aborts on that ("vrapi_SetPropertyInt was called before vrapi_Initialize()!", SIGABRT
 on UnityMain right after the OpenXR instance is created). The VrApi bridge can't take its place: it implements a
@@ -19,9 +19,9 @@ class VrApiStub(Patch):
     id = "frame.vrapi_stub"
     title = "Quiet Meta's VrApi loader (OpenXR games)"
     description = ("Some OpenXR games still ship Meta's VrApi loader and call it a few times without starting VrApi "
-                   "(e.g. Jurassic World Aftermath); Meta's loader then stops the game (\"vrapi_SetPropertyInt was "
-                   "called before vrapi_Initialize()\"). Replaces it with a library that has the same functions, each "
-                   "doing nothing. Only for games whose VR runs through OVRPlugin on OpenXR.")
+                   "(for example Jurassic World Aftermath); Meta's loader then stops the game (\"vrapi_SetPropertyInt "
+                   "was called before vrapi_Initialize()\"). Replaces it with a library that has the same functions, "
+                   "each doing nothing. Only for games whose VR runs through OVRPlugin on OpenXR.")
     order = 59
     conflicts = ("frame.vrapi_bridge",)
 

@@ -33,8 +33,8 @@ FIREWALL_RULE = "FramePort-Pairing"
 HINT_AFTER = 45  # seconds without any request from the Frame before the UI suggests what may block it
 
 # the static setup: one fixed address on the project page serves bootstrap/setup.sh (copied there by the site build)
-SETUP_PAGE = "https://spoopyghosty0.github.io/frameport/setup/"
-SETUP_URL = "spoopyghosty0.github.io/frameport/s"
+SETUP_PAGE = "https://frameport.app/setup/"
+SETUP_URL = "frameport.app/s"
 SETUP_LINE = f"curl -sL {SETUP_URL} | bash"
 SERVICE = "_frameport-pair._tcp.local."
 MAX_ASKS = 3  # open requests at a time (more get 429)
@@ -116,31 +116,28 @@ def firewall_hint(port: int) -> str:
 
     if winhost.is_wsl():
         if winhost.wsl_networking_mode() == "nat":
-            return tr("FramePort runs in WSL with its default NAT network, which other devices can't reach. Set "
-                      "networkingMode=mirrored under [wsl2] in %UserProfile%\\.wslconfig, run wsl --shutdown and "
-                      "start FramePort again.")
+            return tr("The Frame can't reach FramePort in WSL's default network mode. Add networkingMode=mirrored "
+                      "under [wsl2] in %UserProfile%\\.wslconfig, run wsl --shutdown and start FramePort again.")
         if winhost.wsl_inbound_blocked(FIREWALL_RULE):
-            return tr("Windows' firewall for WSL blocks the Frame. Open the setup command again and allow the "
-                      "change when Windows asks (admin).")
+            return tr("Windows' firewall for WSL blocks the Frame. Show the setup command again and allow the "
+                      "change when Windows asks.")
         return ""
     if winhost.is_windows():
         if winhost.network_category(local_ip_towards()) == "Public":
-            return tr("Windows treats this network as public and its firewall blocks the Frame. In Windows' "
-                      "network settings set this network to Private (or allow FramePort on public networks when "
-                      "Windows asks).")
-        return tr("If Windows asked whether FramePort may use the network, allow it (Private networks).")
+            return tr("Windows' firewall blocks the Frame on public networks. Set this network to Private in "
+                      "Windows' network settings.")
+        return tr("If Windows asks whether FramePort may use the network, allow it.")
     if platform.system() == "Darwin":
         fw = out("/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate")
         if "enabled" in fw:
-            return tr("macOS' firewall is on: allow incoming connections when macOS asks about FramePort (or "
-                      "System Settings → Network → Firewall → Options).")
+            return tr("The macOS firewall is on. Allow incoming connections when macOS asks about FramePort.")
         return ""
     if shutil.which("firewall-cmd") and "running" in out("firewall-cmd", "--state"):
         return tr("firewalld is active. Allow the setup port until the next restart with: "
                   "sudo firewall-cmd --add-port={port}/tcp").format(port=port)
     if "active" == out("systemctl", "is-active", "ufw").strip():
-        return tr("ufw is active. Allow the setup port with: sudo ufw allow {port}/tcp (and afterwards: "
-                  "sudo ufw delete allow {port}/tcp)").format(port=port)
+        return tr("ufw is active. Allow the setup port with: sudo ufw allow {port}/tcp (remove it afterwards "
+                  "with: sudo ufw delete allow {port}/tcp)").format(port=port)
     return ""
 
 

@@ -48,27 +48,25 @@ def explain(exc: BaseException) -> str:
         return tr("The connection to the Frame is busy. Try again in a moment.")
     if "authentication failed" in low or "no authentication methods available" in low:
         if "password was refused" in low:
-            return tr("The Frame refused that password. Check it, or run the first-time setup instead: Steam Frame → "
-                      "Show setup command.")
-        return tr("This Frame isn't set up for FramePort yet. Run the first-time setup: Steam Frame → Show setup "
-                  "command.")
+            return tr("The Frame refused that password. Check it, or use Steam Frame → Start setup instead.")
+        return tr("This Frame isn't set up for FramePort yet. Go to Steam Frame → Start setup.")
     if is_connection_error(exc):
         return tr("Can't reach your Frame. Make sure it's on, awake and on the same network, then try again.")
     if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
         return tr("This PC's disk is full. Free some space and try again.")
     if "not enough space on the frame" in low:
-        return tr("Not enough space on the Frame ({detail}). Remove games you don't play or use Free up space on "
+        return tr("Not enough space on the Frame ({detail}). Uninstall games you don't play or free up space on "
                   "the Steam Frame page.").format(detail=msg.split(":", 1)[-1].strip())
     if "is running on the frame" in low or low in ("the game is running", "the game is already running") or \
             "a frameport game is running" in low:
         return tr("A game is running on the Frame. Close it in the headset first, then try again.")
     if "steam did not close" in low or "steam isn't running" in low:
-        return tr("Steam on the Frame isn't responding. Restart the Frame (or its Steam) and try again.")
+        return tr("Steam on the Frame isn't responding. Restart the Frame and try again.")
     if isinstance(exc, zipfile.BadZipFile) or (isinstance(exc, KeyError) and "androidmanifest" in low):
         return tr("The APK file is damaged or incomplete. Get the game again and rescan the folder.")
     if "checksum mismatch" in low:
-        return tr("The upload to the Frame was damaged on the way. Try again (a cable or the Frame's hotspot is "
-                  "more reliable than a busy Wi-Fi).")
+        return tr("The upload to the Frame was damaged. Try again, ideally over a cable or the Frame's "
+                  "hotspot.")
     if msg:
         return msg
     return type(exc).__name__

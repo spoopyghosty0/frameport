@@ -87,8 +87,8 @@ class OvrMicrophone(Patch):
     title = "Fix crash when the game prepares the microphone"
     description = ("OVRPort's Meta platform library opens the microphone only when it's started, but answers a "
                    "game's question about the microphone buffer size from that not-yet-opened stream: games that ask "
-                   "first (Unreal's Oculus voice chat, e.g. The Walking Dead: Saints & Sinners Ch. 2) crash a few "
-                   "seconds after the logo (SIGSEGV in libaaudio.so). Adds the missing check (size 0 until the "
+                   "first (Unreal's Oculus voice chat, for example The Walking Dead: Saints & Sinners Ch. 2) crash a "
+                   "few seconds after the logo (SIGSEGV in libaaudio.so). Adds the missing check (size 0 until the "
                    "microphone is started).")
     order = 46
 

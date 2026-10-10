@@ -296,7 +296,7 @@ class FramePortApp:
                     padding=ft.Padding(T.px(5), T.px(1), T.px(5), T.px(1)), border_radius=T.px(3), bgcolor=T.ERROR,
                     shadow=ft.BoxShadow(blur_radius=8, color=T.soft(T.ERROR, 0.6)), visible=False, opacity=1,
                     animate_opacity=ft.Animation(420, ft.AnimationCurve.EASE_IN_OUT),
-                    tooltip=tr("On air: the live view is streaming"))
+                    tooltip=tr("The live view is streaming."))
                 row.append(self._on_air)
             box = ft.Container(ft.Row(row, spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                                padding=ft.Padding(T.S3, T.px(10), T.S3, T.px(10)), border_radius=T.RADIUS_SM, ink=True,
@@ -414,7 +414,7 @@ class FramePortApp:
             self._act_idle_text.value = tr("Paused: waiting for your Frame")
             self._act_idle_text.color = T.WARN
         elif self.jobs.paused == "battery":
-            self._act_idle_text.value = tr("Paused: Frame battery low, plug it in")
+            self._act_idle_text.value = tr("Paused: low battery — plug in the Frame")
             self._act_idle_text.color = T.WARN
         else:
             recent = next((j for j in self.jobs.recent(1)), None)
@@ -432,7 +432,7 @@ class FramePortApp:
         self._conn_name.value = (self.target.label if self.target else None) or self._saved_name() or tr("Steam Frame")
         self._conn_line.value = {"connected": tr("Connected"), "connecting": tr("Connecting…"),
                                  "offline": tr("Offline")}.get(
-            st, "Not set up")
+            st, tr("Not set up"))
         self._conn_line.color = color
         self.power_row.visible = st == "connected"
         self.sync_on_air(update=False)
@@ -777,7 +777,7 @@ class FramePortApp:
             self.page.run_task(ft.Clipboard().set, text)
             self.toast(tr("Copied"))
         except Exception:  # noqa: BLE001
-            self.toast(tr("Copy failed; select the text instead"), error=True)
+            self.toast(tr("Couldn't copy — select the text instead"), error=True)
 
     def _on_key(self, e: ft.KeyboardEvent) -> None:
         if self._typing_on_frame:
@@ -890,8 +890,8 @@ class FramePortApp:
                                        lambda e: self.share_config_dialog(job.package)))
         if summary and summary.get("suggestions") and job.package:
             sugg = summary["suggestions"]
-            label = (tr("Try Proton Experimental and reinstall") if sugg == [pipeline.PROTON_TOOL]
-                     else tr("Apply the suggested patches and reinstall"))
+            label = (tr("Reinstall with Proton Experimental") if sugg == [pipeline.PROTON_TOOL]
+                     else tr("Reinstall with suggested patches"))
             out.append(C.primary(label, ft.Icons.HEALING_OUTLINED,
                                  lambda e: (pipeline.apply_suggestions(job.package, sugg),
                                             self.install(job.package, getattr(job, "to", "frame")))))
@@ -948,7 +948,7 @@ class FramePortApp:
                      tr("Marked \"Can't run\": ") + ((g.get("recipe") or {}).get("notes") or tr("a known blocker")))]
         frame_opt = (frame_label, G.FRAME, lambda e: self.install(pkg, "frame"), False, None) \
             if connected else (tr("Connect your Frame"), ft.Icons.LINK_ROUNDED, lambda e: self.go("frame"), False,
-                               tr("Set up the connection to your Steam Frame first"))
+                               tr("Connect your Steam Frame first."))
         if g.get("kind") != "rift":
             return [frame_opt]
         from ..core import winhost
@@ -959,8 +959,8 @@ class FramePortApp:
                     else tr("Install on this PC"))
         pc_opt = (pc_label,
                   G.PC, lambda e: self.install(pkg, "pc"), not winhost.available(),
-                  tr("The launch settings changed since it was installed: update the Steam shortcut") if stale else
-                  None if winhost.available() else tr("Needs Windows (or WSL on Windows)"))
+                  tr("The launch settings changed since the install — update the Steam shortcut.") if stale else
+                  None if winhost.available() else tr("Needs Windows (or WSL)."))
         return [frame_opt, pc_opt] if connected or not winhost.available() else [pc_opt, frame_opt]
 
     def play_options(self, g: dict) -> list[tuple]:
@@ -969,11 +969,11 @@ class FramePortApp:
         out = []
         if self.frame_state == "connected" and C.install_state(g, self.frame_info) in ("installed", "outdated"):
             out.append((tr("Play on Frame"), ft.Icons.PLAY_ARROW_ROUNDED, lambda e: self.play(pkg, "frame"), False,
-                        tr("Starts the game through the Frame's Steam — put the headset on")))
+                        tr("Starts the game on the Frame — put the headset on.")))
         if g.get("kind") == "rift" and pkg in self.pc_installs() and \
                 not ((g.get("analysis") or {}).get("extra") or {}).get("flat"):
             out.append((tr("Play on this PC"), ft.Icons.PLAY_ARROW_ROUNDED, lambda e: self.play(pkg, "pc"), False,
-                        tr("Starts the game through Steam on this PC (SteamVR + Revive)")))
+                        tr("Starts the game in SteamVR on this PC.")))
         return out
 
     PLAY_COOLDOWN = 20  # s: a second Play while Steam/Lepton still start the game only gets Steam's AppError_16
@@ -1008,24 +1008,24 @@ class FramePortApp:
                 applog.log.info("Play %s: devkit entry failed: %s", pkg, res["fallback_error"])
             if to == "frame" and res.get("first_try") and steam.get("result") != "error":
                 # Steam ignored FramePort's library entry: the game was added the way Valve's devkit tool does it
-                self.toast(tr("The Frame's Steam didn't accept {title}'s library entry, so FramePort added it as "
-                              "\"Devkit Game: …\" instead. Starting it now — put the headset on.").format(title=title))
+                self.toast(tr("The Frame's Steam didn't accept {title}, so it was added as \"Devkit Game: …\". "
+                              "Starting it now — put the headset on.").format(title=title))
             elif to == "frame" and steam.get("result") == "error" and steam.get("code") == 16:
                 # AppError_16: "WaitingPrevProcess" - the game is still starting or running (GitHub #41)
                 self.toast(tr("{title} is already running on the Frame — put the headset on").format(title=title))
             elif to == "frame" and steam.get("result") == "error":  # 9 = "Game configuration unavailable"
                 started.pop((pkg, to), None)
-                self.toast(tr("The Frame's Steam couldn't start {title} (Steam error {code}). Please send a problem "
-                              "report so we can see why.").format(title=title, code=steam.get("code")), error=True,
+                self.toast(tr("The Frame's Steam couldn't start {title} (error {code}). Please report it.").format(
+                    title=title, code=steam.get("code")), error=True,
                            action=tr("Report a problem…"), on_action=lambda e: self.report_problem_dialog(pkg))
             elif to == "frame":
                 self.toast(tr("Starting {title} on the Frame — put the headset on").format(title=title))
             elif res.get("steamvr") is False:
-                msg = tr("Starting {title}, but SteamVR isn't running — it may open as a flat window. "
-                         "Start SteamVR and relaunch.").format(title=title)
+                msg = tr("Starting {title}, but SteamVR isn't running, so it may open flat. "
+                         "Start SteamVR and try again.").format(title=title)
                 self.toast(msg, error=True)
             else:
-                self.toast(tr("Starting SteamVR and {title} — put your headset on").format(title=title))
+                self.toast(tr("Starting SteamVR and {title} — put the headset on").format(title=title))
         self.run_bg(work)
 
     def _add_then_play(self, pkg: str, title: str) -> None:
@@ -1033,9 +1033,9 @@ class FramePortApp:
             target = self._target_for("frame")
             status = target.add_to_library([pkg], job.reporter)
             if status.get("state") == "waiting":  # Desktop Mode is open (FramePort on the Frame) or a game runs
-                return (tr("{title} will be in the Frame's Steam library when you're back in Gaming Mode: start it "
-                           "from there").format(title=title) if status.get("reason") == "desktop" else
-                        tr("{title} will be in the Frame's Steam library when the game that's running is closed")
+                return (tr("{title} joins the Frame's Steam library when you're back in Gaming Mode — start it "
+                           "there").format(title=title) if status.get("reason") == "desktop" else
+                        tr("{title} joins the Frame's Steam library once the running game closes")
                         .format(title=title))
             if not any(a.get("package") == pkg for a in status.get("added", [])):
                 raise RuntimeError(tr("{title} couldn't be added to the Frame's Steam library: {why}").format(
@@ -1044,7 +1044,7 @@ class FramePortApp:
             target.launch(pkg)
             library.upsert_game(pkg, last_played=time.time())
             return tr("Starting {title} on the Frame — put the headset on").format(title=title)
-        self.toast(tr("{title} isn't in the Frame's Steam library yet: adding it (Steam restarts once)").format(
+        self.toast(tr("Adding {title} to the Frame's Steam library — Steam restarts once").format(
             title=title))
         self.submit(tr("Add to Steam library: {title}").format(title=title), run, pkg, "tool-frame")
 
@@ -1245,17 +1245,15 @@ class FramePortApp:
                 keep = {p for p, b in boxes.items() if b.value}
                 games = [g for g in games if g not in oculus or g["package"] in keep]
                 if not games:
-                    self.toast(tr("Nothing to install on the Frame — "
-                                  "those Oculus games need PC mode (SteamVR + Revive)."))
+                    self.toast(tr("Nothing to install — play these games on this PC"))
                     finished()
                     return
                 ask_obb()
             self.page.show_dialog(C.dialog(
                 tr("These games can't run on the Steam Frame"),
                 ft.Column([
-                    C.body(tr("They're Oculus games that need Revive to reach VR, and Revive can't run on the Frame. "
-                           "Play them on this PC instead (Install on this PC — SteamVR + Revive). Tick any you still "
-                           "want to put on the Frame to experiment (they'll likely run flat or crash).")),
+                    C.body(tr("These PC VR games need Revive, which can't run on the Frame. Play them on this PC, "
+                           "or tick any to try on the Frame anyway.")),
                     *boxes.values()], spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
                 height=T.px(min(130 + 36 * len(boxes), 480)),  # fits the list; scrolls when long
                 modal=True, on_dismiss=pick(closed),
@@ -1277,17 +1275,15 @@ class FramePortApp:
                 keep = {p for p, b in boxes.items() if b.value}
                 games = [g for g in games if g not in missing or g["package"] in keep]
                 if not games:
-                    self.toast(tr("Nothing to install: add the games' .obb files first"))
+                    self.toast(tr("Nothing to install — add the game data (.obb) first"))
                     finished()
                     return
                 ask_license()
             self.page.show_dialog(C.dialog(
                 tr("Game data (.obb) not found"),
                 ft.Column([
-                    C.body(tr("These games keep their content in a data file (.obb), and none was found next to "
-                              "their APK. Without it they hang at start. Put the .obb files in a folder named like "
-                              "the game's package (or obb/) next to the APK and add the folder again. Tick any you "
-                              "still want to install.")),
+                    C.body(tr("Game data (.obb) is missing, so these games hang at start. Put the .obb files in a "
+                              "folder named after the game next to the APK, then add it again.")),
                     *boxes.values()], spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
                 height=T.px(min(150 + 36 * len(boxes), 480)),  # fits the list; scrolls when long
                 modal=True, on_dismiss=pick(closed),
@@ -1311,15 +1307,12 @@ class FramePortApp:
                 keep = {p for p, b in boxes.items() if b.value}
                 go([g["package"] for g in games if g not in sdk or g["package"] in keep])
             self.page.show_dialog(C.dialog(
-                tr("These games check their Oculus license"),
+                tr("These games need Meta's Horizon app"),
                 ft.Column([
-                    C.body(tr("They use the Oculus Platform SDK, which comes with the Meta Horizon (Oculus) app. It "
-                           "doesn't exist on the Steam Frame, so there they crash right at startup (seen with Robo "
-                           "Recall, Lies Beneath and Lone Echo) — play them on this PC. Tick any you still want to "
-                           "try on the Frame.") if frame else
-                           tr("They use the Oculus Platform SDK, which comes with the Meta Horizon (Oculus) app — it "
-                           "isn't installed on this PC, so they may quit right after starting. FramePort doesn't "
-                           "change how a game checks its license. Untick the ones you'd rather skip.")),
+                    C.body(tr("The Frame doesn't have Meta's Horizon app, so these games crash at start. Play them on "
+                           "this PC, or tick any you still want to try.") if frame else
+                           tr("They check your Meta license through the Horizon app, which isn't on this PC, so "
+                           "they may quit at start. Untick any to skip.")),
                     *boxes.values()], spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
                 height=T.px(min(130 + 36 * len(boxes), 480)),  # fits the list; scrolls when long
                 modal=True, on_dismiss=pick(closed),
@@ -1334,8 +1327,8 @@ class FramePortApp:
                 self.page.show_dialog(C.dialog(
                     tr("Not enough space on the Frame"), modal=True, size="s",
                     content=C.body(tr(
-                        "These installs need about {need} on the Frame, and it has {free} free. Remove games you "
-                        "don't play (or use Free up space on the Steam Frame page), or install fewer at once.")
+                        "These installs need about {need}, but the Frame has {free} free. Uninstall games you "
+                        "don't play or install fewer at once.")
                         .format(need=fmt_size(need), free=fmt_size(max(free, 0)))),
                     on_dismiss=pick(closed),
                     actions=[C.ghost(tr("Cancel"), on_click=pick(cancel)),
@@ -1348,7 +1341,7 @@ class FramePortApp:
             for p in final:
                 self._submit_install(p, to)
             if len(final) > 1:
-                msg = tr("Queued {len} installs — they run one after another in the background").format(len=len(final))
+                msg = tr("Queued {len} installs — they run one at a time").format(len=len(final))
                 self.toast(msg,
                            action=tr("Activity"), on_action=lambda e: self.show_activity(True))
             if self.library_view:
@@ -1374,9 +1367,10 @@ class FramePortApp:
             elif job.state == "failed":
                 why = tr("Failed: {error}").format(error=job.error)
             else:
-                why = tr("Installed, but it didn't start properly: ") + (
+                why = tr("Installed, but it didn't start: ") + (
                     fatal[0]["diagnosis"] if fatal
-                    else tr("it stopped at '{value}'").format(value=s.get('milestone') or 'the start'))
+                    else tr("it stopped after: {value}").format(value=C.test_result(None, s["milestone"])[1])
+                    if s.get("milestone") else tr("it stopped right at the start"))
             buttons = []
             if pkg in recs:
                 buttons.append(C.primary(tr("Resume"), ft.Icons.PLAY_ARROW_ROUNDED,
@@ -1449,7 +1443,7 @@ class FramePortApp:
     def resume_installs(self) -> None:
         for pkg, r in self.unfinished_installs().items():
             self._submit_install(pkg, r.get("to", "frame"))
-        self.toast(tr("Resuming — files already copied are skipped"), action=tr("Activity"),
+        self.toast(tr("Resuming — copied files are skipped"), action=tr("Activity"),
                    on_action=lambda e: self.show_activity(True))
 
     def forget_installs(self) -> None:
@@ -1473,7 +1467,7 @@ class FramePortApp:
             rep.stage("Checking the game" if rift or as_is else "Patching the game")
             info = pipeline.build_game(pkg, rep)
             if not info["ok"]:
-                raise RuntimeError(tr("the game didn't pass its checks (see the list above)"))
+                raise RuntimeError(tr("the game failed its checks (see the list above)"))
             rep.check_cancel()
             target = self._target_for(to)
             pipeline.install_game(pkg, target, rep, apk_only=False)
@@ -1482,18 +1476,18 @@ class FramePortApp:
                 library.update_game(pkg, lambda e: e.pop("steam_art_stale", None))
             if to == "pc":  # a PC launch test would start the game on the user's desktop — skip it
                 rep.stage("Installed")
-                return (tr("{get} is installed on this PC — launch it from your Steam library or the Play button "
-                           "(SteamVR starts with it)").format(get=g.get('title')))
+                return tr("{get} is installed on this PC — start it with Play or from your Steam library").format(
+                    get=g.get('title'))
             rep.check_cancel()
             if not library.setting("install.launch_test", True):  # Settings → Installing
                 rep.stage("Installed")
-                return (tr("{get} is installed on {where}: put the headset on and launch it from your Steam library "
-                           "(automatic launch test is off in Settings)").format(get=g.get('title'), where=where))
+                return tr("{get} is installed on {where}: put the headset on and launch it from your Steam "
+                          "library").format(get=g.get('title'), where=where)
             summary = pipeline.test_game(pkg, target, rep)
             job.summary, job.to, job.log_path = summary, to, summary.get("log_path")
             rep.stage(f"Launch test: {'passed' if summary['verdict'] == 'pass' else summary['verdict']}")
             ok = summary["verdict"] == "pass"
-            return (tr("{get} is ready on {where}: put the headset on and launch it from your Steam library")
+            return (tr("{get} is ready on {where} — put the headset on and start it from your Steam library")
                     .format(get=g.get('title'), where=where)
                     if ok else tr("{get} is installed on {where}, but the launch test needs a look")
                     .format(get=g.get('title'), where=where))
@@ -1540,7 +1534,7 @@ class FramePortApp:
     def install_blocked(self, pkg: str) -> None:
         """Install a game marked "Can't run" after saying why it's marked so."""
         g = library.game(pkg) or {}
-        notes = (g.get("recipe") or {}).get("notes") or tr("It has a known blocker on the Steam Frame.")
+        notes = (g.get("recipe") or {}).get("notes") or tr("It's known not to run on the Frame.")
 
         def go(e):
             self.page.pop_dialog()
@@ -1549,7 +1543,7 @@ class FramePortApp:
             tr("Install {title} anyway?").format(title=self._title(pkg)),
             ft.Column([C.body(tr("This game is marked \"Can't run\" on the Steam Frame:"), T.TEXT_2),
                                C.body(notes),
-                               C.body(tr("Install it anyway to try it, for example with different patches."),
+                               C.body(tr("Install it anyway to try other patches."),
                                       T.TEXT_2)],
                               tight=True),
             actions=[C.ghost(tr("Cancel"), on_click=lambda e: self.page.pop_dialog()),
@@ -1566,8 +1560,9 @@ class FramePortApp:
                 res, _ = target.launch_test(pkg, job.reporter)
                 summary = {"verdict": res.verdict, "milestone": res.milestone, "suggestions": []}
             job.summary, job.to, job.log_path = summary, to, summary.get("log_path")
-            return tr("{title}: launch test {verdict} (furthest: {value})").format(
-                title=title, verdict=summary['verdict'], value=summary.get('milestone') or '—')
+            verdict, step = C.test_result(summary["verdict"], summary.get("milestone"))
+            return tr("{title}: launch test {verdict} · furthest step: {value}").format(
+                title=title, verdict=verdict, value=step)
         return self.submit(tr("Launch test: {title}").format(title=title), run, pkg, "test", to=to)
 
     def update_steam_art(self, pkg: str) -> Job:
@@ -1648,10 +1643,10 @@ class FramePortApp:
 
     def uninstall(self, pkg: str, to: str = "frame") -> None:
         title = self._title(pkg)
-        text = (tr("Removes {title}'s game files from the Frame. Saves are kept; the Steam entry disappears "
-                   "after the next Steam restart.").format(title=title)) if to == "frame" else \
-            tr("Removes {title} from this PC's Steam library (Steam restarts once). "
-               "The game folder isn't touched.").format(title=title)
+        text = (tr("Removes {title} from the Frame and keeps its saves. Its Steam entry goes away after "
+                   "Steam's next restart.").format(title=title)) if to == "frame" else \
+            tr("Removes {title} from Steam on this PC (Steam restarts once). "
+               "The game folder stays.").format(title=title)
 
         delete_local, extra = self._delete_local_option(pkg)
 
@@ -1720,7 +1715,7 @@ class FramePortApp:
 
         def go():
             pipeline.reset_recipe(pkg)
-            self.toast(tr("Recipe reset: update the game on the Frame to use it") if installed
+            self.toast(tr("Recipe reset — update the game on the Frame to use it") if installed
                        else tr("Recipe reset"))
             self.refresh_view()
         C.confirm(self.page, tr("Reset {title}'s recipe?").format(title=self._title(pkg)),
@@ -1761,13 +1756,13 @@ class FramePortApp:
             winhost.open_folder(path, select=True)
             if report is not None:
                 self.open_url(pipeline.problem_report(pkg, report, path, info if target is self.target else None))
-                return tr("Saved {name}: drag it into the GitHub issue that just opened").format(name=path.name)
+                return tr("Saved {name} — drag it into the GitHub issue that opened").format(name=path.name)
             return tr("Saved {name} (in {parent})").format(name=path.name, parent=path.parent)
-        job_title = tr("Collect logs: {title}").format(title=self._title(pkg)) if pkg else tr("Collect app logs")
+        job_title = tr("Collect logs: {title}").format(title=self._title(pkg)) if pkg else tr("Collect FramePort logs")
         self.submit(job_title, run, pkg, "diag")
 
     def report_problem_dialog(self, pkg: str | None = None) -> None:
-        text = C.field(label=tr("What happens? (optional: you can also write it on GitHub)"), multiline=True,
+        text = C.field(label=tr("What happens? (optional)"), multiline=True,
                        min_lines=3, max_lines=8, expand=True)
 
         def go(e):
@@ -1776,8 +1771,8 @@ class FramePortApp:
         self.page.show_dialog(C.dialog(
             tr("Report a problem · {title}").format(title=self._title(pkg)) if pkg else tr("Report a problem"),
             ft.Column([
-                C.body(tr("FramePort saves a diagnostics zip (logs, recipe, device info; no game files, personal data "
-                       "removed) and opens a prefilled GitHub issue. Drag the zip into it, check the text, submit."),
+                C.body(tr("FramePort saves a diagnostics zip (no game files or personal data) and opens a GitHub "
+                       "issue. Drag the zip into it and submit."),
                        T.TEXT_2),
                 ft.Row([text, C.help_icon("diag_bundle")]),
             ], tight=True, spacing=T.S3),
@@ -1810,21 +1805,20 @@ class FramePortApp:
                 url = pipeline.share_working_config(pkg, status.value or "works", notes.value or "", info)
                 library.upsert_game(pkg, shared_config=time.time())  # the game page stops asking
                 self.open_url(url)
-                self.toast(tr("Saved as known-good. Check the issue on GitHub and submit it"))
+                self.toast(tr("Saved as known-good — check the GitHub issue and submit it"))
             self.run_bg(work)
         send.on_click = go
         self.page.show_dialog(C.dialog(
             tr("Share working recipe · {title}").format(title=self._title(pkg)),
             ft.Column([
-                C.body(tr("Opens a prefilled GitHub issue with this game's recipe, so it can join the built-in catalog "
-                       "(no account token needed; you review and submit it on GitHub). No game files or personal "
+                C.body(tr("Opens a GitHub issue with this recipe so others get it too. No game files or personal "
                        "data are sent."), T.TEXT_2),
-                *([C.body(tr("Last launch test: {get} · furthest: {value}").format(
-                              get=last.get('verdict'), value=last.get('milestone') or '—'),
+                *([C.body(tr("Last launch test: {get} · furthest step: {value}").format(
+                              get=C.test_result(last.get("verdict"), last.get("milestone"))[0],
+                              value=C.test_result(last.get("verdict"), last.get("milestone"))[1]),
                           T.TEXT_3)] if last else []),
                 ft.Row([status, C.help_icon("share_config")]), notes, played,
-                C.body(tr("Launch tests run without the headset worn, "
-                          "so only you can confirm the picture and controls."),
+                C.body(tr("Launch tests can't check the picture or controls — only you can."),
                        T.TEXT_3),
             ], tight=True, spacing=T.S3),
             actions=[C.ghost(tr("Cancel"), on_click=lambda e: self.page.pop_dialog()), send]))
@@ -1846,7 +1840,7 @@ class FramePortApp:
     # ================================================================== library
     async def pick_folder(self, e=None):
         path = await ft.FilePicker().get_directory_path(
-            dialog_title=tr("Folder with VR games (Android APKs or PC VR games)"))
+            dialog_title=tr("Folder with games (APKs or PC VR games)"))
         if path:
             self.scan(path)
 
@@ -1916,15 +1910,15 @@ class FramePortApp:
             elif kind == "folder":
                 self.scan(path)
             else:
-                self.toast(tr("FramePort can't add {name}: drop an APK, a Linux build (.zip, AppImage), a Windows "
-                              "program (.exe) or a folder").format(name=Path(path).name), error=True)
+                self.toast(tr("Can't add {name} — drop an APK, a Linux app, a Windows program (.exe) or a "
+                              "folder").format(name=Path(path).name), error=True)
 
     async def pick_linux_app(self, e=None):
         """An AppImage or an archive (.zip/.tar.*) with an arm64 Linux app. Any file can be picked: AppImages often
         have no extension."""
         from ..analysis import linux
 
-        title = tr("A Linux app (AppImage, .zip or .tar.gz; arm64, or x86_64 through translation)")
+        title = tr("A Linux app (AppImage, .zip or .tar.gz)")
         files = await ft.FilePicker().pick_files(dialog_title=title, allow_multiple=True)
         for f in files or []:
             if not f.path:
@@ -1932,7 +1926,7 @@ class FramePortApp:
             if linux.looks_like_linux_app(Path(f.path)):
                 self.add_linux(f.path)
             else:
-                self.toast(tr("{name} isn't a Linux app (an AppImage, a Linux program or a .zip/.tar archive)")
+                self.toast(tr("{name} isn't a Linux app (AppImage, Linux program or .zip/.tar archive)")
                            .format(name=Path(f.path).name), error=True)
 
     async def pick_linux_folder(self, e=None):
@@ -1958,7 +1952,7 @@ class FramePortApp:
             self.open_game(pkg)
             extra = (g.get("analysis") or {}).get("extra") or {}
             if len(extra.get("candidates") or []) > 1 and not extra.get("files"):  # (the page has "Change…")
-                return tr("Added {title}: it starts with {exe}. Not the right program? Change it on its page.").format(
+                return tr("Added {title} — it starts {exe}. Wrong program? Change it on its page.").format(
                     title=g.get("title"), exe=g.get("exe", "").rsplit("/", 1)[-1])
             return tr("Added {title}").format(title=g.get("title"))
         return self.submit(tr("Add {name}").format(name=name), run, None, "task")
@@ -1983,7 +1977,7 @@ class FramePortApp:
         """Scan the library's folders again for games added since (unchanged games aren't analyzed again)."""
         roots = self.scan_roots()
         if not roots:
-            self.toast(tr("No folders to rescan yet: add games with Scan a folder"))
+            self.toast(tr("No folders to rescan yet — add games with Scan a folder…"))
             return
         for r in roots:
             self.scan(r, only_new=True)
@@ -2060,7 +2054,7 @@ class FramePortApp:
         heading = {"sleep": tr("Put the Frame to sleep?"), "restart": tr("Restart the Frame?"),
                    "shutdown": tr("Shut down the Frame?")}[action]
         text = {"sleep": tr("The Frame goes to sleep in a few seconds. Wake it with its power button."),
-                "restart": tr("The Frame restarts in a few seconds; FramePort reconnects when it's back."),
+                "restart": tr("The Frame restarts in a few seconds. FramePort reconnects when it's back."),
                 "shutdown": tr("The Frame turns off in a few seconds. Turn it on again with its power button.")}[action]
         if force:
             heading, text = tr("A game is running on the Frame"), tr("It will be closed without saving. Continue?")
@@ -2137,8 +2131,8 @@ class FramePortApp:
         n = pipeline.refresh_analyses()
         if n:
             self.refresh_view()
-            self.toast(tr_n("{n} game was analyzed again for new fixes", "{n} games were analyzed again for new fixes",
-                            n))
+            self.toast(tr_n("{n} game was analyzed again for new patches",
+                            "{n} games were analyzed again for new patches", n))
 
     def _art_backfill(self) -> None:
         """Rift games added before automatic artwork (or while offline): fetch it once in the background."""
@@ -2208,8 +2202,9 @@ class FramePortApp:
                 self.connect(target)
 
         def status(kind: str, detail: str) -> None:
-            text = (tr("{frame} is in Developer Mode: open Settings → Developer → Pair new host on it, then approve "
-                       "FramePort there.").format(frame=detail) if kind == "waiting" else explain(RuntimeError(detail)))
+            text = (tr("{frame} is in Developer Mode — on it, open Settings → Developer → Pair new host and "
+                       "approve FramePort.").format(frame=detail) if kind == "waiting"
+                    else explain(RuntimeError(detail)))
             if text != self.auto_pair_status:
                 self.auto_pair_status = text
                 if self.route[0] == "frame":
@@ -2238,8 +2233,8 @@ class FramePortApp:
         library.upsert_game(game["package"], frame_restart=boot.get("boot_time")) if library.game(game["package"]) \
             else None
         pkg = game["package"]
-        self.toast(tr("Your Frame restarted unexpectedly while {title} was running (or soon after). If that game "
-                      "crashed it, please report it.").format(title=game.get("title") or pkg), error=True,
+        self.toast(tr("Your Frame restarted while {title} was running. If the game caused it, please report "
+                      "it.").format(title=game.get("title") or pkg), error=True,
                    action=tr("Report a problem…"), on_action=lambda e: self.report_problem_dialog(pkg))
 
     def _battery_check(self, fetch: bool) -> None:
@@ -2294,7 +2289,7 @@ class FramePortApp:
         self._check_frame_restart(info)
         self._awake_at = 0.0  # the lock went away with the old connection's Frame session: take it again
         self.jobs.resume()
-        self.toast(tr("Your Frame is back: continuing"))
+        self.toast(tr("Your Frame is back — continuing"))
         self.refresh_view()
         return True
 
@@ -2356,7 +2351,7 @@ class FramePortApp:
                         raise
                     from ..frame import devkit as dk
 
-                    self.toast(tr("Pairing: on the Frame open Settings → Developer → Pair new host, then approve "
+                    self.toast(tr("On the Frame, open Settings → Developer → Pair new host and approve "
                                   "FramePort."))
                     dk.register(target.host)
                     t = FrameLeptonTarget(target, password).connect()
@@ -2473,8 +2468,8 @@ class FramePortApp:
                 return tr("{display_name} is installed on your Frame").format(display_name=tool['display_name'])
             self.submit(tr("Install Proton on the Frame"), run, kind="tool-frame", open_panel=True)
         C.confirm(self.page, tr("Install Proton on the Frame?"),
-                  tr("FramePort has Steam on the Frame download Proton and the runtime it needs (about 1 GiB). Steam "
-                  "restarts once, which closes a running game."), tr("Install"), go)
+                  tr("Steam on the Frame downloads Proton (about 1 GiB). Steam restarts once, which closes a "
+                  "running game."), tr("Install"), go)
 
     def test_proton(self):
         def run(job: Job):
@@ -2494,8 +2489,8 @@ class FramePortApp:
                 r = self.target.frame.agent("cleanup", rollback=True, paths=[])
                 return tr("Freed {value:.1f} GiB on the Frame").format(value=r['freed_bytes'] / 2**30)
             self.submit(tr("Free up space on the Frame"), run, kind="tool-frame")
-        C.confirm(self.page, tr("Free up space?"), tr("Removes the previous version kept after each reinstall and any "
-                  "leftover uploads. Games and saves aren't touched."), tr("Free up space"), go)
+        C.confirm(self.page, tr("Free up space?"), tr("Removes backup copies from reinstalls and leftover uploads. "
+                  "Games and saves stay."), tr("Free up space"), go)
 
     # ================================================================== tools / welcome
     def update_tools(self, update: bool = False, quiet: bool = False) -> Job:
@@ -2579,8 +2574,8 @@ class FramePortApp:
             tr("Uninstall FramePort?"),
             ft.Column([C.body(tr("This removes:"), T.TEXT), *lines, ft.Container(height=T.S2),
                        cb_keys, cb_frame, cb_saves,
-                       C.meta(tr("Signing keys matter: game updates must be signed with "
-                                 "the same key or their saves are lost on reinstall."))],
+                       C.meta(tr("Keep the signing keys: without them, updating a game "
+                                 "loses its saves."))],
                       spacing=T.S2, tight=True, scroll=ft.ScrollMode.AUTO),
             actions=[C.ghost(tr("Cancel"), on_click=lambda e: self.page.pop_dialog()),
                      C.danger(tr("Uninstall"), ft.Icons.DELETE_FOREVER_OUTLINED, go)]))

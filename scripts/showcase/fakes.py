@@ -688,6 +688,6 @@ def install_job(package: str, pace: float = 1.0):
         job.summary = {"verdict": "pass", "findings": []}
         rep.stage("Launch test: passed")
         time.sleep(0.5 * pace)
-        return f"{title} is ready on your Frame: put the headset on and launch it from your Steam library"
+        return f"{title} is ready on your Frame — put the headset on and start it from your Steam library"
     return run
 

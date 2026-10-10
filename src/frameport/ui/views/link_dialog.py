@@ -38,9 +38,8 @@ def show_paste_dialog(app: FramePortApp) -> None:
     app.page.show_dialog(C.dialog(
         tr("Install from a link"),
         ft.Column([
-            C.body(tr("Paste the address of an \"Install with FrameDrop\" button (right-click it → Copy link), a "
-                      "FramePort or FrameDrop manifest (.json) or a direct link to an APK, a Linux build (.zip) or a "
-                      "Windows program (.exe).")),
+            C.body(tr("Paste an install link: a FrameDrop button's address, a manifest (.json) or a direct link to "
+                      "an APK, .zip or .exe.")),
             ft.Row([field, C.help_icon("install_links")]),
         ], tight=True, spacing=T.S3),
         actions=[C.ghost(tr("Cancel"), on_click=lambda e: app.page.pop_dialog()),
@@ -106,10 +105,10 @@ def _confirm(app: FramePortApp, m: deeplink.Manifest, sizes: dict, pasted: bool,
     notes = [C.callout(tr("Only install software from sites you trust. FramePort downloads it from {host} and "
                           "installs it on your Frame.").format(host=m.host or _host(m.source)), "warn")]
     if not frame:
-        notes.append(C.callout(tr("No Frame is connected: the game is added to your library now and installs once "
-                                  "the Frame is connected."), "info"))
+        notes.append(C.callout(tr("No Frame connected: the game goes to your library now and installs when the Frame "
+                                  "connects."), "info"))
     if m.main.kind == deeplink.LINUX:
-        notes.append(C.body(tr("Linux builds must be made for arm64 (x86_64 builds run through translation, slower)."),
+        notes.append(C.body(tr("Linux builds should be made for arm64; others run slower."),
                             T.TEXT_3))
     heading = tr("Install {name}?").format(name=m.name)
     intro = tr("You pasted a link to {name}.") if pasted else tr("A web page asked FramePort to install {name}.")

@@ -22,10 +22,11 @@ class UnityRuntimeMsaa(Il2cppReturnPatch):
     title = "Unity: keep MSAA off at runtime (OVRManager)"
     description = ("Meta's OVRManager switches Unity to the headset's recommended MSAA level (4x) while the game runs, "
                    "whatever its quality settings say (log: \"Switching to the recommended level\"). Multisampled "
-                   "render-to-texture on GLES can hang the Frame's GPU, up to a restart of the whole headset (e.g. "
-                   "Lucky's Tale in a menu) or a crash of its GL driver (e.g. The Room VR, whose own code sets 4x). "
-                   "Rewrites OVRDisplay.recommendedMSAALevel -> 0 and makes QualitySettings.antiAliasing's setter do "
-                   "nothing in libil2cpp.so (found with Cpp2IL), so MSAA stays off.")
+                   "render-to-texture on GLES can hang the Frame's GPU, up to a restart of the whole headset (for "
+                   "example Lucky's Tale in a menu) or a crash of its GL driver (for example The Room VR, whose own "
+                   "code sets 4x). Rewrites OVRDisplay.recommendedMSAALevel -> 0 and makes "
+                   "QualitySettings.antiAliasing's setter do nothing in libil2cpp.so (found with Cpp2IL), so MSAA "
+                   "stays off.")
     order = 47
     targets = {"Oculus.VR/OVRDisplay.cs": {"get_recommendedMSAALevel": RET_ZERO},
                "Assembly-CSharp/OVRDisplay.cs": {"get_recommendedMSAALevel": RET_ZERO},  # older Oculus Integration
@@ -49,9 +50,10 @@ class UnityMultiPass(Il2cppReturnPatch):
     id = "frame.unity_multipass"
     title = "Unity: render each eye separately (no multiview)"
     description = ("Oculus XR Plugin games render both eyes in one pass (multiview) on Android. If one eye shows only "
-                   "effects or grey (e.g. I Am Cat), rendering each eye in its own pass can fix it, at some GPU cost. "
-                   "Rewrites OculusSettings.GetStereoRenderingMode and its inlined read in OculusLoader.Initialize -> "
-                   "MultiPass in libil2cpp.so (found with Cpp2IL). Try it when one eye is wrong.")
+                   "effects or gray (for example I Am Cat), rendering each eye in its own pass can fix it, at some "
+                   "GPU cost. Rewrites OculusSettings.GetStereoRenderingMode and its inlined read in "
+                   "OculusLoader.Initialize -> MultiPass in libil2cpp.so (found with Cpp2IL). Try it when one eye is "
+                   "wrong.")
     order = 48
     revision = 2  # 0.6.3 only patched the getter, which is inlined: also the field read in OculusLoader.Initialize
     SETTINGS = "Unity.XR.Oculus/Unity/XR/Oculus/OculusSettings.cs"
@@ -74,11 +76,11 @@ class UnityNoOverlayCopy(Il2cppReturnPatch):
     id = "frame.unity_no_overlay_copy"
     title = "Unity: skip OVROverlay layers (fades, splash screens)"
     description = ("Meta's OVROverlay copies a texture into its own compositor layer every frame. For some games "
-                   "(e.g. The Room VR's screen fade, a 4x4 overlay) that copy crashes the Frame's GL driver: SIGSEGV "
-                   "in libgallium_dri.so on Unity's render thread right after a tiny xrCreateSwapchain, grey or frozen "
-                   "screen. Rewrites OVROverlay.PopulateLayer -> false in libil2cpp.so (found with Cpp2IL): overlays "
-                   "are skipped (fades become instant cuts, overlay splash screens don't show). Only for games with "
-                   "this crash: menus drawn as overlays would disappear too.")
+                   "(for example The Room VR's screen fade, a 4x4 overlay) that copy crashes the Frame's GL driver: "
+                   "SIGSEGV in libgallium_dri.so on Unity's render thread right after a tiny xrCreateSwapchain, gray "
+                   "or frozen screen. Rewrites OVROverlay.PopulateLayer -> false in libil2cpp.so (found with Cpp2IL): "
+                   "overlays are skipped (fades become instant cuts, overlay splash screens don't show). Only for "
+                   "games with this crash: menus drawn as overlays would disappear too.")
     order = 49
     targets = {"Oculus.VR/OVROverlay.cs": {"PopulateLayer": RET_ZERO},
                "Assembly-CSharp/OVROverlay.cs": {"PopulateLayer": RET_ZERO}}  # older Oculus Integration

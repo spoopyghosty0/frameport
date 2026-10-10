@@ -63,7 +63,7 @@ def working_config_url(g: dict, recipe_yaml: str, status: str, notes: str, env: 
     result = f"{status}" + (f"; last launch test: {last.get('state')} ({last.get('verdict')}), furthest: "
                             f"{last.get('milestone') or '-'}" if last else "")
     return _url("working-config.yml", {
-        "title": red.text(f"[Working config] {title}"),
+        "title": red.text(f"[Working recipe] {title}"),
         "labels": "working-config",
         "game": red.text(game),
         "result": red.text(result),
