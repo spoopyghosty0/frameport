@@ -1,7 +1,7 @@
 ---
 import Wordmark from './Wordmark.astro';
 import Contributors from './Contributors.astro';
-import { REPO, RELEASES, REPORT_PROBLEM, url } from '../data/site';
+import { REPO, REPORT_PROBLEM, url } from '../data/site';
 
 interface Props { credits?: boolean }
 const { credits = true } = Astro.props;
@@ -27,7 +27,7 @@ const joiner = (i: number, n: number) => (i === 0 ? '' : i === n - 1 ? ' and ' :
   <section class="section credits" id="credits">
     <div class="wrap">
       <div class="head reveal">
-        <p class="label"><b>06</b> Built on</p>
+        <p class="label"><b>07</b> Built on</p>
         <h2>Built on open source, by its users</h2>
         <p class="lead">FramePort brings these projects together and adds what the Frame needs.
           <a href={url('docs/architecture/')}>What FramePort adds</a></p>
@@ -53,7 +53,7 @@ const joiner = (i: number, n: number) => (i === 0 ? '' : i === n - 1 ? ' and ' :
     </div>
     <nav class="foot-links" aria-label="Project">
       <a href={REPO}>Source code</a>
-      <a href={RELEASES}>Releases</a>
+      <a href={url('changelog/')}>What's new</a>
       <a href={url('docs/')}>Docs</a>
       <a href={REPORT_PROBLEM}>Report a problem</a>
       <a href={url('install/')}>Install links</a>

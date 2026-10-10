@@ -8,7 +8,7 @@
   "scripts": {
     "sync": "node scripts/sync-media.mjs",
     "dev": "npm run sync && astro dev",
-    "build": "npm run sync && node scripts/contributors.mjs && astro build",
+    "build": "npm run sync && node scripts/contributors.mjs && node scripts/releases.mjs && astro build",
     "preview": "astro preview",
     "check": "astro check",
     "test": "node --test --experimental-strip-types \"src/scripts/*.test.mjs\""

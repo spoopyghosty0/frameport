@@ -8,6 +8,7 @@ import CompatBoard from '../components/CompatBoard.astro';
 import Notice from '../components/Notice.astro';
 import Compare from '../components/Compare.astro';
 import Install from '../components/Install.astro';
+import WhatsNew from '../components/WhatsNew.astro';
 import Footer from '../components/Footer.astro';
 import { loadSnapshot } from '../data/catalog';
 import { short, type Game } from '../scripts/catalog';
@@ -44,6 +45,7 @@ const logGames = games.filter((g) => g.status !== 'unsupported' && g.platform ==
     <Compare />
     <Notice />
     <Install />
+    <WhatsNew />
   </main>
   <Footer />
 </Layout>

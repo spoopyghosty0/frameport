@@ -150,6 +150,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write  # starts the pages workflow
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -185,6 +186,11 @@ jobs:
             echo; cat packaging/release-footer.md; } > "$notes"  # short: the update dialog shows these notes
           gh release delete "$tag" --yes 2>/dev/null || true
           gh release create "$tag" out/* packaging/FramePort-selfsigned.cer --title "FramePort ${tag}" --notes-file "$notes"
+      - name: Refresh the website's changelog (a release made with github.token starts no other workflow)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main
 
   dev-release:
     # "Run workflow" with dev ticked: replaces the rolling `dev` pre-release (never shown by the automatic update check;
@@ -194,6 +200,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write  # starts the pages workflow
     steps:
       - uses: actions/checkout@v7
         with:
@@ -225,3 +232,8 @@ jobs:
           gh release delete dev --yes --cleanup-tag 2>/dev/null || true
           gh release create dev out/* packaging/FramePort-selfsigned.cer --prerelease --target "$GITHUB_SHA" \
             --title "FramePort dev build ${VERSION}" --notes-file "$notes"
+      - name: Refresh the website's changelog (a release made with github.token starts no other workflow)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main

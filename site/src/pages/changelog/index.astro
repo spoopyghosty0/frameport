@@ -1,0 +1,251 @@
+---
+// Every FramePort release, newest first, from GitHub's release notes (src/data/releases.ts). The dev build shows as
+// "Coming next" while it is ahead of the latest release.
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import { LATEST, NEXT, RELEASES } from '../../data/releases';
+import { REPO, downloadPage } from '../../data/site';
+
+const SHOWN = 8; // the rest fold away under "Show older releases"
+const rest = RELEASES.slice(1);
+const recent = rest.slice(0, SHOWN - 1);
+const older = rest.slice(SHOWN - 1);
+const id = (v: string) => `v${v.replaceAll('.', '-')}`;
+const count = (n: number) => (n === 1 ? '1 change' : `${n} changes`);
+---
+<Layout title="What's new · FramePort"
+  description={LATEST ? `What changed in each FramePort release. Latest: ${LATEST.version} (${LATEST.date}).` : 'What changed in each FramePort release.'}>
+  <Nav home={false} />
+  <main class="cl">
+    <div class="wrap inner">
+      <header class="top">
+        <p class="label"><b>Changelog</b> FramePort</p>
+        <h1>What's new</h1>
+        <p class="lead">Every release, newest first. FramePort updates itself and shows these notes before it does.</p>
+      </header>
+
+      {RELEASES.length > 0 && (
+        <nav class="jump" aria-label="Releases">
+          {NEXT && <a href="#next" class="dev">Next</a>}
+          {RELEASES.map((r) => <a href={`#${id(r.version)}`} data-jump={id(r.version)} class={r.kind}>{r.version}</a>)}
+        </nav>
+      )}
+
+      {NEXT && (
+        <section class="next reveal" id="next" aria-label="Coming next">
+          <div class="next-head">
+            <span class="pill pill-pc">In testing</span>
+            <h2>Coming next <span class="ver">{NEXT.version}</span></h2>
+            <time datetime={NEXT.date}>{NEXT.date}</time>
+          </div>
+          <div class="notes" set:html={NEXT.html} />
+          <p class="small">Testers get it from Settings → Updates → <b>Install the latest dev build…</b> ·
+            <a href={NEXT.url}>Dev build on GitHub</a></p>
+        </section>
+      )}
+
+      {LATEST && (
+        <article class="latest reveal" id={id(LATEST.version)}>
+          <div class="latest-meta">
+            <span class="pill pill-ok">Latest</span>
+            <p class="big"><span>{LATEST.version}</span></p>
+            <p class="when"><time datetime={LATEST.date} data-rel>{LATEST.date}</time> · {count(LATEST.changes)}</p>
+            <div class="acts">
+              <a class="btn btn-primary" href={downloadPage()}>Download FramePort</a>
+              <a class="btn btn-ghost" href={LATEST.url}>On GitHub</a>
+            </div>
+          </div>
+          <div class="notes" set:html={LATEST.html} />
+        </article>
+      )}
+
+      {recent.length > 0 && (
+        <ol class="tl">
+          {recent.map((r) => (
+            <li class={`rel reveal ${r.kind}`} id={id(r.version)}>
+              <div class="meta">
+                <a class="v" href={`#${id(r.version)}`}>{r.version}</a>
+                <time datetime={r.date}>{r.date}</time>
+                <span class="kind">{r.kind === 'feature' ? 'New features' : 'Fixes'}</span>
+              </div>
+              <i class="node" aria-hidden="true"></i>
+              <div class="card">
+                <div class="notes" set:html={r.html} />
+                <a class="gh" href={r.url}>Release {r.version} on GitHub</a>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {older.length > 0 && (
+        <details class="older" data-older>
+          <summary><span>Show {older.length} older releases</span> <span class="range">{older[older.length - 1].version} – {older[0].version}</span></summary>
+          <ol class="tl">
+            {older.map((r) => (
+              <li class={`rel ${r.kind}`} id={id(r.version)}>
+                <div class="meta">
+                  <a class="v" href={`#${id(r.version)}`}>{r.version}</a>
+                  <time datetime={r.date}>{r.date}</time>
+                  <span class="kind">{r.kind === 'feature' ? 'New features' : 'Fixes'}</span>
+                </div>
+                <i class="node" aria-hidden="true"></i>
+                <div class="card">
+                  <div class="notes" set:html={r.html} />
+                  <a class="gh" href={r.url}>Release {r.version} on GitHub</a>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+
+      {RELEASES.length === 0 && <p class="lead">No releases yet. See <a href={`${REPO}/releases`}>GitHub</a>.</p>}
+    </div>
+  </main>
+  <Footer />
+</Layout>
+
+<script>
+  // "3 days ago" next to the latest date; open the older releases when a link points into them; mark the release
+  // being read in the version strip
+  const rel = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+  document.querySelectorAll<HTMLTimeElement>('time[data-rel]').forEach((t) => {
+    const days = Math.round((Date.parse(t.dateTime) - Date.now()) / 86400000);
+    if (Number.isFinite(days) && days <= 0) t.textContent = `${t.dateTime} (${rel.format(days, 'day')})`;
+  });
+  const older = document.querySelector<HTMLDetailsElement>('[data-older]');
+  const reveal = () => {
+    const el = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (el && older?.contains(el) && !older.open) { older.open = true; el.scrollIntoView(); }
+  };
+  addEventListener('hashchange', reveal);
+  reveal();
+  const links = new Map([...document.querySelectorAll<HTMLAnchorElement>('[data-jump]')].map((a) => [a.dataset.jump!, a]));
+  const strip = document.querySelector<HTMLElement>('.jump');
+  const seen = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      links.forEach((a) => a.classList.remove('on'));
+      const a = links.get(e.target.id);
+      if (a && strip) { a.classList.add('on'); strip.scrollTo({ left: a.offsetLeft - strip.clientWidth / 2 + a.clientWidth / 2, behavior: 'smooth' }); }
+    }
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  links.forEach((_, key) => { const el = document.getElementById(key); if (el) seen.observe(el); });
+</script>
+
+<style>
+  .cl { background: var(--portal-glow); padding-block: clamp(40px, 7vw, 80px) 96px; }
+  .inner { max-width: 980px; display: grid; gap: 28px; }
+  .top { display: grid; gap: 14px; }
+  h1 { font-size: clamp(40px, 7vw, 68px); line-height: 1.02; font-weight: 800; letter-spacing: -0.03em; }
+  .small { font-size: 14px; color: var(--text-2); }
+  .small b { color: var(--text); }
+
+  /* the version strip: one chip per release, sticky under the nav */
+  .jump { position: sticky; top: 66px; z-index: 5; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+    padding: 10px 2px; margin-inline: -2px; background: linear-gradient(var(--bg) 70%, transparent);
+    mask: linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 24px), transparent); }
+  .jump::-webkit-scrollbar { display: none; }
+  .jump a { flex: none; padding: 5px 11px; border-radius: var(--radius-pill); border: 1px solid var(--border);
+    font: 500 12.5px/1.2 var(--font-mono); color: var(--text-2); text-decoration: none; background: var(--surface);
+    transition: color 200ms, border-color 200ms, background 200ms; }
+  .jump a:first-child { margin-left: 14px; }
+  .jump a:hover { color: var(--text); border-color: var(--border-strong); }
+  .jump a.feature { color: var(--text); }
+  .jump a.dev { color: var(--secondary); border-color: var(--secondary-line); }
+  .jump a.on { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+
+  /* release notes, wherever they show */
+  .notes { min-width: 0; color: var(--text-2); }
+  .notes :global(ul) { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .notes :global(li) { position: relative; padding-left: 22px; line-height: 1.55; }
+  .notes :global(li::before) { content: ""; position: absolute; left: 3px; top: .62em; width: 8px; height: 8px; border-radius: 2px;
+    background: var(--portal); transform: rotate(45deg); box-shadow: 0 0 10px rgba(255, 138, 31, .35); }
+  .notes :global(li.fixes::before) { background: var(--surface-3); box-shadow: none; }
+  .notes :global(li p) { margin: 0; }
+  .notes :global(.tag) { display: inline-block; margin-right: 4px; padding: 1px 8px; border-radius: var(--radius-pill);
+    font: 600 11px/18px var(--font-sans); letter-spacing: .02em; color: var(--text); background: var(--surface-3); vertical-align: 1px; }
+  .notes :global(strong) { color: var(--text); font-weight: 600; }
+  .notes :global(p) { margin: 0 0 10px; }
+  .notes :global(p:last-child) { margin-bottom: 0; }
+  .notes :global(code) { font: 500 .88em var(--font-mono); padding: 1px 6px; border-radius: 5px; background: var(--surface-2);
+    border: 1px solid var(--border); color: var(--text); overflow-wrap: anywhere; }
+  .notes :global(a) { color: var(--secondary); text-decoration: none; }
+  .notes :global(a:hover) { text-decoration: underline; }
+  .notes :global(h4.part) { margin: 18px 0 8px; font: 700 15px/1.3 var(--font-display); color: var(--text); }
+  .notes :global(h4.part:first-child) { margin-top: 0; }
+
+  /* coming next: the dev build */
+  .next { position: relative; display: grid; gap: 12px; padding: 20px 22px; border-radius: var(--radius-md);
+    border: 1px dashed var(--secondary-line); background: linear-gradient(135deg, rgba(58, 168, 255, .07), transparent 60%); }
+  .next-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .next h2 { font-size: 20px; line-height: 1.2; }
+  .next .ver { font: 500 14px var(--font-mono); color: var(--secondary); margin-left: 6px; }
+  .next time { font: 400 13px var(--font-mono); color: var(--text-3); margin-left: auto; }
+
+  /* the latest release */
+  .latest { position: relative; display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: clamp(20px, 4vw, 44px);
+    padding: clamp(22px, 3.5vw, 36px); border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--border);
+    overflow: hidden; scroll-margin-top: 130px; }
+  .latest::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; background: var(--portal); }
+  .latest::after { content: ""; position: absolute; width: 520px; height: 520px; left: -220px; top: -260px; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(58, 168, 255, .16), rgba(255, 138, 31, .06) 55%, transparent); }
+  .latest-meta { position: relative; z-index: 1; display: grid; align-content: start; justify-items: start; gap: 10px; }
+  .big { margin: 0; font: 800 clamp(56px, 8vw, 84px)/0.95 var(--font-display); letter-spacing: -0.04em; }
+  .big span { background: var(--portal); -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 6px 24px rgba(255, 138, 31, .18)); }
+  .when { margin: 0; font: 400 13px/1.4 var(--font-mono); color: var(--text-3); }
+  .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .latest .notes { position: relative; z-index: 1; align-self: center; font-size: 15.5px; }
+  .latest .notes :global(li) { color: var(--text-2); }
+
+  /* the timeline */
+  .tl { list-style: none; margin: 0; padding: 0; position: relative; display: grid; gap: 18px; }
+  .tl::before { content: ""; position: absolute; left: 150px; top: 6px; bottom: 6px; width: 2px; border-radius: 2px;
+    background: linear-gradient(var(--secondary), var(--accent) 60%, rgba(255, 138, 31, 0)); opacity: .45; }
+  .rel { display: grid; grid-template-columns: 128px 44px minmax(0, 1fr); align-items: start; scroll-margin-top: 130px; }
+  .meta { display: grid; justify-items: end; gap: 3px; padding-top: 14px; text-align: right; }
+  .v { font: 700 20px/1.1 var(--font-display); color: var(--text); text-decoration: none; letter-spacing: -0.01em; }
+  .v:hover { color: var(--accent); }
+  .meta time { font: 400 12.5px/1.3 var(--font-mono); color: var(--text-3); }
+  .kind { font: 600 11px/1.3 var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+  .feature .kind { color: var(--accent); }
+  .node { justify-self: center; margin-top: 18px; width: 14px; height: 14px; border-radius: 50%; background: var(--bg);
+    border: 2px solid var(--secondary); box-shadow: 0 0 0 4px var(--bg); position: relative; z-index: 1; }
+  .feature .node { width: 18px; height: 18px; margin-top: 16px; border: 0; background: var(--portal);
+    box-shadow: 0 0 0 4px var(--bg), 0 0 18px rgba(255, 138, 31, .45); }
+  .card { display: grid; gap: 12px; padding: 16px 20px; border-radius: var(--radius-md); background: var(--surface);
+    border: 1px solid var(--border); transition: border-color 250ms, transform 300ms var(--ease-out); }
+  .rel:hover .card { border-color: var(--border-strong); }
+  .rel:target .card { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-glow); }
+  .gh { justify-self: start; font-size: 13px; color: var(--text-3); text-decoration: none; }
+  .gh:hover { color: var(--text); text-decoration: underline; }
+
+  /* older releases */
+  .older { display: grid; gap: 18px; }
+  .older > summary { list-style: none; cursor: pointer; justify-self: center; display: inline-flex; align-items: center; gap: 10px;
+    padding: 10px 18px; border-radius: var(--radius-pill); border: 1px solid var(--secondary-line); color: var(--text);
+    font: 600 14px/1.2 var(--font-sans); transition: background 200ms; }
+  .older > summary::-webkit-details-marker { display: none; }
+  .older > summary:hover { background: rgba(58, 168, 255, .08); }
+  .older > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .older[open] > summary { display: none; }
+  .range { font: 400 12.5px var(--font-mono); color: var(--text-3); }
+
+  @media (max-width: 760px) {
+    .latest { grid-template-columns: 1fr; }
+    .tl::before { left: 8px; }
+    .rel { grid-template-columns: 18px minmax(0, 1fr); column-gap: 14px; }
+    .rel .meta { grid-column: 2; grid-row: 1; justify-items: start; text-align: left; padding: 0 0 8px;
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+    .node { grid-column: 1; grid-row: 1; margin-top: 4px; }
+    .feature .node { margin-top: 2px; }
+    .card { grid-column: 2; }
+    .jump { top: 62px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card, .jump a { transition: none; }
+  }
+</style>

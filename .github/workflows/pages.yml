@@ -16,6 +16,8 @@ on:
       - 'docs/badges/**'
       - 'src/frameport/ui/icons/**'
       - '.github/workflows/pages.yml'
+  release:  # the changelog page shows every release (CI's own releases start this through workflow_dispatch)
+    types: [published]
   workflow_dispatch:
 
 permissions:
