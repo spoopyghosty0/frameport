@@ -1,0 +1,36 @@
+---
+// GitHub Pages serves this for any address that doesn't exist.
+import Layout from '../layouts/Layout.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import { downloadPage, url } from '../data/site';
+---
+<Layout title="Page not found · FramePort" description="This page doesn't exist." noindex>
+  <Nav home={false} />
+  <main class="nf">
+    <div class="wrap inner">
+      <i class="portal" aria-hidden="true"></i>
+      <p class="label"><b>404</b> Not found</p>
+      <h1>This page went through the wrong portal</h1>
+      <p class="lead">The address may be old or mistyped. These are good places to start:</p>
+      <nav class="go" aria-label="Pages">
+        <a class="btn btn-primary" href={url()}>Home</a>
+        <a class="btn btn-secondary" href={url('docs/')}>Docs</a>
+        <a class="btn btn-ghost" href={url('changelog/')}>What's new</a>
+        <a class="btn btn-ghost" href={downloadPage()}>Download FramePort</a>
+      </nav>
+    </div>
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  .nf { background: var(--portal-glow); padding-block: clamp(56px, 10vw, 120px); }
+  .inner { max-width: 760px; display: grid; gap: 18px; justify-items: start; }
+  h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.05; font-weight: 800; letter-spacing: -0.03em; }
+  .label { width: 100%; }
+  .go { display: flex; flex-wrap: wrap; gap: 8px; }
+  .portal { width: 56px; height: 120px; border-radius: 50%; transform: rotate(var(--tilt)); border: 5px solid transparent;
+    background: linear-gradient(var(--bg), var(--bg)) padding-box, var(--portal) border-box;
+    box-shadow: -10px 0 30px rgba(58, 168, 255, .35), 10px 0 30px rgba(255, 138, 31, .35); }
+</style>

@@ -10,7 +10,8 @@ import { DOWNLOADS, RELEASES, downloadPage, downloadUrl, url } from '../../data/
 
 const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detail, asset: d.asset, first: d.first, href: downloadUrl(d.asset) }));
 ---
-<Layout title="Download FramePort" description="Download FramePort for Windows, macOS or Linux.">
+<Layout title="Download FramePort · Windows, macOS and Linux"
+  description="Download FramePort for Windows, macOS or Linux: free and open source. It installs Quest and PC VR games on the Steam Frame.">
   <Nav home={false} />
   <main class="dlp" data-dl data-state="choose" data-builds={JSON.stringify(builds)} data-releases={RELEASES}>
     <section class="stage" aria-hidden="true">

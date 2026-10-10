@@ -5,18 +5,28 @@ import { join } from 'node:path';
 import { Marked, type Tokens } from 'marked';
 import { REPO, url } from './site';
 
-export interface DocInfo { file: string; slug: string; name: string; group: string; blurb: string }
+export interface DocInfo { file: string; slug: string; name: string; group: string; blurb: string; summary: string }
 export const DOCS: DocInfo[] = [
-  { file: 'INSTALL.md', slug: 'install', name: 'Install and first steps', group: 'Get started', blurb: 'Download, connect the Frame, install games.' },
-  { file: 'FRAME_SETUP.md', slug: 'frame-setup', name: 'What the setup changes', group: 'Get started', blurb: 'Changes on the Frame, firewalls, undoing it.' },
-  { file: 'FAQ.md', slug: 'faq', name: 'FAQ', group: 'Get started', blurb: 'Game folders and common questions.' },
-  { file: 'COMPATIBILITY.md', slug: 'compatibility', name: 'Compatibility', group: 'Using FramePort', blurb: 'What runs on the Frame.' },
-  { file: 'THEMES.md', slug: 'themes', name: 'Themes', group: 'Using FramePort', blurb: 'Color themes and making your own.' },
-  { file: 'INSTALL_BUTTON.md', slug: 'install-button', name: 'Install button', group: 'For developers', blurb: 'An install button for your download page.' },
-  { file: 'DIAGNOSTICS.md', slug: 'diagnostics', name: 'Diagnostics and problem reports', group: 'For developers', blurb: 'What a problem report contains.' },
-  { file: 'ARCHITECTURE.md', slug: 'architecture', name: 'Architecture', group: 'For developers', blurb: 'How FramePort is built and what it adds.' },
-  { file: 'PLAYBOOK.md', slug: 'playbook', name: 'Porting playbook', group: 'For developers', blurb: 'Symptoms and fixes from real games.' },
-  { file: 'FRAME_RUNTIME.md', slug: 'frame-runtime', name: 'Steam Frame runtime reference', group: 'For developers', blurb: 'Facts about the Frame\u2019s runtime.' },
+  { file: 'INSTALL.md', slug: 'install', name: 'Install and first steps', group: 'Get started', blurb: 'Download, connect the Frame, install games.',
+    summary: 'Install FramePort on Windows, macOS or Linux, connect your Steam Frame once, then install and play Quest and PC VR games.' },
+  { file: 'FRAME_SETUP.md', slug: 'frame-setup', name: 'What the setup changes', group: 'Get started', blurb: 'Changes on the Frame, firewalls, undoing it.',
+    summary: "What FramePort's one-time setup changes on the Steam Frame, how to undo it, and what your network and firewall need." },
+  { file: 'FAQ.md', slug: 'faq', name: 'FAQ', group: 'Get started', blurb: 'Game folders and common questions.',
+    summary: "Common questions about FramePort: how to lay out game folders with APK and OBB files, and what to do when a game doesn't run." },
+  { file: 'COMPATIBILITY.md', slug: 'compatibility', name: 'Compatibility', group: 'Using FramePort', blurb: 'What runs on the Frame.',
+    summary: 'Which Quest games, PC VR games and Android apps run on the Steam Frame with FramePort, and how to share a recipe that works.' },
+  { file: 'THEMES.md', slug: 'themes', name: 'Themes', group: 'Using FramePort', blurb: 'Color themes and making your own.',
+    summary: "FramePort's dark color themes (Portal, Portal OLED, Original) and how to make and share your own theme file." },
+  { file: 'INSTALL_BUTTON.md', slug: 'install-button', name: 'Install button', group: 'For developers', blurb: 'An install button for your download page.',
+    summary: 'Add an Install with FramePort button to your download page or README, so one click installs your game on a Steam Frame.' },
+  { file: 'DIAGNOSTICS.md', slug: 'diagnostics', name: 'Diagnostics and problem reports', group: 'For developers', blurb: 'What a problem report contains.',
+    summary: "What FramePort's problem reports and shared recipes contain, how personal data is removed, and how recipes reach the catalog." },
+  { file: 'ARCHITECTURE.md', slug: 'architecture', name: 'Architecture', group: 'For developers', blurb: 'How FramePort is built and what it adds.',
+    summary: 'How FramePort is built: the projects it wraps, the pipeline from scan to launch test, and what it adds for the Steam Frame.' },
+  { file: 'PLAYBOOK.md', slug: 'playbook', name: 'Porting playbook', group: 'For developers', blurb: 'Symptoms and fixes from real games.',
+    summary: 'Symptoms, causes and fixes from porting real Quest and PC VR games to the Steam Frame: graphics, input, audio and startup.' },
+  { file: 'FRAME_RUNTIME.md', slug: 'frame-runtime', name: 'Steam Frame runtime reference', group: 'For developers', blurb: 'Facts about the Frame\u2019s runtime.',
+    summary: "Technical facts about the Steam Frame's runtime: OpenXR, graphics, Lepton (Android), Proton, Steam and what games can use." },
 ];
 const BY_FILE = new Map(DOCS.map((d) => [d.file, d]));
 const ROOT = join(process.cwd(), '..');
@@ -43,6 +53,13 @@ export function rewrite(href: string): string {
   // anything else in the repo: on GitHub (docs/ is the base)
   const target = path.startsWith('../') ? path.slice(3) : `docs/${path.replace(/^\.\//, '')}`;
   return `${REPO}/blob/main/${target}${hash ? `#${hash}` : ''}`;
+}
+
+/** A description that fits a search result (about 155 characters), cut at a word. */
+export function clip(text: string, max = 155): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max / 2)).replace(/[\s,;:.(-]+$/, '')}…`;
 }
 
 export interface Doc extends DocInfo { title: string; html: string; toc: { id: string; text: string; depth: number }[]; description: string }
@@ -85,9 +102,17 @@ export function loadDoc(info: DocInfo): Doc {
     },
   });
   const html = marked.parse(md, { async: false }) as string;
-  const first = md.split(/\n\s*\n/).map((p) => p.trim()).find((p) => p && !p.startsWith('#') && !p.startsWith('!') && !p.startsWith('<') && !p.startsWith('```')) ?? info.blurb;
-  const description = first.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[*_`>]/g, '').replace(/\s+/g, ' ').slice(0, 200);
-  return { ...info, title, html, toc, description };
+  const blocks = md.split(/\n\s*\n/).map((p) => p.trim());
+  const at = blocks.findIndex((p) => p && !p.startsWith('#') && !p.startsWith('!') && !p.startsWith('<') && !p.startsWith('```'));
+  let first = at >= 0 ? blocks[at] : info.blurb;
+  // "… three themes:" introduces a list: name its items, so the description says something on its own
+  if (first.endsWith(':') && /^[-*\d]/.test(blocks[at + 1] ?? '')) {
+    const items = blocks[at + 1].split('\n').filter((l) => /^([-*]|\d+\.)\s/.test(l))
+      .map((l) => l.replace(/^([-*]|\d+\.)\s+/, '').split(/:\s|\s—\s|\s\(/)[0].replace(/[*`]/g, '').trim());
+    first = `${first} ${items.join(', ')}.`;
+  }
+  const description = clip(first.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[*_`>|]/g, '').replace(/\s+/g, ' ').trim());
+  return { ...info, title, html, toc, description: info.summary || description };
 }
 
 /** Words → minutes at an unhurried 220 words a minute (tables and code count too: they're what people read here). */

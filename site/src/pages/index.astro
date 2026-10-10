@@ -12,6 +12,8 @@ import WhatsNew from '../components/WhatsNew.astro';
 import Footer from '../components/Footer.astro';
 import { loadSnapshot } from '../data/catalog';
 import { short, type Game } from '../scripts/catalog';
+import { LATEST } from '../data/releases';
+import { REPO, downloadPage } from '../data/site';
 
 const games = Object.values(loadSnapshot().files).map((f) => f.game).filter((g): g is Game => !!g);
 // the hero's travellers: tested Quest games that work, most recently checked first
@@ -34,8 +36,19 @@ const asLog = (g: Game) => ({ title: g.title, package: g.package, engine: g.engi
 const logGames = games.filter((g) => g.status !== 'unsupported' && g.platform === 'Quest' && g.engine && g.xr).map(asLog);
 ---
 <Layout
-  title="FramePort · VR games on your Steam Frame"
-  description="FramePort puts Quest games, PC VR games and Android apps on the Steam Frame and in your Steam library. Free and open source.">
+  title="FramePort · Quest and PC VR games on the Steam Frame"
+  description="FramePort puts Quest games, PC VR games and Android apps on the Steam Frame and in your Steam library. Free and open source."
+  data={[
+    { '@type': 'WebSite', name: 'FramePort', url: Astro.site!.href },
+    { '@type': 'SoftwareApplication', name: 'FramePort', url: Astro.site!.href,
+      description: 'Installs Meta Quest games, PC VR games and Android apps on the Valve Steam Frame, patched to run there.',
+      applicationCategory: 'GameApplication', operatingSystem: 'Windows, macOS, Linux',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      license: 'https://www.gnu.org/licenses/gpl-3.0.html', isAccessibleForFree: true,
+      downloadUrl: new URL(downloadPage(), Astro.site).href, codeRepository: REPO,
+      screenshot: new URL('media/frameport-tour.jpg', Astro.site).href,
+      ...(LATEST ? { softwareVersion: LATEST.version, datePublished: LATEST.date } : {}) },
+  ]}>
   <Nav />
   <main>
     <Hero games={crossing} />

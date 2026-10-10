@@ -2,10 +2,20 @@
 import '../styles/global.css';
 import { DOWNLOADS, downloadPage, url } from '../data/site';
 
-interface Props { title: string; description: string; noindex?: boolean }
-const { title, description, noindex = false } = Astro.props;
+interface Props {
+  title: string;
+  description: string;
+  noindex?: boolean;
+  /** 'article' for docs pages */
+  type?: 'website' | 'article';
+  /** schema.org objects for search engines (JSON-LD) */
+  data?: Record<string, unknown>[];
+}
+const { title, description, noindex = false, type = 'website', data = [] } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
+// the share picture: a frame of the tour video (2560×1440)
 const poster = new URL(url('media/frameport-tour.jpg'), Astro.site);
+const feed = new URL(url('changelog/feed.xml'), Astro.site);
 ---
 <!doctype html>
 <html lang="en">
@@ -17,14 +27,24 @@ const poster = new URL(url('media/frameport-tour.jpg'), Astro.site);
     <meta name="theme-color" content="#0d0e12" />
     <meta name="color-scheme" content="dark" />
     {noindex && <meta name="robots" content="noindex" />}
-    <link rel="canonical" href={canonical} />
+    {!noindex && <link rel="canonical" href={canonical} />}
     <link rel="icon" type="image/svg+xml" href={url('favicon.svg')} />
-    <meta property="og:type" content="website" />
+    <link rel="alternate" type="application/atom+xml" title="FramePort releases" href={feed} />
+    <meta property="og:site_name" content="FramePort" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:type" content={type} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={poster} />
+    <meta property="og:image:width" content="2560" />
+    <meta property="og:image:height" content="1440" />
+    <meta property="og:image:alt" content="FramePort's library of Quest games, ready to install on a Steam Frame" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={poster} />
+    {data.map((d) => <script type="application/ld+json" set:html={JSON.stringify({ '@context': 'https://schema.org', ...d })} />)}
     <script is:inline>document.documentElement.classList.add('js');</script>
   </head>
   <body>

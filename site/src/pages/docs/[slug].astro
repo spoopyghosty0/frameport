@@ -14,7 +14,16 @@ const doc = loadDoc(info);
 const i = DOCS.indexOf(info);
 const prev = DOCS[i - 1], next = DOCS[i + 1];
 ---
-<Layout title={`${doc.title} · FramePort docs`} description={doc.description}>
+<Layout title={`${doc.name} · FramePort docs`} description={doc.description} type="article"
+  data={[
+    { '@type': 'TechArticle', headline: doc.name, description: doc.description, url: new URL(url(`docs/${doc.slug}/`), Astro.site).href,
+      isPartOf: { '@type': 'WebSite', name: 'FramePort', url: Astro.site!.href }, inLanguage: 'en' },
+    { '@type': 'BreadcrumbList', itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'FramePort', item: Astro.site!.href },
+      { '@type': 'ListItem', position: 2, name: 'Docs', item: new URL(url('docs/'), Astro.site).href },
+      { '@type': 'ListItem', position: 3, name: doc.name, item: new URL(url(`docs/${doc.slug}/`), Astro.site).href },
+    ] },
+  ]}>
   <Nav home={false} />
   <main>
     <DocsShell current={doc.slug} toc={doc.toc}>

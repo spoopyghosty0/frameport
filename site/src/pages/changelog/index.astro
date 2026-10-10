@@ -15,7 +15,7 @@ const id = (v: string) => `v${v.replaceAll('.', '-')}`;
 const count = (n: number) => (n === 1 ? '1 change' : `${n} changes`);
 ---
 <Layout title="What's new · FramePort"
-  description={LATEST ? `What changed in each FramePort release. Latest: ${LATEST.version} (${LATEST.date}).` : 'What changed in each FramePort release.'}>
+  description={`New games, patches and fixes in every FramePort release, newest first.${LATEST ? ` Latest: ${LATEST.version} (${LATEST.date}).` : ''}`}>
   <Nav home={false} />
   <main class="cl">
     <div class="wrap inner">
