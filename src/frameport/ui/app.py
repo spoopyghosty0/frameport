@@ -586,6 +586,10 @@ class FramePortApp:
             self.stop_keyboard()  # leaving the tab removes the virtual keyboard from the Frame
         if self.route[0] == "monitor" and route != "monitor":
             self.stop_monitor()  # leaving the tab ends the Frame's monitor stream
+        if route == "frame" and self.route[0] != "frame":
+            from ..frame import autopair
+
+            autopair.rescan_soon()  # the user looks for a Frame: the automatic pairing's scan stops backing off
         self.route = (route, *args)
         self.render()
 
@@ -2216,7 +2220,7 @@ class FramePortApp:
         FramePort in is connected, one that doesn't is offered FramePort's key through Valve's pairing (approve in
         the headset after opening Settings → Developer → Pair new host). Never in an isolated data dir (tests,
         screenshots: they'd connect to a real Frame on the network) or with FRAMEPORT_NO_AUTO_PAIR."""
-        from ..frame import autopair, devkit
+        from ..frame import autopair, devkit, pairing
 
         self.auto_pair_status = ""
         if os.environ.get("FRAMEPORT_HOME") or os.environ.get("FRAMEPORT_NO_AUTO_PAIR"):
@@ -2224,7 +2228,7 @@ class FramePortApp:
 
         def active() -> bool:
             return (self.frame_state in ("none", "offline") and bool(library.setting("frame.auto_pair", True))
-                    and not (self.pairing and self.pairing.running and self.pairing.asks))
+                    and not pairing.asking(self.pairing))
 
         def ready(target) -> None:
             self.auto_pair_status = ""
@@ -2760,24 +2764,33 @@ def serialize_flet_updates() -> None:
       dict mid-iteration ("dictionary changed size during iteration"): the handler that was updating (a sidebar
       click while the live Frame card took a sample) died and the page didn't change.
     Both take one re-entrant lock: re-entrant because did_mount() may update again and the loop's own handlers set
-    properties during a patch."""
-    from flet.controls.value_types import Prop
-    from flet.messaging.session import Session
+    properties during a patch.
+    Both hook Flet internals: if a Flet version moves or renames one, that part is skipped (logged) and the rest
+    still applies."""
+    try:
+        from flet.messaging.session import Session
 
-    if getattr(Session.patch_control, "_serialized", False):
-        return
-    original_patch, original_set = Session.patch_control, Prop.__set__
+        original_patch = Session.patch_control
+        if not getattr(original_patch, "_serialized", False):
+            def patch_control(self, *args, **kwargs):
+                with FLET_LOCK:
+                    return original_patch(self, *args, **kwargs)
+            patch_control._serialized = True
+            Session.patch_control = patch_control
+    except (ImportError, AttributeError) as exc:
+        applog.log.warning("Flet's patch sending couldn't be serialized (another Flet version?): %s", exc)
+    try:
+        from flet.controls.value_types import Prop
 
-    def patch_control(self, *args, **kwargs):
-        with FLET_LOCK:
-            return original_patch(self, *args, **kwargs)
-
-    def set_prop(self, obj, value):
-        with FLET_LOCK:
-            original_set(self, obj, value)
-    patch_control._serialized = True
-    Session.patch_control = patch_control
-    Prop.__set__ = set_prop
+        original_set = Prop.__set__
+        if not getattr(original_set, "_serialized", False):
+            def set_prop(self, obj, value):
+                with FLET_LOCK:
+                    original_set(self, obj, value)
+            set_prop._serialized = True
+            Prop.__set__ = set_prop
+    except (ImportError, AttributeError) as exc:
+        applog.log.warning("Flet's property writes couldn't be serialized (another Flet version?): %s", exc)
 
 
 def main(argv=None):

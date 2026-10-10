@@ -109,8 +109,44 @@ class AutoPairer:
         self._stop.set()
 
 
-SCAN_EVERY = 30.0  # seconds between network scans for Valve's pairing port (mDNS is checked on every look)
-_scan_cache: tuple[float, list[FrameTarget]] = (-1e9, [])
+SCAN_EVERY = 30.0  # seconds between network scans for Valve's pairing port (mDNS is checked on every look) ...
+SCAN_MAX = 300.0  # ... doubling after each scan that found nothing, up to this
+
+
+@dataclass
+class ScanSchedule:
+    """When the slow network scan runs: every SCAN_EVERY seconds at first; each scan that finds nothing doubles the
+    wait up to SCAN_MAX. A changed set of networks (another Wi-Fi, a cable) or reset() (the Frame page was opened)
+    starts over with a scan right away."""
+    clock: Callable[[], float] = time.monotonic
+    empty: int = 0  # scans in a row that found nothing
+    last: float | None = None  # when the last scan ran (None: never)
+    nets: tuple = ()
+    found: list = field(default_factory=list)
+
+    def interval(self) -> float:
+        return min(SCAN_EVERY * 2 ** max(self.empty - 1, 0), SCAN_MAX)
+
+    def due(self, nets: tuple) -> bool:
+        if nets != self.nets:
+            self.nets = nets
+            self.reset()
+        return self.last is None or self.clock() - self.last >= self.interval()
+
+    def done(self, found: list) -> None:
+        self.last, self.found = self.clock(), found
+        self.empty = 0 if found else self.empty + 1
+
+    def reset(self) -> None:
+        self.empty, self.last = 0, None
+
+
+_schedule = ScanSchedule()
+
+
+def rescan_soon() -> None:
+    """Scan again at the next look and start the back-off over (the user opened the Frame page)."""
+    _schedule.reset()
 
 
 def devkit_login(host: str, timeout: float = 0.6) -> str | None:
@@ -125,18 +161,19 @@ def devkit_login(host: str, timeout: float = 0.6) -> str | None:
         return None
 
 
-def _scan_devkits() -> list[FrameTarget]:
+def _scan_devkits(schedule: ScanSchedule | None = None) -> list[FrameTarget]:
     """Every host on the PC's /24 networks answering on Valve's devkit port: for PCs that don't hear the Frame's mDNS
-    (a firewall in front of WSL, some routers). At most every SCAN_EVERY seconds."""
-    global _scan_cache
+    (a firewall in front of WSL, some routers). Only when `schedule` says so (else its last result)."""
     from concurrent.futures import ThreadPoolExecutor
 
     from .discovery import local_addresses, local_subnets
 
-    if time.monotonic() - _scan_cache[0] < SCAN_EVERY:
-        return _scan_cache[1]
+    schedule = schedule or _schedule
+    nets = local_subnets()
+    if not schedule.due(tuple(str(n) for n in nets)):
+        return schedule.found
     own = local_addresses()
-    hosts = [str(h) for n in local_subnets() for h in n.hosts() if str(h) not in own]
+    hosts = [str(h) for n in nets for h in n.hosts() if str(h) not in own]
 
     def probe(h):
         try:
@@ -148,9 +185,11 @@ def _scan_devkits() -> list[FrameTarget]:
             return None
         login = devkit_login(h)
         return FrameTarget(h, login, 22, "") if login else None
-    with ThreadPoolExecutor(128) as pool:
-        found = [t for t in pool.map(probe, hosts) if t]
-    _scan_cache = (time.monotonic(), found)
+    found = []
+    if hosts:
+        with ThreadPoolExecutor(min(128, len(hosts))) as pool:
+            found = [t for t in pool.map(probe, hosts) if t]
+    schedule.done(found)
     return found
 
 

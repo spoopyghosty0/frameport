@@ -179,3 +179,112 @@ def test_first_key_is_made_once_under_concurrency():
     for t in threads:
         t.join()
     assert not errors and len(set(keys)) == 1
+
+
+def test_cli_pair_does_not_announce(monkeypatch):
+    """`frameport frame pair` can't answer the setup URL's requests (no Allow button), so it must not announce
+    itself: a Frame running the setup URL would find it and wait for an answer that never comes."""
+    from typer.testing import CliRunner
+
+    from frameport import cli
+
+    made = []
+
+    class Fake:
+        def __init__(self, **kw):
+            made.append(kw)
+            self.paired = []
+            self.one_liner = "curl -fsS 127.0.0.1:8765/code | bash"
+
+        def start(self):
+            return self
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(pairing, "PairingServer", Fake)
+    result = CliRunner().invoke(cli.app, ["frame", "pair", "--timeout", "0"])
+    assert result.exit_code == 1 and "timed out" in result.output
+    assert made and made[0].get("announce") is False
+
+
+def test_open_requests_expire_when_polling_stops(server):
+    """A Frame that stopped polling /wait (setup.sh ended) no longer blocks new requests, and its card goes."""
+    gone = []
+    server.on_expire = gone.extend
+    for i in range(pairing.MAX_ASKS):
+        hello(server, nonce=f"nonce{i:011d}")
+    assert get(server, "/hello?host=x&nonce=0123456789abcdef")[0] == 429
+    stale = server.asks[0]
+    stale.seen -= 2 * pairing.WAIT + 1
+    assert stale not in server.open_asks()  # the UI drops it at once
+    status, _ = get(server, "/hello?host=x&nonce=0123456789abcdef")
+    assert status == 200 and stale not in server.asks and stale.state == "expired" and gone == [stale]
+    server.decide(stale.id, True)  # Allow on a stale toast: nothing
+    assert stale.state == "expired"
+    assert get(server, f"/wait?id={stale.id}")[0] == 404
+
+
+def test_polled_and_decided_requests(server):
+    now = time.time()
+    a = pairing.Ask("a", "f", "1.2.3.4", "0000", created=now - 10 * pairing.WAIT)
+    a.waiting = 1  # a /wait is held right now: still alive however old
+    b = pairing.Ask("b", "f", "1.2.3.4", "0000", state="allowed", created=now - 60)
+    b.decided = now - 60
+    c = pairing.Ask("c", "f", "1.2.3.4", "0000", state="denied", created=now - pairing.DECIDED_KEEP - 100)
+    c.decided = now - pairing.DECIDED_KEEP - 1
+    server.asks.extend([a, b, c])
+    assert server.prune(now) == [c] and server.asks == [a, b]
+    assert server.open_asks() == [a]
+    a.waiting = 0
+    assert server.prune(now) == [a]
+
+
+def test_polling_keeps_a_request_alive(server, monkeypatch):
+    monkeypatch.setattr(pairing, "WAIT", 0.2)
+    reply = hello(server)
+    ask = server.asks[0]
+    ask.seen -= 100
+    assert get(server, f"/wait?id={reply['id']}")[0] == 202
+    assert time.time() - ask.seen < 1 and ask.waiting == 0 and server.open_asks() == [ask]
+
+
+def test_expiry_loop_runs(monkeypatch):
+    monkeypatch.setattr(pairing, "EXPIRE_EVERY", 0.05)
+    gone = []
+    srv = PairingServer(announce=False, host="127.0.0.1", on_expire=gone.extend).start()
+    try:
+        srv.asks.append(pairing.Ask("x", "f", "1.2.3.4", "0000", created=time.time() - 3 * pairing.WAIT))
+        for _ in range(100):
+            if gone:
+                break
+            time.sleep(0.02)
+        assert [a.id for a in gone] == ["x"] and not srv.asks
+    finally:
+        srv.stop()
+
+
+def test_only_open_requests_hold_off_auto_pairing(server):
+    """Automatic pairing waits only while a Frame waits for Allow / Deny, not for decided or stale requests."""
+    assert not pairing.asking(None) and not pairing.asking(server)
+    hello(server)
+    assert pairing.asking(server)
+    server.decide(server.asks[0].id, False)
+    assert not pairing.asking(server)  # denied: no longer waiting
+    hello(server, nonce="fedcba9876543210")
+    server.asks[-1].seen -= 3 * pairing.WAIT
+    assert not pairing.asking(server)  # its Frame stopped asking
+    hello(server, nonce="00112233445566778899")
+    server.stop()
+    assert not pairing.asking(server)  # setup page closed
+
+
+@pytest.mark.skipif(sys.platform == "win32" or not shutil.which("bash") or not shutil.which("curl"),
+                    reason="needs bash and curl")
+def test_setup_sh_says_why_when_full(server):
+    for i in range(pairing.MAX_ASKS):
+        hello(server, nonce=f"nonce{i:011d}")
+    r = subprocess.run(["bash", str(ROOT / "bootstrap" / "setup.sh"), "--pc", f"127.0.0.1:{server.port}"],
+                       capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+    assert r.returncode == 1 and "already has several setup requests" in r.stdout
+    assert "didn't answer" not in r.stdout

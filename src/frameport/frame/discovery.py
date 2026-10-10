@@ -102,18 +102,43 @@ def local_addresses() -> set[str]:
     return {a.address for addrs in psutil.net_if_addrs().values() for a in addrs if a.family == socket.AF_INET}
 
 
+# Interfaces that never lead to a Frame: container bridges, VM switches, VPN tunnels and overlay networks. Scanning
+# their /24 costs 254 connection attempts each and finds nothing (or someone else's machines).
+_VIRTUAL_PREFIXES = ("docker", "br-", "veth", "virbr", "vmnet", "vboxnet", "tun", "tap", "wg", "tailscale", "zt",
+                     "utun", "lxc", "lxd", "cni", "flannel", "podman", "ham", "ipsec", "ppp")
+_VIRTUAL_PARTS = ("vethernet", "wsl", "hyper-v", "virtualbox", "vmware", "tailscale", "zerotier", "wireguard",
+                  "openvpn", "vpn", "tap-windows", "wintun", "docker", "nordlynx", "loopback")
+_CGNAT = ipaddress.ip_network("100.64.0.0/10")  # carrier-grade NAT: Tailscale and other overlay VPNs live here
+
+
+def is_virtual_interface(name: str) -> bool:
+    """A container, VM, VPN or overlay interface by its name (Linux, macOS and Windows' friendly names)."""
+    n = name.lower()
+    return n.startswith(_VIRTUAL_PREFIXES) or any(p in n for p in _VIRTUAL_PARTS)
+
+
+def scannable_address(address: str) -> bool:
+    """An IPv4 address whose /24 may hold a Frame: not loopback, link-local, CGNAT/VPN or 172.* (Docker/WSL)."""
+    try:
+        ip = ipaddress.IPv4Address(address)
+    except ValueError:
+        return False
+    return not (ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip in _CGNAT
+                or address.startswith("172."))
+
+
 def local_subnets() -> list[ipaddress.IPv4Network]:
-    """/24 networks of the PC's non-loopback, non-link-local IPv4 interfaces (virtual switches skipped)."""
+    """/24 networks of the PC's interfaces that may lead to a Frame (up; container, VM, VPN, loopback, link-local and
+    CGNAT skipped, see is_virtual_interface / scannable_address)."""
     import psutil
 
     nets = set()
     stats = psutil.net_if_stats()
     for nic, addrs in psutil.net_if_addrs().items():
-        virtual = any(v in nic.lower() for v in ("vethernet", "docker", "virbr", "vmnet", "wsl"))
-        if not stats.get(nic) or not stats[nic].isup or virtual:
+        if not stats.get(nic) or not stats[nic].isup or is_virtual_interface(nic):
             continue
         for a in addrs:
-            if a.family == socket.AF_INET and not a.address.startswith(("127.", "169.254.", "172.")):
+            if a.family == socket.AF_INET and scannable_address(a.address):
                 nets.add(ipaddress.ip_network(f"{a.address}/24", strict=False))
     return sorted(nets, key=str)
 

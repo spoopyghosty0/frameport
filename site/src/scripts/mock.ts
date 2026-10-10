@@ -438,7 +438,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
     if (s.link !== 'usb') {  // the setup page's line: the same everywhere, the Frame finds this PC and asks
       dialog(`<h4>Set up your Steam Frame</h4>`
         + `<p>On the Frame, open the SteamVR dashboard → <b>Launch a program → Desktop</b>, then app menu → <b>System → Konsole</b>, and run:</p>`
-        + `<div class="cmdl"><code>curl -sL frameport.app/s | bash</code></div>`
+        + `<div class="cmdl"><code>curl -fsSL https://frameport.app/s | bash</code></div>`
         + `<p class="small">It finds this PC ("amber-otter") and asks. You allow it here.</p>`
         + `<div data-ask></div><ul class="progress" data-prog></ul>`
         + `<div class="row"><button class="btn-p" data-act="ran">I ran it on the Frame</button><button class="btn-s" data-act="close">Close</button></div>`);

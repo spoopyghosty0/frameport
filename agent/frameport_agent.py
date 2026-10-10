@@ -5651,7 +5651,7 @@ MON_INTERVALS = (0.1, 0.25, 0.5, 1, 2, 5)  # seconds between samples; processes 
 MON_DEFAULT_INTERVAL = 0.5
 SCAN_SECONDS = 2.0
 MON_FILTERS = ("game", "steam", "all")
-# what a client can ask for ({"modules": [...]}, agent v65); without that message every module is collected
+# what a client can ask for ({"modules": [...]}, agent v73); without that message every module is collected
 MON_MODULES = ("games", "procs", "cpu", "gpu", "mem", "temps", "power", "battery", "net", "disk")
 MON_PROC_LIMIT = 150
 MON_CONTEXT = 3  # "game" filter: the busiest other processes, shown for context
@@ -6382,7 +6382,7 @@ def monitor_end_game(pkg, wait=6.0):
 
 def monitor_session(stdin, stdout, monitor=None, sleep=time.sleep, max_ticks=None):
     """Long-lived: prints {"ready": 1, "static": {...}}, then one sample per tick. Control lines on stdin:
-    {"interval": 1|2|5}, {"procs": "game"|"steam"|"all"}, {"pause": bool}, {"modules": [...]|"all"} (v63: only those
+    {"interval": 1|2|5}, {"procs": "game"|"steam"|"all"}, {"pause": bool}, {"modules": [...]|"all"} (v73: only those
     collectors run, see monitor_plan), {"id": n, "kill": pid, "sig": "TERM"|"KILL", "force": bool}, {"id": n,
     "end_game": package} (each with an id gets {"reply": n, "ok": …}). Ends at EOF or when the SSH session (parent)
     is gone."""

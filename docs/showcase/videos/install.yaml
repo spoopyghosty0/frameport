@@ -79,7 +79,7 @@ scenes:
         - "In the SteamVR dashboard: **Launch a program** → **Desktop**"
         - "Open the app menu (bottom left) → **System** → **Konsole**"
         - "Type the line and press **Enter** (or copy it from **frameport.app/setup** in Chromium)"
-      code: "curl -sL frameport.app/s | bash"
+      code: "curl -fsSL https://frameport.app/s | bash"
       note: "Nothing changes on the Frame until you allow it on the PC."
 
   - name: allow

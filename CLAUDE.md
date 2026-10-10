@@ -68,7 +68,7 @@ Read `docs/PLAYBOOK.md` (symptom → fix) before debugging a game, and `docs/FRA
     mouse drags/right-clicks.
     Live Frame data comes from one app-owned `app.monitor_hub` (`frame/monitor_hub.py`): subscribers name modules +
     interval, the hub runs one agent `_monitor` stream (union of modules, fastest interval; per-module collection
-    needs agent v65), reconnects after a lost stream and stops it when nobody subscribes; `_poll` retries an "error".
+    needs agent v73), reconnects after a lost stream and stops it when nobody subscribes; `_poll` retries an "error".
     Subscribers: "monitor" (the Monitor tab, everything, only while shown) and "card" = the sidebar's live Frame card
     (`ui/frame_card.py` helpers: battery ring, "now playing" row with fps + 2-min sparkline → click opens Monitor;
     games + battery every 5 s, paused while a job's stage is "Upload…", only while connected and setting
@@ -286,7 +286,7 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
 - `agent/frameport_agent.py` — runs **on the Frame** (python3 stdlib only), JSON over SSH. Owns the install layout,
   launch.sh template, Steam shortcuts (binary VDF), launch tests. Bump `AGENT_VERSION` when changing it.
 - `bootstrap/bootstrap.sh` — one-time Frame setup served by the pairing server (app key, podman fix, Developer Mode, Lepton).
-  `bootstrap/setup.sh` — the setup URL (`curl -sL frameport.app/s | bash`, copied to the site by
+  `bootstrap/setup.sh` — the setup URL (`curl -fsSL https://frameport.app/s | bash`, copied to the site by
   `site/scripts/sync-media.mjs`): finds the PC (stdlib mDNS on 5353 for `_frameport-pair._tcp`, which the pairing
   server announces while open; else the USB address and a /24 scan of `/ping`), `/hello` → the user clicks Allow (4
   digits on both sides, `ask_digits`) → `/wait` hands over the code → runs bootstrap.sh exactly like the typed line.

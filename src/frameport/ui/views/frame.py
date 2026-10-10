@@ -298,7 +298,12 @@ class FrameView:
                             frame=ask.frame, digits=ask.digits), action=tr("Allow"),
                             on_action=lambda e: server.decide(ask.id, True))
                 app.page.run_thread(show)
-            server = app.pairing = PairingServer(on_paired=on_paired, host=host, on_ask=on_ask).start()
+
+            def on_expire(asks):  # a Frame stopped asking (setup.sh ended): its Allow card goes
+                if app.route[0] == "frame" and app.pairing is server:
+                    app.page.run_thread(show_command)
+            server = app.pairing = PairingServer(on_paired=on_paired, host=host, on_ask=on_ask,
+                                                 on_expire=on_expire).start()
             app.pairing_mode = mode
             show_command()
 
@@ -425,7 +430,7 @@ class FrameView:
                 *([C.meta(tr("No keyboard? Open {page} in Chromium on the Frame, copy the line and paste it into "
                              "Konsole. This PC shows there as \"{words}\".").format(page=SETUP_PAGE, words=pc_words()))]
                   if by_url else []),
-                *[ask_card(a) for a in server.asks if a.state == "open"],
+                *[ask_card(a) for a in server.open_asks()],
                 ft.Row([C.spinner(),
                         C.meta(tr("Waiting for your Frame to ask…") if by_url else
                                tr("Waiting for your Frame… (code {code})").format(code=app.pairing.code))],

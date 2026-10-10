@@ -6,7 +6,7 @@ import HeadsetModel from './HeadsetModel.astro';
 import { DOWNLOADS, RELEASES, downloadPage, url } from '../data/site';
 
 const FIRST = Object.fromEntries(DOWNLOADS.map((d) => [d.os, d.first]));
-const LINE = 'curl -sL frameport.app/s | bash';
+const LINE = 'curl -fsSL https://frameport.app/s | bash';
 const steps = [
   { side: 'pc', where: 'On your PC', title: 'Download FramePort' },
   { side: 'pc', where: 'On your PC', title: 'Start setup' },
@@ -183,7 +183,7 @@ const steps = [
     const panes = [...wt.querySelectorAll<HTMLElement>('[data-pane]')];
     const pips = [...wt.querySelectorAll<HTMLButtonElement>('[data-go]')];
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const LINE = 'curl -sL frameport.app/s | bash';
+    const LINE = 'curl -fsSL https://frameport.app/s | bash';
     let i = 0, timers: number[] = [];
     const later = (fn: () => void, ms: number) => timers.push(window.setTimeout(fn, reduce ? 0 : ms));
     const digits = String(1000 + Math.floor(Math.random() * 9000));
