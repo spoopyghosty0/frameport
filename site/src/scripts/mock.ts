@@ -145,7 +145,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
     afterRender();
   }
 
-  // The live view shows a real 3D world (the hero's worlds, seen through two lenses); the CSS scene stays underneath
+  // The live view shows a real 3D world (the hero's worlds, one eye as the app's live view shows it); the CSS scene stays underneath
   // as the fallback without WebGL. One scene lives across re-renders of the tab (quality changes), none elsewhere.
   let vr: { host: HTMLElement; title: string; scene: VrScene | null; dead: boolean } | null = null;
   const liveTitle = () => s.playing ?? s.games[0]?.title ?? 'FramePort';
@@ -169,7 +169,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
     screen.prepend(host);
     const mine = { host, title: liveTitle(), scene: null as VrScene | null, dead: false };
     vr = mine;
-    import('./vrscene').then(({ mountVrScene }) => mountVrScene(host, { title: mine.title, stereo: true, interactive: true }))
+    import('./vrscene').then(({ mountVrScene }) => mountVrScene(host, { title: mine.title, stereo: false, interactive: true }))
       .then((scene) => {
         if (!scene) return;
         if (mine.dead) { scene.dispose(); return; }

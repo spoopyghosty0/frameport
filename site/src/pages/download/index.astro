@@ -16,10 +16,13 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
     <section class="stage" aria-hidden="true">
       <canvas class="warp" data-warp></canvas>
       <div class="portal">
-        <i class="halo"></i>
+        <i class="glow"></i>
         <i class="swirl"></i>
+        <span class="tunnel"><i></i><i></i><i></i><i></i></span>
+        <i class="rim-light"></i>
         <i class="rim"></i>
-        <svg class="count" viewBox="0 0 200 200"><circle class="track" cx="100" cy="100" r="94" /><circle class="arc" cx="100" cy="100" r="94" pathLength="100" data-arc /></svg>
+        <svg class="charge" viewBox="0 0 100 100"><defs><linearGradient id="charge-g" x1="0" x2="1"><stop offset="0" stop-color="#3aa8ff" /><stop offset="1" stop-color="#ff8a1f" /></linearGradient></defs>
+          <ellipse class="arc" cx="50" cy="50" rx="28.6" ry="45.4" pathLength="100" transform="rotate(18 50 50)" data-arc /></svg>
         <b class="num" data-n></b>
       </div>
       <div class="pkg" data-pkg>
@@ -96,7 +99,7 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
 
   const warp = startWarp($<HTMLCanvasElement>('[data-warp]'), { still: reduce });
   const set = (state: string) => { root.dataset.state = state; };
-  const title = $('[data-title]'), status = $('[data-status]'), num = $('[data-n]'), arc = $<SVGCircleElement & HTMLElement>('[data-arc]');
+  const title = $('[data-title]'), status = $('[data-status]'), num = $('[data-n]'), arc = $<SVGEllipseElement & HTMLElement>('[data-arc]');
 
   // this page's links pick a build without leaving the page
   root.querySelectorAll<HTMLAnchorElement>('[data-list] a').forEach((a) => {
@@ -227,30 +230,48 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
     background: radial-gradient(60% 70% at 50% 55%, rgba(58, 168, 255, .10), rgba(255, 138, 31, .06) 45%, transparent 75%); }
   .stage::after { content: ""; position: absolute; inset: auto 0 0; height: 40%; background: linear-gradient(transparent, var(--bg)); pointer-events: none; }
   .warp { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
-  .portal { position: relative; width: clamp(150px, 20vw, 210px); aspect-ratio: 1; display: grid; place-items: center; }
-  .portal i { position: absolute; border-radius: 50%; }
-  .halo { inset: -40%; background: radial-gradient(circle, rgba(58, 168, 255, .25), rgba(255, 138, 31, .15) 40%, transparent 70%); filter: blur(10px);
-    animation: breathe 3.6s ease-in-out infinite; }
-  .rim { inset: 6%; transform: rotate(var(--tilt)) scaleX(.62); border: 5px solid transparent;
-    background: linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(90deg, var(--secondary), var(--accent)) border-box;
-    box-shadow: -14px 0 34px rgba(58, 168, 255, .45), 14px 0 34px rgba(255, 138, 31, .45); }
-  .swirl { inset: 9%; transform: rotate(var(--tilt)) scaleX(.62); overflow: hidden;
-    background: conic-gradient(from var(--sw), rgba(58, 168, 255, .55), transparent 25%, rgba(255, 138, 31, .55) 50%, transparent 75%, rgba(58, 168, 255, .55));
-    mask: radial-gradient(circle, transparent 18%, #000 70%); animation: spin 5s linear infinite; opacity: .55; }
+  .portal { position: relative; width: clamp(190px, 25vw, 290px); aspect-ratio: 1; display: grid; place-items: center; }
+  .portal > i, .tunnel { position: absolute; border-radius: 50%; }
+  /* light spilling out of the portal: blue on the PC's side, orange on the Frame's, shaped like the portal */
+  .glow { inset: -10% 10%; transform: rotate(var(--tilt));
+    background: radial-gradient(closest-side at 35% 50%, rgba(58, 168, 255, .32), transparent),
+                radial-gradient(closest-side at 65% 50%, rgba(255, 138, 31, .32), transparent);
+    filter: blur(22px); animation: breathe 3.6s ease-in-out infinite; }
+  /* the rim: only the band is painted (a masked ring), so the way through stays dark; its light is .rim-light */
+  .rim { inset: 6%; transform: rotate(var(--tilt)) scaleX(.62); padding: 6px;
+    background: linear-gradient(90deg, var(--secondary), var(--accent));
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+  .rim-light { inset: 6%; transform: rotate(var(--tilt)) scaleX(.62);
+    box-shadow: -16px 0 40px rgba(58, 168, 255, .55), 16px 0 40px rgba(255, 138, 31, .55), inset -10px 0 26px rgba(58, 168, 255, .35),
+      inset 10px 0 26px rgba(255, 138, 31, .35); }
+  /* inside: a swirl and rings sinking away, the way through */
+  .swirl { inset: 8%; transform: rotate(var(--tilt)) scaleX(.62); z-index: 0; background-color: #08090c;
+    background: radial-gradient(circle, #050608 38%, rgba(5, 6, 8, .7) 62%, transparent 88%),
+                conic-gradient(from var(--sw), rgba(58, 168, 255, .45), rgba(8, 9, 12, 0) 25%, rgba(255, 138, 31, .45) 50%, rgba(8, 9, 12, 0) 75%, rgba(58, 168, 255, .45));
+    animation: spin 6s linear infinite; }
   @property --sw { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-  .count { position: absolute; inset: -14%; width: 128%; height: 128%; transform: rotate(-90deg); overflow: visible; }
-  .count circle { fill: none; stroke-width: 2.5; }
-  .track { stroke: rgba(237, 238, 242, .07); }
-  .arc { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100;
-    filter: drop-shadow(0 0 6px rgba(255, 138, 31, .8)); opacity: 0; transition: opacity 300ms; }
-  .num { position: relative; font: 800 clamp(34px, 4.4vw, 46px)/1 var(--font-display); color: var(--text); opacity: 0;
-    text-shadow: 0 0 24px rgba(255, 138, 31, .7); transition: opacity 300ms; }
+  .tunnel { inset: 8%; transform: rotate(var(--tilt)) scaleX(.62); overflow: hidden; z-index: 0; }
+  .tunnel i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(237, 238, 242, .5);
+    box-shadow: 0 0 12px rgba(255, 138, 31, .35), inset 0 0 12px rgba(58, 168, 255, .35);
+    animation: sink 2.8s linear infinite; opacity: 0; }
+  .tunnel i:nth-child(2) { animation-delay: -.7s; }
+  .tunnel i:nth-child(3) { animation-delay: -1.4s; }
+  .tunnel i:nth-child(4) { animation-delay: -2.1s; }
+  [data-state="counting"] .tunnel i { animation-duration: 1.4s; }
+  [data-state="counting"] .swirl { animation-duration: 2.2s; }
+  @keyframes sink { 0% { transform: scale(1); opacity: 0; } 15% { opacity: .9; } 100% { transform: scale(.05); opacity: 0; } }
+  /* the countdown charges the rim: a line of light runs round it */
+  .charge { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; z-index: 1; pointer-events: none; }
+  .arc { fill: none; stroke: url(#charge-g); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100;
+    filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 10px rgba(255, 138, 31, .9)); opacity: 0; transition: opacity 300ms; }
+  .num { position: relative; z-index: 2; font: 800 clamp(40px, 5vw, 58px)/1 var(--font-display); color: #fff; opacity: 0;
+    text-shadow: 0 0 18px rgba(58, 168, 255, .9), 0 0 36px rgba(255, 138, 31, .8); transition: opacity 300ms; }
   [data-state="counting"] .arc, [data-state="counting"] .num { opacity: 1; }
 
   .pkg { position: absolute; left: 50%; top: 50%; display: flex; align-items: center; gap: 12px; padding: 12px 18px 12px 12px;
     border-radius: 14px; background: rgba(22, 24, 30, .82); border: 1px solid var(--secondary-line); backdrop-filter: blur(8px);
     box-shadow: 0 18px 40px rgba(0, 0, 0, .5), 0 0 30px rgba(58, 168, 255, .18);
-    transform: translate(calc(-50% - clamp(170px, 22vw, 300px)), -50%); animation: float 3.2s ease-in-out infinite; z-index: 2; }
+    transform: translate(calc(-50% - clamp(200px, 25vw, 340px)), -50%); animation: float 3.2s ease-in-out infinite; z-index: 2; }
   .pkg img { border-radius: 10px; }
   .pkg div { display: grid; gap: 3px; }
   .pkg b { font: 600 14px/1.2 var(--font-mono); color: var(--text); white-space: nowrap; }
@@ -259,7 +280,7 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
   [data-state="sent"] .pkg { animation: through 900ms cubic-bezier(.55, 0, .8, .35) forwards; }
   .arrive { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px; display: grid; place-items: center; border-radius: 50%;
     background: var(--accent); color: var(--on-accent); font: 800 24px/1 var(--font-display); box-shadow: 0 0 40px rgba(255, 138, 31, .7);
-    transform: translateX(clamp(150px, 19vw, 260px)) scale(0); opacity: 0; z-index: 2; }
+    transform: translateX(clamp(175px, 22vw, 300px)) scale(0); opacity: 0; z-index: 2; }
   [data-state="sent"] .arrive { animation: arrive 700ms 780ms var(--ease-back) forwards; }
   .flare { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; opacity: 0; z-index: 1;
     background: radial-gradient(circle, #fff, rgba(255, 138, 31, .8) 30%, transparent 70%); }
@@ -268,13 +289,13 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
 
   @keyframes float { 50% { margin-top: -8px; } }
   @keyframes spin { to { --sw: 360deg; } }
-  @keyframes breathe { 50% { opacity: .65; scale: 1.06; } }
+  @keyframes breathe { 50% { opacity: .7; scale: 1.05; } }
   @keyframes through {
-    0% { transform: translate(calc(-50% - clamp(170px, 22vw, 300px)), -50%); }
-    30% { transform: translate(calc(-50% - clamp(190px, 24vw, 320px)), -50%) scale(1.04); opacity: 1; }
+    0% { transform: translate(calc(-50% - clamp(200px, 25vw, 340px)), -50%); }
+    30% { transform: translate(calc(-50% - clamp(220px, 27vw, 360px)), -50%) scale(1.04); opacity: 1; }
     100% { transform: translate(-50%, -50%) scale(.08) rotate(18deg); opacity: 0; filter: blur(2px); }
   }
-  @keyframes arrive { from { transform: translateX(0) scale(0); opacity: 0; } to { transform: translateX(clamp(150px, 19vw, 260px)) scale(1); opacity: 1; } }
+  @keyframes arrive { from { transform: translateX(0) scale(0); opacity: 0; } to { transform: translateX(clamp(175px, 22vw, 300px)) scale(1); opacity: 1; } }
   @keyframes flare { 0% { opacity: 0; scale: .2; } 25% { opacity: 1; scale: 6; } 100% { opacity: 0; scale: 12; } }
   @keyframes kick { 30% { box-shadow: -20px 0 60px rgba(58, 168, 255, .9), 20px 0 60px rgba(255, 138, 31, .9); } }
 
@@ -330,9 +351,11 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
     .next ol { grid-template-columns: 1fr; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .halo, .swirl, .pkg, .big { animation: none !important; }
+    .glow, .swirl, .tunnel i, .pkg, .big { animation: none !important; }
+    .tunnel i { opacity: .35; }
+    .tunnel i:nth-child(2) { transform: scale(.7); } .tunnel i:nth-child(3) { transform: scale(.45); } .tunnel i:nth-child(4) { transform: scale(.2); }
     [data-state="sent"] .pkg { opacity: 0; }
-    [data-state="sent"] .arrive { animation: none; opacity: 1; transform: translateX(clamp(150px, 19vw, 260px)); }
+    [data-state="sent"] .arrive { animation: none; opacity: 1; transform: translateX(clamp(175px, 22vw, 300px)); }
     [data-state="sent"] .flare, [data-state="sent"] .rim { animation: none; }
   }
 </style>

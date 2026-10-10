@@ -218,8 +218,8 @@ code, kbd, pre { font-family: var(--font-mono); }
 /* headings: words rise in, the pointer lights them in the portal's colours */
 .words .w { display: inline-block; }
 .js .reveal .words .w, .js .words.pre .w { opacity: 0; transform: translateY(.45em) rotate(2deg); }
-.js .reveal.in .words .w { opacity: 1; transform: none; transition: opacity 850ms var(--ease-out), transform 950ms var(--ease-back);
-  transition-delay: calc(var(--wi) * 80ms + 150ms); }
+.js .reveal.in .words .w { opacity: 1; transform: none; transition: opacity 1150ms var(--ease-out), transform 1300ms var(--ease-back);
+  transition-delay: calc(var(--wi) * 110ms + 200ms); }
 .words.lit { background: radial-gradient(180px circle at var(--hx) var(--hy), var(--accent), var(--secondary) 45%, var(--text) 75%) text;
   -webkit-background-clip: text; color: transparent; }
 .words.lit .muted { color: transparent; }

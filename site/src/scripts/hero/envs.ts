@@ -6,14 +6,17 @@
 //   space   — a ringed planet in a nebula, an asteroid field, an orbiting wireframe station, drifting star dust
 //   aurora  — a frozen night: aurora curtains over snowy peaks, mirrored in a frozen lake, ice shards (envs-more.ts)
 //   reef    — under water: light shafts, caustics on the sand, kelp, glowing jellyfish, fish, bubbles (envs-more.ts)
+//   city    — a rainy neon megacity: lit towers, signs, flying traffic, a hologram, the wet street (envs-neon.ts)
+//   tron    — a digital arena: light cycles leaving glowing walls, a circuit floor, a recognizer (envs-neon.ts)
 import * as THREE from 'three';
 import { palette, rng } from './types';
 import { canvasTexture, disposeAll, glowTexture, hsl, mergeGeometries, moveCorners, NOISE, SKY_VERT } from './envkit';
 export { hsl } from './envkit';
 import { aurora, reef } from './envs-more';
+import { city, tron } from './envs-neon';
 
-export type EnvKind = 'grid' | 'islands' | 'space' | 'aurora' | 'reef';
-export const ENV_KINDS: EnvKind[] = ['grid', 'islands', 'space', 'aurora', 'reef'];
+export type EnvKind = 'grid' | 'islands' | 'space' | 'aurora' | 'reef' | 'city' | 'tron';
+export const ENV_KINDS: EnvKind[] = ['grid', 'islands', 'space', 'aurora', 'reef', 'city', 'tron'];
 
 /** How far the world is: open (0..1, fades everything), reveal (0..1, how far out the ground has lit up), grow (0..1,
  * the objects' size), still (reduced motion: no movement, one fixed moment). */
@@ -30,8 +33,10 @@ export interface Env {
 
 /** The environment a game opens into (stable per title). */
 export function envKindFor(title: string): EnvKind {
-  const { h, s } = palette(title);
-  return ENV_KINDS[(h * 7 + s * 3) % ENV_KINDS.length];
+  // FNV-1a over the title: spreads evenly over any number of worlds (a mix of the palette's numbers didn't)
+  let x = 0x811c9dc5;
+  for (let i = 0; i < title.length; i++) x = Math.imul(x ^ title.charCodeAt(i), 0x01000193);
+  return ENV_KINDS[(x >>> 0) % ENV_KINDS.length];
 }
 
 export function buildEnv(kind: EnvKind, scene: THREE.Scene, opts: { small: boolean }): Env {
@@ -39,6 +44,8 @@ export function buildEnv(kind: EnvKind, scene: THREE.Scene, opts: { small: boole
   if (kind === 'space') return space(scene, opts);
   if (kind === 'aurora') return aurora(scene, opts);
   if (kind === 'reef') return reef(scene, opts);
+  if (kind === 'city') return city(scene, opts);
+  if (kind === 'tron') return tron(scene, opts);
   return grid(scene, opts);
 }
 
