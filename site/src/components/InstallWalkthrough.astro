@@ -1,0 +1,461 @@
+---
+// The installation, step by step, the way the install tutorial video tells it: download, Start setup on the PC, the
+// setup line (or Developer Mode pairing) on the Frame, Allow on the PC, the Frame finishes by itself, add a game.
+// Each step has a small live scene; clicking Allow in step 4 moves on, like in the app.
+import HeadsetModel from './HeadsetModel.astro';
+import { DOWNLOADS, RELEASES, downloadUrl, url } from '../data/site';
+
+const FIRST: Record<string, string> = {
+  windows: 'open FramePort.exe. At “Windows protected your PC” choose More info → Run anyway (the app is signed with a free certificate).',
+  macos: 'right-click FramePort.app → Open → Open (macOS asks once for apps from outside the App Store).',
+  linux: 'run FramePort/FramePort from the unpacked folder.',
+  'linux-arm64': 'run FramePort/FramePort from the unpacked folder.',
+};
+const LINE = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
+const steps = [
+  { side: 'pc', where: 'On your PC', title: 'Download FramePort' },
+  { side: 'pc', where: 'On your PC', title: 'Start setup' },
+  { side: 'fr', where: 'On the Frame, once', title: 'Run the setup line' },
+  { side: 'pc', where: 'On your PC', title: 'Allow it' },
+  { side: 'fr', where: 'On the Frame, by itself', title: 'It sets itself up' },
+  { side: 'fr', where: 'Every game', title: 'Add games, play' },
+];
+---
+<div class="wt" data-wt style="--n:6">
+  <ol class="rail" role="tablist" aria-label="Installation steps">
+    {steps.map((s, i) => (
+      <li><button type="button" role="tab" class={`pip ${s.side}`} data-go={i} aria-selected={i === 0 ? 'true' : 'false'}>
+        <span class="k">{i + 1}</span><span class="t"><small>{s.where}</small>{s.title}</span>
+      </button></li>
+    ))}
+    <span class="fill" aria-hidden="true"></span>
+  </ol>
+
+  <div class="panes">
+    <!-- 1 · download -->
+    <section class="pane on" data-pane="0" role="tabpanel">
+      <div class="txt">
+        <p class="ey pc">Step 1 · On your PC</p>
+        <h3>Download FramePort</h3>
+        <p>Windows, macOS or Linux. Unzip it anywhere and start it: no installer, no admin rights. It updates itself after that.</p>
+        <div class="dls">
+          {DOWNLOADS.map((d) => (
+            <a class="dl" href={downloadUrl(d.asset)} data-os={d.os} data-first={FIRST[d.os]}>
+              <strong>{d.label}</strong><span>{d.detail}</span>
+            </a>
+          ))}
+        </div>
+        <p class="first" data-first-out aria-live="polite"><b>First start:</b> <span>{FIRST.windows}</span></p>
+        <a class="small" href={RELEASES}>Release notes and checksums</a>
+      </div>
+      <div class="scene pcwin" aria-hidden="true">
+        <div class="wbar"><i></i><i></i><i></i><span>Downloads</span></div>
+        <div class="dlrow"><span class="zip">ZIP</span><div><b data-zip>FramePort-windows-x64.zip</b><span class="bar"><i></i></span></div></div>
+        <div class="folder"><span class="fico"></span><b>FramePort</b><span class="exe">FramePort.exe</span></div>
+      </div>
+    </section>
+
+    <!-- 2 · start setup -->
+    <section class="pane" data-pane="1" role="tabpanel" hidden>
+      <div class="txt">
+        <p class="ey pc">Step 2 · On your PC</p>
+        <h3>Steam Frame → Start setup</h3>
+        <p>FramePort shows the setup line and, while that page is open, tells your network where it is. The Frame and
+          the PC need the same Wi-Fi, or the Frame's own hotspot, or a USB cable.</p>
+        <p class="small">Try it: click <b>Start setup</b> in the window.</p>
+      </div>
+      <div class="scene pcwin app">
+        <div class="wbar"><i></i><i></i><i></i><span>FramePort</span></div>
+        <div class="appbody">
+          <div class="sb" aria-hidden="true"><b class="wm">Frame<span>Port</span></b><i class="on">Steam Frame</i><i>Library</i><i>Files</i><i>Monitor</i></div>
+          <div class="pg">
+            <b class="h">Connect your Steam Frame</b>
+            <button type="button" class="startb" data-start>Start setup</button>
+            <div class="shown" data-shown hidden>
+              <code>{LINE}</code>
+              <span class="wait"><i class="spin"></i>Waiting for your Frame to ask…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · on the frame -->
+    <section class="pane" data-pane="2" role="tabpanel" hidden>
+      <div class="txt">
+        <p class="ey fr">Step 3 · On the Frame, once</p>
+        <h3>Run the setup line</h3>
+        <div class="seg" role="tablist" aria-label="How">
+          <button type="button" aria-selected="true" data-way="line">Setup line</button>
+          <button type="button" aria-selected="false" data-way="dev">Developer Mode already on</button>
+        </div>
+        <div class="way-line">
+          <p>SteamVR dashboard → <b>Launch a program → Desktop</b>, then the app menu → <b>System → Konsole</b>. Run the same
+            line on every Frame:</p>
+          <div class="cmd"><code><span class="prompt">$</span>{LINE}</code><button type="button" class="btn btn-ghost btn-small" data-copy-line={LINE}>Copy</button></div>
+          <p class="small">No keyboard? Open <a href={url('setup/')}>the setup page</a> in Chromium on the Frame (Steam's <b>+</b> on
+            the taskbar installs it) and paste the line. It finds FramePort and shows a 4-digit code.</p>
+        </div>
+        <div class="way-dev" hidden>
+          <p>Open <b>Settings → Developer → Pair new host</b> on the Frame. FramePort notices the Frame by itself and asks;
+            approve <b>FramePort</b> in the headset. Nothing to click on the PC, and step 4 is done right there.</p>
+        </div>
+      </div>
+      <div class="scene">
+        <div class="konsole way-line" aria-hidden="true">
+          <div class="wbar"><i></i><i></i><i></i><span>Konsole</span></div>
+          <pre data-konsole></pre>
+        </div>
+        <div class="hmdview way-dev" hidden>
+          <div class="model"><HeadsetModel size="240px" aspect="1 / 1" /></div>
+          <div class="prompt-card" aria-hidden="true"><b>Pair with FramePort?</b><span>YOUR-PC wants to connect as a development host</span><i>Approve</i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 · allow -->
+    <section class="pane" data-pane="3" role="tabpanel" hidden>
+      <div class="txt">
+        <p class="ey pc">Step 4 · On your PC</p>
+        <h3>Allow it when the codes match</h3>
+        <p>The Frame's terminal and FramePort show the same 4 digits. Click <b>Allow</b>. Nothing changes on the Frame
+          before that, and nobody else on your network can pair it.</p>
+        <p class="small">Try it: the Frame here shows <b data-digits-txt>4831</b>.</p>
+      </div>
+      <div class="scene pcwin app">
+        <div class="wbar"><i></i><i></i><i></i><span>FramePort</span></div>
+        <div class="pg solo">
+          <b class="h">Connect your Steam Frame</b>
+          <div class="ask" data-ask>
+            <div><b>steamframe wants to be set up</b><span>Allow it if the Frame shows the code <span data-digits>4831</span></span></div>
+            <span class="dg" data-digits>4831</span>
+            <button type="button" class="allow" data-allow>Allow</button>
+            <button type="button" class="deny" data-deny>Deny</button>
+          </div>
+          <p class="said" data-said aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 · it sets itself up -->
+    <section class="pane" data-pane="4" role="tabpanel" hidden>
+      <div class="txt">
+        <p class="ey fr">Step 5 · On the Frame, by itself</p>
+        <h3>The setup finishes on its own</h3>
+        <p>FramePort's key is let in and Developer Mode turns on, with Valve's own helper and no password. The desktop
+          closes and Steam restarts once; if Steam asks to install <b>Lepton</b> (Valve's Android runtime), confirm it.
+          FramePort connects within a minute and finds the Frame by itself from then on.</p>
+        <p class="small"><a href={url('docs/frame-setup/')}>Everything it changes, and how to undo it</a></p>
+      </div>
+      <div class="scene">
+        <ul class="ticks" aria-hidden="true">
+          <li>FramePort's key let in</li><li>Developer Mode on</li><li>Steam restarts once</li><li>Lepton installed</li>
+        </ul>
+        <div class="conn-card" aria-hidden="true"><span class="ring"><b>82</b></span><div><b>steamframe</b><span>● Connected · Wi-Fi</span></div></div>
+      </div>
+    </section>
+
+    <!-- 6 · add games, play -->
+    <section class="pane" data-pane="5" role="tabpanel" hidden>
+      <div class="txt">
+        <p class="ey fr">Step 6 · Every game</p>
+        <h3>Add games, install, play</h3>
+        <p><b>Add games → Scan a folder</b> with your games, pick one, <b>Install on Frame</b>: FramePort patches it,
+          installs it and adds it to the Frame's Steam library with its artwork. Start it from FramePort or in the headset.</p>
+        <a class="video" href={url('media/frameport-install.mp4')}>
+          <video muted loop playsinline preload="none" poster={url('media/frameport-install.jpg')} data-preview={url('media/preview-install.mp4')} width="1280" height="720" aria-hidden="true"></video>
+          <span>▶ The whole walkthrough as a video</span>
+        </a>
+      </div>
+      <div class="scene">
+        <div class="lib" aria-hidden="true">
+          <div class="cv"><i class="sun"></i><b>Your game</b></div>
+          <div class="inst"><span class="lbl">Installing…</span><span class="bar"><i></i></span><span class="playb">▶ Play on Frame</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="nav">
+    <button type="button" class="btn btn-ghost btn-small" data-prev>← Back</button>
+    <span class="cnt"><span data-cnt>1</span> / 6</span>
+    <button type="button" class="btn btn-primary btn-small" data-next>Next →</button>
+  </div>
+</div>
+
+<script>
+  const wt = document.querySelector<HTMLElement>('[data-wt]');
+  if (wt) {
+    const panes = [...wt.querySelectorAll<HTMLElement>('[data-pane]')];
+    const pips = [...wt.querySelectorAll<HTMLButtonElement>('[data-go]')];
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const LINE = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
+    let i = 0, timers: number[] = [];
+    const later = (fn: () => void, ms: number) => timers.push(window.setTimeout(fn, reduce ? 0 : ms));
+    const digits = String(1000 + Math.floor(Math.random() * 9000));
+    wt.querySelectorAll('[data-digits], [data-digits-txt]').forEach((e) => { e.textContent = digits; });
+
+    const konsole = wt.querySelector<HTMLElement>('[data-konsole]')!;
+    const playKonsole = () => {
+      konsole.textContent = '$ ';
+      let k = 0;
+      const type = () => {
+        konsole.textContent = '$ ' + LINE.slice(0, ++k);
+        if (k < LINE.length) later(type, 28); else lines();
+      };
+      const lines = () => [
+        [400, '\n==> FramePort setup for steamframe'], [500, '\nLooking for FramePort on your network...'],
+        [1100, '\nFound FramePort on YOUR-PC (192.168.1.20:8765)'],
+        [500, `\n==> On your PC, allow the code  ${digits}`]].reduce((t, [d, s]) => {
+        later(() => { konsole.textContent += s as string; }, (t += d as number)); return t; }, 0);
+      later(type, 400);
+    };
+    const enter = (n: number) => {
+      timers.forEach(clearTimeout); timers = [];
+      const p = panes[n];
+      p.classList.remove('run'); void p.offsetWidth; p.classList.add('run');
+      if (n === 1) { wt.querySelector<HTMLElement>('[data-shown]')!.hidden = true; wt.querySelector<HTMLElement>('[data-start]')!.hidden = false; }
+      if (n === 2) playKonsole();
+      if (n === 3) { wt.querySelector('[data-ask]')!.classList.remove('done', 'no'); wt.querySelector('[data-said]')!.textContent = ''; }
+    };
+    const go = (n: number) => {
+      n = Math.max(0, Math.min(panes.length - 1, n));
+      panes[i].classList.remove('on'); panes[i].hidden = true; pips[i].setAttribute('aria-selected', 'false');
+      wt.style.setProperty('--dir', String(n >= i ? 1 : -1));
+      i = n;
+      panes[i].hidden = false; panes[i].classList.add('on'); pips[i].setAttribute('aria-selected', 'true');
+      pips.forEach((p, k) => p.classList.toggle('past', k < i));
+      wt.style.setProperty('--at', String(i));
+      wt.querySelector('[data-cnt]')!.textContent = String(i + 1);
+      (wt.querySelector('[data-prev]') as HTMLButtonElement).disabled = i === 0;
+      (wt.querySelector('[data-next]') as HTMLButtonElement).textContent = i === panes.length - 1 ? 'Start over' : 'Next →';
+      enter(i);
+    };
+    pips.forEach((p) => p.addEventListener('click', () => go(Number(p.dataset.go))));
+    wt.querySelector('[data-prev]')!.addEventListener('click', () => go(i - 1));
+    wt.querySelector('[data-next]')!.addEventListener('click', () => go(i === panes.length - 1 ? 0 : i + 1));
+    wt.addEventListener('keydown', (e) => {
+      if ((e.target as Element).closest('input, textarea')) return;
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(i + 1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(i - 1); }
+    });
+    // step 2: Start setup in the little window
+    wt.querySelector('[data-start]')!.addEventListener('click', (e) => {
+      (e.currentTarget as HTMLElement).hidden = true;
+      wt.querySelector<HTMLElement>('[data-shown]')!.hidden = false;
+    });
+    // step 3: the setup line or Developer Mode
+    wt.querySelectorAll<HTMLButtonElement>('[data-way]').forEach((b) => b.addEventListener('click', () => {
+      const dev = b.dataset.way === 'dev';
+      wt.querySelectorAll('[data-way]').forEach((o) => o.setAttribute('aria-selected', String(o === b)));
+      wt.querySelectorAll<HTMLElement>('.way-line').forEach((e) => { e.hidden = dev; });
+      wt.querySelectorAll<HTMLElement>('.way-dev').forEach((e) => { e.hidden = !dev; });
+      if (!dev) playKonsole();
+    }));
+    // step 4: Allow (moves on), Deny (nothing changes)
+    wt.querySelector('[data-allow]')!.addEventListener('click', () => {
+      wt.querySelector('[data-ask]')!.classList.add('done');
+      wt.querySelector('[data-said]')!.textContent = 'Allowed: the Frame runs the setup now.';
+      later(() => go(4), 900);
+    });
+    wt.querySelector('[data-deny]')!.addEventListener('click', () => {
+      wt.querySelector('[data-ask]')!.classList.add('no');
+      wt.querySelector('[data-said]')!.textContent = 'Denied: nothing changed on the Frame. (In this demo, try Allow.)';
+    });
+    document.querySelectorAll<HTMLButtonElement>('[data-copy-line]').forEach((b) => b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copyLine!); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy'; }
+      setTimeout(() => { b.textContent = 'Copy'; }, 1600);
+    }));
+    // step 1: the first-start note follows the system under the pointer, else this computer's
+    const firstOut = wt.querySelector<HTMLElement>('[data-first-out] span');
+    const dls = [...wt.querySelectorAll<HTMLElement>('.dl[data-first]')];
+    const mine = () => dls.find((d) => d.hasAttribute('aria-current')) ?? dls[0];
+    const setFirst = (d?: HTMLElement) => {
+      if (!d) return;
+      if (firstOut) firstOut.textContent = d.dataset.first!;
+      const zip = wt.querySelector('[data-zip]');
+      const a = d.getAttribute('href') ?? '';
+      if (zip) zip.textContent = a.split('/').pop() || 'FramePort.zip';
+    };
+    requestAnimationFrame(() => setFirst(mine()));
+    dls.forEach((d) => {
+      d.addEventListener('pointerenter', () => setFirst(d)); d.addEventListener('focus', () => setFirst(d));
+      d.addEventListener('pointerleave', () => setFirst(mine()));
+    });
+    // start step 1's scene when the walkthrough comes into view
+    new IntersectionObserver((es, io) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); enter(0); } }, { threshold: .3 }).observe(wt);
+    go(0);
+  }
+</script>
+
+<style>
+  .wt { --at: 0; --dir: 1; display: grid; gap: 18px; outline: none; }
+  .rail { position: relative; list-style: none; margin: 0; padding: 0 0 10px; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 8px; }
+  .rail::before, .fill { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 3px; background: var(--surface-3); }
+  .fill { right: auto; width: calc((var(--at) + 1) / var(--n) * 100%); background: var(--portal); transition: width 500ms var(--ease-out); }
+  .pip { all: unset; box-sizing: border-box; width: 100%; display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: var(--radius-sm);
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface); transition: border-color 220ms, background-color 220ms, transform 220ms var(--ease-out); }
+  .pip:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+  .pip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .pip .k { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 800 14px/1 var(--font-display);
+    background: var(--surface-3); color: var(--text-2); transition: background-color 220ms, color 220ms; }
+  .pip .t { display: grid; gap: 1px; min-width: 0; font: 600 13px/1.2 var(--font-sans); color: var(--text-2); }
+  .pip .t small { font: 500 10.5px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pip[aria-selected="true"] { border-color: rgba(255, 138, 31, .55); background: linear-gradient(90deg, rgba(58, 168, 255, .1), rgba(255, 138, 31, .1)); }
+  .pip[aria-selected="true"] .t { color: var(--text); }
+  .pip.pc[aria-selected="true"] .k, .pip.pc.past .k { background: var(--secondary); color: var(--on-accent); }
+  .pip.fr[aria-selected="true"] .k, .pip.fr.past .k { background: var(--accent); color: var(--on-accent); }
+
+  .panes { position: relative; min-height: 420px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); overflow: hidden; }
+  .pane { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; padding: 30px; align-items: center; }
+  .pane[hidden] { display: none; }
+  .pane.on { animation: slide .45s var(--ease-out); }
+  @keyframes slide { from { opacity: 0; transform: translateX(calc(var(--dir) * 24px)); } to { opacity: 1; transform: none; } }
+  .txt { display: grid; gap: 12px; align-content: start; min-width: 0; }
+  .txt h3 { font-size: clamp(22px, 2.6vw, 28px); }
+  .txt p { color: var(--text-2); }
+  .txt b { color: var(--text); font-weight: 600; }
+  .ey { font: 600 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; }
+  .ey.pc { color: var(--secondary); } .ey.fr { color: var(--accent); }
+  .small { font-size: 14px; }
+  .first { font-size: 14px; min-height: 3em; }
+  .dls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .dl { display: grid; gap: 2px; padding: 9px 14px; min-width: 130px; border-radius: var(--radius-sm); text-decoration: none;
+    border: 1px solid var(--border-strong); color: var(--text); transition: border-color 220ms, background-color 220ms; }
+  .dl span { font: 400 12px/1.4 var(--font-mono); color: var(--text-2); }
+  .dl:hover { border-color: var(--secondary-line); background: rgba(58, 168, 255, 0.06); }
+  .dl[aria-current] { border-color: var(--accent); background: rgba(255, 138, 31, 0.08); }
+  .seg { display: inline-flex; justify-self: start; padding: 4px; gap: 4px; border-radius: 999px; background: var(--surface-3); flex-wrap: wrap; }
+  .seg button { all: unset; padding: 7px 14px; border-radius: 999px; cursor: pointer; font: 600 13px/1 var(--font-sans); color: var(--text-2); }
+  .seg button[aria-selected="true"] { color: var(--on-accent); background: var(--accent); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .cmd code { font-size: 13.5px; }
+  [hidden] { display: none !important; }
+
+  /* scenes */
+  .scene { position: relative; min-width: 0; display: grid; gap: 12px; align-content: center; }
+  .pcwin, .konsole { border-radius: 10px; overflow: hidden; border: 1px solid var(--border-strong); background: var(--bg); box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .8); }
+  .wbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--sidebar); border-bottom: 1px solid var(--border);
+    font: 500 11.5px/1 var(--font-mono); color: var(--text-2); }
+  .wbar i { width: 9px; height: 9px; border-radius: 50%; background: var(--surface-3); }
+  .wbar span { margin-left: 6px; }
+  .dlrow { display: flex; gap: 12px; align-items: center; padding: 18px; }
+  .zip { flex: none; width: 40px; height: 48px; border-radius: 6px; display: grid; place-items: center; font: 800 11px/1 var(--font-display);
+    background: linear-gradient(160deg, var(--secondary-soft), var(--surface-3)); color: var(--secondary); }
+  .dlrow > div { display: grid; gap: 8px; flex: 1; min-width: 0; }
+  .dlrow b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar { display: block; height: 6px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 100%; background: var(--portal); transform-origin: left; transform: scaleX(0); }
+  .run .dlrow .bar i { animation: grow 1.6s var(--ease-out) .2s forwards; }
+  .folder { display: flex; align-items: center; gap: 10px; margin: 0 18px 18px; padding: 12px; border-radius: 8px; background: var(--surface);
+    opacity: 0; transform: translateY(8px); font-size: 13px; }
+  .run .folder { animation: rise .5s var(--ease-out) 1.9s forwards; }
+  .fico { width: 26px; height: 20px; border-radius: 3px; background: var(--warn); opacity: .8; }
+  .exe { margin-left: auto; font: 500 12px/1 var(--font-mono); color: var(--accent); padding: 5px 8px; border-radius: 6px; background: rgba(255, 138, 31, .12); }
+  @keyframes grow { to { transform: scaleX(1); } }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+
+  .appbody { display: grid; grid-template-columns: 110px minmax(0, 1fr); min-height: 240px; }
+  .sb { display: grid; align-content: start; gap: 4px; padding: 12px 8px; background: var(--sidebar); border-right: 2px solid transparent;
+    border-image: linear-gradient(180deg, var(--secondary), var(--accent)) 1; font-size: 11.5px; color: var(--text-2); }
+  .sb .wm { font: 800 13px/1 var(--font-display); color: var(--accent); margin-bottom: 8px; }
+  .sb .wm span { color: var(--secondary); }
+  .sb i { font-style: normal; padding: 5px 7px; border-radius: 6px; }
+  .sb i.on { color: var(--text); background: linear-gradient(90deg, rgba(58, 168, 255, .22), rgba(255, 138, 31, .22)); }
+  .pg { display: grid; gap: 14px; align-content: start; padding: 16px; min-width: 0; }
+  .pg.solo { padding: 22px; min-height: 240px; }
+  .pg .h { font: 700 15px/1.2 var(--font-display); }
+  .startb { all: unset; justify-self: start; padding: 9px 16px; border-radius: 8px; background: var(--accent); color: var(--on-accent);
+    font: 600 13px/1 var(--font-sans); cursor: pointer; position: relative; }
+  .startb::after { content: ""; position: absolute; inset: -4px; border-radius: 12px; border: 2px solid var(--accent); animation: pulse 1.6s ease-out infinite; }
+  .startb:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+  @keyframes pulse { from { opacity: .8; transform: scale(1); } to { opacity: 0; transform: scale(1.25); } }
+  .shown { display: grid; gap: 10px; animation: rise .4s var(--ease-out) both; opacity: 0; transform: translateY(6px); }
+  .shown code { display: block; padding: 10px 12px; border-radius: 8px; background: #08090c; border: 1px solid var(--border); font-size: 11.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wait { display: inline-flex; gap: 8px; align-items: center; font-size: 12px; color: var(--text-2); }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--surface-3); border-top-color: var(--secondary); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .konsole pre { margin: 0; min-height: 210px; padding: 14px; font: 400 12.5px/1.6 var(--font-mono); color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .hmdview { position: relative; display: grid; place-items: center; }
+  .hmdview .model { width: min(240px, 100%); }
+  .prompt-card { position: absolute; right: 0; bottom: 6px; display: grid; gap: 4px; width: 210px; padding: 12px; border-radius: 10px;
+    background: rgba(22, 24, 30, .92); border: 1px solid var(--border-strong); font-size: 12px; color: var(--text-2); box-shadow: 0 12px 30px rgba(0, 0, 0, .5); }
+  .prompt-card b { color: var(--text); font-size: 13px; }
+  .prompt-card i { justify-self: start; font-style: normal; margin-top: 4px; padding: 5px 10px; border-radius: 6px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
+
+  .ask { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 10px; background: rgba(92, 208, 230, .08);
+    border: 1px solid rgba(92, 208, 230, .35); transition: background-color 300ms, border-color 300ms, opacity 300ms; flex-wrap: wrap; }
+  .ask > div { display: grid; gap: 2px; margin-right: auto; font-size: 12.5px; min-width: 0; }
+  .ask > div span { color: var(--text-2); font-size: 11.5px; }
+  .dg { font: 700 22px/1 var(--font-mono); color: var(--accent); }
+  .allow, .deny { all: unset; padding: 8px 14px; border-radius: 8px; cursor: pointer; font: 600 13px/1 var(--font-sans); }
+  .allow { background: var(--accent); color: var(--on-accent); position: relative; }
+  .allow::after { content: ""; position: absolute; inset: -4px; border-radius: 12px; border: 2px solid var(--accent); animation: pulse 1.6s ease-out infinite; }
+  .deny { border: 1px solid var(--secondary-line); color: var(--text); }
+  .allow:focus-visible, .deny:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .ask.done { background: rgba(61, 214, 140, .1); border-color: rgba(61, 214, 140, .5); }
+  .ask.done .allow, .ask.done .deny, .ask.no .allow, .ask.no .deny { pointer-events: none; opacity: .4; }
+  .ask.no { opacity: .6; }
+  .said { font-size: 13px; color: var(--ok); min-height: 1.4em; }
+
+  .ticks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .ticks li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border);
+    font-size: 13.5px; opacity: .35; }
+  .ticks li::before { content: "✓"; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800;
+    color: var(--bg); background: var(--surface-3); }
+  .run .ticks li { animation: tick .4s var(--ease-out) forwards; }
+  .run .ticks li:nth-child(1) { animation-delay: .3s; } .run .ticks li:nth-child(2) { animation-delay: 1s; }
+  .run .ticks li:nth-child(3) { animation-delay: 1.7s; } .run .ticks li:nth-child(4) { animation-delay: 2.4s; }
+  @keyframes tick { to { opacity: 1; border-color: rgba(61, 214, 140, .35); } }
+  .run .ticks li::before { animation: tickdot .4s var(--ease-back) forwards; animation-delay: inherit; }
+  @keyframes tickdot { to { background: var(--ok); transform: scale(1.1); } }
+  .conn-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; background: var(--sidebar);
+    border: 1px solid var(--border); opacity: 0; transform: translateY(8px); font-size: 13px; }
+  .run .conn-card { animation: rise .5s var(--ease-out) 3.1s forwards; }
+  .conn-card > div { display: grid; gap: 2px; }
+  .conn-card span:not(.ring) { color: var(--ok); font-size: 12px; }
+  .ring { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-size: 12px;
+    background: radial-gradient(closest-side, var(--sidebar) 76%, transparent 78%), conic-gradient(var(--ok) 82%, var(--surface-3) 0); }
+
+  .lib { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 16px; align-items: end; }
+  .cv { position: relative; aspect-ratio: 2 / 3; border-radius: 10px; overflow: hidden; display: flex; align-items: flex-end; padding: 10px;
+    background: linear-gradient(170deg, #2c3d6b, #12131a 85%); box-shadow: var(--shadow-art-hover); }
+  .cv .sun { position: absolute; left: 60%; top: 25%; width: 120%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 170, 90, .75), transparent 65%); }
+  .cv b { position: relative; font: 800 15px/1.1 var(--font-display); color: #fff; }
+  .inst { display: grid; gap: 10px; }
+  .inst .lbl { font-size: 13px; color: var(--text-2); }
+  .run .inst .bar i { animation: grow 2.2s var(--ease-out) .3s forwards; }
+  .playb { justify-self: start; padding: 9px 14px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: 600 13px/1 var(--font-sans);
+    opacity: 0; transform: scale(.9); }
+  .run .playb { animation: pop .4s var(--ease-back) 2.6s forwards; }
+  @keyframes pop { to { opacity: 1; transform: none; } }
+  .video { position: relative; display: block; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); text-decoration: none;
+    max-width: 420px; transition: transform 220ms var(--ease-out); }
+  .video video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; background: #050608; }
+  .video span { position: absolute; left: 10px; bottom: 10px; padding: 6px 10px; border-radius: 999px; background: rgba(13, 14, 18, .8); color: var(--text); font: 600 12.5px/1 var(--font-sans); }
+  .video:hover { transform: translateY(-3px); }
+
+  .nav { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+  .cnt { font: 500 13px/1 var(--font-mono); color: var(--text-2); }
+  .nav .btn[disabled] { opacity: .35; pointer-events: none; }
+
+  @media (max-width: 860px) {
+    .rail { grid-template-columns: repeat(var(--n), minmax(44px, 1fr)); }
+    .pip { justify-content: center; padding: 8px 6px; }
+    .pip .t { display: none; }
+    .pane { grid-template-columns: minmax(0, 1fr); padding: 20px 18px; }
+    .appbody { grid-template-columns: minmax(0, 1fr); }
+    .sb { display: none; }
+    .lib { grid-template-columns: 100px minmax(0, 1fr); }
+    .prompt-card { position: static; width: auto; }
+    .hmdview { gap: 10px; }
+    .hmdview .model { width: min(180px, 100%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pane.on, .startb::after, .allow::after { animation: none; }
+    .run .bar i, .run .folder, .run .ticks li, .run .ticks li::before, .run .conn-card, .run .playb { animation-duration: .01ms; animation-delay: 0s; }
+  }
+</style>

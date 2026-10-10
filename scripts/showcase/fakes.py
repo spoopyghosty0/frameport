@@ -482,12 +482,19 @@ class FakePairingServer:
     """The Frame page's setup command without a server: nothing listens and no firewall rule is touched. The
     `pairing_done` step hook plays the Frame running the command (on_paired → the pretend Frame connects)."""
 
-    def __init__(self, on_paired=None, host: str = "", **_kw):
+    def __init__(self, on_paired=None, host: str = "", on_ask=None, **_kw):
         # host stays as given ("" = over the network; the Frame page words a set host as the USB-cable setup)
-        self.on_paired, self.host = on_paired, host
+        self.on_paired, self.host, self.on_ask = on_paired, host, on_ask
         self.port, self.code = PAIR_PORT, PAIR_CODE
         self.requests, self.failures, self.paired, self.hint = 1, 0, [], ""  # (requests: no firewall hint)
+        self.asks: list = []  # the setup URL: the `frame_asks` step hook plays a Frame asking (Allow / Deny)
         self.running = False
+
+    def decide(self, ask_id: str, allow: bool) -> None:
+        for a in self.asks:
+            if a.id == ask_id and a.state == "open":
+                a.state = "allowed" if allow else "denied"
+        # (the Frame then runs the setup: the storyboard's `pairing_done` hook connects the pretend Frame)
 
     @property
     def url(self) -> str:

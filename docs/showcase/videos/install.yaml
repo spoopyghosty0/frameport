@@ -1,7 +1,7 @@
 # The install tutorial: from the download to the first game on the Steam Frame (docs/INSTALL.md links it; every
 # release attaches it as FramePort-install.mp4). FramePort starts as on a new computer (the "fresh" demo profile:
-# empty library, welcome screen, no Frame set up); what happens outside FramePort (the download, a command typed
-# on the Frame) is told on instruction cards. Recorded by scripts/showcase/record_video.py; the format is in
+# empty library, welcome screen, no Frame set up); what happens outside FramePort (the download, the setup line
+# run on the Frame) is told on instruction cards. Recorded by scripts/showcase/record_video.py; the format is in
 # docs/SHOWCASE.md ("Videos").
 
 output: docs/media/frameport-install.mp4
@@ -59,28 +59,50 @@ scenes:
       - wait: 1.0
 
   - name: connect
-    caption: ["Connect your Steam Frame", "Once: FramePort shows a command to run on the Frame"]
+    caption: ["Connect your Steam Frame", "Once: one line on the Frame, the same for everyone"]
     hold: 1.5
     steps:
       - click: "Set up the Frame"
       - wait: 1.6
-      - click: "Show setup command"
-      - wait_for: "Waiting for your Frame"
+      - click: "Start setup"
+      - wait_for: "Waiting for your Frame to ask"
       - wait: 1.0
       - hover: "Copy"
       - wait: 1.4
 
   - name: on-the-frame
-    seconds: 10
+    seconds: 11
     card:
       eyebrow: "Step 3 · On the Frame, first time only"
-      heading: Run the setup command
+      heading: Run the setup line
       steps:
         - "In the SteamVR dashboard: **Launch a program** → **Desktop**"
         - "Open the app menu (bottom left) → **System** → **Konsole**"
-        - "Type the command FramePort shows and press **Enter**"
-      code: "curl -fsS <your-PC-address>:8765/<one-time-code> | bash"
-      note: "FramePort shows your PC's address and a one-time code in place of **<…>**. The desktop closes by itself after a few seconds (Steam restarts once); if Steam asks to install **Lepton**, confirm it. No password is needed."
+        - "Type the line and press **Enter** (or open **spoopyghosty0.github.io/frameport/setup** in Chromium and paste it)"
+      code: "curl -sL spoopyghosty0.github.io/frameport/s | bash"
+      note: "It finds FramePort on your network and shows a 4-digit code. Nothing changes on the Frame until you allow it on the PC. Developer Mode already on? Just open **Settings → Developer → Pair new host** and approve FramePort in the headset."
+
+  - name: allow
+    caption: ["Allow it on your PC", "FramePort shows the same code as the Frame"]
+    hold: 1.2
+    steps:
+      - hook: {name: frame_asks, args: ["4831"]}
+      - wait_for: "steamframe wants to be set up"
+      - wait: 1.4
+      - hover: "Allow"
+      - wait: 0.8
+      - click: "Allow"
+      - wait: 0.8
+
+  - name: frame-setup
+    seconds: 7
+    card:
+      eyebrow: "On the Frame, by itself"
+      heading: The setup finishes on its own
+      steps:
+        - "FramePort's key is let in and **Developer Mode** turns on (no password)"
+        - "The desktop closes and Steam restarts once: that's expected"
+        - "If Steam asks to install **Lepton**, confirm it"
 
   - name: connected
     caption: ["Your Frame is connected", "From now on FramePort finds it by itself"]

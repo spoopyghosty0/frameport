@@ -304,6 +304,17 @@ def _pairing_done(session, delay: float = 1.5) -> None:
     _connect(session, delay)
 
 
+def _frame_asks(session, digits: str = "4831") -> None:
+    """The Frame ran the setup line: it found FramePort and asks; the Allow / Deny card shows (setup URL flow)."""
+    from frameport.frame.pairing import Ask
+
+    app = session.app
+    ask = Ask("showcase", "steamframe", "192.168.1.42", digits)
+    app.pairing.asks.append(ask)
+    if callable(app.pairing.on_ask):
+        app.pairing.on_ask(ask)
+
+
 def _easter_eggs(session, on: bool = True, today: str = "", installs: int | None = None) -> None:
     """The app's easter eggs (ui/easter.py) on or off (the demo library has them off). today: pretend this date
     (YYYY-MM-DD: the holiday badges); installs: the install count so far (the next install may be a milestone).
@@ -386,5 +397,6 @@ HOOKS = {"fake_install": _fake_install, "wait_jobs": _wait_jobs, "held_install":
          "live_stream": _live_stream, "stop_live": _stop_live, "monitor_details": _monitor_details,
          "type_tab": _type_tab, "select_files": _select_files, "disconnect": _disconnect, "connect": _connect,
          "settings_section": _settings_section, "first_run": _first_run, "pairing_done": _pairing_done,
+         "frame_asks": _frame_asks,
          "easter_eggs": _easter_eggs, "fps_dip": _fps_dip, "perfect_pacing": _perfect_pacing,
          "battery": _battery, "long_upload": _long_upload, "press_keys": _press_keys}
