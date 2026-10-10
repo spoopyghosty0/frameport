@@ -110,10 +110,11 @@ signatures:
     pattern: 'kernel: .*(?i:hangcheck|gpu fault|msm_drm.*(hang|recover)|kgsl.*(hang|fault)|adreno.*(hang|fault))'
     severity: fatal
     diagnosis: The Frame's GPU hung while the game ran (the kernel reset it; the game froze or closed). Usually one
-      shader or effect the Frame's driver can't handle (e.g. Vader Immortal's lightspeed jump). FramePort can't fix
-      that on its own; capture the game's shaders (OpenGL ES games) and send a problem report with diagnostics, so a
-      shader fix can be added for this game.
-    suggest: [adapter.zink_shader_dump]
+      shader or effect the Frame's driver can't handle (e.g. Vader Immortal's lightspeed jump, a VR4 cutscene).
+      FramePort can't fix that on its own; capture the game's shaders (the shader dump), play to the hang once more and
+      send a problem report with diagnostics, so a shader fix can be added for this game.
+    # triage keeps only the dump for the graphics API the session used (FrameBridge's swapchain formats)
+    suggest: [adapter.vk_shader_dump, adapter.zink_shader_dump]
     report: true
   - id: space-warp-used
     pattern: 'xrCreateSwapchain \d+x\d+ format=(97|129) '

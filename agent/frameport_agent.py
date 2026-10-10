@@ -44,7 +44,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 71
+AGENT_VERSION = 72
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -4661,6 +4661,50 @@ def _tail(path, max_bytes):
         return None
 
 
+# shader dumps in a game's files dir: the Vulkan shim's vk_shader_dump and the shader-fix layer's zink_shader_dump
+SHADER_DUMP_DIRS = ("fp_vk_shaders", "fp_spirv")
+SHADER_DUMP_BYTES = 4 << 20  # newest modules per diagnostics run, base64 on the wire
+SHADER_DUMP_FILES = 200
+
+
+def shader_dumps(files_dir, max_bytes=SHADER_DUMP_BYTES):
+    """{dir: {"index": tail of index.txt, "modules": {name: base64}, "total": n, "skipped": n}} for the dump folders
+    in a game's files dir: the newest modules (by time written) up to max_bytes, so the shader created right before a
+    GPU hang comes along. Unreadable files are skipped (the app writes them inside its container)."""
+    out = {}
+    for d in SHADER_DUMP_DIRS:
+        path = os.path.join(files_dir, d)
+        try:
+            names = [n for n in os.listdir(path) if n.endswith(".spv")]
+        except OSError:
+            continue
+        mods = []
+        for n in names:
+            try:
+                mods.append((os.path.getmtime(os.path.join(path, n)), n))
+            except OSError:
+                pass
+        mods.sort(reverse=True)
+        res = {"total": len(names), "modules": {}, "skipped": 0}
+        index = _tail(os.path.join(path, "index.txt"), 1 << 20)
+        if index is not None:
+            res["index"] = index
+        used = 0
+        for _, n in mods[:SHADER_DUMP_FILES]:
+            try:
+                with open(os.path.join(path, n), "rb") as f:
+                    data = f.read(max_bytes - used + 1)
+            except OSError:
+                res["skipped"] += 1
+                continue
+            if used + len(data) > max_bytes:
+                break
+            used += len(data)
+            res["modules"][n] = base64.b64encode(data).decode("ascii")
+        out[d] = res
+    return out
+
+
 def cmd_collect_diag(args):
     """Everything useful for debugging without the game or the PC app: host runtime facts and, with a package, the
     game's launcher, settings, deployment, logs (launch, Lepton logcat, Proton/Revive/Unreal) and its file listing.
@@ -4741,6 +4785,9 @@ def cmd_collect_diag(args):
     for p in sorted(cands, key=lambda p: next((i for i, k in enumerate(order) if k in os.path.basename(p)), 9)):
         name = os.path.basename(p)
         files[name if name.startswith("logcat") else "logcat-" + name] = _tail(p, max_bytes)
+    shaders = shader_dumps(data_files_dir(base, pkg), int(args.get("shader_bytes", SHADER_DUMP_BYTES)))
+    if shaders:
+        out["shaders"] = shaders
     try:
         listing = cmd_list_files({"package": pkg, "limit": 20000})
         out["listing"] = {"missing": listing["missing"], "truncated": listing["truncated"],
