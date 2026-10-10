@@ -301,3 +301,14 @@ def test_lepton_lines_survive_the_game_filter():
     assert any("FrameBridge" in ln for ln in lines)
     res = triage.triage(log, "RUNNING", package="com.x.y")
     assert "container-not-started" not in [f.id for f in res.findings]
+
+
+def test_unity_data_missing_fails_the_launch_test():
+    """GitHub #155: Batman's launch test passed while Unity was stuck on a bundle missing from the data folder."""
+    from frameport.validate import triage
+
+    log = ("10-10 00:51:10.000  1  2 E Unity   : Unable to open archive file: /sdcard/Android/obb/com.camouflaj.manta/"
+           "localization-assets-french(france)(fr-fr)_assets_all.bundle\n"
+           "10-10 00:51:20.000  1  2 I FrameBridge: pacing: 72.0 fps\n")
+    r = triage.triage(log, "RUNNING")
+    assert "unity-data-missing" in [f.id for f in r.findings] and r.verdict == "fail"

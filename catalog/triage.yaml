@@ -336,6 +336,11 @@ signatures:
     severity: fatal
     diagnosis: The Lepton container failed to start (see the error above it in launch.log).
     suggest: []
+  - id: unity-data-missing
+    pattern: 'Unable to open archive file|is corrupted! Remove it and launch unity again|Failed to read data for the AssetBundle'
+    severity: fatal
+    diagnosis: The game can't read its own data files (OBB/data folder) - they are incomplete or from another version of the game than the APK. Copy the whole data folder again from the same install as the APK, add the game again and reinstall.
+    suggest: []
   - id: permission-denied-save
     pattern: 'Permission denied.*(Android/data|/sdcard)|EACCES.*Android/data'
     severity: warning
