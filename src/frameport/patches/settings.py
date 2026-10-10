@@ -523,6 +523,34 @@ class HideNavBar(Patch):
         ctx.env.update(self.ENV)
 
 
+class SteamGamepad(Patch):
+    id = "device.steam_gamepad"
+    title = "Controllers as a gamepad (Steam Input)"
+    description = ("Lepton's Android only gets a keyboard, a pointer and touch from the Frame, so a 2D game never sees "
+                   "a controller (the controllers only move the pointer; SDL games show their touch controls). This "
+                   "passes Steam Input's virtual gamepad (\"Microsoft X-Box 360 pad\", made by Steam for the Frame's "
+                   "controllers and paired Bluetooth pads) into this app's container with an Xbox 360 key layout, and "
+                   "tells SDL games to use it (SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD). Steam Input must be "
+                   "on for the game's shortcut; the controllers must be on when the game starts (a pad Steam makes "
+                   "later isn't seen until the next start). The APK isn't changed. Off for one start: "
+                   "FRAMEPORT_NO_GAMEPAD=1 in the game's launch options.")
+    category = "device"
+    needs_vr = False
+    stage = "install"  # the agent reads it from the recipe at finalize (deployment.json steam_gamepad)
+
+    def applies(self, a):
+        return a.vr_kind == "none"
+
+    def detect(self, a):
+        if a.vr_kind == "none" and (a.extra or {}).get("gamepad"):
+            return Suggestion(True, "2D app that declares gamepad support (android.hardware.gamepad or Android TV's "
+                                    "launcher): pass the controllers to it as a gamepad.")
+        return None
+
+    def install(self, ctx: InstallContext) -> None:
+        pass  # the launcher line (agent: GAMEPAD_LINE) exports SDL's hint and puts the Podman wrapper on PATH
+
+
 class Foveation(Patch):
     id = "device.foveation"
     title = "Eye-tracked foveation (Valve)"
@@ -590,6 +618,7 @@ for _spec in SETTINGS:
 register(DeviceFiles)
 register(LeptonEnv)
 register(HideNavBar)
+register(SteamGamepad)
 register(TextInputWindow)
 register(DisplayMode)
 register(Foveation)
