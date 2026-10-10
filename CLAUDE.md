@@ -768,6 +768,12 @@ applies where vk_sanitize can: Unreal/Other arm64) writes each distinct SPIR-V m
 returns `shaders` (newest modules of fp_vk_shaders + fp_spirv, ≤4 MB each, base64) → bundle
 `games/<pkg>/target/shaders/`. Triage `gpu-hang` suggests both dumps; `triage.graphics_api` (FrameBridge's
 xrCreateSwapchain formats: <0x1000 Vulkan, else GL) keeps only the session's API's (`API_ONLY`). Host-tested only.
+Agent v74: a reporter's hang came ~10 s after the last new module, so the culprit wasn't among the newest written →
+with an index naming modules, `shader_dumps` sends every module of the index's **newest session** (after the last
+`# start`), deduplicated, last used first, each ≤4 MB, ≤30 MB in all (`session` = how many it names) + that session's
+index lines; no index (fp_spirv) = the old newest-by-mtime 4 MB. One JSON line (~40 MB base64) over the SSH channel
+is read whole by `Frame.agent` (fine at that size); `_Writer.fit` drops the least recently used modules last, after
+cutting logs, to stay under the 24 MB zip limit.
 **Vivox API 31 (GitHub #101, 2026-10-09):** newer Vivox builds (Green Hell VR) call Android 12 AudioManager
 communication-device methods from `com.vivox.sdk.AudioChangeListener` with no SDK check → NoSuchMethodError on Lepton's
 Android 11. `frame.vivox_audio_route` (analysis `vivox_api31`, ANALYSIS_VERSION 4) makes every such method return at

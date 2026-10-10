@@ -171,6 +171,64 @@ def test_agent_collects_the_newest_modules(monkeypatch, tmp_path):
     assert agent.AGENT_VERSION >= 72
 
 
+def _module(d, i, size=1000):
+    data = bytes([i]) * size
+    n = f"{len(data)}_{hashlib.sha256(data).hexdigest()}.spv"
+    (d / n).write_bytes(data)
+    return n
+
+
+def test_agent_collects_the_newest_session(monkeypatch, tmp_path):
+    """GitHub #140: every module of the newest session (index.txt), last used first, not the newest written."""
+    agent = _load_agent(monkeypatch, tmp_path)
+    files = tmp_path / "files"
+    d = files / "fp_vk_shaders"
+    d.mkdir(parents=True)
+    old = [_module(d, i) for i in range(3)]  # only in the first session
+    a, b, c = (_module(d, i) for i in (10, 11, 12))
+    big = _module(d, 13, size=3000)
+    now = time.time()
+    for i, n in enumerate(old):
+        os.utime(d / n, (now + i, now + i))  # the newest written: would have won before
+    (d / "index.txt").write_text(
+        "# start 100 pid 1\n" + "".join(f"{i} 0 1000 {n} new\n" for i, n in enumerate(old + [a]))
+        + "# start 200 pid 2\n"
+        f"1 0 2000 {a} known\n2 5 2005 {b} new\n3 9 2009 {big} new\n4 10 2010 {c} new\n5 20 2020 {b} again\n"
+        f"6 21 2021 {'1_' + 'f' * 64}.spv failed\n")
+    res = agent.shader_dumps(str(files))["fp_vk_shaders"]
+    assert res["session"] == 5 and res["total"] == 7
+    assert list(res["modules"]) == [b, c, big, a]  # last use in the session, newest first; missing file skipped
+    assert not set(old) & set(res["modules"])
+    assert res["index"].startswith("[... earlier sessions left out ...]\n# start 200") and "pid 1" not in res["index"]
+    assert res["skipped"] == 1
+    # the total cap: 1000 + 1000 fit, the 3000-byte module doesn't, the next smaller one still does
+    capped = agent.shader_dumps(str(files), session_bytes=3000)["fp_vk_shaders"]
+    assert list(capped["modules"]) == [b, c, a] and capped["skipped"] == 2
+    monkeypatch.setattr(agent, "SHADER_MODULE_BYTES", 2000)  # each module's cap
+    assert big not in agent.shader_dumps(str(files))["fp_vk_shaders"]["modules"]
+    # an index whose newest session names no module: the newest written, as before
+    (d / "index.txt").write_text("# start 300 pid 3\n")
+    fallback = agent.shader_dumps(str(files), max_bytes=2500)["fp_vk_shaders"]
+    assert "session" not in fallback and list(fallback["modules"]) == [old[2], old[1]]
+    assert agent.AGENT_VERSION >= 74
+
+
+def test_bundle_drops_old_modules_to_fit(tmp_path):
+    w = bundle._Writer(redact.Redactor())
+    names = []
+    for _ in range(16):
+        data = os.urandom(20000)  # incompressible
+        names.append(f"{len(data)}_{hashlib.sha256(data).hexdigest()}.spv")
+        w.files["s/" + names[-1]] = data
+    w.fit(limit=200000)
+    kept = [n for n in names if "s/" + n in w.files]
+    assert kept and kept == names[:len(kept)] and len(kept) < 16  # the newest (first) stay
+    assert any("shader module" in m for m in w.warnings)
+    w2 = bundle._Writer(redact.Redactor())
+    bundle.add_shader_dumps(w2, "g/", {"fp_vk_shaders": {"total": 50, "session": 3, "modules": {}}})
+    assert any("newest session" in m for m in w2.warnings)
+
+
 def test_bundle_writes_the_dumps(tmp_path):
     w = bundle._Writer(redact.Redactor())
     data = b"\x03\x02\x23\x07" * 5

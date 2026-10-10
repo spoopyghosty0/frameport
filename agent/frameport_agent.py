@@ -44,7 +44,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 73
+AGENT_VERSION = 74
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -5017,14 +5017,54 @@ def _tail(path, max_bytes):
 
 # shader dumps in a game's files dir: the Vulkan shim's vk_shader_dump and the shader-fix layer's zink_shader_dump
 SHADER_DUMP_DIRS = ("fp_vk_shaders", "fp_spirv")
-SHADER_DUMP_BYTES = 4 << 20  # newest modules per diagnostics run, base64 on the wire
+SHADER_DUMP_BYTES = 4 << 20  # without an index: newest modules per folder (by time written), base64 on the wire
 SHADER_DUMP_FILES = 200
+SHADER_SESSION_BYTES = 30 << 20  # with an index: the newest session's modules, up to this much in all
+SHADER_MODULE_BYTES = 4 << 20  # larger modules are left out
+SHADER_INDEX_READ = 64 << 20  # index.txt bytes looked at (from the end) for the newest session
+SHADER_INDEX_BYTES = 4 << 20  # index text sent (the newest session's lines)
+_SPV_NAME = re.compile(r"\d+_[0-9a-f]{64}\.spv")
 
 
-def shader_dumps(files_dir, max_bytes=SHADER_DUMP_BYTES):
-    """{dir: {"index": tail of index.txt, "modules": {name: base64}, "total": n, "skipped": n}} for the dump folders
-    in a game's files dir: the newest modules (by time written) up to max_bytes, so the shader created right before a
-    GPU hang comes along. Unreadable files are skipped (the app writes them inside its container)."""
+def shader_session(index_path):
+    """(index text from the newest "# start" line on, [module names of that session, last used first]) from a
+    vk_shader_dump index.txt (`<seq> <ms> <unix ms> <size>_<sha256>.spv new|known|again|failed` lines, one
+    "# start <unix s> pid <pid>" per process), or None without an index or a module line in its newest session."""
+    try:
+        size = os.path.getsize(index_path)
+        with open(index_path, "rb") as f:
+            if size > SHADER_INDEX_READ:
+                f.seek(size - SHADER_INDEX_READ)
+            text = f.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    lines = text.splitlines()
+    first = max((i for i, ln in enumerate(lines) if ln.startswith("# start")), default=0)
+    session = lines[first:]
+    names, seen = [], set()
+    for ln in reversed(session):
+        parts = ln.split()
+        if len(parts) >= 4 and _SPV_NAME.fullmatch(parts[3]) and parts[3] not in seen:
+            seen.add(parts[3])
+            names.append(parts[3])
+    if not names:
+        return None
+    body = "\n".join(session) + "\n"
+    if len(body) > SHADER_INDEX_BYTES:
+        body = f"[... first {len(body) - SHADER_INDEX_BYTES} characters cut ...]\n" + body[-SHADER_INDEX_BYTES:]
+    elif first > 0 or size > SHADER_INDEX_READ:
+        body = "[... earlier sessions left out ...]\n" + body
+    return body, names
+
+
+def shader_dumps(files_dir, max_bytes=SHADER_DUMP_BYTES, session_bytes=SHADER_SESSION_BYTES):
+    """{dir: {"index": index text, "modules": {name: base64}, "total": n, "skipped": n[, "session": n]}} for the
+    dump folders in a game's files dir. With an index.txt naming modules (vk_shader_dump): every module named in its
+    newest session (= process start), last used first, each <= SHADER_MODULE_BYTES, up to session_bytes in all
+    ("session" = how many it names). A GPU hang can come seconds after the culprit was created, so "newest written"
+    missed it (GitHub #140). Without one (fp_spirv): the newest modules (by time written) up to max_bytes. Unreadable
+    files are skipped (the app writes them inside its container). The reply is one JSON line on the SSH channel's
+    stdout (~40 MB base64 at most): the PC reads it whole, which is fine at that size."""
     out = {}
     for d in SHADER_DUMP_DIRS:
         path = os.path.join(files_dir, d)
@@ -5032,27 +5072,38 @@ def shader_dumps(files_dir, max_bytes=SHADER_DUMP_BYTES):
             names = [n for n in os.listdir(path) if n.endswith(".spv")]
         except OSError:
             continue
-        mods = []
-        for n in names:
-            try:
-                mods.append((os.path.getmtime(os.path.join(path, n)), n))
-            except OSError:
-                pass
-        mods.sort(reverse=True)
         res = {"total": len(names), "modules": {}, "skipped": 0}
-        index = _tail(os.path.join(path, "index.txt"), 1 << 20)
-        if index is not None:
-            res["index"] = index
+        session = shader_session(os.path.join(path, "index.txt"))
+        if session is not None:
+            res["index"], order = session
+            res["session"] = len(order)
+            budget, per_module = session_bytes, SHADER_MODULE_BYTES
+        else:
+            index = _tail(os.path.join(path, "index.txt"), 1 << 20)
+            if index is not None:
+                res["index"] = index
+            mods = []
+            for n in names:
+                try:
+                    mods.append((os.path.getmtime(os.path.join(path, n)), n))
+                except OSError:
+                    pass
+            mods.sort(reverse=True)
+            order = [n for _, n in mods[:SHADER_DUMP_FILES]]
+            budget, per_module = max_bytes, max_bytes
         used = 0
-        for _, n in mods[:SHADER_DUMP_FILES]:
+        for n in order:
             try:
                 with open(os.path.join(path, n), "rb") as f:
-                    data = f.read(max_bytes - used + 1)
+                    data = f.read(min(per_module, budget - used) + 1)
             except OSError:
                 res["skipped"] += 1
                 continue
-            if used + len(data) > max_bytes:
-                break
+            if used + len(data) > budget or len(data) > per_module:
+                if session is None:
+                    break
+                res["skipped"] += 1  # too big: a smaller, older one may still fit
+                continue
             used += len(data)
             res["modules"][n] = base64.b64encode(data).decode("ascii")
         out[d] = res
@@ -5139,7 +5190,8 @@ def cmd_collect_diag(args):
     for p in sorted(cands, key=lambda p: next((i for i, k in enumerate(order) if k in os.path.basename(p)), 9)):
         name = os.path.basename(p)
         files[name if name.startswith("logcat") else "logcat-" + name] = _tail(p, max_bytes)
-    shaders = shader_dumps(data_files_dir(base, pkg), int(args.get("shader_bytes", SHADER_DUMP_BYTES)))
+    shaders = shader_dumps(data_files_dir(base, pkg), int(args.get("shader_bytes", SHADER_DUMP_BYTES)),
+                           int(args.get("shader_session_bytes", SHADER_SESSION_BYTES)))
     if shaders:
         out["shaders"] = shaders
     try:
