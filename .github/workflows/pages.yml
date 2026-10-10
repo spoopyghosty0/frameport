@@ -1,4 +1,4 @@
-# The project page (site/, Astro) on GitHub Pages: https://spoopyghosty0.github.io/frameport/
+# The project page (site/, Astro) on GitHub Pages: https://frameport.app/
 # Rebuilt when the site, the catalog or the showcase renders change on main. The games board also refreshes itself
 # from the catalog on main in the visitor's browser, so a catalog change shows before the next build.
 # One-time setup: Settings → Pages → Source: GitHub Actions.

@@ -14,18 +14,17 @@ const latest = latestCheck(games);
   <div class="wrap">
     <div class="head reveal">
       <p class="label"><b>03</b> Games</p>
-      <h2>Tested on a Steam Frame.</h2>
+      <h2>Tested on a Steam Frame</h2>
       <p class="lead">
         <span data-n="works" data-count>{n.works}</span> games work, <span data-n="issues" data-count>{n.issues}</span> work with issues and
-        <span data-n="unsupported" data-count>{n.unsupported}</span> don't run. A tested game gets its recipe automatically. Games
-        that aren't listed may work too: FramePort suggests patches for them, and a recipe that works can be shared from
-        the app.
+        <span data-n="unsupported" data-count>{n.unsupported}</span> don't run. Each tested game gets its recipe (the patches
+        it needs) automatically; for other games FramePort suggests patches.
       </p>
     </div>
 
     <div class="board reveal" data-board>
       <div class="board-top">
-        <span class="board-title">Meta Quest · PC VR <span class="arrow">→</span> Steam Frame</span>
+        <span class="board-title">Quest · PC VR <span class="arrow">→</span> Steam Frame</span>
         <span class="board-meta" data-meta>
           <span data-total>{games.length}</span> games · last checked <span data-latest>{latest}</span>
           <span class="src" data-source title="Built into the page">· catalog of {snapshot.builtAt}</span>
@@ -55,17 +54,17 @@ const latest = latestCheck(games);
         <div class="row head-row" role="row">
           <span role="columnheader">Game</span>
           <span role="columnheader" class="c-eng">Engine</span>
-          <span role="columnheader" class="c-xr">VR API</span>
+          <span role="columnheader" class="c-xr" title="The VR system the game was made for: VrApi (older Quest games) or OpenXR">VR system</span>
           <span role="columnheader">Status</span>
           <span role="columnheader" class="c-date">Checked</span>
         </div>
         <ul class="rows" role="rowgroup" data-rows set:html={rowsHtml(games)} />
-        <p class="empty" data-empty hidden>No tested game matches. It may still work: FramePort suggests patches for any game.</p>
+        <p class="empty" data-empty hidden>No tested game matches. It may still work: FramePort suggests patches.</p>
       </div>
       <div class="board-foot">
         <button type="button" class="btn btn-ghost btn-small" data-more>Show all {games.length} games</button>
         <span class="links">
-          <a href={SHARE_CONFIG}>Share a working config</a>
+          <a href={SHARE_CONFIG}>Share a working recipe</a>
           <span aria-hidden="true">·</span>
           <a href={REPORT_PROBLEM}>Report a problem</a>
           <span aria-hidden="true">·</span>

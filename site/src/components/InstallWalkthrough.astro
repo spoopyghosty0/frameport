@@ -6,7 +6,7 @@ import HeadsetModel from './HeadsetModel.astro';
 import { DOWNLOADS, RELEASES, downloadPage, url } from '../data/site';
 
 const FIRST = Object.fromEntries(DOWNLOADS.map((d) => [d.os, d.first]));
-const LINE = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
+const LINE = 'curl -sL frameport.app/s | bash';
 const steps = [
   { side: 'pc', where: 'On your PC', title: 'Download FramePort' },
   { side: 'pc', where: 'On your PC', title: 'Start setup' },
@@ -32,7 +32,7 @@ const steps = [
       <div class="txt">
         <p class="ey pc">Step 1 · On your PC</p>
         <h3>Download FramePort</h3>
-        <p>Windows, macOS or Linux. Unzip it anywhere and start it: no installer, no admin rights. It updates itself after that.</p>
+        <p>Windows, macOS or Linux. Unpack it anywhere and start it. No installer; it updates itself.</p>
         <div class="dls">
           {DOWNLOADS.map((d) => (
             <a class="dl" href={downloadPage(d.os)} data-os={d.os} data-first={FIRST[d.os]}>
@@ -55,8 +55,8 @@ const steps = [
       <div class="txt">
         <p class="ey pc">Step 2 · On your PC</p>
         <h3>Steam Frame → Start setup</h3>
-        <p>FramePort shows the setup line and, while that page is open, tells your network where it is. The Frame and
-          the PC need the same Wi-Fi, or the Frame's own hotspot, or a USB cable.</p>
+        <p>FramePort shows the setup line and waits for the Frame. Both need the same Wi-Fi, the Frame's hotspot or a
+          USB cable.</p>
         <p class="small">Try it: click <b>Start setup</b> in the window.</p>
       </div>
       <div class="scene pcwin app">
@@ -85,15 +85,15 @@ const steps = [
           <button type="button" aria-selected="false" data-way="dev">Developer Mode already on</button>
         </div>
         <div class="way-line">
-          <p>SteamVR dashboard → <b>Launch a program → Desktop</b>, then the app menu → <b>System → Konsole</b>. Run the same
-            line on every Frame:</p>
+          <p>Open Konsole: SteamVR dashboard → <b>Launch a program → Desktop</b>, then app menu → <b>System → Konsole</b>.
+            Run this line:</p>
           <div class="cmd"><code><span class="prompt">$</span>{LINE}</code><button type="button" class="btn btn-ghost btn-small" data-copy-line={LINE}>Copy</button></div>
-          <p class="small">No keyboard? Open <a href={url('setup/')}>the setup page</a> in Chromium on the Frame (Steam's <b>+</b> on
-            the taskbar installs it) and paste the line. It finds FramePort and shows a 4-digit code.</p>
+          <p class="small">No keyboard? Open <a href={url('setup/')}>the setup page</a> in Chromium on the Frame (Steam's
+            <b>+</b> on the taskbar installs it) and copy the line.</p>
         </div>
         <div class="way-dev" hidden>
-          <p>Open <b>Settings → Developer → Pair new host</b> on the Frame. FramePort notices the Frame by itself and asks;
-            approve <b>FramePort</b> in the headset. Nothing to click on the PC, and step 4 is done right there.</p>
+          <p>Open <b>Settings → Developer → Pair new host</b> on the Frame and approve <b>FramePort</b> in the headset.
+            Nothing to click on the PC; skip step 4.</p>
         </div>
       </div>
       <div class="scene">
@@ -113,8 +113,8 @@ const steps = [
       <div class="txt">
         <p class="ey pc">Step 4 · On your PC</p>
         <h3>Allow it when the codes match</h3>
-        <p>The Frame's terminal and FramePort show the same 4 digits. Click <b>Allow</b>. Nothing changes on the Frame
-          before that, and nobody else on your network can pair it.</p>
+        <p>Konsole and FramePort show the same 4 digits. Click <b>Allow</b>. Nothing changes on the Frame before
+          that.</p>
         <p class="small">Try it: the Frame here shows <b data-digits-txt>4831</b>.</p>
       </div>
       <div class="scene pcwin app">
@@ -137,10 +137,9 @@ const steps = [
       <div class="txt">
         <p class="ey fr">Step 5 · On the Frame, by itself</p>
         <h3>The setup finishes on its own</h3>
-        <p>FramePort's key is let in and Developer Mode turns on, with Valve's own helper and no password. The desktop
-          closes and Steam restarts once; if Steam asks to install <b>Lepton</b> (Valve's Android runtime), confirm it.
-          FramePort connects within a minute and finds the Frame by itself from then on.</p>
-        <p class="small"><a href={url('docs/frame-setup/')}>Everything it changes, and how to undo it</a></p>
+        <p>Developer Mode turns on and Steam restarts once. If Steam asks to install <b>Lepton</b> (Valve's Android app
+          support), confirm it. FramePort connects within a minute.</p>
+        <p class="small"><a href={url('docs/frame-setup/')}>What it changes and how to undo it</a></p>
       </div>
       <div class="scene">
         <ul class="ticks" aria-hidden="true">
@@ -155,11 +154,11 @@ const steps = [
       <div class="txt">
         <p class="ey fr">Step 6 · Every game</p>
         <h3>Add games, install, play</h3>
-        <p><b>Add games → Scan a folder</b> with your games, pick one, <b>Install on Frame</b>: FramePort patches it,
-          installs it and adds it to the Frame's Steam library with its artwork. Start it from FramePort or in the headset.</p>
+        <p><b>Add games → Scan a folder…</b>, pick a game, click <b>Install on Frame</b>. It shows up in the Frame's
+          Steam library. Play it from FramePort or in the headset.</p>
         <a class="video" href={url('media/frameport-install.mp4')}>
           <video muted loop playsinline preload="none" poster={url('media/frameport-install.jpg')} data-preview={url('media/preview-install.mp4')} width="1280" height="720" aria-hidden="true"></video>
-          <span>▶ The whole walkthrough as a video</span>
+          <span>▶ Watch the video</span>
         </a>
       </div>
       <div class="scene">
@@ -184,7 +183,7 @@ const steps = [
     const panes = [...wt.querySelectorAll<HTMLElement>('[data-pane]')];
     const pips = [...wt.querySelectorAll<HTMLButtonElement>('[data-go]')];
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const LINE = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
+    const LINE = 'curl -sL frameport.app/s | bash';
     let i = 0, timers: number[] = [];
     const later = (fn: () => void, ms: number) => timers.push(window.setTimeout(fn, reduce ? 0 : ms));
     const digits = String(1000 + Math.floor(Math.random() * 9000));
@@ -250,12 +249,12 @@ const steps = [
     // step 4: Allow (moves on), Deny (nothing changes)
     wt.querySelector('[data-allow]')!.addEventListener('click', () => {
       wt.querySelector('[data-ask]')!.classList.add('done');
-      wt.querySelector('[data-said]')!.textContent = 'Allowed: the Frame runs the setup now.';
+      wt.querySelector('[data-said]')!.textContent = 'Allowed. The Frame sets itself up now.';
       later(() => go(4), 900);
     });
     wt.querySelector('[data-deny]')!.addEventListener('click', () => {
       wt.querySelector('[data-ask]')!.classList.add('no');
-      wt.querySelector('[data-said]')!.textContent = 'Denied: nothing changed on the Frame. (In this demo, try Allow.)';
+      wt.querySelector('[data-said]')!.textContent = 'Denied. Nothing changed on the Frame. In this demo, try Allow.';
     });
     document.querySelectorAll<HTMLButtonElement>('[data-copy-line]').forEach((b) => b.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(b.dataset.copyLine!); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy'; }

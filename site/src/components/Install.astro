@@ -14,22 +14,21 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
   <div class="wrap">
     <div class="head reveal">
       <p class="label"><b>05</b> Install</p>
-      <h2>From the download to your first game.</h2>
+      <h2>From the download to your first game</h2>
     </div>
 
     <div class="reveal"><InstallWalkthrough /></div>
-    <p class="others reveal">Other ways to connect: the setup command with your PC's address, a USB cable, or Valve's
-      pairing. All on <a href={url('setup/')}>the setup page</a>.</p>
+    <p class="others reveal">Other ways to connect, such as a USB cable, are on <a href={url('setup/')}>the setup page</a>.</p>
 
     <div class="makers reveal" id="button">
       <div class="makers-copy">
         <p class="label"><b>For game makers</b></p>
-        <h3>An “Install with FramePort” button</h3>
-        <p class="muted">Put it on your download page. A click opens FramePort, which asks, downloads and installs your
-          build on the visitor's Frame. Without FramePort, the button's page explains how to get it.</p>
+        <h3>An "Install with FramePort" button</h3>
+        <p class="muted">Put it on your download page. A click opens FramePort, which installs your game on the
+          visitor's Frame.</p>
         <div class="badge-row"><InstallBadge id="makers" href={url('install/?url=https%3A%2F%2Fexample.com%2Fgames%2Fcool-game-arm64.apk')}
           label="Try it: what a visitor without FramePort sees" /><span class="try">← try it</span></div>
-        <a class="small" href={url('docs/install-button/')}>The button, the manifest format and the rules</a>
+        <a class="small" href={url('docs/install-button/')}>How to add the button</a>
       </div>
       <div class="snippet">
         <div class="snippet-bar"><span>HTML</span><button type="button" class="btn btn-ghost btn-small" data-copy>Copy</button></div>

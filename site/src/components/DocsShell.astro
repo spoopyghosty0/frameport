@@ -9,10 +9,10 @@ const { current, toc = [] } = Astro.props;
 const groups = [...new Set(DOCS.map((d) => d.group))];
 ---
 <div class="docs wrap" data-docs={url('docs/')} data-slug={current ?? ''}>
-  <aside class="dnav" aria-label="Documentation">
+  <aside class="dnav" aria-label="Docs">
     <DocSearch />
     <details class="dnav-in" open data-dnav>
-      <summary>Documentation</summary>
+      <summary>Docs</summary>
       <a class:list={['home', { on: !current }]} href={url('docs/')}>Overview</a>
       {groups.map((g) => (
         <div class="grp">

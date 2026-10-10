@@ -15,7 +15,7 @@ import { DOWNLOADS, RELEASES, downloadPage, url } from '../../data/site';
   <Nav home={false} />
   <main class="page" data-state="loading">
     <div class="wrap inner">
-      <InstallBadge id="landing" href="#" label="Open this link in FramePort" />
+      <InstallBadge id="landing" href="#" label="Open in FramePort" />
 
       <!-- what the link installs -->
       <article class="item" data-item hidden>
@@ -32,14 +32,14 @@ import { DOWNLOADS, RELEASES, downloadPage, url } from '../../data/site';
         <span class="spinner" aria-hidden="true"></span>
         <div>
           <h2>Opening FramePort…</h2>
-          <p class="muted">Your browser may ask first. FramePort asks again before it downloads anything.</p>
+          <p class="muted">Your browser may ask first. FramePort asks before it downloads anything.</p>
         </div>
       </section>
 
       <section class="status" data-when="fallback">
         <h2>FramePort didn't open?</h2>
-        <p class="muted">Then it's probably not installed on this computer yet, or your browser blocked the link. FramePort
-          is free; it installs games and apps on a Valve Steam Frame from your computer.</p>
+        <p class="muted">It may not be on this PC yet. FramePort is free and installs games on a Steam Frame from your
+          PC.</p>
 
         <ol class="steps">
           <li>
@@ -50,8 +50,8 @@ import { DOWNLOADS, RELEASES, downloadPage, url } from '../../data/site';
                 <a class="btn btn-primary" href={downloadPage()} data-download><Glyph name="frame-solid" size={18} /><span data-download-label>Download FramePort</span></a>
                 {DOWNLOADS.map((d) => <a class="other" href={downloadPage(d.os)} data-os={d.os}>{d.label}</a>)}
               </div>
-              <p class="muted small">Unzip it and start FramePort. The first time, it shows how to connect your Frame
-                (<a href={url('#install')}>one command on the Frame</a>).</p>
+              <p class="muted small">Unpack it and start FramePort. It shows how to <a href={url('setup/')}>set up
+                your Frame</a>.</p>
             </div>
           </li>
           <li>
@@ -62,8 +62,8 @@ import { DOWNLOADS, RELEASES, downloadPage, url } from '../../data/site';
                 <button type="button" class="btn btn-secondary" data-open><Glyph name="port" size={18} /> Open in FramePort</button>
                 <button type="button" class="btn btn-ghost" data-copy>Copy link</button>
               </div>
-              <p class="muted small">On macOS, and whenever the link won't open: copy it, then in FramePort choose
-                <b>Add games → Install from a link…</b> and paste it.</p>
+              <p class="muted small">Link won't open (always on macOS)? Copy it, then paste it in FramePort under
+                <b>Add games → Add from a link…</b></p>
             </div>
           </li>
         </ol>
@@ -72,19 +72,17 @@ import { DOWNLOADS, RELEASES, downloadPage, url } from '../../data/site';
       <section class="status status-error" data-when="error">
         <h2>This install link doesn't work</h2>
         <p data-error class="error-text"></p>
-        <p class="muted">The page that sent you here may have an old or mistyped link. If you made it: install links look
-          like <code>{url('install/')}?manifest=https://…/game.json</code> or <code>?url=https://…/game.apk</code>.
-          <a href={url('docs/install-button/')}>How to make one</a></p>
+        <p class="muted">The page that sent you here may have an old or mistyped link.
+          <a href={url('docs/install-button/')}>How install links work</a></p>
         <p><a class="btn btn-secondary" href={url()}>What is FramePort?</a></p>
       </section>
 
       <noscript>
-        <p class="muted">This page needs JavaScript to read the link. Without it:
-          <a href={downloadPage()}>download FramePort</a>, then paste the address that follows <code>manifest=</code> or
-          <code>url=</code> in this page's address into FramePort → <b>Add games → Install from a link…</b></p>
+        <p class="muted">This page needs JavaScript. Without it, <a href={downloadPage()}>download FramePort</a> and
+          paste the address after <code>manifest=</code> or <code>url=</code> in <b>Add games → Add from a link…</b></p>
       </noscript>
 
-      <p class="already" data-when="opening fallback">Already have FramePort? <a href="#" data-open-link>Open the link in FramePort</a></p>
+      <p class="already" data-when="opening fallback">Already have FramePort? <a href="#" data-open-link>Open in FramePort</a></p>
     </div>
   </main>
   <Footer credits={false} />

@@ -9,7 +9,7 @@ const id = big ? 'docsearch-big' : 'docsearch';
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></svg>
     <span class="sr-only">Search the docs</span>
   </label>
-  <input id={id} type="search" autocomplete="off" spellcheck="false" placeholder={big ? 'Search every page: “OBB”, “USB cable”, “black screen”…' : 'Search the docs'}
+  <input id={id} type="search" autocomplete="off" spellcheck="false" placeholder={big ? 'Search every page: "USB cable", "black screen"…' : 'Search the docs'}
     role="combobox" aria-expanded="false" aria-controls={`${id}-r`} aria-autocomplete="list" />
   <kbd aria-hidden="true" data-keyhint>/</kbd>
   <div class="results" id={`${id}-r`} role="listbox" data-results hidden></div>

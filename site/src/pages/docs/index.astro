@@ -12,19 +12,19 @@ const groups = [...new Set(docs.map((d) => d.group))];
 // what people come for → the pages to read, in order (docs-ui.ts lights them up)
 const paths = [
   { key: 'first', label: 'Get my first game running', say: 'From the download to playing, in this order:', docs: ['install', 'frame-setup', 'compatibility', 'faq'] },
-  { key: 'broken', label: 'A game won’t start or looks wrong', say: 'Check whether it can run, then report it or look up the symptom:', docs: ['compatibility', 'diagnostics', 'playbook', 'frame-runtime'] },
+  { key: 'broken', label: "A game won't start or looks wrong", say: 'Check whether it can run, then look up the symptom or report it:', docs: ['compatibility', 'diagnostics', 'playbook', 'frame-runtime'] },
   { key: 'button', label: 'Add an install button to my site', say: 'The button, then what your players will see:', docs: ['install-button', 'install'] },
-  { key: 'how', label: 'Understand how it works', say: 'The big picture first, then what the Frame taught us:', docs: ['architecture', 'frame-runtime', 'playbook'] },
-  { key: 'look', label: 'Make it look my way', say: 'Colour themes, and how to share your own:', docs: ['themes'] },
+  { key: 'how', label: 'Understand how it works', say: 'The big picture first, then the details:', docs: ['architecture', 'frame-runtime', 'playbook'] },
+  { key: 'look', label: 'Make it look my way', say: 'Color themes and how to share your own:', docs: ['themes'] },
 ];
 ---
-<Layout title="Documentation · FramePort" description="How to install FramePort, connect a Steam Frame, and everything else in FramePort's documentation.">
+<Layout title="Docs · FramePort" description="How to install FramePort, set up a Steam Frame and get your games running.">
   <Nav home={false} />
   <main>
     <DocsShell>
       <div class="prose">
-        <h1>Documentation</h1>
-        <p class="intro">From the first download to the details of the Frame's runtime. The same pages are in the
+        <h1>Docs</h1>
+        <p class="intro">From the first download to the details of the Steam Frame. The same pages are in the
           repository's <code>docs/</code> folder.</p>
       </div>
       <DocSearch big />

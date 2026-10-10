@@ -7,16 +7,16 @@ import { REPO, url } from './site';
 
 export interface DocInfo { file: string; slug: string; name: string; group: string; blurb: string }
 export const DOCS: DocInfo[] = [
-  { file: 'INSTALL.md', slug: 'install', name: 'Install and first steps', group: 'Get started', blurb: 'Download, connect the Frame, add and install games.' },
-  { file: 'FRAME_SETUP.md', slug: 'frame-setup', name: 'What the setup changes', group: 'Get started', blurb: 'What the setup command changes on the Frame, and how to undo it.' },
-  { file: 'FAQ.md', slug: 'faq', name: 'FAQ', group: 'Get started', blurb: 'Folders, OBB data, and the questions people ask most.' },
-  { file: 'COMPATIBILITY.md', slug: 'compatibility', name: 'Compatibility', group: 'Using FramePort', blurb: 'What runs on the Frame, and why some games can’t.' },
-  { file: 'THEMES.md', slug: 'themes', name: 'Themes', group: 'Using FramePort', blurb: 'Colour themes, and how to make your own.' },
-  { file: 'DIAGNOSTICS.md', slug: 'diagnostics', name: 'Diagnostics and problem reports', group: 'Using FramePort', blurb: 'Reporting a problem without sharing personal data.' },
-  { file: 'INSTALL_BUTTON.md', slug: 'install-button', name: 'Install button', group: 'For developers', blurb: 'An “Install with FramePort” button for your download page.' },
-  { file: 'ARCHITECTURE.md', slug: 'architecture', name: 'Architecture', group: 'For developers', blurb: 'How FramePort is put together, and what it adds itself.' },
-  { file: 'PLAYBOOK.md', slug: 'playbook', name: 'Playbook: symptoms and fixes', group: 'For developers', blurb: 'Symptoms and fixes from porting real games.' },
-  { file: 'FRAME_RUNTIME.md', slug: 'frame-runtime', name: 'Frame runtime facts', group: 'For developers', blurb: 'Facts about the Steam Frame’s runtime, learned the hard way.' },
+  { file: 'INSTALL.md', slug: 'install', name: 'Install and first steps', group: 'Get started', blurb: 'Download, connect the Frame, install games.' },
+  { file: 'FRAME_SETUP.md', slug: 'frame-setup', name: 'What the setup changes', group: 'Get started', blurb: 'Changes on the Frame, firewalls, undoing it.' },
+  { file: 'FAQ.md', slug: 'faq', name: 'FAQ', group: 'Get started', blurb: 'Game folders and common questions.' },
+  { file: 'COMPATIBILITY.md', slug: 'compatibility', name: 'Compatibility', group: 'Using FramePort', blurb: 'What runs on the Frame.' },
+  { file: 'THEMES.md', slug: 'themes', name: 'Themes', group: 'Using FramePort', blurb: 'Color themes and making your own.' },
+  { file: 'INSTALL_BUTTON.md', slug: 'install-button', name: 'Install button', group: 'For developers', blurb: 'An install button for your download page.' },
+  { file: 'DIAGNOSTICS.md', slug: 'diagnostics', name: 'Diagnostics and problem reports', group: 'For developers', blurb: 'What a problem report contains.' },
+  { file: 'ARCHITECTURE.md', slug: 'architecture', name: 'Architecture', group: 'For developers', blurb: 'How FramePort is built and what it adds.' },
+  { file: 'PLAYBOOK.md', slug: 'playbook', name: 'Porting playbook', group: 'For developers', blurb: 'Symptoms and fixes from real games.' },
+  { file: 'FRAME_RUNTIME.md', slug: 'frame-runtime', name: 'Steam Frame runtime reference', group: 'For developers', blurb: 'Facts about the Frame\u2019s runtime.' },
 ];
 const BY_FILE = new Map(DOCS.map((d) => [d.file, d]));
 const ROOT = join(process.cwd(), '..');

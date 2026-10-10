@@ -7,52 +7,52 @@ import Nav from '../../components/Nav.astro';
 import Footer from '../../components/Footer.astro';
 import { downloadPage, url } from '../../data/site';
 
-const line = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
+const line = 'curl -sL frameport.app/s | bash';
 ---
 <Layout title="Set up your Steam Frame · FramePort"
-  description="Connect a Steam Frame to FramePort: one line in the Frame's terminal finds FramePort on your PC; allow it there and the setup finishes on its own.">
+  description="Set up a Steam Frame for FramePort: run one line on the Frame, click Allow on your PC.">
   <Nav home={false} />
   <main class="setup">
     <div class="wrap inner">
       <p class="label"><b>Setup</b> Steam Frame</p>
-      <h1>Connect your Steam Frame</h1>
-      <p class="lead">Once per Frame. The same line works for every Frame and every PC: it finds FramePort on your
-        network, you allow it on the PC, and the setup finishes on its own. No address or code to type, no password.</p>
+      <h1>Set up your Steam Frame</h1>
+      <p class="lead">Once per Frame: run one line on the Frame, click Allow on your PC, done. No address, code or
+        password to type.</p>
 
       <ol class="steps">
         <li class="st pc">
           <span class="n">1</span>
           <div>
             <h2>On your PC</h2>
-            <p>Open FramePort (<a href={downloadPage()}>download</a>) and click <b>Steam Frame → Start setup</b>. Keep it open:
-              it tells the network where it is while that page is open.</p>
+            <p>Open FramePort (<a href={downloadPage()}>download</a>) and click <b>Steam Frame → Start setup</b>. Keep
+              that page open.</p>
           </div>
         </li>
         <li class="st fr">
           <span class="n">2</span>
           <div>
             <h2>On the Frame</h2>
-            <p>Open the <b>SteamVR dashboard → Launch a program → Desktop</b>, then the app menu → <b>System → Konsole</b>,
-              and run:</p>
+            <p>Open the <b>SteamVR dashboard → Launch a program → Desktop</b>, then app menu → <b>System → Konsole</b>,
+              and run the setup line:</p>
             <div class="cmd big" data-cmd>
               <code><span class="prompt">$</span>{line}</code>
               <button type="button" class="copy" data-copy={line}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg> <span>Copy</span></button>
             </div>
-            <p class="small">No keyboard at hand? On the Frame, open this page in Chromium (in Steam, the <b>+</b> on the
-              taskbar installs it), tap <b>Copy</b>, then in Konsole right-click → <b>Paste</b>.</p>
+            <p class="small">No keyboard? Open this page in Chromium on the Frame (Steam's <b>+</b> on the taskbar
+              installs it), tap <b>Copy</b>, then right-click → <b>Paste</b> in Konsole.</p>
           </div>
         </li>
         <li class="st ok">
           <span class="n">3</span>
           <div>
             <h2>Allow it on the PC</h2>
-            <p>The terminal shows a 4-digit code; FramePort shows the same one with <b>Allow</b>. Click it. The Frame
-              then turns on Developer Mode by itself (Steam restarts once) and FramePort connects within a minute.</p>
+            <p>When Konsole and FramePort show the same 4 digits, click <b>Allow</b>. Steam restarts once and
+              FramePort connects within a minute.</p>
           </div>
         </li>
       </ol>
 
-      <section class="term" aria-label="What the terminal shows">
+      <section class="term" aria-label="What Konsole shows">
         <div class="tbar"><i></i><i></i><i></i><span>Konsole · what you'll see</span><button type="button" data-replay>↻ Replay</button></div>
         <pre data-term></pre>
       </section>
@@ -61,10 +61,9 @@ const line = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
         <h2>What it changes on the Frame</h2>
         <ul>
           <li>Nothing until you click <b>Allow</b> on the PC.</li>
-          <li>Then FramePort's own setup script, the one the typed setup command runs: it lets FramePort's key in (SSH),
-            configures podman for Lepton, turns on Developer Mode with Valve's helper (no password) and asks Steam to
-            install Lepton.</li>
-          <li><a href={url('docs/frame-setup/')}>Everything it changes, and how to undo it</a> · <a href={url('setup.sh')}>Read the
+          <li>Then it lets FramePort connect, turns on Developer Mode and asks Steam to install Lepton (Valve's Android
+            app support).</li>
+          <li><a href={url('docs/frame-setup/')}>What it changes and how to undo it</a> · <a href={url('setup.sh')}>Read the
             script</a></li>
         </ul>
       </section>
@@ -72,15 +71,15 @@ const line = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
       <section class="other">
         <h2>Other ways</h2>
         <div class="ways">
-          <div><h3>Setup command</h3><p>FramePort → Steam Frame → <b>Use the setup command</b> shows a line with your PC's address
-            and a one-time code. Works without the project page or a network search.</p></div>
-          <div><h3>USB cable</h3><p>Turn on Developer Mode on the Frame (Steam button → Settings → System), plug it into the PC,
-            then <b>Set up with a USB cable</b>. No Wi-Fi involved.</p></div>
-          <div><h3>Valve's pairing</h3><p>With Developer Mode on, open Settings → Developer → <b>Pair new host</b> on the
-            Frame, then click <b>Connect</b> next to it in FramePort (under <b>Already set up</b>) and approve it in the
+          <div><h3>Setup command</h3><p>FramePort → Steam Frame → <b>Use the setup command</b> shows a line with your
+            PC's address and a one-time code. Use it when the setup line can't find your PC.</p></div>
+          <div><h3>USB cable</h3><p>Turn on Developer Mode (Steam button → Settings → System), plug the Frame into your
+            PC and click <b>Set up with a USB cable</b>.</p></div>
+          <div><h3>Pair new host</h3><p>With Developer Mode on, open Settings → Developer → <b>Pair new host</b> on the
+            Frame. In FramePort, click <b>Connect</b> next to it under <b>Already set up</b>, then approve it in the
             headset.</p></div>
-          <div><h3>Address and password</h3><p>Know the Frame's address and its desktop password? Enter them under
-            <b>Enter the address</b>.</p></div>
+          <div><h3>Address and password</h3><p>Know the Frame's address and desktop password? Use <b>Enter the
+            address</b>.</p></div>
         </div>
       </section>
     </div>
@@ -99,7 +98,7 @@ const line = 'curl -sL spoopyghosty0.github.io/frameport/s | bash';
   const term = document.querySelector<HTMLElement>('[data-term]');
   const digits = String(1000 + Math.floor(Math.random() * 9000));
   const LINES: [number, string, string?][] = [
-    [0, '$ curl -sL spoopyghosty0.github.io/frameport/s | bash', 'tcmd'],
+    [0, '$ curl -sL frameport.app/s | bash', 'tcmd'],
     [600, '==> FramePort setup for steamframe', 'h'],
     [300, 'Looking for FramePort on your network...'],
     [1400, 'Found FramePort on DESKTOP-PC (192.168.1.20:8765), PC words: amber-otter'],

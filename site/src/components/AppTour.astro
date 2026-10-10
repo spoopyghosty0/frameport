@@ -18,15 +18,15 @@ import { url } from '../data/site';
 interface Props { games: MockGame[] }
 const { games } = Astro.props;
 const shots = [
-  { img: library, title: 'Library', text: 'Your games with their artwork. Search, tags and filters; install several at once.' },
-  { img: game, title: 'Game page', text: 'One click to install or play. Patches and game settings under Customize.' },
-  { img: progress, title: 'Installing', text: 'Every stage on the way to the Frame, with speed and time left.' },
-  { img: monitor, title: 'Monitor', text: "The game's frame rate, the Frame's load, temperatures, power and battery, live." },
-  { img: live, title: 'Live view', text: 'What the headset shows, with sound, in a browser window on your computer.' },
-  { img: screenshots, title: 'Screenshots', text: 'The pictures you took in the headset, sorted by game and day.' },
-  { img: files, title: 'Files', text: "The Frame's videos, downloads and each game's storage. Drag and drop." },
-  { img: keys, title: 'Type on Frame', text: "Your computer's keyboard, typing in VR apps, Steam and the desktop." },
-  { img: patches, title: 'Patches', text: 'What each patch does, in plain words; switch any of them.', fit: 'contain' as const },
+  { img: library, title: 'Library', text: 'Your games with their artwork. Search, filter, install several at once.' },
+  { img: game, title: 'Game page', text: 'One click to install or play. Patches under Customize.' },
+  { img: progress, title: 'Installing', text: 'Each stage, with speed and time left.' },
+  { img: monitor, title: 'Monitor', text: "Frame rate, load, temperature and battery, live." },
+  { img: live, title: 'Live view', text: 'What the headset shows, with sound, in your browser.' },
+  { img: screenshots, title: 'Screenshots', text: 'Your headset screenshots, by game and day.' },
+  { img: files, title: 'Files', text: "The Frame's videos, downloads and game storage. Drag and drop." },
+  { img: keys, title: 'Type on Frame', text: "Type on the Frame with your PC's keyboard." },
+  { img: patches, title: 'Patches', text: 'What each patch does, in plain words. Turn any on or off.', fit: 'contain' as const },
 ];
 const videos = [
   { id: 'tour', title: 'The tour', text: 'Library, install, play, monitor · about 90 s' },
@@ -37,9 +37,7 @@ const videos = [
   <div class="wrap">
     <div class="head reveal">
       <p class="label"><b>02</b> The app</p>
-      <h2>Try it before you download it.</h2>
-      <p class="lead">A working copy of FramePort's window, simplified, with a pretend Frame. Take the guided tour from a
-        fresh start, or click around a set-up library: install a game, start it, watch the monitor, type on the Frame.</p>
+      <h2>Try it before you download it</h2>
     </div>
 
     <div class="reveal"><AppMock games={games} /></div>
@@ -50,7 +48,7 @@ const videos = [
     </div>
 
     <div class="watch reveal">
-      <p class="watch-k">Prefer to watch? The real app, filmed at 1440p</p>
+      <p class="watch-k">Prefer to watch? The real app on video</p>
       <div class="vids">
         {videos.map((v) => (
           <button type="button" class="vid" data-video={v.id}>

@@ -1,6 +1,7 @@
 ---
 // Everyone who reported an issue, opened a pull request or committed code (scripts/contributors.mjs).
 import data from '../data/contributors.json';
+import { REPORT_PROBLEM } from '../data/site';
 
 const people = data.people;
 const what = (p: (typeof people)[number]) => [
@@ -20,7 +21,7 @@ const reports = people.filter((p) => p.issues).length;
       <button type="button" data-cf="issues" aria-pressed="false">Reports · {reports}</button>
     </div>
   </div>
-  <p class="cl">Every bug report with a diagnostics zip and every shared recipe made a game work for someone else.</p>
+  <p class="cl">Every report and shared recipe helped a game run for someone else.</p>
   <ul class="wall" data-wall>
     {people.map((p, i) => (
       <li data-kind={`${p.commits || p.prs ? 'code' : ''} ${p.issues ? 'issues' : ''}`} style={`--i:${i}`}>
@@ -31,7 +32,7 @@ const reports = people.filter((p) => p.issues).length;
     ))}
   </ul>
   <p class="card-tip" data-card hidden><b data-card-who></b><span data-card-what></span></p>
-  <p class="cu">From GitHub, {data.updated}. <a href="https://github.com/spoopyghosty0/frameport/issues/new/choose">Report something</a> to join them.</p>
+  <p class="cu">From GitHub, {data.updated}. <a href={REPORT_PROBLEM}>Report a problem</a> to join them.</p>
 </div>
 
 <script>

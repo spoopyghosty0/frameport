@@ -11,39 +11,39 @@ const d = stageDetails(example);
 type Stage = { glyph: Parameters<typeof Glyph>[0]['name']; name: string; detail: string; text: string };
 const pc: Stage[] = [
   { glyph: 'pc', name: 'scan', detail: d.scan,
-    text: 'Point FramePort at a folder. It finds Meta Quest games with their data files, PC VR game folders, Android and Linux apps.' },
+    text: 'Point FramePort at a folder. It finds Quest games, PC VR games, Android apps and Linux apps.' },
   { glyph: 'container', name: 'analyze', detail: d.analyze,
-    text: 'Reads the engine, the VR API and the libraries the game needs, without running it.' },
+    text: 'Checks what the game is built with, without running it.' },
   { glyph: 'recipe', name: 'recipe', detail: d.recipe,
-    text: 'Uses the tested recipe when the game is in the catalog, otherwise suggests patches from the analysis. Every patch is explained in plain words.' },
+    text: 'Picks the tested recipe (the patches a game needs), or suggests patches for an untested game.' },
   { glyph: 'port', name: 'convert', detail: d.convert,
-    text: "OVRPort translates Meta's VR runtime calls to OpenXR, which the Frame speaks." },
+    text: "OVRPort rewrites the game's Meta VR code for the Frame." },
   { glyph: 'patch', name: 'patch', detail: d.patch,
-    text: 'FrameBridge, FramePort’s OpenXR adapter, fills in what the Frame lacks: passthrough, the room, curved and 360° layers.' },
+    text: 'Patches fill in what the Frame lacks, such as passthrough and 360° screens.' },
   { glyph: 'keys', name: 'sign', detail: d.sign,
-    text: 'Each game keeps one signing key, so an update installs over the old build and your saves stay.' },
+    text: 'Each game keeps its own key, so updates keep your saves.' },
   { glyph: 'test', name: 'check', detail: d.check,
-    text: 'Missing libraries and 32-bit-only builds are reported before anything is uploaded.' },
+    text: "Problems that would stop the game are reported before the upload." },
 ];
 const frame: Stage[] = [
   { glyph: 'sync', name: 'upload', detail: d.upload,
-    text: 'Straight to the Frame over your network or a USB cable. Big files continue where they stopped.' },
+    text: 'Over Wi-Fi or a USB cable. A stopped upload continues where it left off.' },
   { glyph: 'frame', name: 'library', detail: d.library,
-    text: 'The game appears in your Steam library with its artwork and tags. Start it like any other game.' },
+    text: 'The game shows up in your Steam library with its artwork. Start it like any other game.' },
   { glyph: 'live', name: 'test', detail: d.test,
-    text: "A launch test starts the game, reads its logs and names the likely fix when it didn't start." },
+    text: "A launch test starts the game and, if it fails, names the likely patch." },
 ];
 ---
 <section class="section" id="how">
   <div class="wrap">
     <div class="head reveal">
       <p class="label"><b>01</b> How it works</p>
-      <h2>Ten stages between your PC and the Frame.<br /><span class="muted">You click once.</span></h2>
+      <h2>Ten stages between your PC and the Steam Frame<br /><span class="muted">You click once</span></h2>
     </div>
 
     <div class="log reveal" data-log>
       <div class="log-bar">
-        <span class="log-title"><Glyph name="frame" size={18} /><span>Installing <b data-lg="title">{example.title}</b> on Steam Frame</span></span>
+        <span class="log-title"><Glyph name="frame" size={18} /><span>Installing <b data-lg="title">{example.title}</b> on the Frame</span></span>
         <span class="log-progress" aria-hidden="true"><i></i></span>
       </div>
 
@@ -78,10 +78,10 @@ const frame: Stage[] = [
     <p class="foot muted reveal">
       <span class="recipe-box" aria-live="polite">
         <span class="rb-k">Recipe</span>
-        <span class="rb-p" data-lg-patches>{example.patches.length ? example.patches.map((x) => <code>{patchLabel(x)}</code>) : <code>FrameBridge defaults</code>}</span>
+        <span class="rb-p" data-lg-patches>{example.patches.length ? example.patches.map((x) => <code>{patchLabel(x)}</code>) : <code>Default patches</code>}</span>
         <span class="rb-n" data-lg-note>{example.note}</span>
       </span>
-      <span class="foot-t"><span data-lg="foot">{example.title}</span>'s real recipe from the catalog. Games outside the catalog get the same stages with suggested patches.</span>
+      <span class="foot-t"><span data-lg="foot">{example.title}</span>'s recipe from the catalog. Untested games get suggested patches.</span>
       <button type="button" class="btn btn-secondary btn-small again" data-again>↻ Try another game</button>
     </p>
   </div>
@@ -107,7 +107,7 @@ const frame: Stage[] = [
     for (const [k, v] of Object.entries(stageDetails(g))) set(k, v);
     const chips = document.querySelector('[data-lg-patches]');
     if (chips) {
-      chips.replaceChildren(...(g.patches.length ? g.patches : ['FrameBridge defaults']).map((x) => {
+      chips.replaceChildren(...(g.patches.length ? g.patches : ['Default patches']).map((x) => {
         const c = document.createElement('code');
         c.textContent = g.patches.length ? patchLabel(x) : x;
         return c;

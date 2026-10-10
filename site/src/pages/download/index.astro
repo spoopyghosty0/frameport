@@ -10,7 +10,7 @@ import { DOWNLOADS, RELEASES, downloadPage, downloadUrl, url } from '../../data/
 
 const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detail, asset: d.asset, first: d.first, href: downloadUrl(d.asset) }));
 ---
-<Layout title="Download FramePort" description="Download FramePort for Windows, macOS or Linux. The download starts by itself; a button stays here in case it doesn't.">
+<Layout title="Download FramePort" description="Download FramePort for Windows, macOS or Linux.">
   <Nav home={false} />
   <main class="dlp" data-dl data-state="choose" data-builds={JSON.stringify(builds)} data-releases={RELEASES}>
     <section class="stage" aria-hidden="true">
@@ -36,7 +36,7 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
     <section class="wrap copy">
       <p class="label"><b>Download</b> <span data-for>FramePort</span></p>
       <h1 data-title>Download FramePort</h1>
-      <p class="status" data-status aria-live="polite">Pick your computer. FramePort runs on Windows, macOS and Linux; nothing to install, just unpack it.</p>
+      <p class="status" data-status aria-live="polite">Pick the one for your PC. No installer: just unpack it.</p>
 
       <div class="acts" data-acts hidden>
         <a class="btn btn-primary big" href={RELEASES} data-manual>
@@ -63,9 +63,9 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
     <section class="wrap next" aria-labelledby="next-h">
       <h2 id="next-h">Then</h2>
       <ol>
-        <li><span class="n">1</span><div><h3>Unpack it</h3><p>Anywhere you like. No installer and no admin rights: FramePort keeps everything in its own data folder.</p></div></li>
-        <li><span class="n">2</span><div><h3>Start FramePort</h3><p data-first>Open FramePort. The first start downloads the tools it uses (about a minute).</p></div></li>
-        <li><span class="n">3</span><div><h3>Connect your Frame</h3><p>One line in the Frame's terminal, then click Allow on your PC. <a href={url('setup/')}>How the setup works</a></p></div></li>
+        <li><span class="n">1</span><div><h3>Unpack it</h3><p>Anywhere you like. No admin rights needed.</p></div></li>
+        <li><span class="n">2</span><div><h3>Start FramePort</h3><p data-first>Open FramePort. The first start downloads its tools (about a minute).</p></div></li>
+        <li><span class="n">3</span><div><h3>Connect your Steam Frame</h3><p>Run one line on the Frame, then click Allow on your PC. <a href={url('setup/')}>Setup</a></p></div></li>
       </ol>
     </section>
   </main>
@@ -82,7 +82,7 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const COUNT = reduce ? 600 : 3000;
 
-  // which build: the button that sent you, else this computer
+  // which build: the button that sent you, else this PC
   function detect(): string | null {
     const ua = navigator.userAgent;
     const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform || '';
@@ -108,8 +108,8 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
 
   if (!build) {
     if (detected === 'phone') {
-      title.textContent = 'FramePort runs on your computer';
-      status.textContent = 'Not on a phone: open this page on the Windows, macOS or Linux computer you’ll connect the Frame to. Copy the link and send it to yourself.';
+      title.textContent = 'FramePort runs on your PC';
+      status.textContent = 'Not on a phone. Open this page on the PC you will connect the Steam Frame to.';
       $('[data-acts]').hidden = false;
       $('[data-manual]').hidden = true;
       $('[data-cancel]').hidden = true;
@@ -170,7 +170,7 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
       warp.speed(0.4);
       set('cancelled');
       title.textContent = 'Download cancelled';
-      status.textContent = 'Nothing was downloaded. The button still works, or pick another computer below.';
+      status.textContent = 'Nothing was downloaded. Use the button or pick another download below.';
       $('[data-cancel]').hidden = true;
       $('[data-manual-label]').textContent = `Download for ${b.label}`;
     }, { once: true });
@@ -180,7 +180,7 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
     set('sent');
     warp.burst();
     title.textContent = earlier ? 'Your download started a moment ago' : 'Your download has started';
-    status.innerHTML = `Didn’t get <b>${b.asset}</b>? Your browser may have blocked it: use the button.`;
+    status.innerHTML = `Didn't get <b>${b.asset}</b>? Use the button.`;
     $('[data-cancel]').hidden = true;
     $('[data-manual-label]').textContent = 'Download manually';
     setTimeout(() => warp.speed(0.6), 1400);
@@ -205,8 +205,9 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
     $('[data-version]').textContent = rel!.tag_name;
     $('[data-date]').textContent = new Date(rel!.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
     if (a) {
-      $('[data-size]').textContent = `${Math.round(a.size / 1e6)} MB`;
-      $('[data-meta]').textContent = `${rel!.tag_name} · ${Math.round(a.size / 1e6)} MB`;
+      const mib = `${Math.round(a.size / 1048576)} MiB`;
+      $('[data-size]').textContent = mib;
+      $('[data-meta]').textContent = `${rel!.tag_name} · ${mib}`;
       const sha = a.digest?.startsWith('sha256:') ? a.digest.slice(7) : '';
       if (sha) {
         $('[data-sha]').textContent = `${sha.slice(0, 16)}…`;

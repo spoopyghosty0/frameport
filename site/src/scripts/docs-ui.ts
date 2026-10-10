@@ -7,7 +7,7 @@ import { GLOSSARY } from './glossary';
 interface Section { slug: string; doc: string; id: string; heading: string; text: string }
 
 const shell = document.querySelector<HTMLElement>('[data-docs]');
-const BASE = shell?.dataset.docs ?? '/frameport/docs/';
+const BASE = shell?.dataset.docs ?? '/docs/';
 const SLUG = shell?.dataset.slug ?? '';
 const prose = document.querySelector<HTMLElement>('.dmain .prose');
 const coarse = matchMedia('(pointer: coarse)').matches;
@@ -358,7 +358,7 @@ function initArrival(root: HTMLElement) {
   let at = Math.max(0, marks.findIndex((m) => m.getBoundingClientRect().top > 60));
   const pill = document.createElement('div');
   pill.className = 'found';
-  pill.innerHTML = `<span>“${esc(q!)}” · <b></b></span><button type="button" data-d="-1" aria-label="Previous match">↑</button>`
+  pill.innerHTML = `<span>"${esc(q!)}" · <b></b></span><button type="button" data-d="-1" aria-label="Previous match">↑</button>`
     + `<button type="button" data-d="1" aria-label="Next match">↓</button><button type="button" data-x>Clear</button>`;
   document.body.append(pill);
   const go = (d: number) => {

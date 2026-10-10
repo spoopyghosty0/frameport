@@ -42,11 +42,11 @@ interface State {
 
 const STAGES = ['scan', 'analyze', 'recipe', 'convert', 'patch', 'sign', 'check', 'upload', 'library', 'test'];
 const PATCHES: [string, string, string, string][] = [
-  ['framebridge', 'FrameBridge adapter', 'Fills in what the Frame lacks: passthrough, the room, curved and 360° layers.', 'frame.framebridge'],
-  ['haptics', 'Controller vibration fix', 'Vibrations stop when the game stops them, at the strength it asked for.', 'adapter.haptic_fix'],
-  ['focus', 'Keep playing through short focus dips', 'The Frame drops focus for a moment now and then; the game keeps running.', 'adapter.focus_hold'],
-  ['textinput', 'Text fields work', 'Lets the game open the Frame’s keyboard for text fields.', 'frame.unity_text_input'],
-  ['spacewarp', 'Turn off space warp', 'Some games flicker with it on the Frame.', 'overport.patch_disable_space_warp'],
+  ['framebridge', 'FrameBridge OpenXR adapter', 'Fills in what the Frame lacks (controllers, room, passthrough).', 'frame.adapter'],
+  ['haptics', 'Fix freezes when controllers vibrate', 'Stops the Frame freezing when a controller vibrates.', 'adapter.haptic_fix'],
+  ['focus', "Don't pause on short interruptions", "The game doesn't pause when the Frame loses focus for a moment.", 'adapter.focus_hold'],
+  ['textinput', 'Make Unity text fields work', "Lets you type into the game's text fields.", 'frame.unity_text_input'],
+  ['spacewarp', 'Disable application space warp if used', "Turns off Meta's frame-rate trick that causes glitches outside Quest headsets.", 'overport.patch_disable_space_warp'],
 ];
 export const THEMES: Record<string, { name: string; dual: boolean; c: Record<string, string> }> = {
   portal: { name: 'Portal', dual: true, c: { bg: '#0D0E12', sidebar: '#111217', surface: '#16181E', 'surface-2': '#1D1F27', 'surface-3': '#252832',
@@ -110,8 +110,8 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
     starting: null, live: false, quality: 'Balanced', scanning: false, filter: 'all', query: '', selecting: false, selected: new Set(),
     location: 'Videos', files: demoFiles(), typed: '', details: false, theme: 'portal', custOpen: null,
     patches: { framebridge: true, haptics: true, focus: true, textinput: true, spacewarp: false },
-    processes: [['Game', 'the game', '38 %'], ['Steam', 'steamwebhelper', '6 %'], ['SteamVR', 'vrcompositor', '11 %'],
-      ['Lepton', 'lepton-container', '4 %'], ['System', 'kwin_wayland', '2 %']],
+    processes: [['Game', 'the game', '38%'], ['Steam', 'steamwebhelper', '6%'], ['SteamVR', 'vrcompositor', '11%'],
+      ['Lepton', 'lepton-container', '4%'], ['System', 'kwin_wayland', '2%']],
   });
   const fresh = (): State => ({ ...demo(), connected: false, games: [], onFrame: new Set(), tested: new Set(), playing: null });
   let s = demo();
@@ -231,7 +231,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
         + `<button class="btn-s" data-act="select" aria-pressed="${s.selecting}">${SELECT}${s.selecting ? 'Done' : 'Select'}</button></div>`
         + `<span class="menu-wrap add-w"><button class="btn-p" data-act="add">+&nbsp; Add games</button>`
         + `<span class="menu" data-menu hidden><button data-act="scan">Scan a folder…</button>`
-        + `<button data-act="link">Install from a link…</button><button disabled>Add a Linux app…</button></span></span></header>`
+        + `<button data-act="link">Add from a link…</button><button disabled>Add a Linux app…</button></span></span></header>`
         + `<div class="filters">${seg([['all', 'All'], ['frame', 'On Frame'], ['pc', 'On this PC']], s.filter, 'data-filter')}`
         + `<span class="seg"><button aria-pressed="true">All</button><button>Android</button><button>PC VR</button></span>`
         + `<span class="dd">Status: <b>Any</b> ▾</span><span class="dd">${TAG}Tags: <b>Any</b> ▾</span>`
@@ -246,8 +246,8 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
               `<button class="wide" data-game="${esc(g.title)}" style="${coverVars(g.title)}"><i class="sun"></i><i class="band"></i><b>${esc(g.title)}</b></button>`).join('')}</div>`
             + '<p class="all-h">All games</p>' : '')
             + (list.length ? `<div class="grid ${s.selecting ? 'selecting' : ''}">${list.map(card).join('')}</div>`
-              + `<p class="none" ${shown ? 'hidden' : ''}>No game matches “${esc(s.query)}”.</p>` : '<p class="none">Nothing here yet.</p>'))
-          : `<div class="empty"><div class="portal-ico"></div><h4>Ready when you are</h4><p>Add a folder with your games. FramePort finds Quest games, PC VR games, Android and Linux apps in it.</p>`
+              + `<p class="none" ${shown ? 'hidden' : ''}>No game matches "${esc(s.query)}".</p>` : '<p class="none">Nothing here yet.</p>'))
+          : `<div class="empty"><div class="portal-ico"></div><h4>Ready when you are</h4><p>Add a folder with your games.</p>`
             + `<button class="btn-p" data-act="scan">Scan a folder…</button></div>`);
     },
     game: () => {
@@ -269,14 +269,14 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
         + (on ? `<span class="p-on">${CHECK}On Frame</span>` : '') + `</p><div class="row">${main}`
         + (on && !busy ? `<button class="btn-s" data-act="install">${HMD}Reinstall on Frame</button>` : '')
         + `<span class="menu-wrap"><button class="btn-s" data-act="more" aria-label="More actions">…</button><span class="menu" data-more hidden>`
-        + `<button data-act="toast" data-msg="Steam artwork updated on the Frame">Update Steam art on Frame</button>`
-        + `<button data-act="toast" data-msg="Artwork picker: store art, or your own images">Find artwork…</button>`
-        + `<button data-act="toast" data-msg="Opens a prefilled GitHub issue">Share working recipe…</button>`
+        + `<button data-act="toast" data-msg="Steam artwork updated on the Frame">Update art on Frame</button>`
+        + `<button data-act="toast" data-msg="Pick store art or your own images">Find artwork…</button>`
+        + `<button data-act="toast" data-msg="Opens a filled-in GitHub issue">Share working recipe…</button>`
         + `<button data-act="toast" data-msg="Moved to the SD card">Move to…</button>`
         + (on ? `<button data-act="uninstall" class="danger">Uninstall from Frame</button>` : '')
         + `</span></span></div></div></div>`
         + (s.tested.has(g.title) ? `<div class="test"><span class="ok">✓</span><div><b>Launch test passed</b>`
-          + `<span>Started in 6.4 s · OpenXR session running · frames paced at 72 fps · no errors in the log</span></div>`
+          + `<span>Started in 6.4 s · 72 fps · no errors</span></div>`
           + `<button class="btn-s" data-act="toast" data-msg="The launch log opens in the app">Log</button></div>` : '')
         + `<details class="cust" ${(s.custOpen ?? !on) ? 'open' : ''}><summary>Customize <span>${Object.values(s.patches).filter(Boolean).length} patches on · from the tested recipe</span></summary>`
         + `<label class="sw tech"><span><b>Show technical details</b></span><input type="checkbox" data-details ${s.details ? 'checked' : ''}><i></i></label>`
@@ -284,46 +284,46 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
           + `<input type="checkbox" data-patch="${k}" ${s.patches[k] ? 'checked' : ''}><i></i></label>`).join('')
         + `</details><h4 class="sec-h">Where it's installed</h4>`
         + `<div class="where"><span class="wico">${HMD}</span><div><b>Steam Frame</b>`
-        + (on ? `<span class="ok">Installed</span><small>Last launch test: pass · furthest: Submitting frames</small>`
+        + (on ? `<span class="ok">Installed</span><small>Last launch test: passed</small>`
           : `<span class="muted">Not installed</span><small>${size(g.title)} · tested recipe from the catalog</small>`)
         + `</div></div>`;
     },
     frame: () => s.connected
       ? `<header class="vh"><div><h3>Steam Frame</h3><p>steamframe · SteamOS · connected ${s.link === 'usb' ? 'with a USB cable' : 'over Wi-Fi'}</p></div>`
         + `<div class="pw"><button class="btn-s" data-act="toast" data-msg="The Frame goes to sleep">Sleep</button><button class="btn-s" data-act="toast" data-msg="The Frame restarts">Restart</button></div></header>`
-        + '<ul class="checks">' + ['Developer Mode is on', 'FramePort can sign in (SSH key)', 'Lepton (Android) is installed',
-          'Proton for PC VR games', 'Storage: 212 GiB free'].map((c) => `<li><i class="ok">✓</i>${c}</li>`).join('') + '</ul>'
-        + `<p class="note">Battery 82 % · ${plural(s.onFrame.size, 'game')} installed by FramePort</p>`
+        + '<ul class="checks">' + ['Developer Mode is on', 'FramePort can sign in', 'Lepton (Android apps) is installed',
+          'Proton (PC VR games) is installed', 'Storage: 212 GiB free'].map((c) => `<li><i class="ok">✓</i>${c}</li>`).join('') + '</ul>'
+        + `<p class="note">Battery 82% · ${plural(s.onFrame.size, 'game')} installed by FramePort</p>`
       : `<header class="vh"><div><h3>Connect your Steam Frame</h3><p>Once. After that FramePort finds it by itself.</p></div></header>`
         + `<div class="ways" role="radiogroup" aria-label="How to connect">`
-        + `<button class="way" data-link="wifi" aria-checked="${s.link === 'wifi'}" role="radio"><b>Setup page</b><span>The same line on every Frame: it finds this PC on your Wi-Fi.</span></button>`
-        + `<button class="way" data-link="usb" aria-checked="${s.link === 'usb'}" role="radio"><b>USB cable</b><span>A USB-C data cable. Turn on Developer Mode on the Frame first.</span></button></div>`
+        + `<button class="way" data-link="wifi" aria-checked="${s.link === 'wifi'}" role="radio"><b>Wi-Fi</b><span>Run the setup line on the Frame.</span></button>`
+        + `<button class="way" data-link="usb" aria-checked="${s.link === 'usb'}" role="radio"><b>USB cable</b><span>Turn on Developer Mode on the Frame first.</span></button></div>`
         + `<button class="btn-p" data-act="show-command">Start setup</button>`,
     files: () => {
       const locs = Object.keys(s.files);
       if (!locs.includes(s.location)) s.location = locs[0];
-      return `<header class="vh"><div><h3>Files</h3><p>The Frame's files. Drop files from your computer here.</p></div>`
+      return `<header class="vh"><div><h3>Files</h3><p>The Frame's files. Drop files from your PC here.</p></div>`
         + `<label class="btn-s">Upload…<input type="file" multiple data-pick hidden></label></header><div class="files">`
         + `<ul class="locs">${locs.map((l) => `<li><button data-loc="${esc(l)}" aria-current="${l === s.location}">${esc(l)}</button></li>`).join('')}</ul>`
         + `<div class="drop" data-drop><ul class="flist">${s.files[s.location].map((f, i) => `<li><span>${esc(f.name)}</span>`
           + (f.progress !== undefined && f.progress < 100 ? `<span class="upbar"><i style="width:${f.progress}%"></i></span>` : `<span>${f.size}</span>`)
           + `<button class="x" data-del="${i}" aria-label="Delete ${esc(f.name)}">×</button></li>`).join('') || '<li class="empty-f">Empty</li>'}</ul>`
-        + `<p class="dz">Drag files here from your desktop · demo: they stay in this browser tab</p></div></div>`;
+        + `<p class="dz">Drag files here · demo: they stay in this tab</p></div></div>`;
     },
     shots: () => {
       const list = s.games.filter((g) => s.onFrame.has(g.title));
-      return `<header class="vh"><div><h3>Screenshots</h3><p>The pictures you took in the headset, by game.</p></div></header>`
+      return `<header class="vh"><div><h3>Screenshots</h3><p>Your headset screenshots, by game.</p></div></header>`
         + (list.length ? list.map((g) => `<h4 class="sh">${esc(g.title)}</h4><div class="shots">${[0, 1, 2].map((k) =>
           `<button class="shot-t" data-shot="${esc(g.title)}" data-k="${k}" style="${coverVars(g.title + k)}"><i class="sun"></i><i class="band"></i></button>`).join('')}</div>`).join('')
-          : '<div class="empty"><h4>No screenshots yet</h4><p>Install and play a game; screenshots you take in the headset show up here.</p></div>');
+          : '<div class="empty"><h4>No screenshots yet</h4><p>Screenshots you take in the headset show up here.</p></div>');
     },
-    live: () => `<header class="vh"><div><h3>Live view</h3><p>What the headset shows, with sound, in a browser window.</p></div>`
+    live: () => `<header class="vh"><div><h3>Live view</h3><p>What the headset shows, with sound, in your browser.</p></div>`
       + `<label class="qsel">Quality <select data-quality>${['Full', 'Balanced', 'Smooth'].map((q) => `<option ${q === s.quality ? 'selected' : ''}>${q}</option>`).join('')}</select></label></header>`
       + `<div class="screen ${s.live ? 'on' : ''}">${s.live
         ? `<div class="scene3d" aria-hidden="true"><i class="sky"></i><i class="floor"></i><i class="orb"></i></div><span class="badge">● Live · ${s.quality === 'Full' ? '1920×1080' : s.quality === 'Balanced' ? '1280×720' : '960×540'} · 32 fps · hardware encoder</span>`
         : `<button class="btn-p" data-act="live" ${s.connected ? '' : 'disabled'}>Start live view</button>`}</div>`
       + (s.live ? '<button class="btn-s" data-act="live">Stop</button>' : ''),
-    keys: () => `<header class="vh"><div><h3>Type on Frame</h3><p>Your keyboard, typing on the Frame: in VR apps, Steam and the desktop.</p></div></header>`
+    keys: () => `<header class="vh"><div><h3>Type on Frame</h3><p>Type on the Frame with your PC's keyboard.</p></div></header>`
       + `<label class="typebox"><span>Type here</span><input data-type placeholder="Try it" value="${esc(s.typed)}" ${s.connected ? '' : 'disabled'}></label>`
       + `<div class="onframe"><span>On the Frame</span><p data-typed>${esc(s.typed) || '<em>…</em>'}<i class="caret"></i></p></div>`,
     monitor: () => s.playing
@@ -339,12 +339,12 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
         + s.processes.map(([grp, name, cpu], i) => `<tr><td>${grp === 'Game' ? esc(s.playing!) : name}</td><td>${grp}</td><td>${cpu}</td>`
           + `<td>${grp === 'System' ? '<span class="lock" title="FramePort never ends this one">protected</span>' : `<button class="btn-s sm" data-end="${i}">End</button>`}</td></tr>`).join('')
         + '</tbody></table>'
-      : `<div class="empty"><div class="portal-ico"></div><h4>Nothing playing</h4><p>Start a game on the Frame to see its frame rate, load and temperatures.</p></div>`,
+      : `<div class="empty"><div class="portal-ico"></div><h4>Nothing playing</h4><p>Start a game to see its frame rate, load and temperature.</p></div>`,
     settings: () => `<header class="vh"><div><h3>Settings</h3><p>Appearance, updates, this PC.</p></div></header>`
       + `<h4 class="sh">Appearance</h4><div class="themes">${Object.entries(THEMES).map(([k, t]) =>
         `<button class="theme" data-theme="${k}" aria-pressed="${s.theme === k}" style="--a:${t.c.accent};--b:${t.c.secondary};--g:${t.c.bg};--s:${t.c.surface}">`
         + `<span class="sw-prev"><i></i><i></i><i></i></span><b>${t.name}</b></button>`).join('')}</div>`
-      + `<h4 class="sh">Updates</h4><div class="row"><span class="note">FramePort updates itself; you can turn that off.</span>`
+      + `<h4 class="sh">Updates</h4><div class="row"><span class="note">FramePort updates itself.</span>`
       + `<button class="btn-s" data-act="check">Check now</button></div>`,
   };
 
@@ -426,7 +426,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
     render();
     games.forEach((g, i) => later(() => {
       if (!s.games.some((x) => x.title === g.title)) s.games.push(g);
-      if (i === games.length - 1) { s.scanning = false; emit('scanned'); toast(`Found ${plural(games.length, 'game')}, each with a tested recipe`); }
+      if (i === games.length - 1) { s.scanning = false; emit('scanned'); toast(`Found ${plural(games.length, 'game')} with tested recipes`); }
       render();
     }, 400 + i * 150));
   }
@@ -437,9 +437,9 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
   function showCommand() {
     if (s.link !== 'usb') {  // the setup page's line: the same everywhere, the Frame finds this PC and asks
       dialog(`<h4>Set up your Steam Frame</h4>`
-        + `<p>On the Frame: open the SteamVR dashboard → <b>Desktop</b>, then <b>Konsole</b>, and run (the same line on every Frame):</p>`
-        + `<div class="cmdl"><code>curl -sL spoopyghosty0.github.io/frameport/s | bash</code></div>`
-        + `<p class="small">It finds FramePort on your network and asks; you allow it here. This PC is “amber-otter”.</p>`
+        + `<p>On the Frame, open the SteamVR dashboard → <b>Launch a program → Desktop</b>, then app menu → <b>System → Konsole</b>, and run:</p>`
+        + `<div class="cmdl"><code>curl -sL frameport.app/s | bash</code></div>`
+        + `<p class="small">It finds this PC ("amber-otter") and asks. You allow it here.</p>`
         + `<div data-ask></div><ul class="progress" data-prog></ul>`
         + `<div class="row"><button class="btn-p" data-act="ran">I ran it on the Frame</button><button class="btn-s" data-act="close">Close</button></div>`);
       emit('command');
@@ -448,9 +448,9 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
     const addr = '10.86.200.234';
     dialog(`<h4>Set up your Steam Frame</h4>`
       + (s.link === 'usb' ? '<p>Found the Frame on the USB cable.</p>' : '')
-      + `<p>On the Frame: open the SteamVR dashboard → <b>Desktop</b>, then <b>Konsole</b>, and type:</p>`
+      + `<p>On the Frame, open the SteamVR dashboard → <b>Launch a program → Desktop</b>, then app menu → <b>System → Konsole</b>, and type:</p>`
       + `<div class="cmdl"><code>curl -fsS ${addr}:8765/k3f9q | bash</code></div>`
-      + `<p class="small">${s.link === 'usb' ? 'Over the cable this PC is always 10.86.200.234.' : 'Example address and code; FramePort shows yours.'} No root, no sudo, no password.</p>`
+      + `<p class="small">${s.link === 'usb' ? 'Over the cable this PC is always 10.86.200.234.' : 'Example address and code; FramePort shows yours.'} No password.</p>`
       + `<ul class="progress" data-prog></ul>`
       + `<div class="row"><button class="btn-p" data-act="ran">I typed it on the Frame</button><button class="btn-s" data-act="close">Close</button></div>`);
     emit('command');
@@ -471,7 +471,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
 
   function connect() {
     layer.querySelector('[data-ask]')?.replaceChildren();
-    const items = ['Frame answered the setup server', 'Developer Mode on (Steam restarts once)', 'Lepton installed', 'SSH key added'];
+    const items = ['The Frame answered', 'Developer Mode on (Steam restarts once)', 'Lepton installed', 'FramePort can sign in'];
     const prog = layer.querySelector('[data-prog]');
     const btn = layer.querySelector<HTMLButtonElement>('[data-act="ran"]');
     if (btn) btn.disabled = true;
@@ -481,7 +481,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
 
   function linkDialog() {
     closeMenus();
-    dialog(`<h4>Install from a link</h4><p>Paste an “Install with FramePort” or FrameDrop link, a manifest (.json) or an APK address.</p>`
+    dialog(`<h4>Install from a link</h4><p>Paste an install link or a file address.</p>`
       + `<input class="lin" data-link-in placeholder="https://example.com/games/cool-game-arm64.apk" value="https://example.com/games/cool-game-arm64.apk">`
       + `<p class="small" data-link-msg></p><div class="row"><button class="btn-p" data-act="link-go">Check link</button><button class="btn-s" data-act="close">Cancel</button></div>`);
     layer.querySelector<HTMLInputElement>('[data-link-in]')?.focus();
@@ -502,7 +502,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
       .replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim() || 'Linked app';
     closeDialog();
     if (!s.games.some((g) => g.title === title)) s.games.unshift({ title, engine: 'Unity', xr: 'OpenXR', status: 'works', platform: 'Quest' });
-    toast(`Downloaded ${file} · added “${title}”`);
+    toast(`Downloaded ${file} · added "${title}"`);
     go('game', title);
   }
 
@@ -515,7 +515,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
         row.progress = Math.min(100, (row.progress ?? 0) + 8 + Math.random() * 18);
         if (s.route === 'files') render();
         if (row.progress < 100) later(stepUp, 140);
-        else toast(`${f.name} uploaded (not really: it stayed in your browser)`, 'info');
+        else toast(`${f.name} uploaded (demo: it stayed in your browser)`, 'info');
       };
       later(stepUp, 120);
     }
@@ -610,7 +610,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
       case 'show-command': showCommand(); break;
       case 'ran': if (s.link === 'usb') connect(); else frameAsks(); break;
       case 'allow-ask': connect(); break;
-      case 'deny-ask': toast('Denied: nothing changed on the Frame', 'info'); closeDialog(); break;
+      case 'deny-ask': toast('Denied. Nothing changed on the Frame.', 'info'); closeDialog(); break;
       case 'close': closeDialog(); break;
       case 'live': s.live = !s.live; render(); break;
       case 'check': toast('You have the latest version', 'info'); break;
@@ -636,15 +636,15 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
   }
   function endGame() {
     if (!s.playing) return;
-    toast(`${s.playing} ended (Steam's Exit game)`, 'info');
+    toast(`${s.playing} ended`, 'info');
     s.playing = null;
     render();
   }
   function viewShot(el: HTMLElement) {
     dialog(`<div class="shotview" style="${el.getAttribute('style')}"><i class="sun"></i><i class="band"></i></div>`
-      + `<div class="row"><b>${esc(el.dataset.shot!)}</b><span class="note">Screenshot ${Number(el.dataset.k) + 1} · taken in the headset</span></div>`
-      + `<div class="row"><button class="btn-p" data-act="toast" data-msg="Copied to the clipboard (in the app)">Copy image</button>`
-      + `<button class="btn-s" data-act="toast" data-msg="Saved to your Pictures folder (in the app)">Download</button><button class="btn-s" data-act="close">Close</button></div>`);
+      + `<div class="row"><b>${esc(el.dataset.shot!)}</b><span class="note">Screenshot ${Number(el.dataset.k) + 1}</span></div>`
+      + `<div class="row"><button class="btn-p" data-act="toast" data-msg="Copied (in the app)">Copy image</button>`
+      + `<button class="btn-s" data-act="toast" data-msg="Saved to Pictures (in the app)">Download</button><button class="btn-s" data-act="close">Close</button></div>`);
   }
 
   // remember only the reader's own click: a <details open> that is inserted fires "toggle" by itself
@@ -654,7 +654,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
   }, true);
   root.addEventListener('change', (ev) => {
     const t = ev.target as HTMLInputElement | HTMLSelectElement;
-    if (t instanceof HTMLInputElement && t.dataset.patch) { s.patches[t.dataset.patch] = t.checked; toast(`${t.checked ? 'On' : 'Off'}: the game is rebuilt on the next install`, 'info'); }
+    if (t instanceof HTMLInputElement && t.dataset.patch) { s.patches[t.dataset.patch] = t.checked; toast(`${t.checked ? 'On' : 'Off'}: applies on the next install`, 'info'); }
     if (t instanceof HTMLInputElement && t.matches('[data-details]')) { s.details = t.checked; render(); }
     if (t instanceof HTMLInputElement && t.matches('[data-pick]') && t.files) addFiles(t.files);
     if (t instanceof HTMLSelectElement && t.matches('[data-quality]')) { s.quality = t.value; render(); }
@@ -679,7 +679,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
       });
       let none = view.querySelector<HTMLElement>('.none');
       if (!shown && !none) { view.querySelector('.grid')?.insertAdjacentHTML('afterend', '<p class="none"></p>'); none = view.querySelector('.none'); }
-      if (none) { none.hidden = shown > 0; none.textContent = `No game matches “${s.query}”.`; }
+      if (none) { none.hidden = shown > 0; none.textContent = `No game matches "${s.query}".`; }
     }
   });
   root.addEventListener('keydown', (ev) => {
@@ -704,24 +704,24 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
   // ------------------------------------------------------------------ the guided tour
   interface Step { target?: string; alt?: string; text: string; title: string; wait?: string; next?: string; place?: 'center' }
   const STEPS: Step[] = [
-    { title: 'You just started FramePort', text: 'The library is empty and no Frame is connected. Set up the Frame first: click <b>Steam Frame</b>.',
+    { title: 'You just started FramePort', text: 'No games and no Frame yet. Click <b>Steam Frame</b>.',
       target: '[data-sidebar] [data-route="frame"]', wait: 'route:frame' },
-    { title: 'One line for every Frame', text: '<b>Setup page</b> (or a USB cable), then <b>Start setup</b>.',
+    { title: 'Set up the Frame', text: 'Pick <b>Wi-Fi</b> or <b>USB cable</b>, then <b>Start setup</b>.',
       target: '[data-act="show-command"]', wait: 'command' },
-    { title: 'Run it, allow it', text: 'On the Frame: Desktop → Konsole, run the line (or paste it from the setup page). Click the button, then <b>Allow</b> when the codes match.',
+    { title: 'Run it, allow it', text: 'Run the line in Konsole on the Frame. Click the button, then <b>Allow</b> when the codes match.',
       target: '.dlg', wait: 'connected' },
-    { title: 'Connected', text: 'The Frame card shows the battery, the connection and later what is playing. FramePort finds the Frame again by itself.',
+    { title: 'Connected', text: 'The Frame card shows the battery and what is playing.',
       target: '[data-framecard]', next: 'Next' },
     { title: 'Add your games', text: 'Back to the <b>Library</b>.', target: '[data-sidebar] [data-route="library"]', wait: 'route:library' },
-    { title: 'Scan a folder', text: 'Open <b>+ Add games</b> and choose <b>Scan a folder…</b>. FramePort reads each game without changing it.',
+    { title: 'Scan a folder', text: 'Open <b>+ Add games</b> and choose <b>Scan a folder…</b>.',
       target: '[data-act="add"]', alt: '[data-menu]:not([hidden])', wait: 'scanned' },
-    { title: 'Pick a game', text: 'Each game already knows its tested recipe. Open one. (Right-click shows more; <b>Select</b> installs several.)',
+    { title: 'Pick a game', text: 'Each one has its tested recipe. Open one.',
       target: '.grid .card', wait: 'route:game' },
-    { title: 'One click', text: 'Install on Frame: convert, patch, sign, upload, add to Steam with artwork, launch test. Watch the activity card.',
+    { title: 'One click', text: 'Click <b>Install on Frame</b> and watch the activity card.',
       target: '[data-act="install"]', wait: 'installed' },
-    { title: 'Play', text: 'It is in your Steam library on the Frame now. Start it from here, or in the headset.',
+    { title: 'Play', text: "It's in the Frame's Steam library now. Play it from here or in the headset.",
       target: '[data-act="play"]', wait: 'played' },
-    { title: "That's the whole setup", text: 'Now try the rest: Monitor, Live view, Screenshots, Files (drop a real file on it), Type on Frame, Settings → themes.',
+    { title: "That's it", text: 'Now try Monitor, Live view, Screenshots, Files, Type on Frame and Settings.',
       place: 'center', next: 'Explore' },
   ];
   let step = -1;

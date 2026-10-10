@@ -8,13 +8,13 @@ const { credits = true } = Astro.props;
 // each project named links to its own page (Lepton has none of its own: it links to Waydroid, which it is built on)
 type Part = [name: string, href?: string];
 const builtOn: { parts: Part[]; what: string }[] = [
-  { parts: [['OVRPort', 'https://github.com/Android-XR-Bridge/OVRPort']], what: 'Quest → OpenXR (originally ovrport/app)' },
+  { parts: [['OVRPort', 'https://github.com/Android-XR-Bridge/OVRPort']], what: 'makes Quest games run on other headsets' },
   { parts: [['Valve Lepton'], ['Waydroid', 'https://waydro.id'], ['Proton', 'https://github.com/ValveSoftware/Proton'],
     ['SteamVR', 'https://store.steampowered.com/app/250820/SteamVR/']],
-    what: "the Frame's Android container (built on Waydroid), Windows layer and VR runtime" },
-  { parts: [['Revive', 'https://github.com/LibreVR/Revive']], what: 'Oculus PC games on SteamVR' },
-  { parts: [['Mesa (Zink)', 'https://docs.mesa3d.org/drivers/zink.html']], what: 'OpenGL on Vulkan' },
-  { parts: [['Khronos OpenXR SDK', 'https://github.com/KhronosGroup/OpenXR-SDK']], what: 'the OpenXR loader and headers' },
+    what: "run Android apps, Windows programs and VR on the Frame" },
+  { parts: [['Revive', 'https://github.com/LibreVR/Revive']], what: 'runs Oculus PC games on SteamVR' },
+  { parts: [['Mesa (Zink)', 'https://docs.mesa3d.org/drivers/zink.html']], what: 'graphics for older games' },
+  { parts: [['Khronos OpenXR SDK', 'https://github.com/KhronosGroup/OpenXR-SDK']], what: 'the VR standard the Frame uses' },
   { parts: [['Eclipse Temurin', 'https://adoptium.net'], ['Android apksigner', 'https://developer.android.com/tools/apksigner'],
     ['NDK', 'https://developer.android.com/ndk']], what: 'the build tools' },
   { parts: [['Flet', 'https://flet.dev']], what: "the app's interface" },
@@ -28,9 +28,9 @@ const joiner = (i: number, n: number) => (i === 0 ? '' : i === n - 1 ? ' and ' :
     <div class="wrap">
       <div class="head reveal">
         <p class="label"><b>06</b> Built on</p>
-        <h2>Built on open source, by its users.</h2>
-        <p class="lead">FramePort downloads these projects, wires them together and adds what the Frame needs.
-          <a href={url('docs/architecture/')}>What FramePort adds itself</a></p>
+        <h2>Built on open source, by its users</h2>
+        <p class="lead">FramePort brings these projects together and adds what the Frame needs.
+          <a href={url('docs/architecture/')}>What FramePort adds</a></p>
       </div>
       <ul class="built reveal">
         {builtOn.map((b) => (
@@ -49,12 +49,12 @@ const joiner = (i: number, n: number) => (i === 0 ? '' : i === n - 1 ? ' and ' :
       <Wordmark id="foot" href={url()} />
       <p>GPL-3.0-only (includes GPL-3.0 code from OVRPort). Not affiliated with Valve or Meta.</p>
       <p class="tm">Meta Quest is a trademark of Meta Platforms, Inc. Steam and Steam Frame are trademarks of Valve
-        Corporation. They are named here only to say what FramePort works with; neither company makes or endorses it.</p>
+        Corporation. Neither company makes or endorses FramePort.</p>
     </div>
     <nav class="foot-links" aria-label="Project">
       <a href={REPO}>Source code</a>
       <a href={RELEASES}>Releases</a>
-      <a href={url('docs/')}>Documentation</a>
+      <a href={url('docs/')}>Docs</a>
       <a href={REPORT_PROBLEM}>Report a problem</a>
       <a href={url('install/')}>Install links</a>
     </nav>

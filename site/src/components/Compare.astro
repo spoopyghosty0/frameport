@@ -2,6 +2,7 @@
 // FramePort next to FrameDrop and Valve's own tools (data/compare.ts; the README's table says the same): the few
 // differences most people decide on as cards, every difference in a table behind "Show all differences".
 import { CHECKED, HEADLINES, ROWS, SOURCES, TOOLS, TOOL_NOTES } from '../data/compare';
+import { REPORT_PROBLEM } from '../data/site';
 
 const SYMBOL = { yes: '✓', no: '–', part: '◐', unknown: '?' } as const;
 const LABEL = { yes: 'Yes', no: 'No', part: 'Partly', unknown: 'Not stated' } as const;
@@ -16,16 +17,16 @@ const ICON = {
   <div class="wrap">
     <div class="head reveal">
       <p class="label"><b>04</b> Compared</p>
-      <h2>Free, open, and it fixes the games that don’t just work.</h2>
-      <p class="lead">FrameDrop and Valve's own tools install an app as it is. FramePort is open source, converts and patches
-        Meta Quest games that don't run on the Frame as they are, and opens FrameDrop's install links too.</p>
+      <h2>Open source, and it patches the games that don't just work</h2>
+      <p class="lead">Other tools install an app as it is. FramePort also patches Quest games that wouldn't run on the
+        Frame.</p>
     </div>
 
     <div class="cmp" data-cmp data-with="1">
       <div class="with" role="group" aria-label="Compare FramePort with">
         <span>Compare with</span>
         <button type="button" data-with-btn="1" aria-pressed="true">FrameDrop</button>
-        <button type="button" data-with-btn="2" aria-pressed="false">Valve’s tools</button>
+        <button type="button" data-with-btn="2" aria-pressed="false">Valve's tools</button>
       </div>
 
       <ul class="heads reveal">
@@ -37,13 +38,13 @@ const ICON = {
             <h3>{h.title}</h3>
             <p class="fp"><span class="who">FramePort</span>{h.frameport}</p>
             <p class="other o1"><span class="who">FrameDrop</span>{h.others[0]}</p>
-            <p class="other o2"><span class="who">Valve’s tools</span>{h.others[1]}</p>
+            <p class="other o2"><span class="who">Valve's tools</span>{h.others[1]}</p>
           </li>
         ))}
       </ul>
 
       <details class="all" data-all>
-        <summary><span>Show all {ROWS.length} differences</span><i aria-hidden="true">▾</i></summary>
+        <summary><span class="show">Show all {ROWS.length} differences</span><span class="hide">Hide the full table</span><i aria-hidden="true">▾</i></summary>
         <div class="scroll">
           <table>
             <thead>
@@ -67,9 +68,9 @@ const ICON = {
             </tbody>
           </table>
         </div>
-        <p class="src">Other tools as described on their own pages, checked {CHECKED}:
+        <p class="src">Other tools as their own pages describe them, checked {CHECKED}:
           {SOURCES.map((s, i) => <>{i > 0 && ' · '}<a href={s.href}>{s.label}</a></>)}.
-          Something out of date? <a href="https://github.com/spoopyghosty0/frameport/issues/new">Open an issue</a>.</p>
+          Out of date? <a href={REPORT_PROBLEM}>Report a problem</a></p>
       </details>
     </div>
   </div>
@@ -136,8 +137,8 @@ const ICON = {
   .all summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .all summary i { font-style: normal; transition: transform 300ms var(--ease-out); }
   .all[open] summary i { transform: rotate(180deg); }
-  .all[open] summary span { font-size: 0; }
-  .all[open] summary span::after { content: "Hide the full table"; font-size: 14px; }
+  .all summary .hide, .all[open] summary .show { display: none; }
+  .all[open] summary .hide { display: inline; }
   .all::details-content { block-size: 0; overflow: hidden; transition: block-size 450ms var(--ease-out), content-visibility 450ms allow-discrete; }
   .all[open]::details-content { block-size: auto; }
 
