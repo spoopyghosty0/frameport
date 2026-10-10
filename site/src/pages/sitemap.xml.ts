@@ -7,7 +7,7 @@ import { url } from '../data/site';
 
 export const GET: APIRoute = ({ site }) => {
   const pages: [string, string?][] = [
-    [''], ['setup/'], ['download/'], ['changelog/', LATEST?.date], ['docs/'], ...DOCS.map((d) => [`docs/${d.slug}/`] as [string]),
+    [''], ['setup/'], ['download/'], ['changelog/', LATEST?.date], ['docs/'], ['privacy/'], ...DOCS.map((d) => [`docs/${d.slug}/`] as [string]),
   ];
   const body = pages.map(([path, mod]) => `  <url><loc>${new URL(url(path), site)}</loc>${mod ? `<lastmod>${mod}</lastmod>` : ''}</url>`);
   return new Response(`<?xml version="1.0" encoding="UTF-8"?>

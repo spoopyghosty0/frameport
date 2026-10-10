@@ -54,6 +54,9 @@ jobs:
       - run: npm run build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # the contributors list (higher API limit)
+          # analytics (Settings → Secrets and variables → Actions → Variables); unset = none on the site
+          PUBLIC_CF_ANALYTICS_TOKEN: ${{ vars.CF_ANALYTICS_TOKEN }}
+          PUBLIC_GA_ID: ${{ vars.GA_MEASUREMENT_ID }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site/dist

@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import Analytics from '../components/Analytics.astro';
 import { DOWNLOADS, downloadPage, url } from '../data/site';
 
 interface Props {
@@ -49,6 +50,7 @@ const feed = new URL(url('changelog/feed.xml'), Astro.site);
   </head>
   <body>
     <slot />
+    <Analytics />
     <script define:vars={{ downloads: DOWNLOADS.map((d) => ({ os: d.os, label: d.label, href: downloadPage(d.os) })) }}>
       // The download buttons offer the build for this computer; the other platforms stay listed next to them.
       const ua = navigator.userAgent;

@@ -57,6 +57,8 @@ const joiner = (i: number, n: number) => (i === 0 ? '' : i === n - 1 ? ' and ' :
       <a href={url('docs/')}>Docs</a>
       <a href={REPORT_PROBLEM}>Report a problem</a>
       <a href={url('install/')}>Install links</a>
+      <a href={url('privacy/')}>Privacy</a>
+      {import.meta.env.PUBLIC_GA_ID && <a href={url('privacy/')} data-cookie-settings>Cookie settings</a>}
     </nav>
   </div>
 </footer>

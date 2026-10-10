@@ -1,0 +1,101 @@
+---
+// Visitor statistics. Both are optional and set at build time (pages workflow → repo variables):
+// - Cloudflare Web Analytics (PUBLIC_CF_ANALYTICS_TOKEN): no cookies and no personal data, so it runs without asking.
+// - Google Analytics 4 (PUBLIC_GA_ID, G-…): sets cookies, so it loads only after the visitor clicks Allow. The
+//   choice is kept in localStorage ("frameport.consent"); "Cookie settings" in the footer asks again. A browser that
+//   sends Global Privacy Control counts as Decline.
+// window.fpTrack(name, params) records an event when Google Analytics is allowed (downloads use it).
+import { url } from '../data/site';
+
+const cf = import.meta.env.PUBLIC_CF_ANALYTICS_TOKEN as string | undefined;
+const ga = import.meta.env.PUBLIC_GA_ID as string | undefined;
+const gaOk = !!ga && /^G-[A-Z0-9]+$/.test(ga);
+---
+{cf && <script is:inline defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={JSON.stringify({ token: cf })}></script>}
+
+{gaOk ? (
+  <>
+    <div class="consent" data-consent hidden role="region" aria-label="Cookie settings">
+      <p><b>Allow analytics cookies?</b> Google Analytics would count visits and downloads, nothing else.
+        <a href={url('privacy/')}>Privacy</a></p>
+      <div class="row">
+        <button type="button" class="btn btn-secondary btn-small" data-consent-no>Decline</button>
+        <button type="button" class="btn btn-secondary btn-small" data-consent-yes>Allow</button>
+      </div>
+    </div>
+    <script is:inline define:vars={{ ga }}>
+      (() => {
+        const KEY = 'frameport.consent';
+        const box = document.querySelector('[data-consent]');
+        const read = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
+        const save = (v) => { try { localStorage.setItem(KEY, v); } catch { /* private mode: ask again next time */ } };
+        let loaded = false;
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { window.dataLayer.push(arguments); }
+        window.fpTrack = (name, params) => { if (loaded) gtag('event', name, params || {}); };
+        const load = () => {
+          if (loaded) return;
+          loaded = true;
+          gtag('js', new Date());
+          gtag('config', ga);
+          const s = document.createElement('script');
+          s.async = true;
+          s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga)}`;
+          document.head.appendChild(s);
+        };
+        const drop = () => {
+          // a later Decline: stop sending and remove Google's cookies for this site
+          window[`ga-disable-${ga}`] = true;
+          for (const c of document.cookie.split(';')) {
+            const name = c.split('=')[0].trim();
+            if (!/^_ga/.test(name)) continue;
+            for (const domain of ['', `; domain=${location.hostname}`, `; domain=.${location.hostname.replace(/^www\./, '')}`]) {
+              document.cookie = `${name}=; max-age=0; path=/${domain}`;
+            }
+          }
+        };
+        // both answers look alike, and nothing is preselected: focus moves only when the visitor asked for the card
+        const show = (asked) => { box.hidden = false; if (asked) box.querySelector('[data-consent-no]').focus({ preventScroll: true }); };
+        const choose = (v) => {
+          save(v);
+          box.hidden = true;
+          if (v === 'granted') { window[`ga-disable-${ga}`] = false; load(); } else drop();
+        };
+        box.querySelector('[data-consent-yes]').addEventListener('click', () => choose('granted'));
+        box.querySelector('[data-consent-no]').addEventListener('click', () => choose('denied'));
+        document.addEventListener('click', (e) => {
+          const open = e.target.closest && e.target.closest('[data-cookie-settings]');
+          if (open) { e.preventDefault(); show(true); }
+        });
+        const choice = read();
+        if (choice === 'granted') load();
+        else if (!choice) {
+          if (navigator.globalPrivacyControl) save('denied');
+          else show(false);
+        }
+        // downloads straight from GitHub's release links (the download page reports its own)
+        document.addEventListener('click', (e) => {
+          const a = e.target.closest && e.target.closest('a[href*="/releases/download/"]');
+          if (a) window.fpTrack('file_download', { file_name: a.href.split('/').pop(), link_url: a.href });
+        });
+      })();
+    </script>
+  </>
+) : <script is:inline>window.fpTrack = () => {};</script>}
+
+<style>
+  .consent { position: fixed; z-index: 90; left: 16px; bottom: 16px; width: min(380px, calc(100% - 32px)); display: grid; gap: 12px;
+    padding: 16px 18px; border-radius: var(--radius-md); background: rgba(22, 24, 30, .96); border: 1px solid var(--border-strong);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .6); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    font-size: 14px; line-height: 1.5; color: var(--text-2); animation: rise .45s var(--ease-out); }
+  .consent[hidden] { display: none; }
+  .consent::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; border-radius: var(--radius-md) var(--radius-md) 0 0;
+    background: var(--portal); opacity: .8; }
+  .consent p { margin: 0; }
+  .consent b { color: var(--text); }
+  .consent a { color: var(--secondary); white-space: nowrap; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row .btn { justify-content: center; }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+  @media (prefers-reduced-motion: reduce) { .consent { animation: none; } }
+</style>

@@ -1,0 +1,61 @@
+---
+// What the site (not the app) records. Kept in step with components/Analytics.astro.
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import { REPORT_PROBLEM } from '../../data/site';
+
+const cf = !!import.meta.env.PUBLIC_CF_ANALYTICS_TOKEN;
+const ga = !!import.meta.env.PUBLIC_GA_ID;
+---
+<Layout title="Privacy · FramePort" description="What frameport.app records about visits, and how to turn analytics cookies off.">
+  <Nav home={false} />
+  <main class="pv">
+    <div class="wrap inner">
+      <p class="label"><b>Privacy</b> frameport.app</p>
+      <h1>Privacy</h1>
+      <p class="lead">This page is about the website. The FramePort app itself has no analytics or tracking.</p>
+
+      <section>
+        <h2>What the site records</h2>
+        <ul>
+          {cf && <li><b>Cloudflare Web Analytics</b> counts page views (page, referrer, country, browser) without
+            cookies or anything that identifies you.</li>}
+          {ga && <li><b>Google Analytics</b> counts visits and downloads, but only if you click <b>Allow</b>. It then
+            sets cookies (<code>_ga</code>) to tell visits apart. Google doesn't store IP addresses.</li>}
+          {!cf && !ga && <li>Nothing: this build of the site has no analytics.</li>}
+          <li>The site is hosted on <b>GitHub Pages</b>, which keeps technical logs (including IP addresses) for
+            security.</li>
+          <li>The site stores a few settings in your browser only (your cookie choice, docs you've read, a
+            remembered tab). They never leave your browser.</li>
+        </ul>
+      </section>
+
+      {ga && (
+        <section>
+          <h2>Change your choice</h2>
+          <p>Open <a href="#" data-cookie-settings>Cookie settings</a> to allow or decline analytics cookies at any
+            time. Declining removes Google's cookies for this site. A browser that sends Global Privacy Control is
+            treated as Decline.</p>
+        </section>
+      )}
+
+      <section>
+        <h2>Questions</h2>
+        <p><a href={REPORT_PROBLEM}>Report a problem</a> on GitHub.</p>
+      </section>
+    </div>
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  .pv { background: var(--portal-glow); padding-block: clamp(40px, 7vw, 80px) 96px; }
+  .inner { max-width: 760px; display: grid; gap: 24px; }
+  h1 { font-size: clamp(36px, 6vw, 56px); line-height: 1.05; font-weight: 800; letter-spacing: -0.03em; }
+  h2 { font-size: 22px; margin-bottom: 10px; }
+  ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; color: var(--text-2); }
+  p { color: var(--text-2); margin: 0; }
+  b { color: var(--text); }
+  code { font: 500 .9em var(--font-mono); }
+</style>

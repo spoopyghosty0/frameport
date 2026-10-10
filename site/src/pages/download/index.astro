@@ -161,6 +161,7 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
     const go = () => {
       try { sessionStorage.setItem(KEY, String(Date.now())); } catch { /* no storage */ }
       sent(b, false);
+      window.fpTrack?.('file_download', { file_name: b.href.split('/').pop(), os: b.os });
       // the download itself: the release asset answers with an attachment, so this page stays
       setTimeout(() => location.assign(b.href), reduce ? 0 : 520);
     };
