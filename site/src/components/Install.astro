@@ -1,5 +1,7 @@
 ---
 import Glyph from './Glyph.astro';
+import InstallBadge from './InstallBadge.astro';
+import HeadsetModel from './HeadsetModel.astro';
 import { DOWNLOADS, RELEASES, blob, downloadUrl, url } from '../data/site';
 
 // how to start it the first time, per system (the install tutorial's words)
@@ -43,7 +45,8 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
       </li>
       <li class="step reveal">
         <span class="num mid">2</span>
-        <div class="body">
+        <div class="body with-model">
+          <div class="model"><HeadsetModel size="320px" aspect="1 / 1" /></div>
           <h3>Connect the Frame: wirelessly or with a cable</h3>
           <div class="conn" data-conn="wifi">
             <div class="seg" role="tablist" aria-label="How to connect">
@@ -77,8 +80,8 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
           <p><b>Add games → Scan a folder</b>, pick a game, <b>Install on Frame</b>. When it's done the game is in your
             Steam library on the Frame.</p>
           <a class="video" href={url('media/frameport-install.mp4')}>
-            <img src={url('media/frameport-install.jpg')} alt="" width="1280" height="720" loading="lazy" decoding="async" />
-            <span><Glyph name="live" size={18} /> The install tutorial · 90 s</span>
+            <video muted loop playsinline preload="none" poster={url('media/frameport-install.jpg')} data-preview={url('media/preview-install.mp4')} width="1280" height="720" aria-hidden="true"></video>
+            <span><Glyph name="live" size={18} /> The install tutorial · 80 s</span>
           </a>
         </div>
       </li>
@@ -90,7 +93,8 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
         <h3>An “Install with FramePort” button</h3>
         <p class="muted">Put it on your download page. A click opens FramePort, which asks, downloads and installs your
           build on the visitor's Frame. Without FramePort, the button's page explains how to get it.</p>
-        <img class="badge" src={url('media/install-with-frameport-animated.svg')} alt="Install with FramePort" width="216" height="60" />
+        <div class="badge-row"><InstallBadge id="makers" href={url('install/?url=https%3A%2F%2Fexample.com%2Fgames%2Fcool-game-arm64.apk')}
+          label="Try it: what a visitor without FramePort sees" /><span class="try">← try it</span></div>
         <a class="small" href={url('docs/install-button/')}>The button, the manifest format and the rules</a>
       </div>
       <div class="snippet">
@@ -152,6 +156,9 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
   .first { font-size: 14px; color: var(--text-2); min-height: 3em; }
   .first b { color: var(--text); }
   .conn { display: grid; gap: 14px; }
+  .with-model { grid-template-columns: minmax(0, 1fr) 280px; column-gap: 28px; }
+  .with-model > :not(.model) { grid-column: 1; }
+  .with-model .model { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
   .seg { display: inline-flex; justify-self: start; padding: 4px; gap: 4px; border-radius: 999px; background: var(--surface-3); }
   .seg button { all: unset; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; cursor: pointer;
     font: 600 14px/1 var(--font-sans); color: var(--text-2); transition: background-color 220ms, color 220ms; }
@@ -174,7 +181,7 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
   .video { position: relative; display: block; max-width: 520px; border-radius: var(--radius-sm); overflow: hidden;
     border: 1px solid var(--border); box-shadow: var(--shadow-art); text-decoration: none;
     transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out); }
-  .video img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
+  .video img, .video video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; background: #050608; }
   .video span { position: absolute; left: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 8px;
     padding: 6px 12px; border-radius: var(--radius-pill); background: rgba(13, 14, 18, 0.75); color: var(--text);
     font: 600 13px/1 var(--font-sans); }
@@ -185,7 +192,8 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
   .makers-copy { display: grid; gap: 14px; align-content: start; }
   .makers-copy .label { margin-bottom: 0; }
   .makers-copy h3 { font-size: 24px; }
-  .badge { width: 216px; height: 60px; margin-block: 6px; }
+  .badge-row { display: flex; align-items: center; gap: 14px; margin-block: 6px; }
+  .try { font: 500 13px/1 var(--font-mono); color: var(--text-2); }
   .snippet { min-width: 0; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border);
     overflow: hidden; align-self: start; }
   .snippet-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 16px;
@@ -196,5 +204,7 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
     .step { grid-template-columns: 1fr; gap: 8px; padding: 22px 18px; }
     .num { font-size: 48px; }
     .makers { grid-template-columns: 1fr; padding: 22px 18px; }
+    .with-model { grid-template-columns: minmax(0, 1fr); }
+    .with-model .model { grid-column: 1; grid-row: auto; max-width: 240px; justify-self: center; }
   }
 </style>

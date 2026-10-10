@@ -204,3 +204,79 @@ code, kbd, pre { font-family: var(--font-mono); }
 .prose tbody tr:hover td { background: rgba(237, 238, 242, .03); }
 .prose details { margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .prose summary { cursor: pointer; font-weight: 600; }
+
+/* ---------------- everything reacts (scripts/interactions.ts) ---------------- */
+.cursor-light { position: fixed; left: 0; top: 0; z-index: 90; width: 520px; height: 520px; margin: -260px 0 0 -260px; border-radius: 50%;
+  pointer-events: none; opacity: 0; transition: opacity 500ms; mix-blend-mode: screen;
+  background: radial-gradient(closest-side, rgba(255, 138, 31, .07), rgba(58, 168, 255, .045) 45%, transparent 75%); }
+.cursor-light.on { opacity: 1; }
+.click-ring { position: fixed; z-index: 95; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; pointer-events: none;
+  border: 2px solid var(--secondary); opacity: 0; animation: click-ring .72s var(--ease-out) both; }
+.click-ring.o { border-color: var(--accent); }
+@keyframes click-ring { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(5); } }
+
+/* headings: words rise in, the pointer lights them in the portal's colours */
+.words .w { display: inline-block; }
+.js .reveal .words .w, .js .words.pre .w { opacity: 0; transform: translateY(.45em) rotate(2deg); }
+.js .reveal.in .words .w { opacity: 1; transform: none; transition: opacity 600ms var(--ease-out), transform 700ms var(--ease-back);
+  transition-delay: calc(var(--wi) * 55ms + 120ms); }
+.words.lit { background: radial-gradient(180px circle at var(--hx) var(--hy), var(--accent), var(--secondary) 45%, var(--text) 75%) text;
+  -webkit-background-clip: text; color: transparent; }
+.words.lit .muted { color: transparent; }
+
+/* section labels */
+.label .scr { font-variant-numeric: tabular-nums; }
+.label:hover { color: var(--text); cursor: default; }
+@supports (animation-timeline: view()) {
+  .label::after { transform-origin: left; animation: label-line linear both; animation-timeline: view(); animation-range: entry 20% cover 45%; }
+  @keyframes label-line { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+}
+
+/* icons: each moves in its own way when what holds it is pointed at */
+.glyph { transition: transform 400ms var(--ease-back); }
+:is(a, button, li, .stage, .hcard, label):hover > .glyph-sync, :is(a, button, li, .stage):hover .g > .glyph-sync { animation: g-spin .9s var(--ease-out); }
+:is(a, button, li, .stage):hover :is(.glyph-frame, .glyph-frame-solid) { animation: g-nod .7s var(--ease-out); }
+:is(a, button, li, .stage):hover .glyph-pc { animation: g-flicker .6s steps(2) 2; }
+:is(a, button, li, .stage):hover .glyph-keys { animation: g-type .5s ease-in-out 2; }
+:is(a, button, li, .stage):hover .glyph-live { animation: g-pulse .8s var(--ease-out) 2; }
+:is(a, button, li, .stage):hover .glyph-patch { transform: rotate(-25deg); }
+:is(a, button, li, .stage):hover .glyph-test { transform: rotate(14deg) translateY(-1px); }
+:is(a, button, li, .stage):hover .glyph-port { transform: translateX(3px); }
+:is(a, button, li, .stage):hover .glyph-recipe { transform: rotateY(180deg); }
+:is(a, button, li, .stage):hover .glyph-container { animation: g-pop .5s var(--ease-back); }
+:is(a, button, li, .stage):hover .glyph-shot { animation: g-flash .5s ease-out; }
+:is(a, button, li, .stage):hover .glyph-link { transform: rotate(-20deg) scale(1.1); }
+@keyframes g-spin { to { transform: rotate(360deg); } }
+@keyframes g-nod { 30% { transform: translateY(-2px) rotate(-6deg); } 60% { transform: translateY(1px) rotate(4deg); } }
+@keyframes g-flicker { 50% { opacity: .3; } }
+@keyframes g-type { 50% { transform: translateY(2px) scaleY(.9); } }
+@keyframes g-pulse { 40% { transform: scale(1.25); } }
+@keyframes g-pop { 40% { transform: scale(1.3) rotate(-6deg); } }
+@keyframes g-flash { 30% { filter: drop-shadow(0 0 6px currentColor) brightness(1.8); } }
+
+/* links in running text: the underline wipes in, blue to orange */
+:is(.lead, .muted, .small, .small-p, .src, .cl, .cu, .foot, .first, .notice-band, .prose) a:not(.btn):not(.anchor) {
+  text-decoration: none; background: linear-gradient(90deg, var(--secondary), var(--accent)) left bottom / 100% 1px no-repeat;
+  transition: background-size 350ms var(--ease-out), color 200ms; padding-bottom: 1px; }
+:is(.lead, .muted, .small, .small-p, .src, .cl, .cu, .foot, .first, .notice-band, .prose) a:not(.btn):not(.anchor):hover { background-size: 100% 100%; color: var(--on-accent); border-radius: 3px; }
+
+/* the hero flies toward its portal as you scroll away */
+.hero .copy { transform: translateY(calc(var(--sp, 0) * -60px)); opacity: calc(1 - var(--sp, 0) * 1.1); }
+.hero .scene { transform: scale(calc(1 + var(--sp, 0) * .35)) translateY(calc(var(--sp, 0) * 40px)); transform-origin: 50% 45%;
+  filter: blur(calc(var(--sp, 0) * 3px)); opacity: calc(1 - var(--sp, 0) * .7); }
+
+@media (prefers-reduced-motion: reduce) {
+  .words .w { opacity: 1 !important; transform: none !important; }
+  .hero .copy, .hero .scene { transform: none; opacity: 1; filter: none; }
+}
+.step .num { display: inline-block; transition: transform 500ms var(--ease-back), filter 300ms; }
+.step:hover .num { transform: scale(1.15) rotate(-8deg); filter: drop-shadow(0 6px 18px rgba(255, 138, 31, .35)); }
+.notice-band .mark { transition: transform 400ms var(--ease-back); }
+.notice-band:hover .mark { animation: wiggle .6s ease-in-out; }
+@keyframes wiggle { 25% { transform: rotate(-14deg) scale(1.1); } 50% { transform: rotate(10deg); } 75% { transform: rotate(-6deg); } }
+.wordmark svg { transition: transform 700ms var(--ease-back); }
+.wordmark:hover svg, a:hover > .wordmark svg { transform: rotate(180deg); }
+:is(.chip, .tab, .with button, .cf button, .seg button):active { transform: scale(.94); }
+.built li { transition: background-color 250ms, padding-left 300ms var(--ease-out); border-radius: 4px; }
+.built li:hover { background: linear-gradient(90deg, rgba(58, 168, 255, .08), transparent); padding-left: 10px; }
+@media (prefers-reduced-motion: reduce) { .step:hover .num, .wordmark:hover svg, a:hover > .wordmark svg { transform: none; } .notice-band:hover .mark { animation: none; } }

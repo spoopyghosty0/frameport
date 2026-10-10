@@ -13,6 +13,6 @@ const { name, size = 20, class: cls = '' } = Astro.props;
 const raw = readFileSync(join(process.cwd(), '..', 'src/frameport/ui/icons/glyphs', `${name}.svg`), 'utf8');
 const svg = raw
   .replaceAll('#FFFFFF', 'currentColor')
-  .replace(/ width="24" height="24"/, ` width="${size}" height="${size}" class="glyph ${cls}" aria-hidden="true" focusable="false"`);
+  .replace(/ width="24" height="24"/, ` width="${size}" height="${size}" class="glyph glyph-${name} ${cls}" aria-hidden="true" focusable="false"`);
 ---
 <Fragment set:html={svg} />

@@ -7,7 +7,7 @@ import { checkUrl, fileName as urlFileName } from './install-link';
 
 export interface MockGame { title: string; engine: string; xr: string; status: 'works' | 'issues'; platform: string }
 
-type Route = 'library' | 'game' | 'frame' | 'files' | 'shots' | 'live' | 'keys' | 'monitor' | 'settings';
+export type Route = 'library' | 'game' | 'frame' | 'files' | 'shots' | 'live' | 'keys' | 'monitor' | 'settings';
 interface FileRow { name: string; size: string; progress?: number }
 interface State {
   connected: boolean;
@@ -73,7 +73,10 @@ function cover(g: MockGame, cls = '') {
     + `<span class="ic">${esc(initials(g.title))}</span><b class="tt">${esc(g.title)}</b></div>`;
 }
 
-export function initMock(root: HTMLElement, games: MockGame[]) {
+/** compact: one screen only (no window bar, sidebar or tour), for the live slides of the screenshot carousel. */
+export interface MockOptions { route?: Route; compact?: boolean; live?: boolean }
+
+export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions = {}) {
   const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
   const view = $('[data-view]');
   const side = $('[data-sidebar]');
@@ -681,6 +684,9 @@ export function initMock(root: HTMLElement, games: MockGame[]) {
   }
   new ResizeObserver(() => coachUpdate()).observe(root);
 
+  if (opts.route) s.route = opts.route;
+  if (opts.route === 'game') s.current = s.games[0]?.title ?? null;
+  if (opts.live) s.live = true;
   applyTheme();
   render();
 }

@@ -1,10 +1,11 @@
 ---
 // A clickable, simplified FramePort window (logic in scripts/mock.ts): explore a demo setup, or take the guided tour
 // from a fresh start. Games are real catalog titles with generated covers; the Frame is pretend.
-import type { MockGame } from '../scripts/mock';
+import type { MockGame, Route } from '../scripts/mock';
 
-interface Props { games: MockGame[] }
-const { games } = Astro.props;
+/** compact: one live screen (no window bar, sidebar or tour), for the carousel's slides */
+interface Props { games: MockGame[]; compact?: boolean; route?: Route; live?: boolean }
+const { games, compact = false, route, live = false } = Astro.props;
 const nav = [
   ['library', 'Library'], ['frame', 'Steam Frame'], ['files', 'Files'], ['shots', 'Screenshots'], ['live', 'Live view'],
   ['keys', 'Type on Frame'], ['monitor', 'Monitor'], ['settings', 'Settings'],
@@ -20,7 +21,9 @@ const ICON: Record<string, string> = {
   settings: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
 };
 ---
-<div class="mock" data-mock>
+<div class="mock-wrap" data-mock-wrap>
+<div class:list={['mock', { compact }]} data-mock={compact ? undefined : ''} data-mock-compact={compact ? '' : undefined}
+  data-route={route} data-live={live ? '' : undefined}>
   <div class="bar">
     <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
     <span class="name">FramePort</span>
@@ -49,7 +52,7 @@ const ICON: Record<string, string> = {
   <div class="ctx" data-ctx hidden role="menu"></div>
   <div class="toasts" data-toasts aria-live="polite"></div>
   <div class="coach" data-coach hidden role="dialog" aria-label="Guided tour"></div>
-  <div class="start" data-start>
+  {!compact && <div class="start" data-start>
     <div class="start-in">
       <p class="start-k">Try FramePort here</p>
       <h3>A working copy of the app, in your browser.</h3>
@@ -59,16 +62,22 @@ const ICON: Record<string, string> = {
         <button type="button" class="btn btn-secondary" data-act="explore">Explore on my own</button>
       </div>
     </div>
-  </div>
+  </div>}
 </div>
 
 <script type="application/json" data-mock-games set:html={JSON.stringify(games).replaceAll('<', '\\u003c')} />
+</div>
 
 <script>
-  import { initMock, type MockGame } from '../scripts/mock';
-  const root = document.querySelector<HTMLElement>('[data-mock]');
-  const data = document.querySelector('[data-mock-games]');
-  if (root && data) initMock(root, JSON.parse(data.textContent || '[]') as MockGame[]);
+  import { initMock, type MockGame, type Route } from '../scripts/mock';
+  // every copy on the page: the trial, and the carousel's live screens
+  document.querySelectorAll<HTMLElement>('[data-mock-wrap]').forEach((wrap) => {
+    const root = wrap.querySelector<HTMLElement>('.mock')!;
+    const data = wrap.querySelector('[data-mock-games]');
+    if (!data) return;
+    initMock(root, JSON.parse(data.textContent || '[]') as MockGame[],
+      { compact: root.hasAttribute('data-mock-compact'), route: (root.dataset.route || undefined) as Route | undefined, live: root.hasAttribute('data-live') });
+  });
 </script>
 
 <style>
@@ -427,6 +436,12 @@ const ICON: Record<string, string> = {
   .toasts :global(.toast.info) { border-left-color: var(--secondary); }
   .toasts :global(.toast.out) { opacity: 0; transform: translateY(8px); }
   @keyframes toastin { from { opacity: 0; transform: translateY(12px) scale(.96); } to { opacity: 1; transform: none; } }
+
+  /* compact: one screen filling its slide */
+  .mock-wrap { display: contents; }
+  .mock.compact { height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+  .compact .bar, .compact .side { display: none; }
+  .compact .body { grid-template-columns: minmax(0, 1fr); }
 
   @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
   @keyframes spin { to { transform: rotate(360deg); } }

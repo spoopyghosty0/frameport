@@ -1,8 +1,8 @@
 ---
-// The logo, told as a scene: a game goes into the portal on the PC's side (blue) as an APK file and comes out on the
-// Frame's side (orange) as a game in the Steam library. Two copies of one moving card, each clipped to its side of
-// the tilted portal, so the card changes at the seam exactly as the logo cuts the monitor and the headset. The same
-// generated app icon is on both sides, so the eye can follow one game through.
+// The logo, told as a scene: a game goes into the portal on the PC's side (blue) as an APK file and arrives on the
+// Frame's side (orange) as something you can step into: an abstract VR world, or the file's pieces gathering into
+// the game's own shape (scripts/hero). The card is clipped at the tilted seam exactly as the logo cuts the monitor
+// and the headset; the Frame side is clipped to the other side of the same seam.
 // Stage units: 100 × 75 (aspect 4:3); portal centre (50, 37.5), tilted 18°, so the seam runs from x 62.18 at the
 // top to x 37.82 at the bottom.
 import { apkName, coverVars, initials } from '../scripts/cover';
@@ -21,12 +21,17 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
       <path d="M9 15h27a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V18a3 3 0 0 1 3-3z" />
       <path d="M22.5 41v6M15.5 47h14" />
     </g>
-    <!-- the Frame: the logo's visor -->
+    <!-- the Frame: the logo's visor, seen until the game's world opens over it -->
     <g class="hmd" transform="translate(33.6 3) scale(1.05)">
       <path d="M30 31.5H32M56.5 31.5H58.5" />
       <path d="M35.5 21h17.5a8 8 0 0 1 8 8v5a8 8 0 0 1-8 8H48.65a3 3 0 0 1-2.6-1.5l-1-1.7a.9.9 0 0 0-1.6 0l-1 1.7a3 3 0 0 1-2.6 1.5H35.5a8 8 0 0 1-8-8v-5a8 8 0 0 1 8-8z" />
     </g>
   </svg>
+
+  <!-- the Frame's side: drawn by three.js (scripts/hero), a CSS scene underneath until then or without WebGL -->
+  <div class="frame-side" data-frameside aria-hidden="true">
+    <div class="fs-fallback"><i class="fsky"></i><i class="ffloor"></i></div>
+  </div>
 
   <div class="lane lane-pc" aria-hidden="true">
     <div class="track">
@@ -44,32 +49,6 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
           <span class="ticker"><span>scan</span><span>analyze</span><span>convert</span><span>patch</span><span>sign</span></span>
           <span class="bar"><i></i></span>
         </div>
-      </div>
-    </div>
-  </div>
-  <div class="lane lane-frame" aria-hidden="true">
-    <div class="track">
-      <div class="card game">
-        <div class="art"><i class="sun"></i><i class="band"></i><i class="band b2"></i></div>
-        <!-- what the headset shows: one view per eye, the game's scene running in both -->
-        <div class="eyes">
-          {['l', 'r'].map((e) => (
-            <span class={`eye ${e}`}><i class="sky"></i><i class="glow"></i><i class="floor"></i><i class="scan"></i></span>
-          ))}
-        </div>
-        <div class="gt-row">
-          <span class="icon" data-f="initials">{initials(first.title)}</span>
-          <span class="pill pill-ok">Works</span>
-        </div>
-        <div class="game-title" data-f="title">{first.title}</div>
-        <div class="now">
-          <span class="dot"></span><span class="playing">Playing</span>
-          <span class="fps"><b class="n"></b> fps</span>
-        </div>
-        <svg class="pace" viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden="true">
-          <polyline points="0,13 8,11 14,12 20,6 28,5 36,4.5 44,4 52,4.4 60,3.8 68,4.1 76,4 84,3.9 92,4 100,4" />
-        </svg>
-        <span class="pulse" aria-hidden="true"></span>
       </div>
     </div>
   </div>
@@ -94,7 +73,7 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
   <div class="sparks" aria-hidden="true">
     {sparks.map((i) => <i style={`--i:${i}`}></i>)}
   </div>
-  <p class="hint" aria-hidden="true">Click the portal for the next game</p>
+  <p class="hint" aria-hidden="true">Click for the next game · drag the Frame side to look around</p>
   <p class="caption">
     <span class="mono" data-f="package">{first.package}</span>
     <span class="arrow">→</span>
@@ -102,16 +81,26 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
   </p>
 </div>
 
+<!-- TEMPORARY: the owner compares the two Frame-side scenes. Remove this toggle, its styles and the unused renderer
+     (scripts/hero/world.ts or particles.ts) once one is picked. -->
+<div class="fs-toggle" role="group" aria-label="Frame side scene (temporary comparison)" data-fs-toggle>
+  <span>Frame side</span>
+  <button type="button" data-fs-mode="world" aria-pressed="true">3D world</button>
+  <button type="button" data-fs-mode="particles" aria-pressed="false">Particles</button>
+</div>
+
 <script type="application/json" data-crossing-games set:html={JSON.stringify(games).replaceAll('<', '\\u003c')} />
 
 <script>
   import { apkName, coverVars, initials } from '../scripts/cover';
+  import { initFrameSide, savedMode, type Mode } from '../scripts/hero/frameside';
   // A different catalog game crosses on every lap (swapped while the card is out of sight).
   const stage = document.querySelector<HTMLElement>('[data-crossing]');
   const data = document.querySelector('[data-crossing-games]');
   if (stage && data) {
     const games = JSON.parse(data.textContent || '[]') as { title: string; package: string; engine: string; xr: string }[];
     let i = 0;
+    const fs = initFrameSide(stage, stage.querySelector<HTMLElement>('[data-frameside]')!, games[0].title);
     const show = () => {
       const g = games[i];
       const values: Record<string, string> = {
@@ -120,10 +109,13 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
       };
       for (const el of stage.querySelectorAll<HTMLElement>('[data-f]')) el.textContent = values[el.dataset.f!] ?? '';
       stage.setAttribute('style', coverVars(g.title) + tiltVars);
+      fs.setGame(g.title);
     };
     stage.querySelector('.track')?.addEventListener('animationiteration', () => { i = (i + 1) % games.length; show(); });
-    // a click sends the next game: every lap animation starts again, the card already on the PC's side
+    // a click sends the next game: every lap animation starts again, the card already on the PC's side (a drag on
+    // the Frame side looks around instead)
     const next = () => {
+      if (fs.dragged()) return;
       i = (i + 1) % games.length;
       show();
       const lap = 9000;
@@ -146,6 +138,16 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
       });
       stage.addEventListener('pointerleave', () => { tiltVars = ''; stage.style.setProperty('--ry', '0deg'); stage.style.setProperty('--rx', '0deg'); });
     }
+    // TEMPORARY: the comparison toggle
+    const toggle = document.querySelector<HTMLElement>('[data-fs-toggle]');
+    const mark = (m: Mode) => toggle?.querySelectorAll<HTMLElement>('[data-fs-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fsMode === m)));
+    mark(savedMode());
+    toggle?.addEventListener('click', (e) => {
+      const b = (e.target as Element).closest<HTMLElement>('[data-fs-mode]');
+      if (!b) return;
+      fs.setMode(b.dataset.fsMode as Mode);
+      mark(fs.mode());
+    });
   }
 </script>
 
@@ -162,8 +164,8 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
     transition: transform 400ms var(--ease-out);
   }
   .stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 12px; }
-  .hint { position: absolute; left: 0; right: 0; top: 2%; margin: 0; text-align: center; font: 500 12px/1 var(--font-mono);
-    color: var(--text-2); opacity: 0; transition: opacity 300ms; pointer-events: none; }
+  .hint { position: absolute; left: 6%; right: 6%; top: 2%; z-index: 3; margin: 0; text-align: center; font: 500 12px/1.4 var(--font-mono);
+    color: var(--text-2); opacity: 0; transition: opacity 300ms; pointer-events: none; text-shadow: 0 1px 6px rgba(0, 0, 0, .8); }
   .stage:hover .hint, .stage:focus-visible .hint { opacity: 1; }
   /* the two sides' light, fading out well inside the stage so it has no edges */
   .stage::before { content: ""; position: absolute; inset: 0; pointer-events: none;
@@ -175,9 +177,25 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
   .props .pc { stroke: rgba(58, 168, 255, 0.22); }
   .props .hmd { stroke: rgba(255, 138, 31, 0.22); }
 
-  .lane { position: absolute; inset: 0; transform-style: preserve-3d; }
+  /* the Frame's side: right of the seam (in its own box the seam runs from 39.18 % at the top to 0 at the bottom) */
+  .frame-side { position: absolute; top: 0; bottom: 0; left: 37.82%; width: 62.18%; touch-action: pan-y;
+    clip-path: polygon(39.18% 0, 100% 0, 100% 100%, 0 100%); cursor: grab;
+    -webkit-mask-image: radial-gradient(130% 100% at 70% 50%, #000 62%, transparent 100%);
+    mask-image: radial-gradient(130% 100% at 70% 50%, #000 62%, transparent 100%); }
+  .frame-side:active { cursor: grabbing; }
+  .frame-side :global(.fs-canvas) { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .fs-fallback { position: absolute; inset: 0; overflow: hidden; transition: opacity 600ms; perspective: 300px;
+    animation: fsopen var(--lap) infinite; }
+  .frame-side:global(.live) .fs-fallback { opacity: 0; animation: none; }
+  .fsky { position: absolute; inset: 0;
+    background: linear-gradient(180deg, hsl(var(--h) 55% 8%), hsl(var(--h2) 70% 34%) 58%, hsl(var(--h) 45% 5%) 58.5%); }
+  .ffloor { position: absolute; left: -60%; right: -60%; top: 58%; height: 90%; transform-origin: top; transform: rotateX(70deg);
+    background-image: linear-gradient(hsl(var(--h2) 90% 62% / .6) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--h) 85% 64% / .5) 1px, transparent 1px);
+    background-size: 5cqi 5cqi; }
+
+  .lane { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; }
   .lane-pc { clip-path: polygon(-50% 0, 62.18% 0, 37.82% 100%, -50% 100%); }
-  .lane-frame { clip-path: polygon(62.18% 0, 150% 0, 150% 100%, 37.82% 100%); }
   .track { position: absolute; inset: 0; animation: lap var(--lap) infinite; will-change: transform, opacity; }
 
   .card {
@@ -227,55 +245,6 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
   .bar i { display: block; height: 100%; width: 100%; background: var(--portal); transform-origin: left;
     animation: fill var(--lap) infinite; }
 
-  /* the Frame's side: the game running in the headset. It comes out of the portal dark, switches on (scan line,
-     a portal-coloured pulse), then its frame rate climbs to 72 while the pacing line draws itself */
-  .game { border: 1px solid rgba(255, 138, 31, 0.5); box-shadow: var(--shadow-art-hover); padding: 2cqi; gap: 1cqi;
-    background: hsl(var(--h) 40% 9%); overflow: visible; }
-  .art { position: absolute; inset: 0; overflow: hidden; border-radius: inherit;
-    background: linear-gradient(170deg, hsl(var(--h) 45% 26%), hsl(var(--h) 40% 8%) 70%); }
-  .art .sun { position: absolute; left: var(--sx); top: var(--sy); width: 26cqi; height: 26cqi; margin: -13cqi 0 0 -13cqi;
-    border-radius: 50%; background: radial-gradient(circle, hsl(var(--h2) 90% 70% / .55), hsl(var(--h2) 90% 55% / 0) 68%);
-    mix-blend-mode: screen; }
-  .art .band { position: absolute; left: -20%; right: -20%; top: 52%; height: 9cqi; transform: rotate(var(--rot));
-    background: linear-gradient(90deg, transparent, hsl(var(--h2) 80% 60% / .2), transparent); }
-  .art .band.b2 { top: 66%; height: 3cqi; transform: rotate(calc(var(--rot) * -1.4)); opacity: .7; }
-  .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(8, 9, 12, .9) 80%); }
-  .game > *:not(.art):not(.pulse) { position: relative; }
-
-  .eyes { display: grid; grid-template-columns: 1fr 1fr; gap: 1cqi; height: 41%; flex: none; filter: brightness(0);
-    animation: poweron var(--lap) infinite; }
-  .eye { position: relative; overflow: hidden; border-radius: 45% 45% 38% 38% / 55% 55% 45% 45%; background: #050608;
-    box-shadow: inset 0 0 1.4cqi rgba(0, 0, 0, .9), 0 0 0 1px rgba(255, 138, 31, .3); }
-  .eye .sky { position: absolute; inset: 0; background: linear-gradient(180deg, hsl(var(--h) 55% 32%), hsl(var(--h2) 60% 40%) 55%, #08090c 56%); }
-  .eye .glow { position: absolute; top: 24%; width: 7cqi; height: 7cqi; margin-left: -3.5cqi; border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, #fff, hsl(var(--h2) 90% 62%) 45%, transparent 72%);
-    box-shadow: 0 0 2.4cqi hsl(var(--h2) 90% 60% / .7); animation: drift 6s ease-in-out infinite alternate; }
-  .eye.l .glow { left: 56%; } .eye.r .glow { left: 46%; }  /* one picture per eye: the near object sits apart */
-  .eye .floor { position: absolute; left: -60%; right: -60%; top: 56%; height: 90%; transform-origin: top; transform: perspective(8cqi) rotateX(62deg);
-    background-image: linear-gradient(hsl(var(--h2) 85% 62% / .55) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--h) 80% 62% / .45) 1px, transparent 1px);
-    background-size: 3cqi 3cqi; animation: run .9s linear infinite; }
-  .eye.r .floor { left: -63%; right: -57%; }
-  .eye .scan { position: absolute; left: 0; right: 0; height: 18%; top: -20%;
-    background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .55), transparent); animation: scanline var(--lap) infinite; }
-
-  .gt-row { display: flex; align-items: center; justify-content: space-between; margin-top: -3.6cqi; }
-  .game .pill { font-size: 1.6cqi; line-height: 1.3; padding: .35cqi 1.1cqi .35cqi .9cqi; gap: .6cqi; background: rgba(8, 9, 12, .7); }
-  .game .pill::before { width: .9cqi; height: .9cqi; }
-  .game-title { margin-top: auto; font: 800 var(--ts)/1.04 var(--font-display); letter-spacing: -0.015em; color: #fff;
-    overflow-wrap: normal; word-break: normal; hyphens: none; text-wrap: balance; text-shadow: 0 .3cqi 1.2cqi rgba(0, 0, 0, .5); }
-  .now { display: flex; align-items: center; gap: .9cqi; font: 600 1.7cqi/1 var(--font-sans); color: var(--text); opacity: 0;
-    animation: shown var(--lap) infinite; }
-  .dot { position: relative; width: 1.1cqi; height: 1.1cqi; border-radius: 50%; background: var(--ok); box-shadow: 0 0 1cqi var(--ok); }
-  .dot::after { content: ""; position: absolute; inset: -.4cqi; border-radius: 50%; border: .25cqi solid var(--ok); animation: ping 1.4s ease-out infinite; }
-  .fps { margin-left: auto; font-family: var(--font-mono); color: var(--text-2); white-space: nowrap; }
-  .fps .n { color: var(--ok); font: 800 2.6cqi/1 var(--font-display); counter-reset: fps var(--fps); animation: count var(--lap) infinite; }
-  .fps .n::after { content: counter(fps); }
-  .pace { width: 100%; height: 3.2cqi; flex: none; overflow: visible; }
-  .pace polyline { fill: none; stroke: var(--ok); stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round;
-    stroke-dasharray: 140; stroke-dashoffset: 140; animation: draw var(--lap) infinite; }
-  .pulse { position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; opacity: 0;
-    box-shadow: 0 0 0 .4cqi var(--secondary), 0 0 3cqi .6cqi rgba(255, 138, 31, .7); animation: landpulse var(--lap) infinite; }
-
   .portal { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   .portal .glow { opacity: .35; animation: breathe 5.5s ease-in-out infinite; }
   .portal .flash { opacity: 0; animation: flash var(--lap) infinite; }
@@ -288,14 +257,27 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
     animation: spark var(--lap) infinite; animation-delay: calc(var(--i) * 18ms); }
   .sparks i:nth-child(odd) { --c: var(--secondary); }
 
-  .caption { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: baseline;
-    gap: 10px; margin: 0; font: 500 13px/1.4 var(--font-sans); color: var(--text-2); min-width: 0; }
-  .caption .mono { font-family: var(--font-mono); color: var(--secondary); white-space: nowrap; overflow: hidden;
+  .caption { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; justify-content: center; align-items: baseline;
+    gap: 10px; margin: 0; font: 500 13px/1.4 var(--font-sans); color: var(--text-2); min-width: 0; pointer-events: none;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, .9); }
+  .caption { padding-inline: 4%; }
+  .caption .mono { flex: 0 1 auto; font-family: var(--font-mono); color: var(--secondary); white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; min-width: 0; }
-  .caption .t { color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .caption .arrow { flex: none; }
+  .caption .t { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; color: var(--accent); font-weight: 600; white-space: nowrap; }
   .caption .arrow { color: var(--text-3); }
 
-  /* one lap: arrive on the PC's side, get prepared, cross, land on the Frame's side and play, leave */
+  /* TEMPORARY: the comparison toggle */
+  .fs-toggle { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+  .fs-toggle span { font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-2); margin-right: 4px; }
+  .fs-toggle button { all: unset; padding: 5px 12px; border-radius: 999px; border: 1px dashed var(--border-strong); font-size: 12.5px;
+    color: var(--text-2); cursor: pointer; }
+  .fs-toggle button:hover { color: var(--text); }
+  .fs-toggle button[aria-pressed="true"] { color: var(--text); border-style: solid; border-color: transparent;
+    background: linear-gradient(90deg, rgba(58, 168, 255, .22), rgba(255, 138, 31, .22)); }
+  .fs-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* one lap: arrive on the PC's side, get prepared, cross, the game opens on the Frame's side, the next one comes */
   @keyframes lap {
     0% { transform: translateX(-26%); opacity: 0; animation-timing-function: var(--ease-out); }
     8% { transform: translateX(0); opacity: 1; }
@@ -326,24 +308,12 @@ const sparks = Array.from({ length: 10 }, (_, i) => i);
     100% { opacity: 0; transform: rotate(var(--a)) translateX(17cqi) scale(.4); }
   }
   @keyframes breathe { 0%, 100% { opacity: .28; } 50% { opacity: .5; } }
+  @keyframes fsopen { 0%, 34% { opacity: 0; } 56%, 90% { opacity: 1; } 98%, 100% { opacity: 0; } }
 
-  @property --fps { syntax: '<integer>'; inherits: false; initial-value: 0; }
-  @keyframes poweron { 0%, 55% { filter: brightness(0); } 57% { filter: brightness(1.8); } 61%, 100% { filter: brightness(1); } }
-  @keyframes scanline { 0%, 55% { top: -20%; opacity: 0; } 56% { opacity: 1; } 62%, 100% { top: 110%; opacity: 0; } }
-  @keyframes shown { 0%, 58% { opacity: 0; transform: translateY(.6cqi); } 62%, 100% { opacity: 1; transform: none; } }
-  @keyframes count { 0%, 58% { --fps: 0; } 70%, 100% { --fps: 72; } }
-  @keyframes draw { 0%, 59% { stroke-dashoffset: 140; } 78%, 100% { stroke-dashoffset: 0; } }
-  @keyframes landpulse { 0%, 55% { opacity: 0; transform: scale(1); } 57% { opacity: 1; transform: scale(1); } 66%, 100% { opacity: 0; transform: scale(1.08); } }
-  @keyframes run { to { background-position: 0 3cqi; } }
-  @keyframes drift { from { transform: translate(-1.5cqi, 0); } to { transform: translate(1.5cqi, -.8cqi); } }
-  @keyframes ping { from { opacity: .8; transform: scale(.6); } to { opacity: 0; transform: scale(1.8); } }
-
-  /* reduced motion: the logo's own moment, the card halfway through */
+  /* reduced motion: the logo's own moment, the card halfway through, the game's world already open */
   @media (prefers-reduced-motion: reduce) {
     .track { animation: none; transform: translateX(31%); opacity: 1; }
-    .card, .ticker span, .bar i, .sparks i, .portal .glow, .portal .flash, .eyes, .eye .scan, .eye .floor, .eye .glow, .now, .fps .n,
-      .pace polyline, .pulse, .dot::after { animation: none; }
-    .eyes { filter: none; } .now { opacity: 1; } .fps .n { --fps: 72; } .pace polyline { stroke-dashoffset: 0; }
+    .card, .ticker span, .bar i, .sparks i, .portal .glow, .portal .flash, .fs-fallback { animation: none; }
     .ticker span { transform: translateY(-300%); }
   }
 </style>

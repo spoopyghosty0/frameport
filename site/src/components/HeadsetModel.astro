@@ -1,0 +1,43 @@
+---
+// A Steam Frame you can turn (scripts/headset3d.ts). It fills its container: give it a width, or `size` for a
+// maximum width. Without WebGL the logo's flat visor drawing stays.
+interface Props { size?: string; aspect?: string; label?: string }
+const { size = '100%', aspect = '4 / 3', label = 'A 3D model of the Steam Frame: drag to turn it' } = Astro.props;
+---
+<div class="hm" data-headset3d style={`--hm-size:${size};--hm-aspect:${aspect}`} role="img" aria-label={label}>
+  <svg class="hm-fallback" viewBox="26 18 37 27" aria-hidden="true">
+    <defs>
+      <linearGradient id="hm-rim" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#3AA8FF" /><stop offset="1" stop-color="#FF8A1F" />
+      </linearGradient>
+    </defs>
+    <path d="M30 31.5H32M56.5 31.5H58.5" stroke="url(#hm-rim)" stroke-width="2" stroke-linecap="round" />
+    <path d="M35.5 21h17.5a8 8 0 0 1 8 8v5a8 8 0 0 1-8 8H48.65a3 3 0 0 1-2.6-1.5l-1-1.7a.9.9 0 0 0-1.6 0l-1 1.7a3 3 0 0 1-2.6 1.5H35.5a8 8 0 0 1-8-8v-5a8 8 0 0 1 8-8z"
+      fill="#14161c" stroke="url(#hm-rim)" stroke-width="1.6" />
+    <ellipse cx="39.5" cy="30.5" rx="4.2" ry="3.8" fill="#FF8A1F" />
+    <ellipse cx="49" cy="30.5" rx="4.2" ry="3.8" fill="#FF8A1F" />
+  </svg>
+  <span class="hm-hint" aria-hidden="true">Drag to turn it</span>
+</div>
+
+<script>
+  import { initHeadsets } from '../scripts/headset3d';
+  initHeadsets();
+</script>
+
+<style>
+  .hm { position: relative; width: 100%; max-width: var(--hm-size); aspect-ratio: var(--hm-aspect); margin-inline: auto;
+    cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; isolation: isolate; }
+  .hm:active { cursor: grabbing; }
+  /* a soft floor shadow and the portal's light behind it */
+  .hm::before { content: ""; position: absolute; left: 18%; right: 18%; bottom: 8%; height: 12%; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(0, 0, 0, .6), transparent); pointer-events: none; }
+  .hm::after { content: ""; position: absolute; inset: 10% 14%; border-radius: 50%; pointer-events: none; z-index: -1;
+    background: radial-gradient(closest-side, rgba(58, 168, 255, .12), rgba(255, 138, 31, .07) 55%, transparent); }
+  .hm :global(.hm-canvas) { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hm-fallback { position: absolute; inset: 18% 14%; width: 72%; height: 64%; transition: opacity 400ms; }
+  .hm:global(.live) .hm-fallback { opacity: 0; }
+  .hm-hint { position: absolute; left: 0; right: 0; bottom: 2%; text-align: center; font: 500 12px/1 var(--font-mono);
+    color: var(--text-2); transition: opacity 400ms; pointer-events: none; }
+  .hm:global(.turned) .hm-hint { opacity: 0; }
+</style>

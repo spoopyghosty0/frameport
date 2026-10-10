@@ -5,6 +5,7 @@ import Layout from '../../layouts/Layout.astro';
 import Nav from '../../components/Nav.astro';
 import Footer from '../../components/Footer.astro';
 import Glyph from '../../components/Glyph.astro';
+import InstallBadge from '../../components/InstallBadge.astro';
 import { DOWNLOADS, RELEASES, downloadUrl, url } from '../../data/site';
 ---
 <Layout
@@ -14,7 +15,7 @@ import { DOWNLOADS, RELEASES, downloadUrl, url } from '../../data/site';
   <Nav home={false} />
   <main class="page" data-state="loading">
     <div class="wrap inner">
-      <img class="badge" src={url('media/install-with-frameport.svg')} alt="Install with FramePort" width="216" height="60" />
+      <InstallBadge id="landing" href="#" label="Open this link in FramePort" />
 
       <!-- what the link installs -->
       <article class="item" data-item hidden>
@@ -146,6 +147,7 @@ import { DOWNLOADS, RELEASES, downloadUrl, url } from '../../data/site';
     };
     $('[data-open]').addEventListener('click', open);
     $<HTMLAnchorElement>('[data-open-link]').href = parsed.link;
+    document.querySelectorAll<HTMLAnchorElement>('[data-ib]').forEach((a) => { a.href = parsed.link; });
     $('[data-copy]').addEventListener('click', async (ev) => {
       const b = ev.currentTarget as HTMLButtonElement;
       try { await navigator.clipboard.writeText(parsed.link); b.textContent = 'Copied'; }

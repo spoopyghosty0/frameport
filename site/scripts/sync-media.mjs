@@ -1,6 +1,7 @@
 // Copies the showcase renders (docs/images, docs/media) and the install badges (docs/badges) into the site before a
 // build. They are rendered by scripts/showcase in CI and never by hand, so the site always shows the current ones.
 // Screenshots go to src/assets/media (Astro optimizes them), videos and badges to public/media (served as they are).
+import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +33,17 @@ for (const [dir, names] of Object.entries(PUBLIC)) {
     copy(dir === 'docs/media' && existsSync(hq) ? hq : join(repo, dir, name), join(site, 'public/media', name));
   }
 }
+// short silent loops of each video for the video tiles (light: they play while on screen); needs ffmpeg, else the
+// tiles show their poster
+for (const [id, from] of [['tour', 18], ['install', 28]]) {
+  const src = join(site, 'public/media', `frameport-${id}.mp4`);
+  const out = join(site, 'public/media', `preview-${id}.mp4`);
+  const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(from), '-t', '14', '-i', src, '-an',
+    '-vf', 'fps=24,scale=960:-2:flags=lanczos', '-c:v', 'libx264', '-preset', 'slow', '-crf', '28', '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart', out]);
+  console.log(r.status === 0 ? `preview ${id}` : `no preview for ${id} (ffmpeg missing or failed)`);
+}
+
 // every image the docs pages show (docs/images → media/docs)
 let docImages = 0;
 for (const name of readdirSync(join(repo, 'docs/images'))) {

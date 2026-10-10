@@ -40,6 +40,7 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
       - uses: actions/configure-pages@v6
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg  # the video tiles' short previews
       - run: npm ci
       - run: npm test
       - run: npm run build

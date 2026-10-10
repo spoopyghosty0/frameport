@@ -1,0 +1,57 @@
+---
+// The "Install with FramePort" button as a live control (the SVG badge in docs/badges is what other sites embed):
+// the same look, with its blue and orange washes breathing, a portal light that follows the pointer, a press ripple.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import Wordmark from './Wordmark.astro';
+
+interface Props { href: string; id: string; label?: string }
+const { href, id, label = 'Install with FramePort' } = Astro.props;
+const logo = readFileSync(join(process.cwd(), '..', 'src/frameport/ui/icons/logo.svg'), 'utf8')
+  .replace(/id="fp(\d)"/g, `id="ib-${id}-$1"`).replace(/url\(#fp(\d)\)/g, `url(#ib-${id}-$1)`)
+  .replace('<svg ', '<svg class="ib-logo" aria-hidden="true" ');
+---
+<a class="ib" href={href} aria-label={label} data-ib>
+  <span class="ib-wash b" aria-hidden="true"></span>
+  <span class="ib-wash o" aria-hidden="true"></span>
+  <span class="ib-core" aria-hidden="true"></span>
+  <Fragment set:html={logo} />
+  <span class="ib-text" aria-hidden="true"><small>Install with</small><Wordmark id={`ib-${id}`} /></span>
+</a>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-ib]').forEach((b) => {
+    b.addEventListener('pointermove', (e) => {
+      const r = b.getBoundingClientRect();
+      b.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
+      b.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
+    });
+    b.addEventListener('pointerdown', () => { b.classList.remove('pressed'); void b.offsetWidth; b.classList.add('pressed'); });
+  });
+</script>
+
+<style>
+  .ib { --mx: 56%; --my: 65%; position: relative; display: inline-flex; align-items: center; gap: 10px; width: 216px; height: 60px; padding: 0 14px 0 10px;
+    box-sizing: border-box; border-radius: 12px; overflow: hidden; text-decoration: none; isolation: isolate;
+    background: #0d0e12; border: 1px solid #2a2d37; transition: transform 320ms var(--ease-back), border-color 220ms, box-shadow 220ms; }
+  .ib:hover { transform: translateY(-2px) scale(1.03); border-color: rgba(255, 138, 31, .6); box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 24px rgba(255, 138, 31, .25); }
+  .ib:active { transform: scale(.97); }
+  .ib:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .ib-wash { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+  .ib-wash.b { background: linear-gradient(90deg, rgba(58, 168, 255, .46), transparent 55%); transform-origin: left; animation: wb 6s ease-in-out infinite; }
+  .ib-wash.o { background: linear-gradient(90deg, transparent 45%, rgba(255, 138, 31, .34)); transform-origin: right; animation: wo 6s ease-in-out infinite; }
+  .ib-core { position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 300ms;
+    background: radial-gradient(70px 40px at var(--mx) var(--my), rgba(255, 226, 189, .45), rgba(255, 138, 31, .2) 35%, rgba(58, 168, 255, .08) 70%, transparent); }
+  .ib:hover .ib-core { opacity: 1; }
+  .ib.pressed::after { content: ""; position: absolute; left: var(--mx); top: var(--my); width: 20px; height: 20px; margin: -10px; border-radius: 50%;
+    border: 2px solid var(--secondary); animation: ibring .6s var(--ease-out) forwards; pointer-events: none; }
+  .ib :global(.ib-logo) { width: 40px; height: 40px; flex: none; transition: transform 600ms var(--ease-back); }
+  .ib:hover :global(.ib-logo) { transform: rotate(-8deg) scale(1.06); }
+  .ib-text { display: grid; gap: 2px; line-height: 1; }
+  .ib-text small { font: 700 9.5px/1 var(--font-sans); letter-spacing: .14em; text-transform: uppercase; color: #a7abb7; }
+  .ib-text :global(.wordmark) { font-size: 19px; }
+  @keyframes wb { 0%, 10%, 100% { opacity: .45; transform: scaleX(1); } 32% { opacity: 1; transform: scaleX(1.5); } 54% { opacity: .3; transform: scaleX(1); } }
+  @keyframes wo { 0%, 38%, 100% { opacity: .6; transform: scaleX(1); } 60% { opacity: 1; transform: scaleX(1.4); } 84% { opacity: .6; transform: scaleX(1); } }
+  @keyframes ibring { from { opacity: 1; transform: scale(1); border-color: var(--secondary); } to { opacity: 0; transform: scale(9); border-color: var(--accent); } }
+  @media (prefers-reduced-motion: reduce) { .ib-wash { animation: none; } }
+</style>

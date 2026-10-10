@@ -1,32 +1,22 @@
 ---
-// The app itself: a clickable copy (AppMock) with a guided tour, the showcase videos (rendered by scripts/showcase,
-// never by hand) in a player, and real screenshots.
+// The app itself: a clickable copy (AppMock) with a guided tour, every screen as a live slide, and the showcase
+// videos (rendered by scripts/showcase, never by hand), previewed by short silent loops while on screen.
 import AppMock from './AppMock.astro';
 import Carousel from './Carousel.astro';
 import type { MockGame } from '../scripts/mock';
 import { url } from '../data/site';
-import library from '../assets/media/library.png';
-import game from '../assets/media/game.png';
-import monitor from '../assets/media/monitor.png';
-import live from '../assets/media/live-view.png';
-import files from '../assets/media/files.png';
-import keys from '../assets/media/type-on-frame.png';
-import screenshots from '../assets/media/screenshots.png';
-import progress from '../assets/media/install-progress.png';
-import patches from '../assets/media/patches.png';
 
 interface Props { games: MockGame[] }
 const { games } = Astro.props;
-const shots = [
-  { img: library, title: 'Library', text: 'Your games with their artwork. Search, tags and filters; install several at once.' },
-  { img: game, title: 'Game page', text: 'One click to install or play. Patches and game settings under Customize.' },
-  { img: monitor, title: 'Monitor', text: "The game's frame rate, the Frame's load, temperatures, power and battery, live." },
-  { img: live, title: 'Live view', text: 'What the headset shows, with sound, in a browser window on your computer.' },
-  { img: screenshots, title: 'Screenshots', text: 'The pictures you took in the headset, sorted by game and day.' },
-  { img: files, title: 'Files', text: "The Frame's videos, downloads and each game's storage. Drag and drop." },
-  { img: keys, title: 'Type on Frame', text: "Your computer's keyboard, typing in VR apps, Steam and the desktop." },
-  { img: progress, title: 'Installing', text: 'Every stage on the way to the Frame, with speed and time left.' },
-  { img: patches, title: 'Patches', text: 'What each patch does, in plain words; switch any of them.', fit: 'contain' as const },
+const screens = [
+  { route: 'library' as const, title: 'Library', text: 'Your games with their artwork. Search, filter, right-click, select several.' },
+  { route: 'game' as const, title: 'Game page', text: 'One click to install or play. Patches and game settings under Customize.' },
+  { route: 'monitor' as const, title: 'Monitor', text: "The game's frame rate, the Frame's load and temperatures, live. End a process." },
+  { route: 'live' as const, title: 'Live view', text: 'What the headset shows, in a browser window on your computer.', live: true },
+  { route: 'shots' as const, title: 'Screenshots', text: 'The pictures you took in the headset, by game. Open one.' },
+  { route: 'files' as const, title: 'Files', text: "The Frame's files. Drop a file from your desktop on it." },
+  { route: 'keys' as const, title: 'Type on Frame', text: 'Type here; it appears on the Frame.' },
+  { route: 'settings' as const, title: 'Themes', text: 'Pick a theme; the screen changes at once.' },
 ];
 const videos = [
   { id: 'tour', title: 'The tour', text: 'Library, install, play, monitor · about 90 s' },
@@ -44,12 +34,18 @@ const videos = [
 
     <div class="reveal"><AppMock games={games} /></div>
 
+    <div class="shots reveal">
+      <p class="watch-k">Every screen, live: click, type, drop a file</p>
+      <Carousel slides={screens} games={games} />
+    </div>
+
     <div class="watch reveal">
       <p class="watch-k">Prefer to watch? The real app, filmed at 1440p</p>
       <div class="vids">
         {videos.map((v) => (
           <button type="button" class="vid" data-video={v.id}>
-            <img src={url(`media/frameport-${v.id}.jpg`)} alt="" width="1280" height="720" loading="lazy" decoding="async" />
+            <video muted loop playsinline preload="none" poster={url(`media/frameport-${v.id}.jpg`)} data-preview={url(`media/preview-${v.id}.mp4`)}
+              width="1280" height="720" aria-hidden="true"></video>
             <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg></span>
             <span class="vid-t"><b>{v.title}</b><span>{v.text}</span></span>
           </button>
@@ -58,10 +54,6 @@ const videos = [
     </div>
   </div>
 
-  <div class="wrap shots reveal">
-    <p class="watch-k">The real app, screenshot by screenshot</p>
-    <Carousel slides={shots} />
-  </div>
 
   <dialog class="player" data-player aria-label="Video">
     <video controls playsinline preload="none" data-player-video></video>
@@ -81,6 +73,18 @@ const videos = [
     video.play().catch(() => {});
   }));
   dlg?.addEventListener('close', () => { video?.pause(); });
+  // the tiles play their short silent loop while on screen (no preview file: the poster stays)
+  const previews = [...document.querySelectorAll<HTMLVideoElement>('video[data-preview]')];
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => {
+      const v = e.target as HTMLVideoElement;
+      if (e.isIntersecting) {
+        if (!v.src) v.src = v.dataset.preview!;
+        v.play().catch(() => {});
+      } else v.pause();
+    }), { threshold: 0.35 });
+    previews.forEach((v) => io.observe(v));
+  }
   dlg?.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
 </script>
 
@@ -91,12 +95,12 @@ const videos = [
   .vids { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
   .vid { all: unset; position: relative; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px 14px;
     cursor: pointer; transition: transform 220ms var(--ease-out); }
-  .vid img { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; opacity: .9;
+  .vid video { grid-column: 1 / -1; background: #050608; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; opacity: .9;
     border-radius: var(--radius-md); border: 1px solid var(--border); box-shadow: var(--shadow-art);
     transition: opacity 220ms, box-shadow 220ms var(--ease-out); }
-  .vid:hover img { box-shadow: var(--shadow-art-hover); }
+  .vid:hover video { box-shadow: var(--shadow-art-hover); }
   .vid:hover, .vid:focus-visible { transform: translateY(-3px); }
-  .vid:hover img { opacity: 1; }
+  .vid:hover video { opacity: 1; }
   .vid:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .vid-play { position: relative; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center;
     background: rgba(22, 24, 30, .65); backdrop-filter: blur(8px); border: 1px solid rgba(237, 238, 242, .25); color: var(--text);
@@ -115,5 +119,6 @@ const videos = [
     place-items: center; font-size: 24px; color: var(--text); background: rgba(22, 24, 30, .7); cursor: pointer; }
   .player .close:hover { background: var(--accent); color: var(--on-accent); }
 
-  .shots { margin-top: clamp(48px, 7vw, 72px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .shots { margin-top: clamp(40px, 6vw, 64px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .watch { margin-top: clamp(40px, 6vw, 64px); }
 </style>

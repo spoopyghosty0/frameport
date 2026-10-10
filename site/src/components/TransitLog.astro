@@ -42,7 +42,7 @@ const frame: Stage[] = [
 
     <div class="log reveal" data-log>
       <div class="log-bar">
-        <span class="log-title"><Glyph name="frame" size={18} /> Installing <span data-lg="title">{example.title}</span> on Steam Frame</span>
+        <span class="log-title"><Glyph name="frame" size={18} /><span>Installing <b data-lg="title">{example.title}</b> on Steam Frame</span></span>
         <span class="log-progress" aria-hidden="true"><i></i></span>
       </div>
 
@@ -101,9 +101,9 @@ const frame: Stage[] = [
     set('analyze', `${g.engine} · ${g.xr} · arm64`);
     set('recipe', g.verified ? `tested recipe · ${g.verified}` : 'tested recipe');
     set('patch', g.patches ? `FrameBridge + ${g.patches} from the recipe` : 'FrameBridge + Frame patches');
-    log.classList.remove('in');
-    void log.offsetWidth;  // restart the line-by-line entrance
-    log.classList.add('in');
+    log.classList.remove('sweep');
+    void log.offsetWidth;  // restart the sweep
+    log.classList.add('sweep');
   });
 </script>
 
@@ -117,8 +117,7 @@ const frame: Stage[] = [
     overflow: hidden; }
   .log-progress i { display: block; height: 100%; width: 100%; background: var(--portal); transform-origin: left;
     transform: scaleX(1); }
-  .js .log:not(.in) .log-progress i { transform: scaleX(0); }
-  .js .log.in .log-progress i { transition: transform 2.6s var(--ease-out) .2s; }
+  .log.scrubbed .log-progress i { transform: scaleX(0); transition: transform 450ms var(--ease-out); }
 
   .side { display: flex; align-items: center; gap: 8px; padding: 18px 20px 6px; margin: 0;
     font: 600 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; }
@@ -140,12 +139,17 @@ const frame: Stage[] = [
   .d { color: var(--text-2); font-size: 12.5px; text-align: right; overflow-wrap: anywhere; }
   .ok { font: 600 11px/1 var(--font-mono); color: var(--ok); text-transform: uppercase; justify-self: end; }
 
-  /* the lines arrive one after another, like the app's activity log */
-  .js .log:not(.in) .stage { opacity: 0; transform: translateX(-8px); }
-  .js .log.in .stage { transition: opacity 500ms var(--ease-out), transform 500ms var(--ease-out);
-    transition-delay: calc(var(--i) * 140ms + 200ms); }
-  .js .log:not(.in) .ok { opacity: 0; }
-  .js .log.in .ok { transition: opacity 300ms; transition-delay: calc(var(--i) * 140ms + 520ms); }
+  /* scrolling completes the install line by line (scripts/interactions.ts marks .done), like the app's activity log */
+  .log.scrubbed .stage { opacity: .32; transition: opacity 450ms var(--ease-out), background-color 300ms; }
+  .log.scrubbed .stage.done { opacity: 1; }
+  .log.scrubbed .stage.done .g { animation: gpop .5s var(--ease-back); }
+  .log.scrubbed .ok { opacity: 0; transform: scale(.5); transition: opacity 300ms, transform 400ms var(--ease-back); }
+  .log.scrubbed .stage.done .ok { opacity: 1; transform: none; }
+  .log.complete .log-title::after { content: "· done"; margin-left: 4px; color: var(--ok); font: 600 12px/1 var(--font-mono); }
+  @keyframes gpop { 40% { transform: scale(1.25); } }
+  /* another game: a light sweeps down the lines */
+  .log.sweep .stage { animation: sweep .7s var(--ease-out) both; animation-delay: calc(var(--i) * 70ms); }
+  @keyframes sweep { 0% { background-color: rgba(255, 138, 31, 0); } 30% { background-color: rgba(255, 138, 31, .1); } 100% { background-color: rgba(255, 138, 31, 0); } }
 
   .seam { position: relative; height: 40px; margin: 6px 0; display: grid; place-items: center; }
   .seam::before { content: ""; position: absolute; left: 20px; right: 20px; top: 50%; height: 2px; background: var(--portal);

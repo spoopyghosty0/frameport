@@ -48,6 +48,7 @@ const poster = new URL(url('media/frameport-tour.jpg'), Astro.site);
       }
     </script>
     <script>
+      import { initInteractions } from '../scripts/interactions';
       // Sections fade in once as they reach the viewport (not with reduced motion: CSS shows them at once).
       const io = new IntersectionObserver((entries) => {
         for (const e of entries) {
@@ -55,6 +56,7 @@ const poster = new URL(url('media/frameport-tour.jpg'), Astro.site);
         }
       }, { rootMargin: '0px 0px -12% 0px' });
       document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+      initInteractions();
       // the big buttons lean toward the pointer
       if (matchMedia('(pointer: fine)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.querySelectorAll<HTMLElement>('.hero .btn, .nav .btn-primary').forEach((b) => {
