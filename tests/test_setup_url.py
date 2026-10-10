@@ -179,3 +179,30 @@ def test_first_key_is_made_once_under_concurrency():
     for t in threads:
         t.join()
     assert not errors and len(set(keys)) == 1
+
+
+def test_cli_pair_does_not_announce(monkeypatch):
+    """`frameport frame pair` can't answer the setup URL's requests (no Allow button), so it must not announce
+    itself: a Frame running the setup URL would find it and wait for an answer that never comes."""
+    from typer.testing import CliRunner
+
+    from frameport import cli
+
+    made = []
+
+    class Fake:
+        def __init__(self, **kw):
+            made.append(kw)
+            self.paired = []
+            self.one_liner = "curl -fsS 127.0.0.1:8765/code | bash"
+
+        def start(self):
+            return self
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(pairing, "PairingServer", Fake)
+    result = CliRunner().invoke(cli.app, ["frame", "pair", "--timeout", "0"])
+    assert result.exit_code == 1 and "timed out" in result.output
+    assert made and made[0].get("announce") is False

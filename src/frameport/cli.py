@@ -532,7 +532,8 @@ def frame_pair(timeout: float = typer.Option(600, help="seconds to wait for the 
     from .frame.connection import FrameTarget, save_target
     from .frame.pairing import PairingServer
 
-    srv = PairingServer().start()
+    # no mDNS announcement: the setup URL's requests need someone to click Allow, which only the GUI offers
+    srv = PairingServer(announce=False).start()
     typer.echo("On the Frame, open the SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
                "Konsole, and run:\n\n    " + srv.one_liner + "\n")
     end = time.time() + timeout
