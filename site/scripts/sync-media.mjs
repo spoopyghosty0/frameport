@@ -23,7 +23,12 @@ function copy(from, to) {
 }
 
 for (const name of SHOTS) copy(join(repo, 'docs/images', name), join(site, 'src/assets/media', name));
+// sharper copies of the videos (record_video.py --size 2560x1440, in site/media-hq) win over the docs ones
+const HQ = join(site, 'media-hq');
 for (const [dir, names] of Object.entries(PUBLIC)) {
-  for (const name of names) copy(join(repo, dir, name), join(site, 'public/media', name));
+  for (const name of names) {
+    const hq = join(HQ, name);
+    copy(dir === 'docs/media' && existsSync(hq) ? hq : join(repo, dir, name), join(site, 'public/media', name));
+  }
 }
 console.log(`synced ${SHOTS.length} screenshots and ${Object.values(PUBLIC).flat().length} media files`);

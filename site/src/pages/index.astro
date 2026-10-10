@@ -6,6 +6,7 @@ import TransitLog from '../components/TransitLog.astro';
 import AppTour from '../components/AppTour.astro';
 import CompatBoard from '../components/CompatBoard.astro';
 import FieldNotes from '../components/FieldNotes.astro';
+import Compare from '../components/Compare.astro';
 import Install from '../components/Install.astro';
 import Footer from '../components/Footer.astro';
 import { loadSnapshot } from '../data/catalog';
@@ -18,19 +19,27 @@ const crossing = games
   .sort((a, b) => b.checked.localeCompare(a.checked) || a.title.localeCompare(b.title))
   .slice(0, 10)
   .map(({ title, package: pkg, engine, xr }) => ({ title, package: pkg, engine, xr }));
+// the app demo's library: tested titles (mostly working, one with issues, one PC VR game when there is one)
+const pick = (pred: (g: Game) => boolean, n: number) => games.filter(pred).sort((a, b) => a.title.localeCompare(b.title)).slice(0, n);
+const mockGames = [
+  ...pick((g) => g.status === 'works' && g.platform === 'Quest' && g.title.length <= 22 && !crossing.slice(0, 2).some((c) => c.title === g.title), 9),
+  ...pick((g) => g.status === 'issues' && g.platform === 'Quest' && g.title.length <= 22, 1),
+  ...pick((g) => g.status === 'works' && g.platform === 'PC VR', 1),
+].map(({ title, engine, xr, status, platform }) => ({ title, engine, xr, status: status as 'works' | 'issues', platform }));
 // the install log follows one real recipe
 const example = games.find((g) => g.package === 'com.Armature.VR4') ?? games.find((g) => g.status === 'works')!;
 ---
 <Layout
-  title="FramePort · Quest games on your Steam Frame"
-  description="FramePort converts, patches and installs Quest games, Android apps and PC VR games on the Valve Steam Frame and adds them to your Steam library. Free and open source.">
+  title="FramePort · VR games on your Steam Frame"
+  description="FramePort converts, patches and installs Meta Quest games, Android apps and PC VR games on the Valve Steam Frame and adds them to your Steam library. Free and open source.">
   <Nav />
   <main>
     <Hero games={crossing} />
     <TransitLog example={{ title: example.title, engine: example.engine, xr: example.xr, verified: example.checked }} />
-    <AppTour />
+    <AppTour games={mockGames} />
     <CompatBoard />
     <FieldNotes />
+    <Compare />
     <Install />
   </main>
   <Footer />

@@ -1,15 +1,20 @@
 ---
-// The logo, told as a scene: a game goes into the portal on the PC's side (blue) as an APK and comes out on the
+// The logo, told as a scene: a game goes into the portal on the PC's side (blue) as an APK file and comes out on the
 // Frame's side (orange) as a game in the Steam library. Two copies of one moving card, each clipped to its side of
-// the tilted portal, so the card changes at the seam exactly as the logo cuts the monitor and the headset.
+// the tilted portal, so the card changes at the seam exactly as the logo cuts the monitor and the headset. The same
+// generated app icon is on both sides, so the eye can follow one game through.
 // Stage units: 100 × 75 (aspect 4:3); portal centre (50, 37.5), tilted 18°, so the seam runs from x 62.18 at the
 // top to x 37.82 at the bottom.
+import { apkName, coverVars, initials } from '../scripts/cover';
+
 export interface CrossingGame { title: string; package: string; engine: string; xr: string }
-interface Props { games: CrossingGame[]; compact?: boolean }
-const { games, compact = false } = Astro.props;
+interface Props { games: CrossingGame[] }
+const { games } = Astro.props;
 const first = games[0];
+const sparks = Array.from({ length: 10 }, (_, i) => i);
 ---
-<div class:list={['stage', { compact }]} data-crossing>
+<div class="stage" data-crossing style={coverVars(first.title)} role="button" tabindex="0"
+  aria-label="Send the next tested game through the portal">
   <svg class="props" viewBox="0 0 100 75" aria-hidden="true">
     <!-- the PC: the logo's monitor -->
     <g class="pc" transform="translate(-6.5 1) scale(1.2)">
@@ -26,21 +31,32 @@ const first = games[0];
   <div class="lane lane-pc" aria-hidden="true">
     <div class="track">
       <div class="card apk">
-        <div class="apk-top"><span>Quest</span><span>.apk</span></div>
-        <div class="apk-pkg" data-f="package">{first.package}</div>
-        <div class="apk-lines"><i></i><i></i><i></i><i></i></div>
+        <div class="apk-head">
+          <span class="icon" data-f="initials">{initials(first.title)}</span>
+          <span class="apk-kind">Meta Quest<br /><b>APK</b></span>
+        </div>
+        <div class="apk-name" data-f="file">{apkName(first.package, first.title)}</div>
         <div class="apk-meta"><span data-f="engine">{first.engine}</span> · <span data-f="xr">{first.xr}</span></div>
+        <ul class="tree">
+          <li>AndroidManifest.xml</li><li>lib/arm64-v8a/</li><li class="sub">libOVRPlugin.so</li><li>assets/</li><li>obb/</li>
+        </ul>
+        <div class="apk-work">
+          <span class="ticker"><span>scan</span><span>analyze</span><span>convert</span><span>patch</span><span>sign</span></span>
+          <span class="bar"><i></i></span>
+        </div>
       </div>
     </div>
   </div>
   <div class="lane lane-frame" aria-hidden="true">
     <div class="track">
       <div class="card game">
-        <div class="game-art"></div>
+        <div class="art"><i class="sun"></i><i class="band"></i><i class="band b2"></i></div>
+        <span class="icon" data-f="initials">{initials(first.title)}</span>
+        <span class="pill pill-ok">Works</span>
         <div class="game-title" data-f="title">{first.title}</div>
         <div class="game-foot">
-          <span class="pill pill-ok">Works</span>
-          <span class="game-where">In your Steam library</span>
+          <span class="where">Steam library · Frame</span>
+          <span class="play"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg></span>
         </div>
       </div>
     </div>
@@ -63,38 +79,80 @@ const first = games[0];
       <ellipse cx="50" cy="37.5" rx="6.2" ry="31" fill="none" stroke="url(#rim)" stroke-width="1.6" />
     </g>
   </svg>
-  <p class="caption" aria-live="off">
-    <span class="mono"><span data-f="package">{first.package}</span></span>
+  <div class="sparks" aria-hidden="true">
+    {sparks.map((i) => <i style={`--i:${i}`}></i>)}
+  </div>
+  <p class="hint" aria-hidden="true">Click the portal for the next game</p>
+  <p class="caption">
+    <span class="mono" data-f="package">{first.package}</span>
     <span class="arrow">→</span>
-    <span data-f="title">{first.title}</span>
+    <span class="t" data-f="title">{first.title}</span>
   </p>
 </div>
 
 <script type="application/json" data-crossing-games set:html={JSON.stringify(games).replaceAll('<', '\\u003c')} />
 
 <script>
+  import { apkName, coverVars, initials } from '../scripts/cover';
   // A different catalog game crosses on every lap (swapped while the card is out of sight).
   const stage = document.querySelector<HTMLElement>('[data-crossing]');
   const data = document.querySelector('[data-crossing-games]');
   if (stage && data) {
-    const games = JSON.parse(data.textContent || '[]') as Record<string, string>[];
+    const games = JSON.parse(data.textContent || '[]') as { title: string; package: string; engine: string; xr: string }[];
     let i = 0;
-    const track = stage.querySelector('.track');
-    track?.addEventListener('animationiteration', () => {
+    const show = () => {
+      const g = games[i];
+      const values: Record<string, string> = {
+        title: g.title, package: g.package, engine: g.engine, xr: g.xr,
+        initials: initials(g.title), file: apkName(g.package, g.title),
+      };
+      for (const el of stage.querySelectorAll<HTMLElement>('[data-f]')) el.textContent = values[el.dataset.f!] ?? '';
+      stage.setAttribute('style', coverVars(g.title) + tiltVars);
+    };
+    stage.querySelector('.track')?.addEventListener('animationiteration', () => { i = (i + 1) % games.length; show(); });
+    // a click sends the next game: every lap animation starts again, the card already on the PC's side
+    const next = () => {
       i = (i + 1) % games.length;
-      for (const el of stage.querySelectorAll<HTMLElement>('[data-f]')) el.textContent = games[i][el.dataset.f!] ?? '';
-    });
+      show();
+      const lap = 9000;
+      for (const a of stage.getAnimations({ subtree: true })) {
+        const d = a.effect?.getTiming().duration;
+        if (d === lap) a.currentTime = lap * 0.1;
+      }
+    };
+    stage.addEventListener('click', next);
+    stage.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); next(); } });
+    // the scene leans a little toward the pointer
+    let tiltVars = '';
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches && matchMedia('(pointer: fine)').matches) {
+      stage.addEventListener('pointermove', (e) => {
+        const r = stage.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+        tiltVars = `;--ry:${(x * 8).toFixed(2)}deg;--rx:${(-y * 6).toFixed(2)}deg`;
+        stage.style.setProperty('--ry', `${(x * 8).toFixed(2)}deg`);
+        stage.style.setProperty('--rx', `${(-y * 6).toFixed(2)}deg`);
+      });
+      stage.addEventListener('pointerleave', () => { tiltVars = ''; stage.style.setProperty('--ry', '0deg'); stage.style.setProperty('--rx', '0deg'); });
+    }
   }
 </script>
 
 <style>
   .stage {
-    --lap: 8.5s;
+    --lap: 9s;
     position: relative;
     aspect-ratio: 4 / 3;
     width: 100%;
     container-type: inline-size;
+    perspective: 900px;
+    cursor: pointer;
+    transform: perspective(1400px) rotateY(var(--ry, 0deg)) rotateX(var(--rx, 0deg));
+    transition: transform 400ms var(--ease-out);
   }
+  .stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 12px; }
+  .hint { position: absolute; left: 0; right: 0; top: 2%; margin: 0; text-align: center; font: 500 12px/1 var(--font-mono);
+    color: var(--text-2); opacity: 0; transition: opacity 300ms; pointer-events: none; }
+  .stage:hover .hint, .stage:focus-visible .hint { opacity: 1; }
   /* the two sides' light, fading out well inside the stage so it has no edges */
   .stage::before { content: ""; position: absolute; inset: 0; pointer-events: none;
     background:
@@ -105,86 +163,147 @@ const first = games[0];
   .props .pc { stroke: rgba(58, 168, 255, 0.22); }
   .props .hmd { stroke: rgba(255, 138, 31, 0.22); }
 
-  .lane { position: absolute; inset: 0; }
+  .lane { position: absolute; inset: 0; transform-style: preserve-3d; }
   .lane-pc { clip-path: polygon(-50% 0, 62.18% 0, 37.82% 100%, -50% 100%); }
   .lane-frame { clip-path: polygon(62.18% 0, 150% 0, 150% 100%, 37.82% 100%); }
   .track { position: absolute; inset: 0; animation: lap var(--lap) infinite; will-change: transform, opacity; }
 
   .card {
-    position: absolute; left: 5%; top: 23.33%; width: 30%; height: 53.33%;
+    position: absolute; left: 5%; top: 21%; width: 30%; height: 56%;
     border-radius: 2.2cqi; overflow: hidden;
     display: flex; flex-direction: column;
+    animation: tilt var(--lap) infinite;
   }
-  /* the PC's side: a file */
+  .icon {
+    width: 7.2cqi; height: 7.2cqi; flex: none; border-radius: 1.8cqi; display: grid; place-items: center;
+    font: 800 3cqi/1 var(--font-display); letter-spacing: -0.02em; color: #fff;
+    background:
+      radial-gradient(120% 90% at 20% 10%, hsl(var(--h2) 85% 70% / .65), transparent 60%),
+      linear-gradient(150deg, hsl(var(--h) 70% 52%), hsl(var(--h) 65% 26%));
+    box-shadow: 0 .6cqi 1.6cqi rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .14);
+  }
+
+  /* the PC's side: a file being prepared */
   .apk {
-    background: linear-gradient(180deg, #14202d, var(--surface) 70%);
+    background: linear-gradient(180deg, #132131, var(--surface) 75%);
     border: 1px solid var(--secondary-line);
     padding: 2.4cqi;
-    gap: 1.6cqi;
-    clip-path: polygon(0 0, 78% 0, 100% 16%, 100% 100%, 0 100%);
+    gap: 1.4cqi;
+    clip-path: polygon(0 0, 80% 0, 100% 14%, 100% 100%, 0 100%);
     font-family: var(--font-mono);
   }
-  .apk::after { content: ""; position: absolute; right: 0; top: 0; width: 22%; height: 16%;
-    background: linear-gradient(225deg, transparent 50%, rgba(58, 168, 255, 0.35) 50%); }
-  .apk-top { display: flex; gap: 1.2cqi; font-size: 1.9cqi; letter-spacing: .12em; text-transform: uppercase; }
-  .apk-top span:first-child { color: var(--on-accent); background: var(--secondary); padding: .3cqi 1cqi; border-radius: .6cqi; }
-  .apk-top span:last-child { color: var(--secondary); padding: .3cqi 0; }
-  .apk-pkg { color: var(--text); font-size: 2.3cqi; line-height: 1.35; overflow-wrap: anywhere; margin-top: 1cqi; }
-  .apk-lines { display: grid; gap: 1.1cqi; margin-top: auto; }
-  .apk-lines i { display: block; height: .7cqi; border-radius: 1cqi; background: rgba(58, 168, 255, 0.18); }
-  .apk-lines i:nth-child(2) { width: 72%; } .apk-lines i:nth-child(3) { width: 86%; } .apk-lines i:nth-child(4) { width: 54%; }
-  .apk-meta { color: var(--text-2); font-size: 1.9cqi; }
+  .apk::after { content: ""; position: absolute; right: 0; top: 0; width: 20%; height: 14%;
+    background: linear-gradient(225deg, transparent 50%, rgba(58, 168, 255, 0.4) 50%); }
+  .apk-head { display: flex; align-items: center; gap: 1.6cqi; }
+  .apk-kind { font-size: 1.7cqi; line-height: 1.3; letter-spacing: .1em; text-transform: uppercase; color: var(--text-2); }
+  .apk-kind b { color: var(--secondary); font-weight: 700; }
+  .apk-name { margin-top: 1cqi; color: var(--text); font-size: 2.15cqi; line-height: 1.3;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .apk-meta { color: var(--text-2); font-size: 1.8cqi; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tree { list-style: none; margin: .6cqi 0 0; padding: 1cqi 0 0; border-top: 1px dashed rgba(58, 168, 255, .25);
+    display: grid; gap: .5cqi; font-size: 1.6cqi; line-height: 1.25; color: rgba(167, 171, 183, .7); }
+  .tree li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tree li::before { content: "▸ "; color: rgba(58, 168, 255, .55); }
+  .tree .sub { padding-left: 2cqi; }
+  .tree .sub::before { content: "· "; }
+  .apk-work { margin-top: auto; display: grid; gap: 1cqi; }
+  .ticker { position: relative; height: 2.2cqi; overflow: hidden; font-size: 1.8cqi; line-height: 2.2cqi; color: var(--secondary);
+    padding-left: 1.8cqi; }
+  .ticker span { display: block; animation: ticker var(--lap) infinite; }
+  .ticker::before { content: "›"; position: absolute; left: 0; top: 0; }
+  .bar { height: .8cqi; border-radius: 1cqi; background: rgba(58, 168, 255, 0.15); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 100%; background: var(--portal); transform-origin: left;
+    animation: fill var(--lap) infinite; }
 
-  /* the Frame's side: a game in the library */
-  .game {
-    background: var(--surface);
-    border: 1px solid rgba(255, 138, 31, 0.45);
-    box-shadow: var(--shadow-art-hover);
-  }
-  .game-art { position: absolute; inset: 0;
-    background:
-      radial-gradient(90% 60% at 70% 20%, rgba(255, 138, 31, 0.32), transparent 70%),
-      radial-gradient(70% 50% at 10% 90%, rgba(58, 168, 255, 0.18), transparent 70%),
-      linear-gradient(165deg, var(--accent-soft), #121318 75%); }
-  .game-art::after { content: ""; position: absolute; inset: 0;
-    background: repeating-linear-gradient(-72deg, transparent 0 2.2cqi, rgba(255, 255, 255, 0.025) 2.2cqi 2.4cqi); }
-  .game-title { position: relative; margin-top: auto; padding: 0 2.4cqi; font: 800 4.2cqi/1.05 var(--font-display);
-    letter-spacing: -0.01em; color: var(--text); overflow-wrap: anywhere; text-wrap: balance; }
-  .game-foot { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1cqi;
-    padding: 1.6cqi 2.4cqi 2.4cqi; }
-  .game-foot .pill { font-size: 1.8cqi; line-height: 1.3; padding: .35cqi 1.1cqi .35cqi .9cqi; gap: .7cqi; }
-  .game-foot .pill::before { width: .9cqi; height: .9cqi; }
-  .game-where { font: 500 1.8cqi/1.2 var(--font-sans); color: var(--text-2); }
+  /* the Frame's side: a game in the library, with generated cover art */
+  .game { border: 1px solid rgba(255, 138, 31, 0.45); box-shadow: var(--shadow-art-hover); padding: 2.2cqi; gap: 1.2cqi;
+    background: hsl(var(--h) 45% 12%); }
+  .art { position: absolute; inset: 0; overflow: hidden;
+    background: linear-gradient(170deg, hsl(var(--h) 45% 32%), hsl(var(--h) 40% 10%) 85%); }
+  .art .sun { position: absolute; left: var(--sx); top: var(--sy); width: 26cqi; height: 26cqi; margin: -13cqi 0 0 -13cqi;
+    border-radius: 50%; background: radial-gradient(circle, hsl(var(--h2) 90% 70% / .85), hsl(var(--h2) 90% 55% / 0) 68%);
+    mix-blend-mode: screen; }
+  .art .band { position: absolute; left: -20%; right: -20%; top: 52%; height: 9cqi; transform: rotate(var(--rot));
+    background: linear-gradient(90deg, transparent, hsl(var(--h2) 80% 60% / .28), transparent); }
+  .art .band.b2 { top: 66%; height: 3cqi; transform: rotate(calc(var(--rot) * -1.4)); opacity: .7; }
+  .art::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 40%, rgba(8, 9, 12, .82) 92%); }
+  .game > *:not(.art) { position: relative; }
+  .game .icon { position: absolute; top: 2.2cqi; left: 2.2cqi; }
+  .game .pill { position: absolute; top: 2.6cqi; right: 2.2cqi; font-size: 1.6cqi; line-height: 1.3;
+    padding: .35cqi 1.1cqi .35cqi .9cqi; gap: .6cqi; background: rgba(8, 9, 12, .6); }
+  .game .pill::before { width: .9cqi; height: .9cqi; }
+  .game-title { margin-top: auto; font: 800 var(--ts)/1.04 var(--font-display); letter-spacing: -0.015em; color: #fff;
+    overflow-wrap: normal; word-break: normal; hyphens: none; text-wrap: balance; text-shadow: 0 .3cqi 1.2cqi rgba(0, 0, 0, .5); }
+  .game-foot { display: flex; align-items: center; justify-content: space-between; gap: 1cqi; }
+  .where { font: 500 1.6cqi/1.2 var(--font-sans); color: rgba(237, 238, 242, .75); white-space: nowrap; }
+  .play { position: relative; width: 5.6cqi; height: 5.6cqi; flex: none; border-radius: 50%; display: grid; place-items: center;
+    color: var(--on-accent); background: var(--accent); box-shadow: 0 0 2cqi rgba(255, 138, 31, .55); }
+  .play svg { width: 2.8cqi; height: 2.8cqi; margin-left: .3cqi; }
+  /* the app's Play ripple: a blue ring, then an orange one 160 ms later */
+  .play::before, .play::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: .35cqi solid var(--secondary);
+    opacity: 0; animation: ring var(--lap) infinite; }
+  .play::after { border-color: var(--accent); animation-name: ring2; }
 
   .portal { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   .portal .glow { opacity: .35; animation: breathe 5.5s ease-in-out infinite; }
   .portal .flash { opacity: 0; animation: flash var(--lap) infinite; }
 
-  .caption { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 10px;
-    font: 500 13px/1.4 var(--font-sans); color: var(--text-2); }
-  .caption .mono { font-family: var(--font-mono); color: var(--secondary); }
-  .caption [data-f="title"] { color: var(--accent); font-weight: 600; }
+  /* sparks thrown off the rim while the card passes */
+  .sparks { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+  .sparks i { position: absolute; width: .9cqi; height: .9cqi; border-radius: 50%;
+    background: var(--c, var(--accent)); box-shadow: 0 0 1.2cqi var(--c, var(--accent)); opacity: 0;
+    --a: calc(var(--i) * 36deg + 8deg);
+    animation: spark var(--lap) infinite; animation-delay: calc(var(--i) * 18ms); }
+  .sparks i:nth-child(odd) { --c: var(--secondary); }
+
+  .caption { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: baseline;
+    gap: 10px; margin: 0; font: 500 13px/1.4 var(--font-sans); color: var(--text-2); min-width: 0; }
+  .caption .mono { font-family: var(--font-mono); color: var(--secondary); white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; min-width: 0; }
+  .caption .t { color: var(--accent); font-weight: 600; white-space: nowrap; }
   .caption .arrow { color: var(--text-3); }
 
-  /* one lap: arrive on the PC's side, wait, cross, rest on the Frame's side, leave */
+  /* one lap: arrive on the PC's side, get prepared, cross, land on the Frame's side and play, leave */
   @keyframes lap {
     0% { transform: translateX(-26%); opacity: 0; animation-timing-function: var(--ease-out); }
-    9% { transform: translateX(0); opacity: 1; }
-    24% { transform: translateX(0); opacity: 1; animation-timing-function: cubic-bezier(.62, 0, .3, 1); }
-    54% { transform: translateX(60%); opacity: 1; }
-    88% { transform: translateX(60%); opacity: 1; animation-timing-function: ease-in; }
-    97%, 100% { transform: translateX(68%); opacity: 0; }
+    8% { transform: translateX(0); opacity: 1; }
+    30% { transform: translateX(0); opacity: 1; animation-timing-function: cubic-bezier(.62, 0, .3, 1); }
+    56% { transform: translateX(60%); opacity: 1; }
+    90% { transform: translateX(60%); opacity: 1; animation-timing-function: ease-in; }
+    98%, 100% { transform: translateX(68%); opacity: 0; }
   }
-  @keyframes flash {
-    0%, 33% { opacity: 0; }
-    39% { opacity: 1; }
-    52%, 100% { opacity: 0; }
+  @keyframes tilt {
+    0%, 30% { transform: rotateY(0) scale(1); }
+    40% { transform: rotateY(-16deg) scale(.96); }
+    46% { transform: rotateY(14deg) scale(.96); }
+    56%, 100% { transform: rotateY(0) scale(1); }
   }
+  @keyframes ticker {
+    0%, 10% { transform: translateY(0); }
+    11%, 14% { transform: translateY(-100%); }
+    15%, 18% { transform: translateY(-200%); }
+    19%, 22% { transform: translateY(-300%); }
+    23%, 100% { transform: translateY(-400%); }
+  }
+  @keyframes fill { 0%, 8% { transform: scaleX(0); } 28%, 100% { transform: scaleX(1); } }
+  @keyframes flash { 0%, 36% { opacity: 0; } 42% { opacity: 1; } 54%, 100% { opacity: 0; } }
+  @keyframes spark {
+    0%, 38% { opacity: 0; transform: rotate(var(--a)) translateX(4cqi) scale(1); }
+    40% { opacity: 1; }
+    52% { opacity: 0; transform: rotate(var(--a)) translateX(17cqi) scale(.4); }
+    100% { opacity: 0; transform: rotate(var(--a)) translateX(17cqi) scale(.4); }
+  }
+  @keyframes ring { 0%, 64% { opacity: 0; transform: scale(1); } 65% { opacity: .9; transform: scale(1); }
+    74%, 100% { opacity: 0; transform: scale(2.5); } }
+  @keyframes ring2 { 0%, 66% { opacity: 0; transform: scale(1); } 67% { opacity: .9; transform: scale(1); }
+    76%, 100% { opacity: 0; transform: scale(2.5); } }
   @keyframes breathe { 0%, 100% { opacity: .28; } 50% { opacity: .5; } }
 
   /* reduced motion: the logo's own moment, the card halfway through */
   @media (prefers-reduced-motion: reduce) {
     .track { animation: none; transform: translateX(31%); opacity: 1; }
-    .portal .glow, .portal .flash { animation: none; }
+    .card, .ticker span, .bar i, .play::before, .play::after, .sparks i, .portal .glow, .portal .flash { animation: none; }
+    .ticker span { transform: translateY(-300%); }
   }
 </style>

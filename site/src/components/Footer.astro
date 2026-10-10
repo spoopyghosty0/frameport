@@ -19,7 +19,7 @@ const builtOn = [
   <section class="section credits" id="credits">
     <div class="wrap">
       <div class="head reveal">
-        <p class="label"><b>06</b> Built on</p>
+        <p class="label"><b>07</b> Built on</p>
         <h2>Most of the work is theirs.</h2>
         <p class="lead">FramePort downloads these projects, wires them together and adds what the Frame needs.
           <a href={blob('docs/ARCHITECTURE.md')}>What FramePort adds itself</a></p>
@@ -37,6 +37,8 @@ const builtOn = [
     <div class="foot-brand">
       <Wordmark id="foot" href={url()} />
       <p>GPL-3.0-only (includes GPL-3.0 code from OVRPort). Not affiliated with Valve or Meta.</p>
+      <p class="tm">Meta Quest is a trademark of Meta Platforms, Inc. Steam and Steam Frame are trademarks of Valve
+        Corporation. They are named here only to say what FramePort works with; neither company makes or endorses it.</p>
     </div>
     <nav class="foot-links" aria-label="Project">
       <a href={REPO}>Source code</a>
@@ -61,6 +63,7 @@ const builtOn = [
   .foot-in { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px; align-items: flex-start; }
   .foot-brand { display: grid; gap: 12px; }
   .foot-brand p { color: var(--text-2); font-size: 13px; max-width: 46ch; }
+  .foot-brand .tm { color: var(--text-2); font-size: 12px; max-width: 70ch; }
   .foot-links { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 14px; }
   .foot-links a { color: var(--text-2); text-decoration: none; }
   .foot-links a:hover { color: var(--text); text-decoration: underline; }

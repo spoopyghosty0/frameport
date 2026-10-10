@@ -1,7 +1,10 @@
 ---
-// The app itself: the showcase tour (rendered in CI from the demo library, never by hand) and real screenshots.
+// The app itself: a clickable copy (AppMock) with a guided tour, the showcase videos (rendered by scripts/showcase,
+// never by hand) in a player, and real screenshots.
 import { Image } from 'astro:assets';
+import AppMock from './AppMock.astro';
 import Glyph from './Glyph.astro';
+import type { MockGame } from '../scripts/mock';
 import { url } from '../data/site';
 import library from '../assets/media/library.png';
 import game from '../assets/media/game.png';
@@ -11,6 +14,8 @@ import files from '../assets/media/files.png';
 import keys from '../assets/media/type-on-frame.png';
 import screenshots from '../assets/media/screenshots.png';
 
+interface Props { games: MockGame[] }
+const { games } = Astro.props;
 const shots = [
   { img: library, title: 'Library', text: 'Your games with their artwork. Search, tags and filters; install several at once.' },
   { img: game, title: 'Game page', text: 'One click to install or play. Patches and game settings under Customize.' },
@@ -20,38 +25,34 @@ const shots = [
   { img: files, title: 'Files', text: "The Frame's videos, downloads and each game's storage. Drag and drop." },
   { img: keys, title: 'Type on Frame', text: "Your computer's keyboard, typing in VR apps, Steam and the desktop." },
 ];
+const videos = [
+  { id: 'tour', title: 'The tour', text: 'Library, install, play, monitor · about 90 s' },
+  { id: 'install', title: 'The install tutorial', text: 'From the download to the first game · about 80 s' },
+];
 ---
 <section class="section tour" id="tour">
   <div class="wrap">
     <div class="head reveal">
       <p class="label"><b>02</b> The app</p>
-      <h2>A library for the Frame,<br />on your computer.</h2>
-      <p class="lead">Windows, macOS and Linux. It finds your Frame on the network, keeps itself up to date and shows what
-        the headset is doing while you play.</p>
+      <h2>Try it before you download it.</h2>
+      <p class="lead">A working copy of FramePort's window, simplified, with a pretend Frame. Take the guided tour from a
+        fresh start, or click around a set-up library: install a game, start it, watch the monitor, type on the Frame.</p>
     </div>
 
-    <figure class="screen reveal">
-      <div class="screen-bar" aria-hidden="true">
-        <span class="dot"></span><span class="screen-name">FramePort</span>
-        <span class="screen-note">90 s tour · demo library</span>
+    <div class="reveal"><AppMock games={games} /></div>
+
+    <div class="watch reveal">
+      <p class="watch-k">Prefer to watch? The real app, filmed at 1440p</p>
+      <div class="vids">
+        {videos.map((v) => (
+          <button type="button" class="vid" data-video={v.id}>
+            <img src={url(`media/frameport-${v.id}.jpg`)} alt="" width="1280" height="720" loading="lazy" decoding="async" />
+            <span class="vid-play" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg></span>
+            <span class="vid-t"><b>{v.title}</b><span>{v.text}</span></span>
+          </button>
+        ))}
       </div>
-      <button class="play" type="button" data-play aria-label="Play the 90-second tour video">
-        <img src={url('media/tour-teaser.webp')} alt="FramePort's library, a game being installed and played, the monitor"
-          width="960" height="540" loading="lazy" decoding="async" />
-        <span class="play-btn" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="26" height="26"><path d="M8 5.5v13l11-6.5z" fill="currentColor" /></svg>
-        </span>
-      </button>
-      <template data-video>
-        <video controls autoplay playsinline preload="metadata" poster={url('media/frameport-tour.jpg')}
-          src={url('media/frameport-tour.mp4')} width="1280" height="720"></video>
-      </template>
-    </figure>
-    <p class="after reveal">
-      <a href={url('media/frameport-tour.mp4')}>Download the tour (MP4)</a>
-      <span aria-hidden="true">·</span>
-      <a href="#install">The install tutorial</a>
-    </p>
+    </div>
   </div>
 
   <div class="strip-wrap reveal">
@@ -67,46 +68,62 @@ const shots = [
         </li>
       ))}
     </ul>
-    <p class="strip-hint wrap"><Glyph name="shot" size={16} /> Scroll sideways for more · every screenshot is rendered from a demo library</p>
+    <p class="strip-hint wrap"><Glyph name="shot" size={16} /> Screenshots of the real app · scroll sideways for more</p>
   </div>
+
+  <dialog class="player" data-player aria-label="Video">
+    <video controls playsinline preload="none" data-player-video></video>
+    <form method="dialog"><button class="close" aria-label="Close">×</button></form>
+  </dialog>
 </section>
 
 <script>
-  // The teaser loops silently; a click swaps in the full tour with sound and controls.
-  const btn = document.querySelector<HTMLButtonElement>('[data-play]');
-  const tpl = document.querySelector<HTMLTemplateElement>('[data-video]');
-  btn?.addEventListener('click', () => {
-    if (!tpl) return;
-    const video = tpl.content.firstElementChild!.cloneNode(true) as HTMLVideoElement;
-    btn.replaceWith(video);
-    video.focus();
-  });
+  import { url } from '../data/site';
+  const dlg = document.querySelector<HTMLDialogElement>('[data-player]');
+  const video = document.querySelector<HTMLVideoElement>('[data-player-video]');
+  document.querySelectorAll<HTMLButtonElement>('[data-video]').forEach((b) => b.addEventListener('click', () => {
+    if (!dlg || !video) return;
+    video.poster = url(`media/frameport-${b.dataset.video}.jpg`);
+    video.src = url(`media/frameport-${b.dataset.video}.mp4`);
+    dlg.showModal();
+    video.play().catch(() => {});
+  }));
+  dlg?.addEventListener('close', () => { video?.pause(); });
+  dlg?.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
 </script>
 
 <style>
-  .tour { background: linear-gradient(180deg, transparent, rgba(17, 18, 23, 0.7) 30%, rgba(17, 18, 23, 0.7) 80%, transparent); }
-  .screen { margin: 0; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-strong);
-    background: var(--sidebar); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.4); }
-  .screen-bar { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 16px; font: 500 12px/1 var(--font-sans);
-    color: var(--text-2); border-bottom: 1px solid var(--border); }
-  .screen-bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--portal); opacity: .6; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px rgba(61, 214, 140, 0.6); }
-  .screen-name { color: var(--text); font-weight: 600; }
-  .screen-note { margin-left: auto; font-family: var(--font-mono); }
-  .play { position: relative; display: block; width: 100%; padding: 0; border: 0; background: #000; cursor: pointer; }
-  .play img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
-  .play-btn { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 50%;
-    display: grid; place-items: center; color: var(--text);
-    background: rgba(22, 24, 30, 0.6); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-    border: 1px solid rgba(237, 238, 242, 0.25); box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
-    transition: background-color 220ms var(--ease-out), box-shadow 220ms var(--ease-out), transform 320ms var(--ease-back), color 220ms; }
-  .play-btn svg { margin-left: 4px; }
-  .play:hover .play-btn, .play:focus-visible .play-btn { background: var(--accent); color: var(--on-accent); transform: scale(1.08);
-    box-shadow: 0 0 26px 1px rgba(255, 138, 31, 0.55), 0 6px 18px rgba(0, 0, 0, 0.5); }
-  .screen :global(video) { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #000; }
-  .after { margin-top: 16px; display: flex; gap: 10px; font-size: 14px; color: var(--text-3); }
+  .tour { background: linear-gradient(180deg, transparent, rgba(17, 18, 23, 0.7) 20%, rgba(17, 18, 23, 0.7) 85%, transparent); }
+  .watch { margin-top: 36px; display: grid; gap: 14px; }
+  .watch-k { font: 600 12px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-2); }
+  .vids { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .vid { all: unset; position: relative; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px 14px;
+    cursor: pointer; transition: transform 220ms var(--ease-out); }
+  .vid img { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; opacity: .9;
+    border-radius: var(--radius-md); border: 1px solid var(--border); box-shadow: var(--shadow-art);
+    transition: opacity 220ms, box-shadow 220ms var(--ease-out); }
+  .vid:hover img { box-shadow: var(--shadow-art-hover); }
+  .vid:hover, .vid:focus-visible { transform: translateY(-3px); }
+  .vid:hover img { opacity: 1; }
+  .vid:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .vid-play { position: relative; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center;
+    background: rgba(22, 24, 30, .65); backdrop-filter: blur(8px); border: 1px solid rgba(237, 238, 242, .25); color: var(--text);
+    transition: background-color 220ms, color 220ms, box-shadow 220ms; }
+  .vid-play svg { margin-left: 3px; }
+  .vid:hover .vid-play { background: var(--accent); color: var(--on-accent); box-shadow: 0 0 26px rgba(255, 138, 31, .55); }
+  .vid-t { display: grid; gap: 2px; }
+  .vid-t b { font: 700 16px/1.2 var(--font-display); }
+  .vid-t span { font-size: 13px; color: var(--text-2); }
 
-  .strip-wrap { margin-top: clamp(48px, 7vw, 80px); }
+  .player { padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: #000; width: min(1280px, 94vw);
+    max-height: 92vh; overflow: hidden; }
+  .player::backdrop { background: rgba(5, 6, 8, .85); backdrop-filter: blur(4px); }
+  .player video { display: block; width: 100%; height: auto; max-height: 90vh; background: #000; }
+  .player .close { all: unset; position: absolute; right: 10px; top: 8px; width: 36px; height: 36px; border-radius: 50%; display: grid;
+    place-items: center; font-size: 24px; color: var(--text); background: rgba(22, 24, 30, .7); cursor: pointer; }
+  .player .close:hover { background: var(--accent); color: var(--on-accent); }
+
+  .strip-wrap { margin-top: clamp(48px, 7vw, 72px); }
   .strip { list-style: none; margin: 0; display: flex; gap: 20px; overflow-x: auto; scroll-snap-type: x mandatory;
     padding: 12px max(var(--gutter), calc((100vw - var(--page)) / 2)) 28px; scroll-padding-inline: max(var(--gutter), calc((100vw - var(--page)) / 2));
     scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
@@ -121,5 +138,5 @@ const shots = [
   .shot-img:hover :global(img) { transform: scale(1.03); }
   figcaption { margin-top: 14px; color: var(--text-2); font-size: 14px; line-height: 1.55; }
   figcaption strong { color: var(--text); font-weight: 600; margin-right: 4px; }
-  .strip-hint { display: flex; align-items: center; gap: 8px; color: var(--text-3); font: 400 12px/1 var(--font-mono); }
+  .strip-hint { display: flex; align-items: center; gap: 8px; color: var(--text-2); font: 400 12px/1 var(--font-mono); }
 </style>

@@ -27,3 +27,4 @@ site/dist/
 site/.astro/
 site/public/media/
 site/src/assets/media/
+site/media-hq/

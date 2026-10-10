@@ -16,7 +16,8 @@ from pathlib import Path
 
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 FPS = 30
-SIZE = (1920, 1080)
+SIZE = (1920, 1080)  # the finished videos; record_video.py --size changes it for one run
+LAYOUT = (1920, 1080)  # the cards' and captions' CSS pixels (drawn at SIZE / LAYOUT device pixels)
 
 
 def run(args: list[str]) -> None:
@@ -40,14 +41,14 @@ def concat_list(frames: list[tuple[float, str]], end: float | None = None, min_f
     return "\n".join(lines) + "\n"
 
 
-def frames_to_video(folder: Path, out: Path, end: float | None = None, size: tuple[int, int] = SIZE) -> float:
+def frames_to_video(folder: Path, out: Path, end: float | None = None, size: tuple[int, int] | None = None) -> float:
     """The screencast (folder/frames.json + JPEGs) as a constant-frame-rate H.264 file (high quality, an
     intermediate). Returns the wall-clock time of its first frame (scene times are relative to it)."""
     frames = [tuple(f) for f in json.loads((folder / "frames.json").read_text())]
     if not frames:
         raise RuntimeError("the screencast has no frames")
     (folder / "frames.ffconcat").write_text(concat_list(frames, end))
-    w, h = size
+    w, h = size or SIZE
     run(["-f", "concat", "-safe", "0", "-i", folder / "frames.ffconcat",
          "-vf", f"fps={FPS},scale={w}:{h}:flags=lanczos:force_original_aspect_ratio=decrease,"
                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
@@ -65,16 +66,17 @@ def caption_window(duration: float, show: float = 4.2, fade: float = 0.45, lead:
     return start, end
 
 
-def scene_filter(duration: float, fade: float = 0.45, size: tuple[int, int] = SIZE) -> str:
+def scene_filter(duration: float, fade: float = 0.45, size: tuple[int, int] | None = None) -> str:
     """The filter graph laying a caption (input 1, a still RGBA PNG looped) over a scene (input 0)."""
     start, end = caption_window(duration, fade=fade)
+    size = size or SIZE
     return (f"[1:v]scale={size[0]}:{size[1]}:flags=lanczos,format=rgba,fade=t=in:st={start:.3f}:d={fade}:alpha=1,"
             f"fade=t=out:st={end - fade:.3f}:d={fade}:alpha=1[cap];"
             f"[0:v][cap]overlay=0:0:format=auto:shortest=1,format=yuv420p[v]")
 
 
 def cut_scene(raw: Path, start: float, duration: float, caption: Path | None, out: Path,
-              size: tuple[int, int] = SIZE) -> None:
+              size: tuple[int, int] | None = None) -> None:
     """One scene from the raw recording, with its caption."""
     if caption is None:
         run(["-ss", f"{start:.3f}", "-t", f"{duration:.3f}", "-i", raw, "-an",
@@ -107,10 +109,10 @@ def xfade_offsets(durations: list[float], transition: float) -> list[float]:
     return offsets
 
 
-def xfade_graph(durations: list[float], transition: float, size: tuple[int, int] = SIZE) -> tuple[str, str]:
+def xfade_graph(durations: list[float], transition: float, size: tuple[int, int] | None = None) -> tuple[str, str]:
     """(filter graph, output label) crossfading inputs 0..n-1 in order. Every input is brought to the same size,
     frame rate, timebase and pixel format first (xfade refuses anything else)."""
-    w, h = size
+    w, h = size or SIZE
     parts = [f"[{k}:v]fps={FPS},scale={w}:{h}:flags=lanczos,setsar=1,format=yuv420p,settb=AVTB[n{k}]"
              for k in range(len(durations))]
     prev = "[n0]"
@@ -127,7 +129,7 @@ def joined_length(durations: list[float], transition: float) -> float:
 
 
 def join(clips: list[Path], durations: list[float], out: Path, transition: float = 0.5, crf: int = 23,
-         size: tuple[int, int] = SIZE, extra: list[str] | None = None) -> None:
+         size: tuple[int, int] | None = None, extra: list[str] | None = None) -> None:
     graph, label = xfade_graph(durations, transition, size)
     args = []
     for c in clips:
@@ -188,7 +190,7 @@ def caption_html(title: str, subtitle: str, c: dict, left: int = 372, bottom: in
     """A lower third: a dark glass panel with a blue→orange edge (the logo's two portals), title + one line."""
     e = html.escape
     return f"""<!doctype html><html><head><meta charset="utf-8">{FONT_CSS}<style>
-html,body{{margin:0;width:{SIZE[0]}px;height:{SIZE[1]}px;background:transparent;font-family:{FONT}}}
+html,body{{margin:0;width:{LAYOUT[0]}px;height:{LAYOUT[1]}px;background:transparent;font-family:{FONT}}}
 .cap{{position:absolute;left:{left}px;bottom:{bottom}px;max-width:1180px;padding:26px 40px 28px 44px;
 border-radius:22px;background:rgba(12,14,20,.86);box-shadow:0 18px 50px rgba(0,0,0,.55),
 inset 0 0 0 1px rgba(255,255,255,.08);overflow:hidden}}
@@ -206,7 +208,7 @@ def card_html(title: str, subtitle: str, footer: str, logo_svg: str, c: dict) ->
     word = ('<span style="color:{a}">Frame</span><span style="color:{b}">Port</span>'
             .format(a=c["ACCENT"], b=c["SECONDARY"])) if title == "FramePort" else e(title)
     return f"""<!doctype html><html><head><meta charset="utf-8">{FONT_CSS}<style>
-html,body{{margin:0;width:{SIZE[0]}px;height:{SIZE[1]}px;background:{c['BG']};font-family:{FONT};overflow:hidden}}
+html,body{{margin:0;width:{LAYOUT[0]}px;height:{LAYOUT[1]}px;background:{c['BG']};font-family:{FONT};overflow:hidden}}
 .glow{{position:absolute;inset:0;
 background:radial-gradient(ellipse 46% 52% at 42% 50%,{c['SECONDARY']}33,transparent 70%),
 radial-gradient(ellipse 46% 52% at 58% 50%,{c['ACCENT']}2e,transparent 70%)}}
@@ -232,7 +234,7 @@ def step_card_html(card: dict, c: dict) -> str:
                     for i, s in enumerate(card.get("steps") or [], 1))
     code = (f'<div class="code"><span class="prompt">$</span>{e(card["code"])}</div>' if card.get("code") else "")
     return f"""<!doctype html><html><head><meta charset="utf-8">{FONT_CSS}<style>
-html,body{{margin:0;width:{SIZE[0]}px;height:{SIZE[1]}px;background:{c['BG']};font-family:{FONT};overflow:hidden}}
+html,body{{margin:0;width:{LAYOUT[0]}px;height:{LAYOUT[1]}px;background:{c['BG']};font-family:{FONT};overflow:hidden}}
 .glow{{position:absolute;inset:0;
 background:radial-gradient(ellipse 40% 55% at 12% 30%,{c['SECONDARY']}26,transparent 70%),
 radial-gradient(ellipse 45% 55% at 92% 80%,{c['ACCENT']}22,transparent 70%)}}
@@ -269,7 +271,8 @@ def render_card(playwright, page_html: str, out: Path, transparent: bool = False
     """Render an HTML card to a PNG at the video size (fonts loaded first)."""
     browser = playwright.chromium.launch()
     try:
-        page = browser.new_page(viewport={"width": SIZE[0], "height": SIZE[1]})
+        page = browser.new_page(viewport={"width": LAYOUT[0], "height": LAYOUT[1]},
+                                device_scale_factor=SIZE[0] / LAYOUT[0])
         page.set_content(page_html, wait_until="networkidle")
         page.evaluate("document.fonts.ready")
         page.screenshot(path=str(out), omit_background=transparent)

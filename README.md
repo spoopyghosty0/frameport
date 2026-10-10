@@ -118,6 +118,32 @@ will attempt to guess key patches. If you find a new config that works for an ap
 recipe for you) or **Report a problem…** (attaches a diagnostics zip with personal data removed). Without the app:
 [share a working config](https://github.com/spoopyghosty0/frameport/issues/new?template=working-config.yml) · [report a problem](https://github.com/spoopyghosty0/frameport/issues/new?template=bug-report.yml). Shared configs become built-in recipes for everyone.
 
+## Compared with other tools
+
+FrameDrop and Valve's own tools install an app as it is. FramePort also converts and patches Meta Quest games that
+don't run on the Frame as they are, and keeps a tested recipe per game. It opens FrameDrop's install links too.
+
+| | **FramePort** | **FrameDrop** | **By hand with Valve's tools** |
+|---|---|---|---|
+| Price and source | Free, open source (GPL-3.0) | Free (donationware), source not published | Free, from Valve |
+| Your computer | Windows, macOS, Linux | Windows | Depends on the tool |
+| Connecting the Frame | One command in the Frame's Konsole (turns on Developer Mode itself); Wi-Fi or USB cable | Developer Mode, then Settings → Developer → Pair new host; same Wi-Fi | Developer Mode and pairing (Devkit Client), or Lepton Development and adb |
+| Meta Quest games that don't run as they are | Converted (OVRPort: Meta's VR runtime → OpenXR) and patched for the Frame | Not mentioned: the APK must meet Lepton's requirements as it is (arm64, minSdk 30 or lower) | Installed as they are |
+| Tested per-game recipes | 100+ tested games, followed automatically | Not stated | No |
+| Steam library entry | Shortcut with artwork and tags | "Devkit Game" shortcut | "Devkit Game: &lt;title&gt;" (Devkit Client); none with adb |
+| Android 2D apps | Yes, in a window | Yes (Lepton Flatscreen) | Yes, with a marker file |
+| Linux apps | arm64, and x86_64 through FEX | arm64 zips; x86_64 less reliable | Yes (Devkit Client) |
+| Windows programs and PC VR games | Proton (installed for you); PC VR games also through Revive on your PC | Windows .exe through Proton (install Proton first) | Proton (Devkit Client) |
+| "Install with …" buttons on web pages | `frameport://` and FrameDrop's `framedrop://` links | `framedrop://` links (FrameDrop defined them) | No |
+| After installing | Launch test that reads the logs and names the likely fix | Log viewer (pull the headset log) | No |
+| Also on the PC | Files, Screenshots, Live view, Monitor, Type on Frame | Not stated | No |
+| Updates | Updates itself | Run the new installer (automatic updates not stated) | Per tool |
+
+Other tools as described on their own pages, checked 2026-10-09:
+[FrameDrop about](https://framedropvr.com/about) · [how-to](https://framedropvr.com/how-to) ·
+[install buttons](https://framedropvr.com/docs) · [Valve: loading games on Steam Frame](https://partner.steamgames.com/doc/steamhardware/steamframe/loadgames).
+Something out of date? [Open an issue](https://github.com/spoopyghosty0/frameport/issues/new).
+
 ## Built on
 
 [OVRPort](https://github.com/Android-XR-Bridge/OVRPort) (Quest → OpenXR, originally

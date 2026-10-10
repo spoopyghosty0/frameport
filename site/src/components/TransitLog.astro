@@ -9,7 +9,7 @@ const { example } = Astro.props;
 type Stage = { glyph: Parameters<typeof Glyph>[0]['name']; name: string; detail: string; text: string };
 const pc: Stage[] = [
   { glyph: 'pc', name: 'scan', detail: `${example.title} · APK + OBB`,
-    text: 'Point FramePort at a folder. It finds Quest games with their data files, PC VR game folders, Android and Linux apps.' },
+    text: 'Point FramePort at a folder. It finds Meta Quest games with their data files, PC VR game folders, Android and Linux apps.' },
   { glyph: 'container', name: 'analyze', detail: `${example.engine} · ${example.xr} · arm64`,
     text: 'Reads the engine, the VR API and the libraries the game needs, without running it.' },
   { glyph: 'recipe', name: 'recipe', detail: example.verified ? `tested recipe · ${example.verified}` : 'tested recipe',

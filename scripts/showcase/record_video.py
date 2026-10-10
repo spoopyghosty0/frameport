@@ -175,7 +175,7 @@ def record(name: str, args) -> int:
         if os.environ.get("SHOWCASE_DEBUG") else None
 
     def script(server) -> int:
-        scale = 1.0 if args.draft else 4 / 3
+        scale = 1.0 if args.draft else postprod.SIZE[0] / VIEWPORT[0]
         s = server.session(VIEWPORT, cursor=True, device_scale=scale)
         video_installs(s)
         if start.get("frame") == "disconnected":
@@ -300,12 +300,25 @@ def main() -> int:
                     "since this git revision")
     ap.add_argument("--scenes", default=None, help="comma-separated scene names (one video)")
     ap.add_argument("--draft", action="store_true", help="720p, quick, no teaser; nothing written to docs/")
+    ap.add_argument("--size", default=None, metavar="WxH", help="finished size (default 1920x1080; e.g. 2560x1440 "
+                    "for sharper copies: filmed at that many device pixels; 16:9 only)")
     ap.add_argument("--names", action="store_true", help="print the clickable names after each scene")
     ap.add_argument("--work", type=Path, default=None, help="folder for frames and clips (<work>/<video>)")
     ap.add_argument("--home", type=Path, default=None, help="demo data dirs (<home>/<video>; default: temp)")
     ap.add_argument("--offline", action="store_true", help="use only cached art")
     ap.add_argument("--allow-missing-art", action="store_true", help="render even when a game got no art")
     args = ap.parse_args()
+    if args.size:
+        from showcase import postprod
+
+        try:
+            w, h = (int(v) for v in args.size.lower().split("x"))
+        except ValueError:
+            w = h = 0
+        if w <= 0 or w * 9 != h * 16:
+            print(f"--size must be a 16:9 size like 2560x1440 (got {args.size})", file=sys.stderr)
+            return 2
+        postprod.SIZE = (w, h)
     names = args.videos or (changed_videos(args.changed_since) if args.changed_since else video_names())
     unknown = {n for n in names if not (n.endswith(".yaml") and Path(n).is_file())} - set(video_names())
     if unknown:
@@ -322,6 +335,7 @@ def main() -> int:
     failed = []
     passed = [*(["--draft"] if args.draft else []), *(["--names"] if args.names else []),
               *(["--offline"] if args.offline else []), *(["--allow-missing-art"] if args.allow_missing_art else []),
+              *(["--size", args.size] if args.size else []),
               *(["--work", str(args.work)] if args.work else []), *(["--home", str(args.home)] if args.home else [])]
     for name in names:
         cmd = [sys.executable, __file__, name, *passed]
