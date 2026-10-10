@@ -165,6 +165,9 @@ def test_problem_url(tmp_path):
     f = _fields(url)
     assert f["template"] == "bug-report.yml" and "FramePort-diag-a.zip" in f["logs"]
     assert "missing-ovr-symbol" in f["findings"] and "alice" not in url
+    assert f["title"].startswith("[Game report] ") and f["labels"] == "game-compatibility"
+    f = _fields(issue.problem_url(None, "the window stays white", {"app": "x"}, None))
+    assert f["title"] == "[App] FramePort" and f["labels"] == "bug"
 
 
 def test_entry_from_library_matches_save_known_good_shape(tmp_path):

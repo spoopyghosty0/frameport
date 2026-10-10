@@ -99,8 +99,9 @@ def problem_url(g: dict | None, description: str, env: dict, bundle_name: str | 
     logs = f"⬇ Drag and drop {bundle_name} (the diagnostics zip FramePort just saved) into this box." \
         if bundle_name else ""
     return _url("bug-report.yml", {
-        "title": red.text(f"[Problem] {title}"),
-        "labels": "bug",
+        # a game's report is about the game on the Frame, not a FramePort fault (titles read as a list of app bugs)
+        "title": red.text(f"[Game report] {title}" if g else "[App] FramePort"),
+        "labels": "game-compatibility" if g else "bug",
         "game": red.text(game),
         "description": red.text(description or ""),
         "findings": red.text(findings_text(g.get("last_test") if g else None)),
