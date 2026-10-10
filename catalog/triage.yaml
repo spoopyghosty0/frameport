@@ -1,4 +1,4 @@
-# Log signature -> diagnosis -> suggested fix. Matched against the game's launch.log (Lepton logcat mirror).
+# Log signature -> diagnosis -> suggested patches. Matched against the game's launch.log (Lepton logcat mirror).
 # `pattern` is a Python regex (case-sensitive). `suggest` lists patch ids (+ optional params) the UI offers as
 # "apply and rebuild". `severity`: fatal (the game can't run) | error | warning | info.
 # Sources: every failure we hit porting 34 games to the Steam Frame (see docs/PLAYBOOK.md).
@@ -6,339 +6,317 @@ signatures:
   - id: no-launcher
     pattern: 'APP_ACTIVITY is empty'
     severity: fatal
-    diagnosis: Lepton found no activity with category LAUNCHER.
+    diagnosis: 'Nothing starts: Lepton found no entry point in the app (an activity with category LAUNCHER).'
     suggest: [frame.launcher]
   - id: linux-x86-no-fex
     pattern: '(cannot execute binary file: Exec format error|exec format error)'
     severity: fatal
-    diagnosis: An x86_64 Linux program was started directly; the Frame's arm64 CPU needs FEX (x86 translation) for it. Reinstall the app with FramePort 0.12 or newer, which installs FEX and starts the program through it.
+    diagnosis: This x86_64 Linux program was started without the translator it needs. The Frame's arm64 CPU runs it only through FEX; reinstall the app with FramePort 0.12 or newer, which installs FEX and starts the program through it.
     suggest: []
   - id: no-arm64
     pattern: 'INSTALL_FAILED_NO_MATCHING_ABIS'
     severity: fatal
-    diagnosis: 32-bit-only APK. The Steam Frame has no AArch32; this cannot run. Use the PC (Rift) version via Revive.
+    diagnosis: This game is 32-bit only and can't run on the Frame (no AArch32). Use the PC (Rift) version through Revive.
     suggest: []
   - id: android-too-new
     pattern: '(NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError)\b.*(Landroid/window/|android\.window\.|(storeStoreFence|loadLoadFence)\(\)V in class Ljava/lang/invoke/VarHandle)'
     severity: fatal
-    diagnosis: The app calls Android 12/13+ classes (android.window.*, VarHandle fences) that the Frame's Android 11 (API 30) container doesn't have; it needs a newer Android (e.g. minSdk 34 apps). Nothing to patch - it can't run until Valve updates the Frame's Android.
+    diagnosis: The game needs a newer Android than the Frame has, so it can't run yet. It calls Android 12/13+ classes (android.window.*, VarHandle fences) that the Frame's Android 11 (API 30) container lacks (for example minSdk 34 apps); nothing to patch until Valve updates Lepton's Android.
     suggest: []
   - id: web-wrapper
     pattern: '(Creating TwaLauncher for com\.oculus\.browser|NameNotFoundException:? com\.oculus\.browser)'
     severity: fatal
-    diagnosis: The app is a website in an Android wrapper (Trusted Web Activity) that opens Meta's browser (com.oculus.browser), which the Frame doesn't have, so nothing opens. There's no game to port - open the website (TWALauncherActivity's "Using URL" line) in a browser instead.
+    diagnosis: This app is a website, not a game, and it can't open on the Frame. It is a Trusted Web Activity that opens Meta's browser (com.oculus.browser), which the Frame doesn't have; open the website (TWALauncherActivity's "Using URL" line) in a browser instead.
     suggest: []
   - id: unity-render-crash
     pattern: 'CRASH\s*:.*#\d+\s+pc [0-9a-f]+\s+\S*libgallium_dri\.so'
     severity: fatal
-    diagnosis: Unity's render thread crashed inside the Frame's GL driver (Mesa/Zink); the picture freezes or stays grey. Known triggers - an OVROverlay copy (try "Unity - skip OVROverlay layers", e.g. The Room VR), MSAA switched on at runtime, a GPU hang (zink DEVICE LOST).
+    diagnosis: 'The game''s graphics crashed, so the picture freezes or stays gray. Unity''s render thread crashed in the Frame''s GL driver (Mesa/Zink); known triggers are an OVROverlay copy (try "Unity: skip OVROverlay layers", for example The Room VR), MSAA switched on at runtime and a GPU hang (zink DEVICE LOST).'
     suggest: [frame.unity_no_overlay_copy, frame.unity_runtime_msaa_off]
   - id: unreal-msrtt-crash
     pattern: 'fault addr 0x10000 in tid \d+ \((RHIThread|RenderThread)'
     severity: fatal
-    diagnosis: The game's render thread jumped to address 0x10000 inside the Frame's GL driver (Mesa/Zink) a few seconds after start. Zink looks up a render-pass cache slot past its end when a game renders through multisampled render-to-texture (Unreal's mobile MSAA, e.g. Star Wars Pinball VR). Load the GL shim, which hides that extension.
+    diagnosis: The game's graphics crashed a few seconds after start. Its render thread jumped to address 0x10000 in the Frame's GL driver (Mesa/Zink), which reads past a render-pass cache when a game uses multisampled render-to-texture (Unreal's mobile MSAA, for example Star Wars Pinball VR); the GL shim hides that extension.
     suggest: [frame.unreal_gl_shim, frame.unity_gl_shim]
   - id: pac-unpaired
     pattern: 'ILL_ILLOPN\), fault addr 0x[0-9a-f]+ \(\*pc=0xd50323bf\)'
     severity: fatal
-    diagnosis: The game crashed on a return-address check (autiasp) its code never signed. The Quest's CPU ignores these checks, the Steam Frame's enforces them; some OpenSSL assembly in game engines has such unpaired checks (e.g. Star Wars Pinball VR on its first network connection, thread HttpManager).
+    diagnosis: The game crashed on a CPU check the Quest ignores but the Frame enforces. Its code checks a return address (autiasp) it never signed; some OpenSSL assembly in game engines does this (for example Star Wars Pinball VR on its first network connection, thread HttpManager).
     suggest: [frame.pac_hints]
   - id: swapchain-rect-invalid
     pattern: 'xrEndFrame failed -25\b'
     severity: fatal
-    diagnosis: The runtime rejects the game's frames because an image rect reaches past its swapchain (by a few pixels on some Frames); the game stops drawing (e.g. stuck at a "Waiting" box). FrameBridge from FramePort 0.11.0 clamps the rects - rebuild and reinstall the game.
+    diagnosis: The runtime rejects the game's frames, so it stops drawing (for example stuck at a "Waiting" box). An image rect reaches a few pixels past its swapchain on some Frames; FrameBridge from FramePort 0.11.0 clamps the rects, so rebuild and reinstall the game.
     suggest: [frame.adapter]
   - id: missing-ovr-symbol
     pattern: '(UnsatisfiedLinkError|cannot locate symbol) .*"?(ovr_[A-Za-z0-9_]+|ovr[A-Z][A-Za-z0-9]*_ToString)'
     severity: fatal
-    diagnosis: The game imports Meta platform functions overport's loader lacks.
+    diagnosis: The game can't load because OVRPort's platform loader lacks Meta platform functions it uses.
     suggest: [frame.ovrstubs, frame.ovrplatformcompat]
   - id: oculus-os-class
     pattern: '(ClassNotFoundException|NoClassDefFoundError).*com[./]oculus[./]os[./](AnalyticsEvent|UnifiedTelemetryLogger)'
     severity: fatal
-    diagnosis: Quest-only telemetry class lookup aborts the app (Meta XR Audio / native telemetry).
+    diagnosis: The game looks up a Quest-only system class and aborts. The lookup comes from Quest telemetry (Meta XR Audio or native code).
     suggest: [frame.metaxr_telemetry, frame.oculusos]
   - id: checkjni-abort
     pattern: 'JNI DETECTED ERROR IN APPLICATION|GetStringUTFChars.*NULL|CheckJNI'
     severity: fatal
-    diagnosis: CheckJNI (on because the app is debuggable) aborts on sloppy JNI usage.
+    diagnosis: Android's debug checks stopped the game. CheckJNI is on because the converted app is debuggable, and it aborts on sloppy JNI use.
     suggest: [frame.nodebug]
   - id: force-quit
     pattern: 'System\.exit|ForceQuit|FAndroidMisc::RequestExit'
     severity: error
-    diagnosis: The game quit itself right after starting (Unreal ForceQuit after a failed platform check).
+    diagnosis: The game quit itself right after starting. Usually Unreal's ForceQuit after a failed Quest platform check; the alternate build leaves it out.
     suggest: [patch_remove_unreal_force_quit]
     use_alt: true
   - id: swapchain-format
     pattern: 'xrCreateSwapchain.*(-26|FORMAT_UNSUPPORTED)|swapchain format .* rejected'
     unless: 'FrameBridge:\s+retry (samples=1|format=\d+) result=0'  # the adapter's fallback worked
     severity: error
-    diagnosis: The Frame rejected the swapchain format (GLES games must use sRGB formats, no MSAA).
+    diagnosis: The Frame rejected the game's image format. GLES games must use sRGB formats without MSAA.
     suggest: [adapter.swapchain_fix]
   - id: zink-device-lost
     pattern: 'zink.*DEVICE[_ ]LOST|VK_ERROR_DEVICE_LOST'
     severity: fatal
-    diagnosis: The GPU hung (Zink/Mesa). For GLES Unity games MSAA render-to-texture is the usual cause.
+    diagnosis: The GPU hung, so the game froze or closed. For GLES Unity games (Zink/Mesa) MSAA render-to-texture is the usual cause.
     suggest: [frame.unity_no_msaa, frame.unity_runtime_msaa_off]
   - id: unity-runtime-msaa
     pattern: 'recommended MSAA level is [248]\. Switching to the recommended level'
     severity: info
-    diagnosis: The game's OVRManager turns MSAA on at runtime (QualitySettings can't keep it off). On GLES this can
-      hang the Frame's GPU or restart the headset; if it does, keep it off in the game's code.
+    diagnosis: The game turns MSAA on at runtime, which can hang the Frame's GPU. Its OVRManager does this past QualitySettings; if the game hangs or the Frame restarts, keep it off in the game's code.
     suggest: [frame.unity_runtime_msaa_off]
   - id: runtime-input-crash
     pattern: 'vrclient\.so[^\n]*(UpdateActionStateInternal|sxr_xrSyncActions)'
     severity: fatal
-    diagnosis: The Frame's runtime crashed in its controller-input code (xrSyncActions), typically right after the game
-      got focus. sync_guard serialises input syncs and pauses them briefly after focus returns.
+    diagnosis: The Frame's runtime crashed in its controller code, usually right after the game got focus. sync_guard runs input syncs (xrSyncActions) one at a time and pauses them briefly after focus returns.
     suggest: [adapter.sync_guard]
   - id: focus-dip-teleport
     pattern: 'OnVRPresence[^\n]*Teleport'
     severity: warning
-    diagnosis: The game moves the player when the headset reports presence again, which the Frame's brief focus dips
-      trigger (the view jumps). focus_hold hides dips under 600 ms.
+    diagnosis: The view jumps because the game moves the player after the Frame's brief focus dips. The game reacts to the headset reporting presence again; focus_hold hides short dips.
     suggest: [adapter.focus_hold]
   - id: unity-vr-device-none
     pattern: 'NewtonVR.*(not setup properly|no headset found)|Loaded VR device: None|XR: Oculus could not be loaded'
     severity: fatal
-    diagnosis: Unity didn't start its Oculus VR device (older Unity checks for Meta's system apps first), so the game
-      runs as a hidden 2D app.
+    diagnosis: Unity didn't start VR, so the game runs as a hidden 2D app. Older Unity checks for Meta's system apps before it starts its Oculus VR device.
     suggest: [frame.unity_oculus_check]
   - id: unity-frame-not-begun
     pattern: 'frame loop shim: frame \d+: the last waited frame wasn.t begun'
     severity: info
-    diagnosis: Unity skipped beginning a frame (typically while it activates a scene); FramePort's frame wait didn't
-      wait for that frame instead of blocking the game. A few at each scene load are normal.
+    diagnosis: Unity skipped beginning a frame, and FramePort's frame wait moved on instead of blocking the game. This happens while a scene loads; a few at each scene load are normal.
     suggest: []
   - id: sdl-no-clipboard
     pattern: 'ClipboardManager\.addPrimaryClipChangedListener|SDLClipboardHandler\.<init>'
     severity: fatal
-    diagnosis: An SDL app (SDL2 / LÖVE) crashed at start because Lepton's Android has no clipboard service.
+    diagnosis: The app crashed at start because the Frame's Android has no clipboard. SDL apps (SDL2 / LÖVE) need Android's clipboard service, which Lepton lacks.
     suggest: [frame.sdl_clipboard]
   - id: controller-profile-rejected
     pattern: 'PATH_UNSUPPORTED.*xrSuggestInteractionProfileBindings|xrSuggestInteractionProfileBindings.*(-48|PATH_UNSUPPORTED)'
     severity: info
-    diagnosis: The runtime rejected controller bindings for a profile it doesn't know (Meta's Touch Plus/Pro). Usually
-      harmless (Meta's OVRPlugin suggests plain Touch too); a game that suggests only these gets them again as Touch
-      (profile_remap, on by default; log "controller profile ... -> oculus/touch_controller").
+    diagnosis: 'Usually harmless: the runtime rejected bindings for controllers it doesn''t know (Meta''s Touch Plus/Pro). OVRPlugin games suggest plain Touch too; a game that suggests only these gets them again as Touch (profile_remap, on by default; log "controller profile ... -> oculus/touch_controller").'
     suggest: []
   - id: input-call-failed
     pattern: 'input_diag: unsupported: (xrStringToPath|xrCreateAction|xrAttachSessionActionSets|xrSyncActions) ->'
     severity: warning
-    diagnosis: The runtime refused one of the game's controller-input calls (logged by input_diag; the line names the
-      call, the result and the argument), so controls set up through it don't work.
+    diagnosis: 'Some controls may not work: the runtime refused one of the game''s controller-input calls. input_diag logged it; the line names the call, the result and the argument.'
     suggest: []
   - id: gl-shader-failed
     pattern: 'GLShim\s*: SHADER COMPILE FAILED|#extension directive is not allowed in the middle|could not implicitly convert operands'
     severity: error
-    diagnosis: Shaders written for Quest drivers fail on Mesa (GLSL strictness).
+    diagnosis: The game's shaders don't compile on the Frame, so parts of the picture are missing. Shaders written for Quest drivers fail on Mesa's stricter GLSL.
     suggest: [frame.gl_shim]
   - id: vrapi-unsupported-layer
     pattern: 'OVRPortVrApi.*Unsupported VrApi layer type (\d+)'
     severity: error
-    diagnosis: The game submits a VrApi layer type the bridge can't show; whole frames are dropped (black screen).
+    diagnosis: The screen stays black because the game submits a layer the VrApi bridge can't show. Whole frames with that VrApi layer type are dropped.
     suggest: []
   - id: graphics-requirements-missing
     pattern: '(XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING|Failed to create XR session: -50\b|xrCreateSession[^\n]*-50\b)'
     severity: fatal
-    diagnosis: The game creates its OpenXR session without asking for the graphics requirements first; Meta's runtime
-      allows that, the Frame's doesn't (e.g. Lambda1VR). Current FrameBridge builds ask on the game's behalf and retry -
-      rebuild the game.
+    diagnosis: The game can't start VR on the Frame; rebuild it with the current FramePort. It creates its OpenXR session without asking for the graphics requirements first, which Meta's runtime allows and the Frame's doesn't (for example Lambda1VR); current FrameBridge builds ask on the game's behalf and retry.
     suggest: [frame.adapter]
     supersedes: [native-crash]
   - id: avatar-driver-missing
     pattern: 'OVRAvatar-Loader: DisplayErrorAndExit'
     severity: fatal
-    diagnosis: Meta's avatar library can't find its driver (it needs Meta's Horizon app) and stops the game (e.g.
-      BlazeRush). Replace it with a do-nothing library; the game runs without Meta avatars.
+    diagnosis: Meta's avatar library stopped the game because it needs Meta's Horizon app. A do-nothing stand-in lets the game run without Meta avatars (for example BlazeRush).
     suggest: [frame.avatar_stub]
     supersedes: [native-crash, java-crash]
   - id: vrapi-symbol-missing
     pattern: 'cannot locate symbol "vrapi_\w+"'
     severity: fatal
-    diagnosis: The game needs a VrApi function its libvrapi.so doesn't have (e.g. BlazeRush before the bridge gained
-      vrapi_PollEvent). Rebuild with the current FramePort; if it persists, report the function name.
+    diagnosis: The game needs a VrApi function the VrApi bridge doesn't have. Rebuild with the current FramePort; if it persists, report the function name (for example BlazeRush before the bridge gained vrapi_PollEvent).
     suggest: []
     supersedes: [native-crash, java-crash, dlopen-failed]
   - id: vrapi-before-init
     pattern: 'VrApiLoader: vrapi_\w+ was called before vrapi_Initialize'
     severity: fatal
-    diagnosis: Meta's VrApi loader stopped the game. Its OVRPlugin runs on OpenXR but still calls a VrApi function
-      without starting VrApi (e.g. Jurassic World Aftermath); the VrApi bridge can't stand in for this loader.
+    diagnosis: Meta's VrApi loader stopped the game. Its OVRPlugin runs on OpenXR but still calls a VrApi function without starting VrApi (for example Jurassic World Aftermath); the VrApi bridge can't stand in for this loader.
     suggest: [frame.vrapi_stub]
     supersedes: [direct-vrapi, native-crash]
   - id: direct-vrapi
     pattern: '(?<!called before )vrapi_Initialize|VrApi.*not supported|libvrapi\.so.*(not found|failed)'
     severity: warning
-    diagnosis: The engine talks to VrApi directly; it needs the VrApi bridge.
+    diagnosis: The game uses Meta's VrApi directly and needs the VrApi bridge.
     suggest: [frame.vrapi_bridge]
   - id: passthrough-missing
     pattern: 'XR_FB_passthrough.*(not supported|UNSUPPORTED|missing)|XR_ERROR_EXTENSION_NOT_PRESENT.*passthrough'
     severity: error
-    diagnosis: The game needs Meta passthrough; the adapter emulates it.
+    diagnosis: The game needs Meta passthrough (the camera view), which the Frame lacks; the adapter emulates it.
     suggest: [adapter.passthrough_emul, patch_force_passthrough]
   - id: render-model-requested
     pattern: 'dropped unsupported extension XR_FB_render_model'
     severity: info
-    diagnosis: The game asks the headset for its controller models (XR_FB_render_model), which the Frame lacks, so it
-      shows its own (Quest) controllers or none. The adapter can serve the Steam Frame controllers instead.
+    diagnosis: The game shows Quest controllers (or none) because the Frame doesn't provide controller models. It asks for them through XR_FB_render_model; the adapter can serve the Frame's own controller models instead.
     suggest: [adapter.controller_models]
   - id: controller-models-missing
     pattern: 'FrameBridge: controller models not found'
     severity: warning
-    diagnosis: Steam Frame controller models are on, but the converted models aren't in the game's files dir (the
-      agent found no Frame controller render models in SteamVR at install time; see the install log, or run the
-      agent's controller_models command).
+    diagnosis: Frame controller models are on, but the converted models are missing from the game's files. The agent found no Frame controller render models in SteamVR at install time; see the install log, or run the agent's controller_models command.
     suggest: []
   - id: scene-missing
     # not OVRPlugin's routine "Unavailable OpenXR extension: XR_FB_scene" (printed by every OVRPlugin game)
     pattern: '(?<!Unavailable OpenXR extension: )XR_FB_scene|XR_FB_spatial_entity.*(not supported|UNSUPPORTED)|xrQuerySpacesFB'
     severity: warning
-    diagnosis: The game uses the Meta scene (room) API; enable the adapter's guardian-based room emulation.
+    diagnosis: The game wants Meta's room data (scene API), which the Frame lacks. The adapter can emulate a room from the guardian bounds.
     suggest: [adapter.scene_emul]
   - id: time-conversion
     pattern: 'xrConvert(Timespec)?Time(ToTimespec)?Time(KHR)?.*(-12|FUNCTION_UNSUPPORTED)'
     severity: warning
-    diagnosis: Runtime lacks timespec time conversion (emulated by the current adapter build).
+    diagnosis: The Frame's runtime lacks timespec time conversion; the current adapter build emulates it.
     suggest: [frame.adapter]
   - id: unreal-vulkan-driver-crash
     pattern: '#00 pc [^\n]*/vulkan\.freedreno\.so[\s\S]{0,3000}?lib(Unreal|UE4)\.so'
     severity: fatal
-    diagnosis: The Frame's Vulkan driver crashed on a call from Unreal. Unreal 5 passes things Quest's driver ignores - a depth resolve in a subpass without a depth attachment (fixed by the Vulkan shim), image barriers and image views for a missing image when it expects fragment density maps (foveation) from the headset (e.g. Metro Awakening).
+    diagnosis: 'The Frame''s Vulkan driver crashed on a call from Unreal. Unreal 5 passes things Quest''s driver ignores: a depth resolve in a subpass without a depth attachment (handled by the Vulkan shim), and image barriers and views for a missing image when it expects fragment density maps (foveation) from the headset (for example Metro Awakening).'
     suggest: [frame.vk_sanitize, adapter.vk_spec_fixes, adapter.vk_hide_fdm]
     supersedes: [native-crash]
   - id: unreal-fdm-missing
     pattern: 'vk shim: left out \d+ image barrier\(s\) without an image \(first: layout \d+ -> 1000218000'
     unless: 'vk shim: fragment density map extensions hidden'
     severity: warning
-    diagnosis: Unreal expects fragment density maps (foveation) from the headset, which the Frame doesn't provide; its image views for them crash the Frame's driver a few seconds later (e.g. Metro Awakening).
+    diagnosis: 'The game will likely crash a few seconds in: Unreal expects foveation data the Frame doesn''t provide. Its image views for the missing fragment density maps crash the Frame''s driver (for example Metro Awakening).'
     suggest: [adapter.vk_hide_fdm]
   - id: fossilize-renderpass
     pattern: '#0\d pc [^\n]*libVkLayer_fossilize\.so[\s\S]{0,4000}?FVulkanRenderPass::FVulkanRenderPass'
     severity: fatal
-    diagnosis: Lepton's Fossilize layer crashed while recording a render pass (the engine leaves an attachment reference's pNext uninitialized).
+    diagnosis: A Vulkan layer in Lepton (Fossilize) crashed while the game set up its graphics. The engine leaves an attachment reference's pNext uninitialized, and Fossilize follows it while recording a render pass.
     suggest: [frame.vk_sanitize]
     supersedes: [native-crash]
   - id: equirect-layers-dropped
     pattern: 'new layer: type=100009100\d [^\n]*usable=0|new layer: type=1000018000 [^\n]*usable=0'
     severity: warning
-    diagnosis: The game shows 360° (equirect) layers, e.g. a video player's theatre or 360° videos, which the Frame's
-      runtime can't composite, so they are missing. GLES games can get them back as panels around the player.
+    diagnosis: The game's 360° pictures (for example a video player's theater or 360° videos) are missing because the Frame's runtime can't show equirect layers. GLES games can get them back through the adapter.
     suggest: [adapter.equirect_emul]
   - id: equirect-emul-disabled
     pattern: 'equirect_emul: (disabled|drawing failed|not a GLES session)'
     severity: warning
-    diagnosis: The 360° layer emulation switched itself off for this session (no shared GLES context, or drawing
-      failed); the 360° layers are dropped as without it. See the lines before it in the log.
+    diagnosis: The 360° layer emulation switched itself off for this session, so 360° pictures are missing. No shared GLES context, or drawing failed; see the lines before it in the log.
     suggest: []
   - id: swapchain-size-abort
     pattern: '#01 pc [^\n]*libopenxr_loader\.so \(xrCreateSwapchain\+|Wrong createInfo size'
     severity: fatal
-    diagnosis: overport's OpenXR dispatcher aborted on a swapchain larger than 4096 px (video players, big textures).
+    diagnosis: The game crashed creating a very large image (over 4096 px, for example in video players). OVRPort's OpenXR dispatcher aborts on such swapchains.
     suggest: [frame.swapchain_limit]
     supersedes: [native-crash]
   - id: ovr-microphone-crash
     pattern: 'ovr_Microphone_GetOutputBufferMaxSize\+'
     severity: fatal
-    diagnosis: The game asked OVRPort's Meta platform library for the microphone buffer size before starting the
-      microphone, and the library read the not-yet-opened audio stream (SIGSEGV in libaaudio.so, e.g. Unreal's Oculus
-      voice chat a few seconds after the logo).
+    diagnosis: The game crashed while setting up the microphone (for example Unreal's Oculus voice chat a few seconds after the logo). It asks OVRPort's Meta platform library for the microphone buffer size before starting the microphone, and the library reads the not-yet-opened audio stream (SIGSEGV in libaaudio.so).
     suggest: [frame.ovr_microphone]
     supersedes: [native-crash]
   - id: slz-vulkan-hook-crash
     pattern: 'SLZ Graphics plugin loading![\s\S]{0,20000}?E CRASH   : .*pc  0000000000000000'
     severity: fatal
-    diagnosis: Stress Level Zero's graphics plugin (libSLZQuestNative.so) hooks Unity's Vulkan start-up and calls an invalid function there on the Frame (e.g. BONELAB 1.2974); the game crashes or hangs before its first frame.
+    diagnosis: The game's own graphics plugin crashes or hangs it before the first frame (for example BONELAB 1.2974). Stress Level Zero's plugin (libSLZQuestNative.so) hooks Unity's Vulkan start-up and calls an invalid function there on the Frame.
     suggest: [frame.slz_vulkan_hooks]
     supersedes: [java-crash, native-crash]
   - id: native-crash
     pattern: 'Fatal signal (\d+) \(SIG[A-Z]+\)'
     severity: fatal
-    diagnosis: Native crash. See the backtrace (#00 pc ...) for the library.
+    diagnosis: The game crashed. The backtrace (#00 pc ...) names the library.
     suggest: []
   - id: java-crash
     pattern: 'FATAL EXCEPTION'
     severity: fatal
-    diagnosis: Java crash. See "Caused by".
+    diagnosis: The game's Java code crashed. See "Caused by" in the log.
     suggest: []
   - id: dlopen-failed
     pattern: 'dlopen failed: (.*)'
     severity: info
-    diagnosis: A native library failed to load. Usually an optional probe (libOVRMrcLib, libovraudio32, …); it only
-      matters when a crash or UnsatisfiedLinkError abort follows.
+    diagnosis: 'Usually harmless: a native library failed to load. Often an optional probe (libOVRMrcLib, libovraudio32, …); it only matters when a crash or UnsatisfiedLinkError follows.'
     suggest: []
   - id: keyring-quota
     pattern: 'create keyring .*Disk quota exceeded'
     severity: fatal
-    diagnosis: The Frame ran out of kernel keys (rootless podman leaks one session keyring per container start). The
-      FramePort agent sets keyring=false in ~/.config/containers/containers.conf; reboot the Frame to free the leaked keys.
+    diagnosis: 'Games can''t start until the Frame restarts: it ran out of kernel keys. Rootless podman leaks one session keyring per container start; the FramePort agent sets keyring=false in ~/.config/containers/containers.conf, and a reboot frees the leaked keys.'
     suggest: []
   - id: container-not-started
     pattern: "is not a running context|OCI runtime error"
     severity: fatal
-    diagnosis: The Lepton container failed to start (see the error above it in launch.log).
+    diagnosis: The game's Android container (Lepton) failed to start. See the error above it in launch.log.
     suggest: []
   - id: permission-denied-save
     pattern: 'Permission denied.*(Android/data|/sdcard)|EACCES.*Android/data'
     severity: warning
-    diagnosis: The game created folders it can't write (saves break). The FramePort launcher repairs permissions every 2 s.
+    diagnosis: The game can't write some of its folders, so saves may break. The FramePort launcher repairs permissions every 2 s.
     suggest: []
   # ---- PC VR (Oculus Rift games under Revive; on the Frame under Proton). kind: pcvr = only for those logs
   - id: proton-missing-runtime
     kind: pcvr
     pattern: 'needs Steam app \d+ \(runtime\)|_v2-entry-point: (No such file|not found)'
     severity: fatal
-    diagnosis: The Steam Linux Runtime that Proton needs isn't installed on the Frame.
+    diagnosis: Proton can't start because the Steam Linux Runtime it needs isn't installed on the Frame.
     suggest: []
   - id: revive-inject-failed
     kind: pcvr
     pattern: 'Failed to create process'
     severity: fatal
-    diagnosis: Revive's injector could not start the game (wrong exe path, or a 32-bit/64-bit mismatch).
+    diagnosis: 'Revive couldn''t start the game: wrong exe path, or a 32-bit/64-bit mismatch.'
     suggest: []
   - id: oculus-hmd-event
     kind: pcvr
     pattern: 'FramePort oculushmd: could not (create the OculusHMDConnected event|start the command)'
     severity: error
-    diagnosis: FramePort's Oculus detection helper couldn't provide the OculusHMDConnected event (or couldn't start the game). Unreal's Oculus plugin then skips VR silently and the game runs as a flat window.
+    diagnosis: The game runs as a flat window because FramePort's Oculus detection helper failed. It couldn't provide the OculusHMDConnected event (or couldn't start the game), so Unreal's Oculus plugin skips VR silently.
     suggest: [pcvr.oculus_unreal, pcvr.proton_log]
   - id: openxr-no-runtime
     kind: pcvr
     # (not the loader's 'xrCreateInstance failed': Proton's own OpenXR probe fails once and retries on the Frame)
     pattern: 'XR_ERROR_RUNTIME_(UNAVAILABLE|FAILURE)|No OpenXR runtime|OpenXR runtime (is )?not (found|available)|failed to (create|initialize) (the )?OpenXR'
     severity: fatal
-    diagnosis: No OpenXR runtime reached the game. On a PC start SteamVR (or set it as the OpenXR runtime); on the Frame Proton couldn't bridge to the Frame runtime.
+    diagnosis: No VR runtime reached the game. On a PC, start SteamVR (or set it as the OpenXR runtime); on the Frame, Proton couldn't bridge to the Frame's runtime.
     suggest: []
   - id: openxr-missing-ext
     kind: pcvr
     pattern: 'XR_ERROR_EXTENSION_NOT_PRESENT|XR_KHR_D3D11_enable.*(not|unsupported)'
     severity: fatal
-    diagnosis: The OpenXR runtime lacks an extension Revive requires (XR_KHR_D3D11_enable / win32 time conversion).
+    diagnosis: The VR runtime lacks a feature Revive needs (XR_KHR_D3D11_enable or win32 time conversion).
     suggest: [pcvr.xr_timefix, pcvr.revive_openvr]
   - id: openxr-api-version
     kind: pcvr
     pattern: 'LoaderInstance::CreateInstance chained CreateInstance call failed|XR_ERROR_API_VERSION_UNSUPPORTED|Unable to load LibOVRRT DLL'
     severity: fatal
-    diagnosis: Proton's VR setup couldn't create an OpenXR instance (the Frame's SteamVR runtime only accepts OpenXR 1.0 apps; Proton asks for 1.1), so the game got no VR — a flat window, or Revive fails with "Unable to load LibOVRRT DLL".
+    diagnosis: The game got no VR, so it runs as a flat window or Revive fails. Proton asks for OpenXR 1.1 but the Frame's SteamVR runtime only accepts 1.0 apps (Revive then reports "Unable to load LibOVRRT DLL").
     suggest: [pcvr.xr_timefix]
   - id: openxr-time-conversion
     kind: pcvr
     pattern: 'xrConvert(TimespecTimeToTime|TimeToTimespecTime)KHR failed|XR_KHR_convert_timespec_time not available'
     severity: error
-    diagnosis: The OpenXR runtime refused time conversion, which Proton needs for Windows games' performance-counter times.
+    diagnosis: The VR runtime refused a time conversion that Proton needs for Windows games' performance-counter times.
     suggest: [pcvr.xr_timefix]
   - id: delayload-missing
     kind: pcvr
     pattern: '[Ee]xception:? 0xc06d007e|code=c06d007e'
     severity: fatal
-    diagnosis: A DLL the game loads on demand is missing (Windows delay-load error). For Oculus Store games this is usually LibOVRPlatform64_1.dll, the Oculus Platform SDK that the Oculus app installs for the licence check; FramePort doesn't replace it, so such games need the Oculus app (PC mode).
+    diagnosis: A DLL the game needs is missing, so it closes at once. For Oculus Store games this is usually LibOVRPlatform64_1.dll, the Oculus Platform SDK that the Oculus app installs for the license check; FramePort doesn't replace it, so such games need the Oculus app (PC mode).
     suggest: []
     supersedes: [unreal-crash, wine-crash]  # the crash is this missing DLL; don't send the user after other fixes
   - id: oculus-entitlement
     kind: pcvr
     pattern: '(?i)entitlement (check )?fail|ovr_PlatformInitialize.*(fail|error)|ovrPlatformInitialize_(NotEntitled|Uninitialized|PreLoaded|FileInvalid|SignatureInvalid|UnableToVerify)'
     severity: fatal
-    diagnosis: The Oculus Platform SDK entitlement check failed. The game needs the Oculus app running with a license you own (PC mode only).
+    diagnosis: The game's Oculus license check failed. It needs the Oculus app running with a license you own (PC mode only).
     suggest: []
   - id: vcruntime-missing
     kind: pcvr
@@ -350,39 +328,35 @@ signatures:
     kind: pcvr
     pattern: 'DXVK: .*(DEVICE_LOST|Device lost)|VK_ERROR_DEVICE_LOST'
     severity: fatal
-    diagnosis: The GPU driver lost the device while running the game (D3D through DXVK on freedreno).
+    diagnosis: The GPU stopped responding while running the game (D3D through DXVK on freedreno).
     suggest: [pcvr.proton_log]
   - id: unreal-crash
     kind: pcvr
     pattern: 'CrashReportClient|UE4CC-Windows|UECC-Windows|Fatal error!|Unhandled Exception: EXCEPTION'
     severity: fatal
-    diagnosis: The game crashed (Unreal's crash reporter started). See the game log and crash summary in the log. Common causes are that no VR runtime reached the game (Revive off) or a GPU or driver problem under Proton.
+    diagnosis: The game crashed (Unreal's crash reporter started). Common causes are that no VR runtime reached the game (Revive off) or a GPU or driver problem under Proton; see the game log and crash summary in the log.
     suggest: [pcvr.revive, pcvr.proton_log, pcvr.no_crash_reporter]
   - id: wine-crash
     kind: pcvr
     pattern: 'Unhandled exception: page fault|wine: Unhandled|Backtrace:'
     severity: error
-    diagnosis: The game crashed under Wine/Proton (set the Proton debug log and check steam-<appid>.log).
+    diagnosis: The game crashed under Wine/Proton. Turn on the Proton debug log and check steam-<appid>.log.
     suggest: [pcvr.proton_log]
 
   - id: save-folder-permission
     pattern: "(We don't have write permission to|UnauthorizedAccessException: Access to the path \"/(sdcard|storage/emulated/0)/Android/data/)"
     severity: error
-    diagnosis: The game can't write to a folder it created in its storage (e.g. SUPERHOT's cloud/data, mode 1700, which
-      makes it quit at start). FramePort's launcher (agent 41 or newer) gives such folders owner and group write
-      permission before and during every launch; update the game on the Frame (reinstall) to get the new launcher.
+    diagnosis: The game can't write to a folder it created, so it may quit at start (for example SUPERHOT's cloud/data, mode 1700). FramePort's launcher (agent 41 or newer) gives such folders owner and group write permission at every launch; reinstall the game to get the new launcher.
     suggest: []
   - id: surface-swapchain-emulated
     pattern: 'surface_emul: emulated Android surface swapchain'
     severity: info
-    diagnosis: The game plays a video on a panel through an Android Surface (XR_KHR_android_surface_swapchain), which the
-      Frame's runtime refuses; FrameBridge emulates it (surface_emul) and copies each video frame into the panel.
+    diagnosis: The game plays video on a panel through an Android Surface, which FrameBridge emulates. The Frame's runtime refuses XR_KHR_android_surface_swapchain; surface_emul copies each video frame into the panel.
     suggest: []
   - id: surface-swapchain-failed
     pattern: 'surface_emul: (setup failed|upload failed|EGL context failed|Vulkan upload path unavailable)'
     severity: warning
-    diagnosis: FrameBridge couldn't emulate an Android video panel (XR_KHR_android_surface_swapchain); the panel stays
-      empty, and a game waiting for its intro video may stay black (e.g. I Am Monkey's intro).
+    diagnosis: A video panel stays empty, and a game waiting for its intro video may stay black (for example I Am Monkey's intro). FrameBridge couldn't emulate the Android video panel (XR_KHR_android_surface_swapchain).
     suggest: []
 milestones:  # progress markers, in order; the furthest one reached is reported
   - {id: pcvr-launch, kind: pcvr, pattern: 'FramePort: launching|Launched injector with', label: Launcher started}

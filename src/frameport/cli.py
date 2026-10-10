@@ -35,12 +35,12 @@ from .core import library
 from .core.events import printing_reporter
 from .patches import base
 
-FRAME_HELP = "the Frame as user@host (default: the paired Frame)"
+FRAME_HELP = "the Frame as user@host (default: the remembered Frame)"
 ALL_HELP = "every game in the library"
 JSON_HELP = "print JSON"
 
 app = typer.Typer(add_completion=False, no_args_is_help=True,
-                  help="Run Meta Quest, Android and PC VR games on the Steam Frame.",
+                  help="Run Quest games, PC VR games, Android and Linux apps on the Steam Frame.",
                   epilog="Exit codes: 0 done, 1 something failed, 2 wrong usage, 10 (update --check) a newer version "
                          "exists. The GUI is frameport-gui.")
 tools_app = typer.Typer(help="Manage the portable toolchain.")
@@ -64,7 +64,7 @@ def _show_version(value: bool):
 @app.callback()
 def _setup(ctx: typer.Context,
            version: bool = typer.Option(False, "--version", is_eager=True, callback=_show_version,
-                                        help="Show the FramePort version and exit.")):
+                                        help="show the FramePort version and exit")):
     from .core import applog
 
     applog.setup("cli")
@@ -102,8 +102,8 @@ def _version() -> str:
 
 
 @app.command("update")
-def update_cmd(check: bool = typer.Option(False, "--check", help="Only say whether a newer version exists."),
-               yes: bool = typer.Option(False, "--yes", "-y", help="Don't ask before updating.")):
+def update_cmd(check: bool = typer.Option(False, "--check", help="only say whether a newer version exists"),
+               yes: bool = typer.Option(False, "--yes", "-y", help="don't ask before updating")):
     """Update FramePort to the latest release (the app, a `uv tool`/pip install, or a source checkout)."""
     import subprocess
 
@@ -161,7 +161,7 @@ def _target(frame: Optional[str], password: Optional[str] = None, to: str = "fra
     else:
         saved = saved_targets()
         if not saved:
-            raise typer.BadParameter("no Frame given and none paired; use --frame steamos@<host>")
+            raise typer.BadParameter("no Frame given and none remembered; use --frame steamos@<host>")
         t = saved[0]
     return FrameLeptonTarget(t, password).connect()
 
@@ -197,7 +197,7 @@ def tools_status(check_latest: bool = typer.Option(False, "--latest", help="also
 
 @tools_app.command("install")
 def tools_install(update: bool = typer.Option(False, help="update to the newest versions"),
-                  revive: bool = typer.Option(False, help="also install Revive (for Oculus PC games)")):
+                  revive: bool = typer.Option(False, help="also install Revive (for Oculus PC VR games)")):
     """Download the tools FramePort needs into its own folder (nothing is installed system-wide)."""
     from .tools import overport as ov
     from .tools import toolchain
@@ -235,12 +235,12 @@ def scan(path: Path = typer.Argument(..., help="a folder with game backups (APKs
 
 @app.command("catalog-update")
 def catalog_update():
-    """Fetch confirmed game configs from the repo's main branch now (normally automatic, every 6 h)."""
+    """Fetch confirmed game recipes from the repo's main branch now (normally automatic, every 6 h)."""
     from .recommend import catalog
 
     n = catalog.refresh_remote(force=True)
     st = catalog.remote_status()
-    typer.echo(f"{n} config(s) downloaded; {st['entries']} on GitHub main")
+    typer.echo(f"{n} recipe(s) downloaded; {st['entries']} on GitHub main")
     for pkg, why in sorted(st["skipped"].items()):
         typer.echo(f"  skipped {pkg}: {why}")
 
@@ -420,8 +420,8 @@ def install(package: Optional[str] = typer.Argument(None), all_: bool = typer.Op
             apk_only: bool = typer.Option(False, help="reuse game data already on the Frame"),
             no_library: bool = typer.Option(False, help="don't add to the Steam library now"),
             to: str = typer.Option("frame", help="frame, or pc (PC VR games only: install on this PC)"),
-            apk: Optional[Path] = typer.Option(None, help="install this APK instead of the last build (one game; e.g. "
-                                                          "a test build signed with the game's key)"),
+            apk: Optional[Path] = typer.Option(None, help="install this APK instead of the last build (one game; "
+                                                          "for example a test build signed with the game's key)"),
             dest: Optional[str] = typer.Option(None, help="drive for new installs: 'internal' or a drive's path from "
                                                           "'frameport frame drives' (default: the app's setting); "
                                                           "installed games stay where they are")):
@@ -445,7 +445,7 @@ def test(package: Optional[str] = typer.Argument(None), all_: bool = typer.Optio
          frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
          seconds: int = typer.Option(45, help="how long the game runs before it's stopped"),
          to: str = typer.Option("frame", help="frame, or pc (PC VR games installed on this PC)")):
-    """Headless launch on the Frame (or this PC) + log triage."""
+    """Headless launch test on the Frame (or this PC) and log triage."""
     target = _target(frame, to=to)
     installed = {g["package"] for g in target.installed()}
     for pkg in _pkgs(package, all_):
@@ -473,7 +473,7 @@ def triage(logfile: Path = typer.Argument(..., help="a launch.log"),
 @app.command()
 def settings(package: str, values: list[str] = typer.Argument(..., help="key=value pairs"),
              frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
-    """Change FrameBridge settings of an installed game (no re-patching), e.g. scale=1.2."""
+    """Change FrameBridge settings of an installed game (no rebuild), for example scale=1.2."""
     target = _target(frame)
     kv = dict(v.split("=", 1) for v in values)
     typer.echo(json.dumps(target.set_settings(package, kv), indent=1))
@@ -491,15 +491,15 @@ def frame_discover(seconds: float = typer.Option(4.0, help="how long to listen")
 
 @frame_app.command("pair")
 def frame_pair(timeout: float = typer.Option(600, help="seconds to wait for the Frame")):
-    """Serve the one-line bootstrap for the Frame and wait until it reports back."""
+    """Show the setup command for the Frame and wait until the Frame reports back."""
     import time
 
     from .frame.connection import FrameTarget, save_target
     from .frame.pairing import PairingServer
 
     srv = PairingServer().start()
-    typer.echo("On the Frame, open the SteamVR dashboard → Launch a program → Desktop, then System → Konsole, and "
-               "run:\n\n    " + srv.one_liner + "\n")
+    typer.echo("On the Frame, open the SteamVR dashboard → Launch a program → Desktop, then app menu → System → "
+               "Konsole, and run:\n\n    " + srv.one_liner + "\n")
     end = time.time() + timeout
     while time.time() < end and not srv.paired:
         time.sleep(1)
@@ -509,7 +509,7 @@ def frame_pair(timeout: float = typer.Option(600, help="seconds to wait for the 
         raise typer.Exit(1)
     info = srv.paired[0]
     save_target(FrameTarget(info["host"], info["user"], 22, info["name"]))
-    typer.echo(f"paired with {info['name']} at {info['host']}")
+    typer.echo(f"connected to {info['name']} at {info['host']}")
 
 
 @frame_app.command("connect")
@@ -532,7 +532,7 @@ def frame_connect(address: str = typer.Argument(..., help="steamos@<host or IP>"
 def frame_cleanup(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
                   keep_rollback: bool = typer.Option(False, help="keep previous-game.apk copies"),
                   path: list[str] = typer.Option([], help="extra folder under the Frame's home to delete, "
-                                                         "e.g. ~/PATCHED")):
+                                                         "for example ~/PATCHED")):
     """Free space on the Frame: rollback APKs from reinstalls, leftover uploads, optional extra folders."""
     r = _target(frame).frame.agent("cleanup", rollback=not keep_rollback, paths=path)
     typer.echo(f"removed {len(r['removed'])} item(s), freed {r['freed_bytes'] / 2**30:.1f} GiB")
@@ -545,7 +545,7 @@ def frame_send(paths: list[Path] = typer.Argument(..., help="files or folders to
                game: Optional[str] = typer.Option(None, help="package of the game, for --dest app / app-files"),
                folder: str = typer.Option("", help="sub-folder inside the destination"),
                app: Optional[str] = typer.Option(None, help="package of a player: also add the files to its own folder "
-                                                            "(e.g. 4XVR lists /sdcard/4XPlayer, not Movies)"),
+                                                            "(for example 4XVR lists /sdcard/4XPlayer, not Movies)"),
                frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
     """Send files to apps on the Frame. videos/downloads/documents are shared by every Quest game (they appear as
     /sdcard/Movies, /sdcard/Download, /sdcard/Documents); app/app-files are one game's own storage. Apps find the
@@ -585,14 +585,14 @@ def frame_drives(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
         typer.echo(f"{mark} {d['label']:20} {d.get('fstype') or '':6} {free:>16}  {state}")
         if not d["internal"]:
             typer.echo(f"  {'':20} {d['path']}")
-    typer.echo("* = where new games go (frameport install --dest, or the app's Settings: Frame)")
+    typer.echo("* = where new games go (frameport install --dest, or the app's Frame page → Storage)")
 
 
 @frame_app.command("move")
 def frame_move(package: str = typer.Argument(..., help="an installed game"),
                to_: str = typer.Option(..., "--to", help="'internal' or a drive's path from 'frameport frame drives'"),
                frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
-    """Move an installed game's files to another drive of the Frame (e.g. the microSD card) or back. Saves, the
+    """Move an installed game's files to another drive of the Frame (for example the microSD card) or back. Saves, the
     Steam library entry and settings stay as they are."""
     pkg = _pkgs(package, False)[0]
     st = _target(frame).move(pkg, to_, printing_reporter())
@@ -618,7 +618,7 @@ def frame_usb_check(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
 @frame_app.command("controller-models")
 def frame_controller_models(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
                             convert: bool = typer.Option(False, help="also convert them (cached on the Frame)")):
-    """SteamVR render models on the Frame and which ones serve as Steam Frame controller models (controller_models)."""
+    """SteamVR render models on the Frame and which ones serve as Frame controller models (controller_models)."""
     typer.echo(json.dumps(_target(frame).frame.agent("controller_models", convert=convert), indent=1))
 
 
@@ -628,8 +628,9 @@ def frame_proton(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
                                                "and downloads it; waits until done)"),
                  in_headset: bool = typer.Option(False, help="with --install: only ask Steam (confirm in the headset)"),
                  test: bool = typer.Option(False, "--test", help="run a Windows program under Proton on the Frame"),
-                 tool: Optional[str] = typer.Option(None, help="compat tool name, e.g. proton-experimental-arm64")):
-    """Proton (ARM64) on the Frame, needed for Oculus Rift (PC VR) games."""
+                 tool: Optional[str] = typer.Option(None, help="compat tool name, for example "
+                                                                "proton-experimental-arm64")):
+    """Proton (ARM64) on the Frame, needed for PC VR games."""
     t = _target(frame)
     if test:
         r = t.proton_selftest(tool)
@@ -687,7 +688,7 @@ def parity(known_good: Path = typer.Option(..., help="folder of known-good game 
 
 @app.command()
 def report(out: Path = typer.Option(Path("REPORT.md"), help="the file to write")):
-    """Write a status report of every catalog game (markdown)."""
+    """Write a status report of every catalog game (Markdown)."""
     from .report import write
 
     typer.echo(f"wrote {write(out)}")
@@ -827,7 +828,7 @@ def share_recipe(package: str, status: str = typer.Option("works", help="works o
                  notes: str = typer.Option("", help="what you checked in the headset, known issues"),
                  frame: Optional[str] = typer.Option(None, help="include the Frame's SteamOS build"),
                  browser: bool = typer.Option(True, "--browser/--no-browser", help="open the issue in a browser")):
-    """Submit a working configuration: saves it as a known-good recipe and opens a prefilled GitHub issue."""
+    """Share a working recipe: saves it as known-good and opens a prefilled GitHub issue."""
     if status not in ("works", "issues"):
         raise typer.BadParameter("--status must be works or issues")
     pkg = _pkgs(package, False)[0]

@@ -23,7 +23,7 @@
 3. **Recipe** (`recommend/engine.py`): every patch's `detect()` suggests itself with a reason; a catalog entry (exact
    known-good recipe) overrides heuristics. The UI shows toggles; the user confirms.
 4. **Build** (`build.py`): overport CLI (OVRPort; defaults + extras) → apk-stage patches in `order` on an
-   `ApkWorkspace` → apksigner (with the package's own keystore) → static validation. Optional alternate build (e.g.
+   `ApkWorkspace` → apksigner (with the package's own keystore) → static validation. Optional alternate build (for example
    without Unreal ForceQuit).
 5. **Install** (`install/installer.py` + `agent/frameport_agent.py`): `prepare` (paths, what's already there) → SFTP
    uploads with resume → `finalize` (move into place, settings.conf/framebridge.conf, device files, launch.sh,
@@ -33,7 +33,7 @@
    `triage.py` (milestones + signatures → suggested patches) → UI offers "apply suggestions and rebuild".
 
 ## Extending
-- **New fix**: `patches/frame/<name>.py` with a `Patch` subclass (`detect`, `apply`, optional `validate`), plus a
+- **New patch**: `patches/frame/<name>.py` with a `Patch` subclass (`detect`, `apply`, optional `validate`), plus a
   signature in `catalog/triage.yaml` and a PLAYBOOK row. Stages: `overport` | `apk` | `install`.
 - **Upstream fixed a bug we work around**: register an `UpstreamFix` (`patches/upstream.py`) in the workaround's
   module: a probe that finds the fix in OVRPort's output (True / False / None = can't tell). Each build runs the probes
@@ -106,4 +106,4 @@ FramePort is a front end for other projects; most of the functionality comes fro
 | OculusDB, Steam store | Game descriptions, genres and artwork |
 
 FramePort's own parts: game detection and recipes, the Steam Frame OpenXR adapter (FrameBridge) and the other native
-fixes in `native/`, the installer agent that runs on the Frame, and the desktop/command-line app.
+patches in `native/`, the installer agent that runs on the Frame, and the desktop/command-line app.

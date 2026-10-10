@@ -1,14 +1,14 @@
-# Diagnostics bundles and shared recipes
+# Diagnostics and problem reports
 
 Two ways users feed results back, both without a GitHub token:
 
-- **Share working recipe** (game menu, `frameport share-recipe <pkg>`): saves the recipe as a user catalog entry and
+- **Share working recipe…** (game menu, `frameport share-recipe <pkg>`): saves the recipe as a user catalog entry and
   opens a prefilled issue from `.github/ISSUE_TEMPLATE/working-config.yml`. A maintainer checks it and adds the label
   `catalog-accepted`. Then `.github/workflows/catalog-from-issue.yml` runs `scripts/catalog_from_issue.py`, which reads
   only the YAML block, validates it, and writes `catalog/games/<pkg>.yaml`, and the workflow opens a PR.
   - The PR step needs Settings → Actions → "Allow GitHub Actions to create and approve pull requests".
   - Create the labels `working-config`, `catalog-accepted` and `bug` once.
-- **Report a problem / Collect logs** (game menu, Settings, the failure pop-up, `frameport diag report|collect`): writes
+- **Report a problem…** / **Collect logs** (game menu, Settings, the failure pop-up, `frameport diag report|collect`): writes
   a redacted zip and opens a prefilled `bug-report.yml` issue.
   - GitHub has no API for issue attachments, so the user drags the zip in (25 MB max; the bundle stays under 24 MB).
   - Prefilled links are capped at about 7.5k characters. Free text is trimmed first; the recipe is never cut.
@@ -47,14 +47,14 @@ Each log keeps at most its last 4 MB (2 MB per file from the Frame).
   saved Frame addresses → `<host>`, Steam account ids from the Frame's `info` and the PC's Steam → `<steam-id>`, the
   folders holding the user's game dumps → `<source>`.
 - **Patterns:** IPv4 addresses (first octet ≥ 10, so version numbers survive), IPv6, MAC, SteamID64, `userdata/<id>`,
-  e-mail addresses (file names like `x@123.txt` excluded), and any `/home/<u>`, `/Users/<u>`, `C:\Users\<u>` or
+  email addresses (file names like `x@123.txt` excluded), and any `/home/<u>`, `/Users/<u>`, `C:\Users\<u>` or
   `/mnt/c/Users/<u>`.
 - **Kept:** generic accounts that identify no one: `steamos`, `steamuser` (Proton), `root`, `deck`.
 
 ## Debugging from a bundle (no game, no Frame, no GUI)
 1. `frameport diag inspect <zip>` (`--json` for everything). It prints the versions and warnings, the last launch
    test, and a fresh triage of the newest launch log with the current `catalog/triage.yaml`.
-2. Match the findings and log lines against `docs/PLAYBOOK.md` (symptom → fix) and `docs/FRAME_RUNTIME.md`.
+2. Match the findings and log lines against `docs/PLAYBOOK.md` (symptom → cause → fix) and `docs/FRAME_RUNTIME.md`.
 3. Check the analysis in `entry.json` (engine, XR API, `extra`: missing ovr symbols, features, Unreal version) and
    `package/elf.json` against the heuristics in CLAUDE.md. Compare `recipe.yaml` with catalog games that use the same
    engine and API.

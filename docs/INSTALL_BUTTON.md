@@ -1,4 +1,4 @@
-# "Install with FramePort" button
+# Install button
 
 A button for web pages and READMEs that opens a game straight in FramePort. Clicking it hands FramePort an install
 link; FramePort shows what it would download and asks before it does anything (see
@@ -15,8 +15,8 @@ All files are in [`docs/badges/`](badges/). Each SVG is self-contained (no exter
 | File | Use it for |
 |---|---|
 | [`install-with-frameport.svg`](badges/install-with-frameport.svg) | Everywhere. No motion. |
-| [`install-with-frameport-animated.svg`](badges/install-with-frameport-animated.svg) | GitHub READMEs and other pages that only allow images. The glow plays by itself every 6 seconds: blue swells from the left, the portal between "Frame" and "Port" flares, then orange swells on the right. |
-| [`install-with-frameport-hover.svg`](badges/install-with-frameport-hover.svg) | Websites where you can paste HTML. The glow brightens and the middle portal lights up while the pointer is on the button. It only reacts to the mouse when the SVG code is placed in the page itself (see below). |
+| [`install-with-frameport-animated.svg`](badges/install-with-frameport-animated.svg) | GitHub READMEs and other pages that only allow images. The glow plays by itself every 6 seconds. |
+| [`install-with-frameport-hover.svg`](badges/install-with-frameport-hover.svg) | Websites where you can paste HTML. It glows while the pointer is on it, but only when its SVG code is in the page itself (see below). |
 | [`install-with-frameport@2x.png`](badges/install-with-frameport@2x.png) | Places without SVG support (some forums, email). 432 × 120; show it at 216 × 60. |
 
 Both animated versions stop moving for visitors who turn on reduced motion in their system settings.
@@ -81,8 +81,7 @@ FrameDrop's install page, which opens `framedrop://` links (FramePort opens thos
 [![Install with FramePort](https://cdn.jsdelivr.net/gh/spoopyghosty0/frameport@main/docs/badges/install-with-frameport-animated.svg)](https://framedropvr.com/install?manifest=https%3A%2F%2Fexample.com%2Fmy-game.json)
 ```
 
-Use the animated or still SVG; the hover version doesn't react inside a README, because GitHub shows SVGs as
-images.
+Use the animated or still SVG: GitHub shows SVGs as images, so the hover version doesn't react there.
 
 ## If a visitor doesn't have FramePort
 

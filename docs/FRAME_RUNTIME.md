@@ -79,7 +79,7 @@
   submission order (seen 2026-10-01: quads placed before 4XVR's projection layer covered it).
 - Swapchain formats: GLES `GL_SRGB8_ALPHA8` (35907) / `GL_SRGB8` (35905) only, samples = 1. Vulkan: 43 (R8G8B8A8_SRGB)
   and 50, not 37/44 (UNORM).
-- Environment blend: ALPHA_BLEND available (greyscale passthrough cameras).
+- Environment blend: ALPHA_BLEND available (grayscale passthrough cameras).
 - Reference spaces: STAGE bounds are reported as 1×1 m.
 - Display 72 Hz by default in tests. Head pose is only tracked while the headset is worn; otherwise flags 0x3 and
   the session stays below FOCUSED.
@@ -107,7 +107,7 @@
   `/fex-compat-tool %verb% --`, **no** require_tool_appid: it does not use the Steam Linux Runtime. fex-compat-tool
   (Python) runs `<FEX-Emu>/usr/bin/FEX` with RootFS `/usr/share/guestos/fex-mesa` (part of the SteamOS image: an
   x86 Arch-style root with glibc 2.41, Mesa, graphics_provider.json for x86_64 + i386), emulates x86_64 and i386
-  (emulator.json), honours `STEAM_FEX_TSOENABLED`, `STEAM_FEX_MULTIBLOCK`, `STEAM_COMPAT_FEX_CONFIG`, sets
+  (emulator.json), honors `STEAM_FEX_TSOENABLED`, `STEAM_FEX_MULTIBLOCK`, `STEAM_COMPAT_FEX_CONFIG`, sets
   `tu_override_uncached_as_cache_coherent=true` and logs to `/tmp/fex-compat-tool-<pid>.log`. It **exits 1 ("No compat
   data path?") without `STEAM_COMPAT_DATA_PATH`** (keeps Config.json/AppConfig/Server/Telemetry in `<it>/fex-emu/`):
   the Linux launcher exports `<base>/compatdata`. Version seen: FEX-2607-76-g37265b1. ldd can't read x86 programs,
@@ -135,7 +135,7 @@
   create as 1.0; enabled by `XR_ENABLE_API_LAYERS` from launch.sh. Proton's Steam Linux Runtime container drops
   `XR_API_LAYER_PATH` (it keeps `XR_ENABLE_API_LAYERS`), so the agent registers the layer as an explicit layer in
   `~/.local/share/openxr/1/api_layers/explicit.d/` (home is shared into the container) with an absolute library path.
-- Oculus Store builds that delay-load `LibOVRPlatform64_1.dll` (Platform SDK, e.g. Lies Beneath) crash with
+- Oculus Store builds that delay-load `LibOVRPlatform64_1.dll` (Platform SDK, for example Lies Beneath) crash with
   `0xc06d007e` (delay-load module not found): that DLL comes with the Oculus app, which the Frame doesn't have. (No Oculus runtime DLLs or
   registry keys are needed: Revive's LibOVRRT hook works once OpenXR does.)
 - Unreal's Oculus plugin (and LibOVR's `ovr_Detect`) first checks for the Windows event `OculusHMDConnected` (created
@@ -177,11 +177,11 @@
   writes it to a v4l2loopback webcam named **"SteamVR"** (`/dev/video99`, 1920x1080 RGB24, advertised 30 fps, frames
   arrive at the display rate). Nothing on the Frame reads it by default; idle it costs nothing, read ~0.2 core.
   It shows what the wearer sees (SteamVR home, Steam's panels; a game's layers are expected but not yet seen in it).
-  Black and ~1 fps (one frame per ~1.0 s) while the headset sleeps (standby): a 30 fps stream then repeats each
+  Black and ~1 fps (one frame per ~1.0 s) while the Frame sleeps (standby): a 30 fps stream then repeats each
   frame in bursts, which looks like a stall in a player. Its size follows SteamVR's headset view (v4l2cam has no size
   option), so the live view only scales down (360p/480p/720p/1080p) or sends it as is ("full").
 - Sound: `pactl get-default-sink` (`alsa_loopback_device.stereo.alsa_output.platform-sound.HiFi__Speaker__sink`) and its
-  `.monitor` source carry what the headset plays; the Frame's ffmpeg has the `pulse` input and `aac`. Timestamps: pulse
+  `.monitor` source carry what the Frame plays; the Frame's ffmpeg has the `pulse` input and `aac`. Timestamps: pulse
   uses the wall clock, v4l2 CLOCK_MONOTONIC → `-ts mono2abs` on the v4l2 input. Don't force
   `-use_wallclock_as_timestamps` on the pulse input: it stamped bursts of AAC packets with one time.
 - Steam's own game recording / Remote Play / broadcast capture the **gamescope** PipeWire node (`CDesktopCapturePipeWire:
@@ -208,11 +208,11 @@
     Baseline..Constrained High, levels up to 6.0.
   - The `steamos` user can open it (group video).
   - The panel's current refresh rate can be read without privileges through DRM: `/dev/dri/card0` is mode 0666, and
-    GETCRTC reports e.g. `2*2160x2160_96` (clock 1402720 kHz / 4448 × 3285 = 96 Hz) even while the headset sleeps.
+    GETCRTC reports for example `2*2160x2160_96` (clock 1402720 kHz / 4448 × 3285 = 96 Hz) even while the Frame sleeps.
     The panel offers 72/80/90/96/108/120/144 Hz.
   - `/dev/video99` (v4l2loopback) has `max_buffers=2`: a reader asking for more gets 2.
   - Mid-stream keyframe requests (FORCE_KEY_FRAME) take effect on the next frame, and the GOP restarts from there.
-  - Measured 2026-10-07 with the headset asleep (still picture):
+  - Measured 2026-10-07 with the Frame asleep (still picture):
     - `fp_venc` alone at 32/36 fps: 1% of a core at 1080p, 2.5% at 720p.
     - Live view end to end: `fp_venc` 2.6% + ffmpeg 8.4% (AAC encoding + muxing).
   - Conversion cost per new picture (self-test, NEON, 2026-10-07):
@@ -273,7 +273,7 @@ All readable by the steamos user without root; the agent reads them directly (no
 | Power | hwmon `max34417_*` `power{1-4}_{label,input}` (µW) | `vph` = whole system (~3.6 W idle), `gfx` = GPU, `apc0/1/2` = CPU clusters, `nsp1/2` = NPU; each read is an I2C transfer (~0.7 ms wall), so only these are read |
 | Battery | `power_supply/max1720x_bat_7-36` | `current_now` (µA, negative = draining) × `voltage_now` (µV) = watts; `time_to_empty_now`/`time_to_full_now` (s), `cycle_count`, `health`, `temp` (0.1 °C) |
 | Game fps | `<base>/launch.log` lines `FrameBridge: pacing: N fps …` (every ~5 s) | Quest games only; SteamVR writes PC VR frame stats only as an end-of-session summary in `vrcompositor.txt` |
-| Game container | conmon `-n lepton-steamlaunch-<appid>`; its child's `/proc/<pid>/cgroup` → `cpu.stat`, `memory.current` | The container's ~90 Android processes show as uid 1000 on the host and can be signalled (4XVR, 2026-10-07); Android names them after the package's last 15 characters (`lus4xvrplayerov`), the full name is in `cmdline` |
+| Game container | conmon `-n lepton-steamlaunch-<appid>`; its child's `/proc/<pid>/cgroup` → `cpu.stat`, `memory.current` | The container's ~90 Android processes show as uid 1000 on the host and can be signaled (4XVR, 2026-10-07); Android names them after the package's last 15 characters (`lus4xvrplayerov`), the full name is in `cmdline` |
 
 Cost: a naive sample (fds of ~520 processes scanned) took 43 ms CPU. With kernel threads skipped after their first
 sighting, command lines checked once per process, render fds cached (rescanned every 60 s, every 4 s for busy young
