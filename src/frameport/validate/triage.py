@@ -88,6 +88,21 @@ def game_lines(log: str, package: str | None = None) -> list[str]:
     return out
 
 
+# suggestions that only work with one graphics API: the Vulkan shim's settings for Vulkan games, the shader-fix layer
+# under Zink for OpenGL ES games
+API_ONLY = {"adapter.vk_shader_dump": "vulkan", "adapter.vk_shader_fix": "vulkan",
+            "adapter.zink_shader_dump": "gles", "adapter.zink_shader_fix": "gles"}
+SWAPCHAIN_FORMAT = re.compile(r"xrCreateSwapchain \d+x\d+ format=(\d+) .*result=0\b")
+
+
+def graphics_api(text: str) -> str | None:
+    """"vulkan" or "gles" from the swapchain formats FrameBridge logged: OpenXR passes the API's own format numbers,
+    Vulkan's VkFormat values are small (e.g. 43 = sRGB), GL's internal formats are 0x8000+ (35907 = GL_SRGB8_ALPHA8).
+    None when the log has no (or both kinds of) swapchains."""
+    kinds = {"gles" if int(m) >= 0x1000 else "vulkan" for m in SWAPCHAIN_FORMAT.findall(text)}
+    return kinds.pop() if len(kinds) == 1 else None
+
+
 def split_suggestion(s: str) -> tuple[str, str | None]:
     """A suggestion is a patch id, or a value for an adapter setting ("adapter.focus_hold_ms=2500")."""
     pid, eq, value = s.partition("=")
@@ -122,6 +137,10 @@ def triage(log: str, state: str = "UNKNOWN", package: str | None = None, crash: 
             res.findings.append(Finding(sig["id"], sig["severity"], sig["diagnosis"], list(sig.get("suggest") or []),
                                         line.strip()[:300], bool(sig.get("use_alt")), sig.get("question") or "",
                                         bool(sig.get("report"))))
+    api = graphics_api(text)
+    if api:  # a setting for the other graphics API can't help (e.g. the GPU-hang shader dumps)
+        for f in res.findings:
+            f.suggest = [s for s in f.suggest if API_ONLY.get(split_suggestion(s)[0], api) == api]
     # a root-cause finding hides the generic crash findings it explains
     hidden = {h for sig in db["signatures"] if any(f.id == sig["id"] for f in res.findings)
               for h in sig.get("supersedes") or []}

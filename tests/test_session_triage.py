@@ -115,7 +115,7 @@ def test_gpu_hang_from_kernel_lines():
     kernel = "kernel: 1790000000.0 steamos kernel: msm_dpu: [drm:a6xx_hangcheck] hangcheck detected gpu lockup\n"
     r = triage(START, "UNKNOWN", PKG, kernel=kernel)
     f = next(f for f in r.findings if f.id == "gpu-hang")
-    assert f.report and f.suggest == ["adapter.zink_shader_dump"] and f.severity == "fatal"
+    assert f.report and f.suggest == ["adapter.vk_shader_dump", "adapter.zink_shader_dump"] and f.severity == "fatal"
     assert "gpu-hang" not in {f.id for f in triage(START + "hangcheck in an app's own log\n", "UNKNOWN", PKG).findings}
 
 

@@ -181,6 +181,11 @@ SETTINGS = [
      "Shader-fix Vulkan layer (frame.zink_shader_fix): writes every distinct SPIR-V module the GL driver creates to "
      "Android/data/<package>/files/fp_spirv/<size>_<sha256>.spv, to capture a shader for a new zink_shader_fix. No "
      "effect on the game."),
+    ("vk_shader_dump", "int", 0, "Vulkan shader dump (diagnostics)",
+     "Vulkan shim (frame.vk_sanitize): writes every distinct SPIR-V module the game creates to "
+     "Android/data/<package>/files/fp_vk_shaders/<size>_<sha256>.spv, with index.txt listing every creation in order "
+     "with its time, to find the shader behind a GPU hang and capture it for a new vk_shader_fix. Diagnostics include "
+     "the newest modules. No effect on the game."),
     ("vk_query_slots", "int", 0, "Vulkan shim: slots per occlusion query",
      "Vulkan shim (frame.vk_sanitize): on gives every occlusion query room for both eyes. In multiview passes the "
      "Frame's driver writes a zero result for the second eye into the next query, so engines that count on one slot "
@@ -338,7 +343,7 @@ UI: dict[str, dict] = {
         "mutable_fix", "flip_quads", "swap_eyes", "vk_validation", "rect_clamp", "gl_hide_msrtt", "strip_color_bias",
         "snapshot", "strip_depth", "respace_kick", "layer_debug", "eye_debug", "input_diag", "release_wait",
         "vk_hide_fdm", "ovrp_begin_gate", "ovrp_hold_physics", "pose_debug",
-        "zink_shader_dump", "gl_mv_debug")},
+        "zink_shader_dump", "vk_shader_dump", "gl_mv_debug")},
 }
 
 
@@ -418,6 +423,8 @@ class AdapterSetting(Patch):
             "vk_hide_fdm": lambda a: a.engine == "Unreal",  # Unreal's Vulkan isn't always detected (Metro Awakening)
             "vk_query_slots": lambda a: a.engine == "Unreal" and ap.is_vulkan(a),
             "vk_validation": lambda a: a.engine == "Unreal",
+            # wherever the Vulkan shim can be (vk_sanitize); Unreal's Vulkan builds are rarely detected as such
+            "vk_shader_dump": lambda a: a.engine in ("Unreal", "Other") and "arm64-v8a" in a.abis,
             "zink_shader_fix": ap.is_gles,
             "zink_shader_dump": ap.is_gles,
             "haptic_fix": lambda a: "libOVRPlugin.so" in a.libs,

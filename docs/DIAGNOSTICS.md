@@ -40,8 +40,16 @@ games/<pkg>/target/          from the Frame (or the PC): launch.sh, settings.con
                              ReviveInjector.txt / steam-<appid>.log / game-log-N.txt (PC VR), files.json (+ missing)
                              (game-log-N.txt: Unreal Saved/Logs + crash summaries, Unity Player.log / Player-prev.log /
                              output_log.txt + crash error.log from the Proton prefix, agent v67)
+games/<pkg>/target/shaders/  shader dumps (agent v72), when the game wrote any:
+    fp_vk_shaders/           adapter vk_shader_dump=1 (Vulkan shim): <size>_<sha256>.spv + index.txt
+    fp_spirv/                adapter zink_shader_dump=1 (OpenGL ES, shader-fix layer under Zink): <size>_<sha256>.spv
 ```
-Each log keeps at most its last 4 MB (2 MB per file from the Frame).
+Each log keeps at most its last 4 MB (2 MB per file from the Frame). Shader dumps: the newest modules (by time
+written) up to 4 MB per folder, SPIR-V unchanged (compiled game shaders, not redacted); a module the game created
+for the first time right before a GPU hang is among them. `index.txt` (Vulkan) lists every vkCreateShaderModule as
+`<seq> <ms since the first module> <unix ms> <size>_<sha256>.spv new|known|again|failed`; match the unix time with
+the kernel's `hangcheck detected gpu lockup` line (this-boot-kernel.txt). All modules stay in the game's storage on
+the Frame (`Android/data/<pkg>/files/fp_vk_shaders/`, Files tab → the game's storage).
 
 ## Redaction
 `diag/redact.py` runs on every file and on the issue text.

@@ -15,6 +15,9 @@
 // copied with extra words inserted at a byte offset, e.g. stores that initialize locals a shader reads before writing
 // (an undefined loop counter hung the GPU in VR4's campaign). Every other module passes through unchanged.
 // Format: vk_shader_fix=<size>:<sha256 hex>:<byte offset>:<word>,<word>,...[;<next fix>]
+// Shader dump (vk_shader_dump=1, diagnostics): every distinct module the game creates is written once to the app's
+// files/fp_vk_shaders/ with an index of every creation (order, time), to find the shader behind a GPU hang
+// (shader_dump.h).
 //
 // Query slots (adapter setting vk_query_slots=2, per game): with multiview, Vulkan counts a query that runs in a
 // multiview render pass as one query per view (N consecutive indices). Mesa's drivers (the Frame's Turnip) write a
@@ -99,6 +102,8 @@ static int spec_fixes;       // vk_spec_fixes: make two Unreal habits valid Vulk
 #define VALIDATION_LAYER "VK_LAYER_KHRONOS_validation"
 static int validation;       // vk_validation: add Khronos' validation layer (bundled in the APK) to the instance
 static int hide_fdm;         // vk_hide_fdm: the game doesn't see VK_EXT_fragment_density_map(2)
+static int want_dump;        // vk_shader_dump: write the game's SPIR-V modules to files/fp_vk_shaders/
+static char app_files[400];  // /sdcard/Android/data/<package>/files
 
 static void read_settings(const char *path) {
     FILE *f = fopen(path, "r");
@@ -109,6 +114,7 @@ static void read_settings(const char *path) {
         if (!strncmp(line, "vk_validation=", 14)) validation = atoi(line + 14) != 0;
         if (!strncmp(line, "vk_hide_fdm=", 12)) hide_fdm = atoi(line + 12) != 0;
         if (!strncmp(line, "vk_spec_fixes=", 14)) spec_fixes = atoi(line + 14) != 0;
+        if (!strncmp(line, "vk_shader_dump=", 15)) want_dump = atoi(line + 15) != 0;
         if (!strncmp(line, "vk_query_slots=", 15)) {
             int v = atoi(line + 15);
             query_slots = v == 1 ? 2 : v >= 2 && v <= 4 ? v : 1;  // 1 = on (the settings dialog's switch) = 2 slots
@@ -140,58 +146,17 @@ static void read_all_settings(void) {
     }
     char *colon = strchr(pkg, ':');
     if (colon) *colon = 0;
-    if (*pkg && !strchr(pkg, '/')) {
-        snprintf(path, sizeof path, "/sdcard/Android/data/%s/files/framebridge.conf", pkg);
+    if (*pkg && !strchr(pkg, '/') && strlen(pkg) < 300) {
+        snprintf(app_files, sizeof app_files, "/sdcard/Android/data/%s/files", pkg);
+        snprintf(path, sizeof path, "%s/framebridge.conf", app_files);
         read_settings(path);
     }
     const char *env = getenv("FRAMEBRIDGE_CONFIG");
     if (env && *env) read_settings(env);
 }
 
-// SHA-256 (FIPS 180-4), only run for modules whose size matches a fix
-static const uint32_t K[64] = {
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01,
-    0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
-    0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
-    0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08,
-    0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
-#define ROR(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
-
-static void sha256_block(uint32_t h[8], const uint8_t *p) {
-    uint32_t w[64];
-    for (int i = 0; i < 16; i++) w[i] = (uint32_t)p[4 * i] << 24 | (uint32_t)p[4 * i + 1] << 16 | (uint32_t)p[4 * i + 2] << 8 | p[4 * i + 3];
-    for (int i = 16; i < 64; i++) {
-        uint32_t s0 = ROR(w[i - 15], 7) ^ ROR(w[i - 15], 18) ^ (w[i - 15] >> 3);
-        uint32_t s1 = ROR(w[i - 2], 17) ^ ROR(w[i - 2], 19) ^ (w[i - 2] >> 10);
-        w[i] = w[i - 16] + s0 + w[i - 7] + s1;
-    }
-    uint32_t a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
-    for (int i = 0; i < 64; i++) {
-        uint32_t t1 = hh + (ROR(e, 6) ^ ROR(e, 11) ^ ROR(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i];
-        uint32_t t2 = (ROR(a, 2) ^ ROR(a, 13) ^ ROR(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
-        hh = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
-    }
-    h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
-}
-
-static void sha256(const uint8_t *data, size_t len, uint8_t out[32]) {
-    uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
-    size_t i = 0;
-    for (; i + 64 <= len; i += 64) sha256_block(h, data + i);
-    uint8_t tail[128] = {0};
-    size_t rest = len - i;
-    memcpy(tail, data + i, rest);
-    tail[rest] = 0x80;
-    size_t blocks = rest + 9 > 64 ? 2 : 1;
-    uint64_t bits = (uint64_t)len * 8;
-    for (int b = 0; b < 8; b++) tail[blocks * 64 - 1 - b] = (uint8_t)(bits >> (8 * b));
-    for (size_t b = 0; b < blocks; b++) sha256_block(h, tail + 64 * b);
-    for (int b = 0; b < 8; b++) {
-        out[4 * b] = h[b] >> 24; out[4 * b + 1] = h[b] >> 16; out[4 * b + 2] = h[b] >> 8; out[4 * b + 3] = h[b];
-    }
-}
+#include "sha256.h"  // only run for modules whose size matches a fix, or every module with vk_shader_dump
+#include "shader_dump.h"
 
 // The fixed copy of `code` (caller frees) and its size, or NULL when no fix matches.
 static uint32_t *fixed_shader(const uint32_t *code, size_t size, size_t *out_size) {
@@ -218,6 +183,7 @@ static void init(void) {
     if (query_slots > 1) LOG("vk shim: %d slots per occlusion query", query_slots);
     if (validation) LOG("vk shim: adding %s to the instance", VALIDATION_LAYER);
     if (hide_fdm) LOG("vk shim: fragment density map extensions hidden from the game");
+    if (want_dump && !dump_init(app_files)) LOG("vk shim: shader dump not possible (no package name or files dir)");
     if (spec_fixes) LOG("vk shim: Vulkan spec fixes on (depth images can be cleared, no depth resolve in shader-resolve "
                         "subpasses)");
     real_vk = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
@@ -499,6 +465,7 @@ EXPORT VKAPI_ATTR VkResult VKAPI_CALL vkCreateShaderModule(VkDevice device, cons
     PFN_vkCreateShaderModule real = (PFN_vkCreateShaderModule)device_fn(device, FN_CSM);
     if (!real) real = real_csm_trampoline;
     if (!real) return VK_ERROR_INITIALIZATION_FAILED;
+    if (dump_on && ci) dump_module(ci->pCode, ci->codeSize);  // the game's own module, before any fix
     size_t size = 0;
     uint32_t *code = nfixes && ci && ci->pCode ? fixed_shader(ci->pCode, ci->codeSize, &size) : NULL;
     if (!code) return real(device, ci, alloc, module);
@@ -888,7 +855,7 @@ static PFN_vkVoidFunction wrap(const char *name) {
     switch (wrapped_index(name)) {
     case FN_RP2: return (PFN_vkVoidFunction)vkCreateRenderPass2;
     case FN_RP2KHR: return (PFN_vkVoidFunction)create_render_pass2_khr;
-    case FN_CSM: return nfixes ? (PFN_vkVoidFunction)vkCreateShaderModule : NULL;  // nothing to fix: no detour
+    case FN_CSM: return nfixes || dump_on ? (PFN_vkVoidFunction)vkCreateShaderModule : NULL;  // else no detour
     case FN_CIMG: return spec_fixes ? (PFN_vkVoidFunction)create_image : NULL;
     case FN_PB: return spec_fixes ? (PFN_vkVoidFunction)cmd_pipeline_barrier : NULL;
     case FN_PB2: return spec_fixes ? (PFN_vkVoidFunction)cmd_pipeline_barrier2 : NULL;
