@@ -82,6 +82,12 @@ class SettingsView:
         def keep_changed(e):
             library.set_setting("build.keep_copies", bool(e.control.value))
 
+        def video_changed(e):
+            library.set_setting("video.hw_decode", bool(e.control.value))
+            target = self.app.target if self.app.frame_state == "connected" else None
+            if target is not None:  # else applied at the next connection
+                self.app.run_bg(target.frame.apply_video_decoding)
+
         def clean(e):
             def work():
                 freed = pipeline.remove_all_converted_copies()
@@ -93,8 +99,14 @@ class SettingsView:
         launch = C.switch(tr("Launch test after installing on the Frame (starts the game once without the headset "
                              "and checks its log)"), value=bool(library.setting("install.launch_test", True)),
                           on_change=changed)
-        return ft.Column([launch, keep, C.ghost(tr("Remove converted copies now"), ft.Icons.CLEANING_SERVICES_ROUNDED,
-                                               clean, tooltip=tr("Your own game files aren't touched."))],
+        video = ft.Row([ft.Container(C.switch(tr("Hardware video decoding on the Frame (for games set up for "
+                                                    "it: videos play on the Frame's video hardware)"),
+                                                 value=bool(library.setting("video.hw_decode", True)),
+                                                 on_change=video_changed), expand=True),
+                        C.help_icon("hw_video_decode")], spacing=T.S1)
+        return ft.Column([launch, keep, video,
+                          C.ghost(tr("Remove converted copies now"), ft.Icons.CLEANING_SERVICES_ROUNDED, clean,
+                                  tooltip=tr("Your own game files aren't touched."))],
                          spacing=T.S2, horizontal_alignment=ft.CrossAxisAlignment.START)
 
     def updates_card(self) -> ft.Control:

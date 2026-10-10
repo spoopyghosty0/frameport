@@ -3,9 +3,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import sys
-import types
-import zipfile
 from pathlib import Path
 
 import pytest
@@ -39,66 +36,44 @@ def test_mounts_only_matching_game_and_runtime(tmp_path, monkeypatch):
     xml.write_text('<MediaCodecs><Include href="stock.xml" /></MediaCodecs>')
     directory = tmp_path / "game/frameport-codec"
     directory.mkdir(parents=True)
+    for name in ("libstagefrighthw.so", "media_codecs_frameport.xml"):
+        (directory / name).write_bytes(b"codec asset")
     config = {"lepton": str(tmp_path / "lepton/lepton"), "appid": "123",
               "runtime_sha256": hashlib.sha256(b"runtime ABI").hexdigest()}
     exists = Path.exists
     monkeypatch.setattr(Path, "exists", lambda p: True if p.as_posix() == "/dev/video-dec0" else exists(p))
+    (tmp_path / "run").mkdir()
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "run"))
     args = ["run", "--name", "lepton-steamlaunch-123", "--rootfs", str(runtime) + ":O", "/init"]
     extra = wrapper.mounts(directory, config, args)
     assert [s.replace("\\", "/") for s in extra[:2]] == [
         "--mount", "type=bind,source=/dev/video-dec0,destination=/dev/video-dec0,rw"]
-    assert "media_codecs_frameport.xml" in (directory / "media_codecs.xml").read_text()
+    # the merged codec list goes to the runtime dir: the verified version directory is never written
+    merged = next((tmp_path / "run/frameport-video").glob("media_codecs.*.xml"))
+    assert "media_codecs_frameport.xml" in merged.read_text()
+    assert sorted(p.name for p in directory.iterdir()) == ["libstagefrighthw.so", "media_codecs_frameport.xml"]
+    for spec in extra[1::2][1:]:
+        fields = dict(item.split("=", 1) for item in spec.split(",") if "=" in item)
+        assert Path(fields["source"]).is_file()
     assert "frameport" not in xml.read_text()  # shared runtime stays unchanged
     assert wrapper.mounts(directory, config, ["kill", "lepton-steamlaunch-123"]) == []
     assert wrapper.mounts(directory, config, [s.replace("123", "456") for s in args]) == []
     config["runtime_sha256"] = "wrong ABI"
     assert wrapper.mounts(directory, config, args) == []
 
-
-def test_agent_extracts_only_verified_assets_and_removes_old_wrapper(tmp_path, monkeypatch):
-    # The agent targets Linux; this test only exercises stdlib ZIP/file work.
-    if sys.platform == "win32":
-        monkeypatch.setitem(sys.modules, "fcntl", types.SimpleNamespace())
-    agent = load_module(ROOT / "agent/frameport_agent.py", "codec_agent")
-    monkeypatch.setattr(agent.shutil, "which", lambda _: "/usr/bin/podman")
-    base = tmp_path / "game"
-    (base / "lepton-app/obb").mkdir(parents=True)
-    video = base / "lepton-app/obb/movie.mp4"
-    video.write_bytes(b"original large asset")
-    apk = base / "lepton-app/game.apk"
-    assets = ROOT / "artifacts/hevc"
-    with zipfile.ZipFile(apk, "w") as z:
-        for name in ("manifest.json", "podman.py", "libstagefrighthw.so", "media_codecs_frameport.xml",
-                     "COPYING.FFmpeg"):
-            z.write(assets / (name + ".txt" if name == "podman.py" else name), "assets/frameport/hevc/" + name)
-    replace = agent.os.replace
-    published = []
-
-    def publish(source, target):
-        target = Path(target)
-        if target.name == "podman":
-            config = json.loads((base / "frameport-codec/deployment.json").read_text())
-            assert config["podman"] == "/usr/bin/podman"
-            assert all((base / "frameport-codec" / n).is_file()
-                       for n in ("libstagefrighthw.so", "media_codecs_frameport.xml", "COPYING.FFmpeg"))
-        published.append(target.name)
-        replace(source, target)
-
-    monkeypatch.setattr(agent.os, "replace", publish)
-    assert agent.install_video_codec(str(base), "/lepton/lepton", 123)
-    assert published[0] == "deployment.json" and published[-1] == "podman"
-    wrapper = base / "frameport-codec/bin/podman"
-    assert wrapper.read_bytes() == (assets / "podman.py.txt").read_bytes()
-    assert video.read_bytes() == b"original large asset"
-    with zipfile.ZipFile(apk, "w") as z:
-        z.writestr("AndroidManifest.xml", b"old APK")
-    assert not agent.install_video_codec(str(base), "/lepton/lepton", 123)
-    assert not wrapper.exists()
-    with zipfile.ZipFile(apk, "w") as z:
-        z.write(assets / "manifest.json", "assets/frameport/hevc/manifest.json")
-        z.writestr("assets/frameport/hevc/libstagefrighthw.so", b"corrupt")
-    with pytest.raises(agent.AgentError, match="checksum mismatch"):
-        agent.install_video_codec(str(base), "/lepton/lepton", 123)
+    # The shared wrapper serves any package with an unchanged APK: the launcher (frame.hw_video_decode in the game's
+    # recipe) puts it on PATH, the container identity limits it to that game's container.
+    app = tmp_path / "another-package/lepton-app"
+    app.mkdir(parents=True)
+    monkeypatch.setenv("SteamAppId", "123")
+    monkeypatch.setenv("STEAM_COMPAT_INSTALL_PATH", str(app))
+    shared = {"scope": "shared", "runtime_sha256": hashlib.sha256(b"runtime ABI").hexdigest()}
+    assert wrapper.mounts(directory, shared, args)
+    assert wrapper.mounts(directory, shared, [s.replace("123", "456") for s in args]) == []
+    assert wrapper.mounts(directory, shared, [s.replace(":O", "") for s in args]) == []
+    assert wrapper.mounts(directory, shared, ["kill", "lepton-steamlaunch-123"]) == []
+    monkeypatch.delenv("SteamAppId")
+    assert wrapper.mounts(directory, shared, args) == []
 
 
 @pytest.mark.parametrize("configuration", [None, "{", "[]", "{}", '{"podman":null}',
@@ -183,6 +158,89 @@ def test_wrapper_finds_podman_under_the_android_path(tmp_path, monkeypatch):
     wrapper = load_module(ROOT / "native/hevc/podman.py", "android_path_wrapper")
     monkeypatch.setattr(wrapper, "__file__", str(tmp_path / "codec/bin/podman"))
     monkeypatch.setenv("PATH", "/product/bin:/system/bin:/vendor/bin")
-    monkeypatch.setattr(wrapper.shutil, "which", lambda _, path: path + "/podman" if path.endswith("usr/bin") else None)
+    monkeypatch.setattr(
+        wrapper.shutil, "which",
+        lambda _, path: path + "/podman" if Path(path).as_posix().endswith("/usr/bin") else None,
+    )
     monkeypatch.setattr(wrapper.Path, "resolve", lambda self: self)
     assert Path(wrapper.real_podman(tmp_path / "codec")).as_posix().endswith("/usr/bin/podman")
+
+
+def test_codec_list_matches_the_plugin_table():
+    """H.264, HEVC and VP9: the codec XML names exactly the components the plugin's table enumerates."""
+    from xml.etree import ElementTree as ET
+
+    xml = ET.parse(ROOT / "artifacts/hevc/media_codecs_frameport.xml").getroot()
+    entries = {c.get("name"): c.get("type") for c in xml.iter("MediaCodec")}
+    assert entries == {"OMX.frameport.avc.decoder": "video/avc", "OMX.frameport.hevc.decoder": "video/hevc",
+                       "OMX.frameport.vp9.decoder": "video/x-vnd.on2.vp9"}
+    for codec in xml.iter("MediaCodec"):
+        limits = {limit.get("name"): limit for limit in codec.iter("Limit")}
+        # VP9 at 7680x3840 never returned a picture on the Frame (2026-10-09): it stops at 4K
+        expected = "4096x2304" if "vp9" in codec.get("name") else "8192x8192"
+        assert limits["concurrent-instances"].get("max") == "1" and limits["size"].get("max") == expected
+    source = (ROOT / "native/hevc/frameport_hevc.cpp").read_text()
+    for name, mime in entries.items():
+        assert f'"{name}"' in source and f'"{mime}"' in source
+    assert "4096,2304}" in source  # the plugin's own VP9 limit (larger VP9 decodes in software)
+    build = (ROOT / "native/hevc/build.py").read_text()
+    for decoder in ("h264_v4l2m2m", "hevc_v4l2m2m", "vp9_v4l2m2m"):
+        assert f'"{decoder}"' in source and decoder in build
+    assert (ROOT / "artifacts/hevc/media_codecs_frameport.xml").read_bytes() == (
+        ROOT / "native/hevc/media_codecs_frameport.xml").read_bytes()
+
+
+@pytest.mark.parametrize("how", ["env", "flag"])
+def test_switched_off_wrapper_runs_stock_podman_untouched(tmp_path, monkeypatch, how):
+    """FRAMEPORT_NO_HW_VIDEO=1 or FramePort's setting (video-codec/disabled): the wrapper adds nothing."""
+    wrapper = load_module(ROOT / "native/hevc/podman.py", f"off_wrapper_{how}")
+    directory = tmp_path / "video-codec/versions/abc"
+    own = directory / "bin/podman"
+    own.parent.mkdir(parents=True)
+    (directory / "deployment.json").write_text('{"scope": "shared", "runtime_sha256": "x"}')
+    monkeypatch.setattr(wrapper, "__file__", str(own))
+    monkeypatch.setattr(wrapper, "real_podman", lambda _: "/usr/bin/podman")
+    monkeypatch.delenv("FRAMEPORT_NO_HW_VIDEO", raising=False)
+    if how == "env":
+        monkeypatch.setenv("FRAMEPORT_NO_HW_VIDEO", "1")
+    else:
+        (tmp_path / "video-codec/disabled").write_text("off")
+    monkeypatch.setattr(wrapper, "mounts", lambda *_: pytest.fail("mounts while switched off"))
+    args = ["run", "--name", "lepton-steamlaunch-123", "/init"]
+    monkeypatch.setattr(wrapper.sys, "argv", [str(own), *args])
+    executed = []
+
+    class ExecSucceeded(BaseException):
+        pass
+
+    def execute(path, argv):
+        executed.append(argv)
+        raise ExecSucceeded
+
+    monkeypatch.setattr(wrapper.os, "execv", execute)
+    with pytest.raises(ExecSucceeded):
+        wrapper.main()
+    assert executed == [["/usr/bin/podman", *args]]
+    monkeypatch.setenv("FRAMEPORT_NO_HW_VIDEO", "0")
+    (tmp_path / "video-codec/disabled").unlink(missing_ok=True)
+    assert not wrapper.switched_off(directory)
+
+
+def test_empty_capture_buffers_are_requeued_not_taken_for_the_end():
+    """Iris returns an empty capture buffer (no LAST flag) for each hidden VP9 frame. FFmpeg's wrapper ended the EOS
+    drain at the first one and lost the pictures still in the driver (two-pass VP9 4K: 573 of 600, 2026-10-10)."""
+    build = load_module(ROOT / "native/hevc/build.py", "hevc_build")
+    stand_in = ("static V4L2Buffer* v4l2_dequeue_v4l2buf(V4L2Context *ctx, int timeout)\n{\n    struct pollfd pfd = {\n"
+                + build.EMPTY_DECLARE + "start:\n" + build.EMPTY_POLL + "dequeue:\n"
+                + build.EMPTY_DRAIN + " = 0;\n        }\n}\n")
+    patched = build.skip_empty_pictures(stand_in)
+    assert "int i, ret, skipped_empty = 0;" in patched
+    # empty buffers are skipped before the drain's "empty buffer = end" check, unless LAST/ERROR is set
+    assert patched.index("ff_v4l2_buffer_enqueue(&ctx->buffers[buf.index])") < patched.index(build.EMPTY_DRAIN)
+    assert "!(buf.flags & (V4L2_BUF_FLAG_LAST | V4L2_BUF_FLAG_ERROR))" in patched
+    # a drain can't block forever after a skipped empty buffer
+    assert "if (!ret && skipped_empty && ctx_to_m2mctx(ctx)->draining) {" in patched
+    with pytest.raises(RuntimeError):
+        build.skip_empty_pictures(stand_in.replace(build.EMPTY_POLL, ""))
+    # the component no longer guesses which pictures belong to hidden frames
+    assert "vp9Hidden" not in (ROOT / "native/hevc/frameport_hevc.cpp").read_text()

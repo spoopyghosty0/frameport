@@ -6,6 +6,7 @@ password if given.
 """
 from __future__ import annotations
 
+import base64
 import contextlib
 import hashlib
 import json
@@ -21,11 +22,21 @@ from pathlib import Path
 
 import paramiko
 
-from ..core.paths import agent_file, ssh_dir, user_data_dir, write_atomic
+from ..core.paths import agent_file, artifacts_dir, ssh_dir, user_data_dir, write_atomic
 
 log = logging.getLogger(__name__)
 
 REMOTE_AGENT_DIR = ".local/share/frameport/agent"
+
+
+def video_decoding_enabled() -> bool:
+    """FramePort's switch for hardware video decoding on the Frame (Settings; default on)."""
+    try:
+        from ..core import library
+
+        return bool(library.peek_setting("video.hw_decode", True))
+    except Exception:  # noqa: BLE001 - no library yet
+        return True
 
 
 def agent_version_of(text: str) -> int:
@@ -349,6 +360,8 @@ class Frame:
     _pool: SftpPool | None = None  # SFTP channels shared by all threads (see sftp)
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _agent_digest: str = ""  # the agent version known to be on the Frame (checked once per connection)
+    _video_codec_digest: str = ""  # "<manifest digest>:<on|off>" handled on this connection (incl. a failed install)
+    _video_codec_lock: threading.Lock = field(default_factory=threading.Lock)
     home: str = ""
 
     # ------------------------------------------------------------------ connect
@@ -476,6 +489,7 @@ class Frame:
             self.client.close()
         self.client = None
         self._agent_digest = ""
+        self._video_codec_digest = ""
 
     def alive(self) -> bool:
         """The SSH connection itself still works (a failed agent command doesn't mean the Frame is gone)."""
@@ -517,6 +531,7 @@ class Frame:
         remote_dir = posixpath.join(self.home, REMOTE_AGENT_DIR)
         remote = posixpath.join(remote_dir, "frameport_agent.py")
         if self._agent_digest == digest:
+            self._ensure_video_codec_if_supported(text)
             return remote
         code, out, _ = self.run(f"sha256sum {sh_quote(remote)} 2>/dev/null | cut -c1-16; "
                                 f"grep -m1 '^AGENT_VERSION' {sh_quote(remote)} 2>/dev/null")
@@ -527,6 +542,7 @@ class Frame:
             # stay compatible with older apps; replacing it broke the newer one's launchers (2026-10-04: an older
             # app put agent 43 back over 45 every few seconds)
             self._agent_digest = digest
+            self._ensure_video_codec_if_supported(text)
             return remote
         if lines[0].strip() != digest:
             self.run(f"mkdir -p {sh_quote(remote_dir)}")
@@ -537,7 +553,69 @@ class Frame:
             if code:
                 raise AgentFailed(f"couldn't install the FramePort agent on the Frame: {err.strip()[-300:]}")
         self._agent_digest = digest
+        self._ensure_video_codec_if_supported(text)
         return remote
+
+    def _ensure_video_codec_if_supported(self, agent_source: bytes) -> None:
+        if agent_version_of(agent_source.decode("utf-8", "replace")) < 71:
+            return
+        try:
+            self.ensure_video_codec()
+        except Exception as exc:
+            # Optional acceleration must never block pairing, installs or play.
+            log.warning("Hardware video decoder unavailable; retaining stock codecs: %s", exc)
+
+    def ensure_video_codec(self, enabled: bool | None = None) -> None:
+        """The shared hardware video codec (games with frame.hw_video_decode use it): installed once per Frame, and
+        FramePort's on/off setting (library setting video.hw_decode) applied. Checked once per connection: a failed
+        install isn't retried at every agent call (it would upload ~6 MB each time)."""
+        import io
+        import zipfile
+
+        if enabled is None:
+            if self._video_codec_digest:
+                return  # handled on this connection (a changed setting comes through apply_video_decoding)
+            enabled = video_decoding_enabled()
+        with self._video_codec_lock:
+            directory = artifacts_dir() / "hevc"
+            raw = (directory / "manifest.json").read_bytes()
+            digest = hashlib.sha256(raw).hexdigest()
+            key = f"{digest}:{'on' if enabled else 'off'}"
+            if self._video_codec_digest == key:
+                return
+            self._video_codec_digest = key  # also after a failure: once per connection
+            manifest = json.loads(raw)
+            status = self.agent("video_codec_status", ensure=False)
+            if bool(status.get("disabled")) == enabled:
+                status = self.agent("video_codec_switch", ensure=False, enabled=enabled)
+            ours, theirs = manifest.get("revision", 1), status.get("revision", 0)
+            if not enabled or status.get("digest") == digest:
+                return
+            if status.get("digest") and theirs >= ours:
+                # the same revision built elsewhere (another PC's FramePort) or a newer one: keep the Frame's, so
+                # two PCs don't replace each other's codec at every connection
+                log.info("Keeping the Frame's video codec (revision %s, %s; this app has revision %s, %s)",
+                         theirs, status["digest"][:12], ours, digest[:12])
+                return
+            bundle = io.BytesIO()
+            with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("manifest.json", raw)
+                for name, expected in manifest["files"].items():
+                    path = directory / (name + ".txt" if name == "podman.py" else name)
+                    data = path.read_bytes()
+                    if hashlib.sha256(data).hexdigest() != expected:
+                        raise AgentFailed(f"video codec asset checksum mismatch: {name}")
+                    archive.writestr(name, data)
+            result = self.agent("install_video_codec", ensure=False, digest=digest,
+                                bundle=base64.b64encode(bundle.getvalue()).decode("ascii"))
+            if result.get("kept"):
+                log.info("The Frame kept its video codec (revision %s)", result.get("revision"))
+
+    def apply_video_decoding(self) -> None:
+        """Apply a changed "Hardware video decoding" setting now (Settings saves it first); errors are logged."""
+        with self._video_codec_lock:
+            self._video_codec_digest = ""
+        self.ensure_agent()
 
     def agent(self, command: str, timeout: float | None = 600, ensure: bool = True, **args):
         """Run an agent command. ensure=False uses the agent already on the Frame (never re-uploads it)."""

@@ -37,6 +37,10 @@ SETTINGS = [
      "The Frame's runtime has no cube-map layers and refuses their swapchains; OVRPlugin then crashes when it submits "
      "the next frame (e.g. Budget Cuts Ultimate). FrameBridge serves such a swapchain itself (a GL cube map, GLES "
      "games) and drops its layers, so the game runs on without that layer."),
+    ("surface_native", "int", 0, "Native video surfaces (Batman renderer)",
+     "Plays the game's Android video surface through GPU-shared buffers and composes it as a stereo panorama (Batman: "
+     "Arkham Shadow's cutscenes, see docs/SURFACE_VIDEO.md). Specific to that game's renderer: set by its recipe, not "
+     "shown in Game settings. Use with frame.hw_video_decode."),
     ("layer_fix", "int", 1, "Drop invalid layers",
      "Drop layers whose swapchain failed or whose extension isn't enabled."),
     ("passthrough_emul", "int", 1, "Emulate passthrough",
@@ -219,6 +223,9 @@ SETTINGS = [
 # vk_query_slots and vk_spec_fixes in 0.10.0. haptic_fix stays at 2 although the shim also converts PCM vibrations
 # since 0.12.1: no game is known to need that, and a bump would mark every OVRPlugin game's build outdated
 REVISIONS = {"vk_shader_fix": 2, "vk_query_slots": 3, "vk_spec_fixes": 2, "haptic_fix": 2, "pose_consistency": 2}
+
+# Settings a game's recipe sets that the Game settings dialog doesn't show (engine-specific, not user choices)
+HIDDEN = {"surface_native"}
 
 # How the "Game settings" dialog shows each setting to non-technical users: group, level (common settings are always
 # shown; advanced ones only under "Show advanced settings"), a plain label and one-line help, the control, and the
@@ -414,6 +421,7 @@ class AdapterSetting(Patch):
             "zink_shader_fix": ap.is_gles,
             "zink_shader_dump": ap.is_gles,
             "haptic_fix": lambda a: "libOVRPlugin.so" in a.libs,
+            "surface_native": lambda a: "arm64-v8a" in a.abis,  # the xrshim it needs is arm64 only
             "pose_time_fix": lambda a: "libOVRPlugin.so" in a.libs,
             "proximity_emul": lambda a: "libOVRPlugin.so" in a.libs,
             "vk_spec_fixes": lambda a: a.engine == "Unreal" and ap.is_vulkan(a),

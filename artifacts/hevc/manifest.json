@@ -1,11 +1,17 @@
 {
+  "revision": 8,
   "runtime_sha256": "456e912c75cd389abcf6a63bc80e2a53bdc334371d00b200c93680388ae955e2",
   "files": {
-    "libstagefrighthw.so": "c1c2a73e269ff765ce6ed74cd19d37d2258a7499873d799c8ee4799575cd56d3",
-    "podman.py": "a55a7d18a5725d5b1f461999dab35c988b283dc885fc0f7a41d2d762911729de",
-    "media_codecs_frameport.xml": "e4028fccc30132918160c230958aeac616ac6dbf851e6af0c1fe15517b30f2e6",
+    "libstagefrighthw.so": "141de01f0d40b97d4f9a720db5ab8ea442f6aa35db5272048899292884994a1c",
+    "podman.py": "529ea35d5d82474afe9e09ad1216d269317f56dd24a05fb100fced52b7b4dbca",
+    "media_codecs_frameport.xml": "46c3dcad2c43cc30bea3b3680b362ed84a99c15d60714bbbbb422c80ecf90405",
     "COPYING.FFmpeg": "b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe"
   },
+  "codecs": [
+    "video/hevc",
+    "video/avc",
+    "video/x-vnd.on2.vp9"
+  ],
   "build": {
     "ndk_revision": "27.2.12479018",
     "ffmpeg_source_sha256": "733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1"

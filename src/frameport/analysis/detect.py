@@ -27,7 +27,8 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 # 5: unreal_quest_gates (Quest-only branches in ILMxLAB's Unreal: frame.unreal_quest_precompile/_keymap) (2026-10)
 # 6: gl_multiview_libs (own-engine libraries with OVR_multiview GLSL: frame.gl_multiview_fbo) (2026-10)
 # 7: unreal_thumb_touch (UE4 OculusInput's ThumbUp from near-touch, matched exactly: frame.unreal_thumb_touch)
-ANALYSIS_VERSION = 7
+# 8: media_codec (plays video through Android's decoders: MediaCodec/ExoPlayer/Media3 or VLC: frame.hw_video_decode)
+ANALYSIS_VERSION = 8
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
@@ -149,6 +150,9 @@ def vr_kind(libs: set[str], manifest_strings: list[str]) -> str:
     return "none"
 
 
+# dex type names of Android's video decoding APIs (frame.hw_video_decode)
+MEDIA_CODEC_MARKERS = (b"Landroid/media/MediaCodec;", b"Landroidx/media3/exoplayer", b"Lcom/google/android/exoplayer2/")
+
 # OpenXR composition-layer extensions the Frame runtime lacks (see docs/FRAME_RUNTIME.md).
 LAYER_EXTENSIONS = ("XR_KHR_composition_layer_cylinder", "XR_KHR_composition_layer_equirect",
                     "XR_KHR_composition_layer_equirect2", "XR_KHR_composition_layer_cube")
@@ -167,6 +171,8 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
         sdl_java = any(b"Lorg/libsdl/app/SDLClipboardHandler;" in d for d in dexes)
         # Vivox voice chat calling Android 12 audio-routing methods: crashes in Lepton (Android 11)
         vivox_api31 = any(b"Lcom/vivox/sdk/AudioChangeListener;" in d and b"CommunicationDevice" in d for d in dexes)
+        # video through Android's decoders (frame.hw_video_decode): Java MediaCodec, ExoPlayer/Media3, or libVLC
+        media_codec = any(m in d for d in dexes for m in MEDIA_CODEC_MARKERS) or "libvlc.so" in libs
         del dexes
         manifest = z.read("AndroidManifest.xml")
         lib_bytes = {}
@@ -287,6 +293,7 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             "ovr_runtime_msaa": bool(il2cpp_meta) and b"\0useRecommendedMSAALevel\0" in il2cpp_meta,
             "sdl_java": sdl_java,
             "vivox_api31": vivox_api31,
+            "media_codec": media_codec,
             "oculus_xr_plugin": bool(il2cpp_meta) and b"\0m_StereoRenderingModeAndroid\0" in il2cpp_meta,
             # Unity's built-in Oculus support checks for Meta's system apps before VR (frame.unity_oculus_check)
             "unity_oculus_check": b"\0com.oculus.systemactivities\0" in lib_bytes.get("libunity.so", b""),

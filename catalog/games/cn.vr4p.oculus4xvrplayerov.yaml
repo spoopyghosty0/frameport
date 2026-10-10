@@ -6,10 +6,14 @@ notes: 'Native OpenXR GLES video player. 360 theatres/videos (equirect2 layers, 
   at 72 fps (the runtime asks for 4536 px per eye). Confirmed in the headset by the owner (2026-10-01). Its "Internal
   Storage" list is /sdcard/4XPlayer: send videos with the game page''s "Add videos".'
 details: 'Settings: equirect_emul (GLES worker draws 360 layers into a projection layer), stable_local, focus_hold,
-  scale 0.75; frame.swapchain_limit for its 7680x3840 theatre swapchains.'
+  scale 0.75; frame.swapchain_limit for its 7680x3840 theatre swapchains. Its hardware decoding mode (Java MediaCodec,
+  Vr4pMediaPlayer; its own FFmpeg is the software path) gets the Frame''s video hardware with frame.hw_video_decode
+  (added 2026-10-09, not yet checked in the headset).'
 tested_version: 2.0.22
 engine: Other
 xr: OpenXR
+frame:
+- frame.hw_video_decode
 adapter:
   equirect_emul: 1
   stable_local: 1
@@ -17,4 +21,6 @@ adapter:
   scale: 0.75
 verified:
   date: '2026-10-01'
+updated: '2026-10-10'
+min_app: 0.12.1
 source_hint: 4XVR Video Player
