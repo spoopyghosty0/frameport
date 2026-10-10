@@ -57,6 +57,22 @@ restart) is unit-tested only.
 - Logs for diagnostics: `<Runtime>\output\logs\game\{host.log,host.err,session.json,guest.log}`,
   `logs\emulator\emulator.std{out,err}.log`.
 
+## Headset results (2026-10-10, Steam Frame streaming to the PC through Steam Link / vrlink, 96 Hz)
+
+AXRB's bridge opened a SteamVR session on the Frame each time (session state up to FOCUSED, both hands active), started
+through FramePort's launcher with the emulator booted by AXRB's run script (~1 min), and shut down cleanly.
+
+- **Lucky's Tale (Unity, GLES): black.** GLES games go through AXRB's raw image path (eye readback → TCP), sized
+  by SteamVR's recommended resolution: 3412×3412 per eye at the owner's 250 % supersampling = 93 MB per frame,
+  ~10 s per frame; at a lowered resolution 2644×2644 = 56 MB, 6.6 s per frame (~8.5 MB/s). Not fixable from
+  FramePort (AXRB has no maximum-extent setting, only AXRB_MIN_EYE_EXTENT); even ~1000² would be ~1 fps.
+  AXRB's zero-copy GPU path covers Vulkan games only.
+- **Pinball FX VR (UE5, Vulkan): crash 4 s after start**, the same gfxstream `vkAllocateMemory` SIGSEGV from AXRB's
+  runtime layer as headless (so not a headless artefact). AXRB's side.
+
+Not reached: sound, controllers. Next candidates: a Vulkan game AXRB reports playable (Deadpool VR, Batman: Arkham
+Shadow); an AXRB issue for the Pinball crash.
+
 ## Open (needs the owner + a headset)
 
 - A game in the headset through SteamVR (picture, audio, controllers; Steam Frame controllers: AXRB #20).
