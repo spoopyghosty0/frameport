@@ -523,6 +523,32 @@ def test_flet_updates_are_serialized():
         Session.patch_control, Prop.__set__ = original, original_set
 
 
+def test_serialize_survives_moved_flet_internals(monkeypatch, caplog):
+    """A Flet version without value_types.Prop (or Session.patch_control) must not stop the GUI from starting: that
+    part is skipped and logged, the other still applies."""
+    import logging
+
+    import flet.controls.value_types as value_types
+    from flet.messaging.session import Session
+
+    from frameport.ui import app
+
+    original, original_set = Session.patch_control, value_types.Prop.__set__
+    try:
+        Session.patch_control = lambda self, *a, **k: None
+        monkeypatch.delattr(value_types, "Prop")
+        with caplog.at_level(logging.WARNING):
+            app.serialize_flet_updates()
+        assert getattr(Session.patch_control, "_serialized", False)
+        assert "property writes couldn't be serialized" in caplog.text
+        monkeypatch.undo()
+        monkeypatch.delattr(Session, "patch_control")
+        app.serialize_flet_updates()  # nothing to wrap: no exception
+    finally:
+        monkeypatch.undo()
+        Session.patch_control, value_types.Prop.__set__ = original, original_set
+
+
 def test_property_writes_wait_for_a_patch_being_packed():
     """A property set on a background thread (the live Frame card, job progress) while the event loop packs a patch
     changed the control's _values mid-iteration: "dictionary changed size during iteration" killed the update (a

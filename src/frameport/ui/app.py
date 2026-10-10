@@ -2740,24 +2740,33 @@ def serialize_flet_updates() -> None:
       dict mid-iteration ("dictionary changed size during iteration"): the handler that was updating (a sidebar
       click while the live Frame card took a sample) died and the page didn't change.
     Both take one re-entrant lock: re-entrant because did_mount() may update again and the loop's own handlers set
-    properties during a patch."""
-    from flet.controls.value_types import Prop
-    from flet.messaging.session import Session
+    properties during a patch.
+    Both hook Flet internals: if a Flet version moves or renames one, that part is skipped (logged) and the rest
+    still applies."""
+    try:
+        from flet.messaging.session import Session
 
-    if getattr(Session.patch_control, "_serialized", False):
-        return
-    original_patch, original_set = Session.patch_control, Prop.__set__
+        original_patch = Session.patch_control
+        if not getattr(original_patch, "_serialized", False):
+            def patch_control(self, *args, **kwargs):
+                with FLET_LOCK:
+                    return original_patch(self, *args, **kwargs)
+            patch_control._serialized = True
+            Session.patch_control = patch_control
+    except (ImportError, AttributeError) as exc:
+        applog.log.warning("Flet's patch sending couldn't be serialized (another Flet version?): %s", exc)
+    try:
+        from flet.controls.value_types import Prop
 
-    def patch_control(self, *args, **kwargs):
-        with FLET_LOCK:
-            return original_patch(self, *args, **kwargs)
-
-    def set_prop(self, obj, value):
-        with FLET_LOCK:
-            original_set(self, obj, value)
-    patch_control._serialized = True
-    Session.patch_control = patch_control
-    Prop.__set__ = set_prop
+        original_set = Prop.__set__
+        if not getattr(original_set, "_serialized", False):
+            def set_prop(self, obj, value):
+                with FLET_LOCK:
+                    original_set(self, obj, value)
+            set_prop._serialized = True
+            Prop.__set__ = set_prop
+    except (ImportError, AttributeError) as exc:
+        applog.log.warning("Flet's property writes couldn't be serialized (another Flet version?): %s", exc)
 
 
 def main(argv=None):
