@@ -1,0 +1,224 @@
+---
+// Every game in the app's catalog (catalog/games/*.yaml). Built into the page from this checkout, then brought up to
+// date in the browser from GitHub's main branch (scripts/catalog-live.ts), the way the app follows the catalog.
+import { loadSnapshot } from '../data/catalog';
+import { STATUS, counts, engines, latestCheck, rowsHtml, sortGames, type Game, type Status } from '../scripts/catalog';
+import { SHARE_CONFIG, REPORT_PROBLEM, blob } from '../data/site';
+
+const snapshot = loadSnapshot();
+const games = sortGames(Object.values(snapshot.files).map((f) => f.game).filter((g): g is Game => !!g));
+const n = counts(games);
+const latest = latestCheck(games);
+---
+<section class="section" id="games">
+  <div class="wrap">
+    <div class="head reveal">
+      <p class="label"><b>03</b> Games</p>
+      <h2>Tested on a Steam Frame.</h2>
+      <p class="lead">
+        <span data-n="works">{n.works}</span> games work, <span data-n="issues">{n.issues}</span> work with issues and
+        <span data-n="unsupported">{n.unsupported}</span> don't run. A tested game gets its recipe automatically. Games
+        that aren't listed may work too: FramePort suggests patches for them, and a recipe that works can be shared from
+        the app.
+      </p>
+    </div>
+
+    <div class="board reveal" data-board>
+      <div class="board-top">
+        <span class="board-title">Quest <span class="arrow">→</span> Steam Frame</span>
+        <span class="board-meta" data-meta>
+          <span data-total>{games.length}</span> games · last checked <span data-latest>{latest}</span>
+          <span class="src" data-source title="Built into the page">· catalog of {snapshot.builtAt}</span>
+        </span>
+      </div>
+
+      <div class="filters" role="group" aria-label="Filter games">
+        <div class="chips" aria-label="Status">
+          <button type="button" class="chip" aria-pressed="true" data-status="">All</button>
+          {(Object.keys(STATUS) as Status[]).map((s) => (
+            <button type="button" class="chip" aria-pressed="false" data-status={s}>
+              {STATUS[s].label} <span class="n" data-n={s}>{n[s]}</span>
+            </button>
+          ))}
+        </div>
+        <div class="chips" aria-label="Engine" data-engines>
+          {engines(games).map((e) => <button type="button" class="chip chip-quiet" aria-pressed="false" data-engine={e}>{e}</button>)}
+        </div>
+        <label class="search">
+          <span class="visually-hidden">Search games</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2" /><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+          <input type="search" placeholder="Search" data-search autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="table" role="table" aria-label="Tested games">
+        <div class="row head-row" role="row">
+          <span role="columnheader">Game</span>
+          <span role="columnheader" class="c-eng">Engine</span>
+          <span role="columnheader" class="c-xr">VR API</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader" class="c-date">Checked</span>
+        </div>
+        <ul class="rows" role="rowgroup" data-rows set:html={rowsHtml(games)} />
+        <p class="empty" data-empty hidden>No tested game matches. It may still work: FramePort suggests patches for any game.</p>
+      </div>
+      <div class="board-foot">
+        <button type="button" class="btn btn-ghost btn-small" data-more>Show all {games.length} games</button>
+        <span class="links">
+          <a href={SHARE_CONFIG}>Share a working config</a>
+          <span aria-hidden="true">·</span>
+          <a href={REPORT_PROBLEM}>Report a problem</a>
+          <span aria-hidden="true">·</span>
+          <a href={blob('catalog/games')}>The catalog on GitHub</a>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script type="application/json" data-snapshot set:html={JSON.stringify(snapshot).replaceAll('<', '\\u003c')} />
+
+<script>
+  import { counts, engines, latestCheck, rowsHtml, sortGames, type Snapshot } from '../scripts/catalog';
+  import { refreshCatalog } from '../scripts/catalog-live';
+
+  const board = document.querySelector<HTMLElement>('[data-board]');
+  if (board) {
+    const list = board.querySelector<HTMLElement>('[data-rows]')!;
+    const more = board.querySelector<HTMLButtonElement>('[data-more]')!;
+    const empty = board.querySelector<HTMLElement>('[data-empty]')!;
+    const search = board.querySelector<HTMLInputElement>('[data-search]')!;
+    const engineBox = board.querySelector<HTMLElement>('[data-engines]')!;
+    const FIRST = 14;
+    let status = '', engine = '', expanded = false;
+
+    const apply = () => {
+      const q = search.value.trim().toLowerCase();
+      let shown = 0, matches = 0;
+      for (const r of list.querySelectorAll<HTMLElement>(':scope > li')) {
+        const ok = (!status || r.dataset.status === status) && (!engine || r.dataset.engine === engine)
+          && (!q || (r.dataset.text ?? '').includes(q));
+        if (ok) matches++;
+        const visible = ok && (expanded || shown < FIRST);
+        r.hidden = !visible;
+        if (visible) shown++;
+      }
+      empty.hidden = matches > 0;
+      more.hidden = expanded || matches <= FIRST;
+      more.textContent = `Show all ${matches} games`;
+    };
+
+    board.addEventListener('click', (ev) => {
+      const b = (ev.target as Element).closest('button');
+      if (!b) return;
+      if (b.hasAttribute('data-status')) {
+        status = b.dataset.status || '';
+        board.querySelectorAll('button[data-status]').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+      } else if (b.hasAttribute('data-engine')) {
+        engine = engine === b.dataset.engine ? '' : b.dataset.engine!;
+        board.querySelectorAll<HTMLElement>('button[data-engine]').forEach((o) => o.setAttribute('aria-pressed', String(o.dataset.engine === engine)));
+      } else if (b === more) {
+        expanded = true;
+      } else return;
+      apply();
+    });
+    search.addEventListener('input', apply);
+    apply();
+
+    // bring the board up to date with the catalog on GitHub
+    const snapshot = JSON.parse(document.querySelector('[data-snapshot]')?.textContent || '{"files":{}}') as Snapshot;
+    const set = (sel: string, text: string) => document.querySelectorAll(sel).forEach((el) => { el.textContent = text; });
+    const start = () => refreshCatalog(snapshot).then((live) => {
+      if (!live) return;
+      const when = new Date(live.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      const src = board.querySelector<HTMLElement>('[data-source]')!;
+      src.textContent = '· live from GitHub';
+      src.title = `The catalog on GitHub's main branch, as of ${when}`;
+      src.classList.add('live');
+      if (!live.changed) return;
+      const games = sortGames(live.games);
+      list.innerHTML = rowsHtml(games);
+      const n = counts(games);
+      for (const s of ['works', 'issues', 'unsupported'] as const) set(`[data-n="${s}"]`, String(n[s]));
+      set('[data-total]', String(games.length));
+      set('[data-latest]', latestCheck(games));
+      const names = engines(games);
+      if (engine && !names.includes(engine)) engine = '';
+      engineBox.replaceChildren(...names.map((e) => {
+        const b = document.createElement('button');
+        Object.assign(b, { type: 'button', className: 'chip chip-quiet', textContent: e });
+        b.dataset.engine = e;
+        b.setAttribute('aria-pressed', String(e === engine));
+        return b;
+      }));
+      apply();
+    }).catch(() => { /* the built-in list stays */ });
+    // only when the board is about to be seen: most visits never scroll there, and the API allows 60 calls an hour
+    const io = new IntersectionObserver((e) => {
+      if (e.some((x) => x.isIntersecting)) { io.disconnect(); start(); }
+    }, { rootMargin: '600px 0px' });
+    io.observe(board);
+  }
+</script>
+
+<style>
+  .board { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); overflow: hidden; }
+  .board-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px;
+    padding: 16px 20px; background: var(--sidebar); border-bottom: 1px solid var(--border); position: relative; }
+  .board-top::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--portal); opacity: .6; }
+  .board-title { font: 700 13px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; }
+  .board-title .arrow { color: var(--accent); }
+  .board-meta { font: 400 12px/1.4 var(--font-mono); color: var(--text-2); }
+  .src.live { color: var(--ok); }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 14px 20px;
+    border-bottom: 1px solid var(--border); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .board :global(.chip) { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong); background: transparent; color: var(--text-2); cursor: pointer;
+    font: 500 13px/18px var(--font-sans); transition: background-color 150ms, color 150ms, border-color 150ms; }
+  .board :global(.chip:hover) { color: var(--text); border-color: var(--text-3); }
+  .board :global(.chip[aria-pressed="true"]) { color: var(--text); border-color: transparent;
+    background: linear-gradient(90deg, rgba(58, 168, 255, 0.22), rgba(255, 138, 31, 0.22)); }
+  .board :global(.chip .n) { font: 500 11px/1 var(--font-mono); color: var(--text-2); }
+  .board :global(.chip-quiet) { border-style: dashed; }
+  .search { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 34px;
+    border-radius: var(--radius-sm); background: var(--surface-3); color: var(--text-2); min-width: 0; flex: 0 1 220px; }
+  .search:focus-within { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+  .search input { all: unset; flex: 1; min-width: 0; color: var(--text); font: 400 14px/20px var(--font-sans); }
+  .search input::placeholder { color: var(--text-2); }
+
+  .rows { list-style: none; margin: 0; padding: 0; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 100px 90px 120px 100px; gap: 6px 16px; align-items: center;
+    padding: 12px 20px; }
+  .rows :global(.row) { display: grid; grid-template-columns: minmax(0, 1fr) 100px 90px 120px 100px; gap: 6px 16px;
+    align-items: center; padding: 12px 20px; border-top: 1px solid rgba(42, 45, 55, 0.7); }
+  .rows :global(.row:hover) { background: rgba(237, 238, 242, 0.025); }
+  .rows :global(.row[hidden]) { display: none; }
+  .head-row { padding-block: 10px; font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase;
+    color: var(--text-2); }
+  .rows :global(.c-game) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
+  .rows :global(.title) { font: 600 15px/1.35 var(--font-sans); color: var(--text); }
+  .rows :global(.tag) { font: 600 11px/1 var(--font-mono); color: var(--secondary); padding: 3px 6px; border-radius: 4px;
+    background: rgba(58, 168, 255, 0.12); }
+  .rows :global(.pkg) { font: 400 12px/1 var(--font-mono); color: var(--text-2); }
+  .rows :global(.note) { flex-basis: 100%; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+  .table :global(.c-eng), .table :global(.c-xr) { font: 400 13px/1 var(--font-mono); color: var(--text-2); }
+  .table :global(.c-date) { font: 400 12.5px/1 var(--font-mono); color: var(--text-2); }
+  .head-row .c-eng, .head-row .c-xr, .head-row .c-date { font: inherit; }
+  .empty { padding: 28px 20px; color: var(--text-2); text-align: center; margin: 0; border-top: 1px solid var(--border); }
+
+  .board-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
+    padding: 12px 20px; border-top: 1px solid var(--border); }
+  .board-foot [hidden] { display: none; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px; color: var(--text-3); margin-left: auto; }
+
+  @media (max-width: 760px) {
+    .row, .rows :global(.row) { grid-template-columns: minmax(0, 1fr) auto; padding-inline: 16px; }
+    .table :global(.c-eng), .table :global(.c-xr), .table :global(.c-date) { display: none; }
+    .head-row { display: none; }
+    .search { margin-left: 0; flex-basis: 100%; }
+    .filters, .board-top, .board-foot { padding-inline: 16px; }
+  }
+  :global(html:not(.js)) .board-foot .btn { display: none; }
+</style>

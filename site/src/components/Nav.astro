@@ -1,0 +1,45 @@
+---
+import Wordmark from './Wordmark.astro';
+import { REPO, RELEASES, url } from '../data/site';
+
+interface Props { home?: boolean }
+const { home = true } = Astro.props;
+const at = (hash: string) => (home ? hash : url(hash));
+---
+<header class="nav">
+  <div class="nav-in wrap">
+    <a class="brand" href={url()}>
+      <img src={url('favicon.svg')} alt="" width="30" height="30" />
+      <Wordmark id="nav" />
+    </a>
+    <nav aria-label="Sections">
+      <a href={at('#how')}>How it works</a>
+      <a href={at('#games')}>Games</a>
+      <a href={at('#install')}>Install</a>
+      <a href={REPO}>GitHub</a>
+    </nav>
+    <a class="btn btn-primary btn-small" href={RELEASES} data-download><span data-download-label>Download</span></a>
+  </div>
+</header>
+
+<style>
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(17, 18, 23, 0.82);
+    -webkit-backdrop-filter: blur(12px) saturate(1.2); backdrop-filter: blur(12px) saturate(1.2);
+  }
+  /* the app's sidebar edge, laid down: blue to orange */
+  .nav::after { content: ""; position: absolute; inset: auto 0 0 0; height: 2px; background: var(--portal); opacity: 0.7; }
+  .nav-in { display: flex; align-items: center; gap: 24px; min-height: 64px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand img { border-radius: 7px; }
+  nav { display: flex; gap: 2px; margin-left: auto; }
+  nav a { padding: 8px 12px; border-radius: var(--radius-sm); color: var(--text-2); text-decoration: none;
+    font: 500 14px/20px var(--font-sans); }
+  nav a:hover { color: var(--text); background: rgba(237, 238, 242, 0.06); }
+  [data-download-label] { font-size: 13px; }
+  @media (max-width: 760px) {
+    nav { display: none; }
+    .btn { margin-left: auto; }
+  }
+</style>

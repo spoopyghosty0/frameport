@@ -1,0 +1,64 @@
+---
+import Crossing, { type CrossingGame } from './Crossing.astro';
+import Glyph from './Glyph.astro';
+import { DOWNLOADS, RELEASES, downloadUrl } from '../data/site';
+
+interface Props { games: CrossingGame[] }
+const { games } = Astro.props;
+---
+<section class="hero">
+  <div class="hero-in wrap">
+    <div class="copy">
+      <p class="eyebrow">For the Valve Steam Frame</p>
+      <h1><span class="q">Quest games</span> on your <span class="f">Steam Frame</span>.</h1>
+      <p class="lead">
+        FramePort converts, patches and installs Quest games, Android apps and PC VR games on the Steam Frame, and adds
+        them to your Steam library. Set up the Frame once with one command; after that it's one click per game.
+      </p>
+      <div class="ctas">
+        <a class="btn btn-primary" href={RELEASES} data-download>
+          <Glyph name="frame-solid" size={20} />
+          <span data-download-label>Download FramePort</span>
+        </a>
+        <a class="btn btn-secondary" href="#tour"><Glyph name="live" size={20} /> Watch the tour</a>
+      </div>
+      <ul class="platforms" aria-label="All downloads">
+        {DOWNLOADS.map((d) => (
+          <li><a href={downloadUrl(d.asset)} data-os={d.os}>{d.label}</a></li>
+        ))}
+        <li><a href={RELEASES}>All releases</a></li>
+      </ul>
+      <p class="facts">Free and open source · GPL-3.0 · Proof of concept · Not affiliated with Valve or Meta</p>
+    </div>
+    <div class="scene">
+      <Crossing games={games} />
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero { position: relative; overflow: hidden; padding-block: clamp(48px, 8vw, 104px) clamp(56px, 8vw, 96px);
+    background: var(--portal-glow); }
+  .hero-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(24px, 4vw, 64px);
+    align-items: center; }
+  .eyebrow { font: 600 12px/1 var(--font-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--text-2);
+    margin-bottom: 22px; display: flex; align-items: center; gap: 12px; }
+  .eyebrow::before { content: ""; width: 28px; height: 2px; background: var(--portal); }
+  h1 { font-size: clamp(42px, 6.4vw, 76px); line-height: 1.0; font-weight: 800; letter-spacing: -0.035em; }
+  h1 .q { color: var(--secondary); }
+  h1 .f { color: var(--accent); }
+  .lead { margin-top: 24px; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+  .platforms { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 0; margin: 18px 0 0;
+    font: 500 13px/20px var(--font-sans); }
+  .platforms a { color: var(--text-2); text-decoration: none; }
+  .platforms a:hover { color: var(--text); text-decoration: underline; }
+  .platforms a[aria-current] { color: var(--accent); }
+  .facts { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); font: 400 12px/1.6 var(--font-mono);
+    color: var(--text-2); letter-spacing: .02em; }
+  .scene { position: relative; }
+  @media (max-width: 900px) {
+    .hero-in { grid-template-columns: 1fr; }
+    .scene { max-width: 560px; width: 100%; margin-inline: auto; }
+  }
+</style>

@@ -1,0 +1,167 @@
+/* FramePort Portal, for the web. Colour values are the app's (src/frameport/ui/theme.py, theme "portal"). Dark only:
+   the app has no light theme and neither does its page. */
+
+@font-face {
+  font-family: Sora;
+  src: url('../assets/fonts/Sora-Variable-latin.woff2') format('woff2');
+  font-weight: 600 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+
+  --bg: #0d0e12;
+  --sidebar: #111217;
+  --surface: #16181e;
+  --surface-2: #1d1f27;
+  --surface-3: #252832;
+  --border: #2a2d37;
+  --border-strong: #393d49;
+  --text: #edeef2;
+  --text-2: #a7abb7;
+  --text-3: #717583;
+  --accent: #ff8a1f;
+  --accent-soft: #3a2512;
+  --on-accent: #160c03;
+  --secondary: #3aa8ff;
+  --secondary-soft: #0f2a40;
+  --secondary-line: rgba(58, 168, 255, 0.55);
+  --accent-glow: rgba(255, 138, 31, 0.22);
+  --ok: #3dd68c;
+  --warn: #f2c94c;
+  --error: #ff6166;
+  --info: #5cd0e6;
+
+  --font-display: Sora, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-pill: 20px;
+
+  --shadow-art: 0 8px 22px 1px rgba(0, 0, 0, 0.55);
+  --shadow-art-hover: 0 16px 36px 2px rgba(0, 0, 0, 0.75), 0 4px 30px -2px var(--accent-glow);
+
+  /* the portal: blue (the PC) on the left, orange (the Frame) on the right; the only decoration */
+  --portal: linear-gradient(90deg, var(--secondary), var(--accent));
+  --portal-glow: radial-gradient(85% 85% at 50% 37%, rgba(58, 168, 255, 0.10) 0%, rgba(255, 138, 31, 0.05) 45%, rgba(13, 14, 18, 0) 100%);
+  --tilt: 18deg; /* the logo's portal tilt */
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --gutter: clamp(16px, 4vw, 40px);
+  --page: 1180px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 80px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 16px/1.6 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+/* film grain: keeps the large dark areas from looking like flat plastic */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+img, video, svg { display: block; max-width: 100%; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+::selection { background: rgba(255, 138, 31, 0.35); color: var(--text); }
+
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h2 { font-size: clamp(30px, 4.2vw, 44px); line-height: 1.1; font-weight: 800; letter-spacing: -0.02em; }
+h3 { font-size: 18px; line-height: 1.3; font-weight: 700; }
+p { margin: 0; text-wrap: pretty; }
+code, kbd, pre { font-family: var(--font-mono); }
+
+.wrap { width: min(100% - 2 * var(--gutter), var(--page)); margin-inline: auto; }
+.section { padding-block: clamp(56px, 7vw, 96px); position: relative; }
+.lead { color: var(--text-2); font-size: clamp(16px, 1.6vw, 18px); line-height: 1.6; max-width: 62ch; }
+.muted { color: var(--text-2); }
+
+/* section label: "02 · The app" + the portal hairline, the app's section label for the web */
+.label {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 20px;
+  font: 600 12px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-2);
+}
+.label b { color: var(--text); font-weight: 600; }
+.label::after { content: ""; flex: 1; height: 1px; background: var(--portal); opacity: 0.55; }
+
+.head { display: grid; gap: 16px; margin-bottom: clamp(32px, 5vw, 56px); }
+
+/* wordmark: "Frame" orange, the portal, "Port" blue */
+.wordmark { display: inline-flex; align-items: center; font: 800 22px/1 var(--font-display); letter-spacing: 0;
+  text-decoration: none; white-space: nowrap; }
+.wordmark .f { color: var(--accent); }
+.wordmark .p { color: var(--secondary); }
+.wordmark svg { width: 0.62em; height: 1.1em; margin-inline: 0.04em; }
+
+/* glyph icons */
+.glyph { flex: none; }
+
+/* buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 13px 20px; border-radius: var(--radius-sm); border: 1px solid transparent;
+  font: 600 15px/20px var(--font-sans); text-decoration: none; cursor: pointer; white-space: nowrap;
+  color: var(--text); background: transparent;
+  transition: background-color 220ms var(--ease-out), border-color 220ms var(--ease-out), filter 220ms var(--ease-out),
+    transform 320ms var(--ease-back);
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover { filter: brightness(1.08); text-decoration: none; }
+.btn-secondary { border-color: var(--secondary-line); }
+.btn-secondary .glyph { color: var(--secondary); }
+.btn-secondary:hover { background: rgba(58, 168, 255, 0.08); text-decoration: none; }
+.btn-ghost { color: var(--text-2); padding-inline: 12px; }
+.btn-ghost:hover { color: var(--text); background: rgba(237, 238, 242, 0.06); text-decoration: none; }
+.btn-small { padding: 7px 12px; font-size: 13px; }
+
+/* pills: always a word next to the colour */
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: var(--radius-pill);
+  font: 600 12px/16px var(--font-sans); white-space: nowrap; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill-ok { color: var(--ok); background: rgba(61, 214, 140, 0.12); }
+.pill-warn { color: var(--warn); background: rgba(242, 201, 76, 0.12); }
+.pill-error { color: var(--error); background: rgba(255, 97, 102, 0.12); }
+.pill-pc { color: var(--secondary); background: rgba(58, 168, 255, 0.12); }
+
+/* command / code block */
+.cmd { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 16px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); min-width: 0; }
+.cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 14px; line-height: 22px;
+  scrollbar-width: thin; }
+.cmd .prompt { color: var(--text-3); user-select: none; margin-right: 8px; }
+.cmd .ph { color: var(--secondary); }
+
+/* scroll reveal (script in Layout); without JS or with reduced motion, everything is simply shown */
+.js .reveal { opacity: 0; transform: translateY(18px); transition: opacity 700ms var(--ease-out), transform 700ms var(--ease-out); }
+.js .reveal.in { opacity: 1; transform: none; }
+
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important; }
+  .js .reveal { opacity: 1; transform: none; }
+}

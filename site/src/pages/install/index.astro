@@ -1,0 +1,210 @@
+---
+// Where an "Install with FramePort" button lands: it opens frameport://install?… and, if FramePort didn't take the
+// link, says how to get FramePort. Nothing is downloaded from this page.
+import Layout from '../../layouts/Layout.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import Glyph from '../../components/Glyph.astro';
+import { DOWNLOADS, RELEASES, blob, downloadUrl, url } from '../../data/site';
+---
+<Layout
+  title="Install with FramePort"
+  description="This link installs a game or app on a Steam Frame with FramePort."
+  noindex>
+  <Nav home={false} />
+  <main class="page" data-state="loading">
+    <div class="wrap inner">
+      <img class="badge" src={url('media/install-with-frameport.svg')} alt="Install with FramePort" width="216" height="60" />
+
+      <!-- what the link installs -->
+      <article class="item" data-item hidden>
+        <div class="item-icon" data-icon aria-hidden="true"><Glyph name="frame" size={30} /></div>
+        <div class="item-text">
+          <p class="item-kicker">This link installs</p>
+          <h1 data-name>…</h1>
+          <p class="item-desc" data-desc hidden></p>
+          <p class="item-from"><span data-files></span> <span class="from">from <b data-host></b></span></p>
+        </div>
+      </article>
+
+      <section class="status status-opening" data-when="opening">
+        <span class="spinner" aria-hidden="true"></span>
+        <div>
+          <h2>Opening FramePort…</h2>
+          <p class="muted">Your browser may ask first. FramePort asks again before it downloads anything.</p>
+        </div>
+      </section>
+
+      <section class="status" data-when="fallback">
+        <h2>FramePort didn't open?</h2>
+        <p class="muted">Then it's probably not installed on this computer yet, or your browser blocked the link. FramePort
+          is free; it installs games and apps on a Valve Steam Frame from your computer.</p>
+
+        <ol class="steps">
+          <li>
+            <span class="n pc">1</span>
+            <div>
+              <h3>Get FramePort</h3>
+              <div class="dls">
+                <a class="btn btn-primary" href={RELEASES} data-download><Glyph name="frame-solid" size={18} /><span data-download-label>Download FramePort</span></a>
+                {DOWNLOADS.map((d) => <a class="other" href={downloadUrl(d.asset)} data-os={d.os}>{d.label}</a>)}
+              </div>
+              <p class="muted small">Unzip it and start FramePort. The first time, it shows how to connect your Frame
+                (<a href={url('#install')}>one command on the Frame</a>).</p>
+            </div>
+          </li>
+          <li>
+            <span class="n frame">2</span>
+            <div>
+              <h3>Come back and click again</h3>
+              <div class="row">
+                <button type="button" class="btn btn-secondary" data-open><Glyph name="port" size={18} /> Open in FramePort</button>
+                <button type="button" class="btn btn-ghost" data-copy>Copy link</button>
+              </div>
+              <p class="muted small">On macOS, and whenever the link won't open: copy it, then in FramePort choose
+                <b>Add games → Install from a link…</b> and paste it.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="status status-error" data-when="error">
+        <h2>This install link doesn't work</h2>
+        <p data-error class="error-text"></p>
+        <p class="muted">The page that sent you here may have an old or mistyped link. If you made it: install links look
+          like <code>{url('install/')}?manifest=https://…/game.json</code> or <code>?url=https://…/game.apk</code>.
+          <a href={blob('docs/INSTALL_BUTTON.md')}>How to make one</a></p>
+        <p><a class="btn btn-secondary" href={url()}>What is FramePort?</a></p>
+      </section>
+
+      <noscript>
+        <p class="muted">This page needs JavaScript to read the link. Without it:
+          <a href={RELEASES}>download FramePort</a>, then paste the address that follows <code>manifest=</code> or
+          <code>url=</code> in this page's address into FramePort → <b>Add games → Install from a link…</b></p>
+      </noscript>
+
+      <p class="already" data-when="opening fallback">Already have FramePort? <a href="#" data-open-link>Open the link in FramePort</a></p>
+    </div>
+  </main>
+  <Footer credits={false} />
+</Layout>
+
+<script>
+  import { parseInstallParams, readManifest } from '../../scripts/install-link';
+
+  const page = document.querySelector<HTMLElement>('main.page')!;
+  const $ = <T extends HTMLElement>(sel: string) => page.querySelector<T>(sel)!;
+  const show = (state: string) => { page.dataset.state = state; };
+  const parsed = parseInstallParams(location.search);
+
+  if (!parsed.ok) {
+    $('[data-error]').textContent = parsed.error;
+    show('error');
+  } else {
+    const target = new URL(parsed.target);
+    const fileName = decodeURIComponent(target.pathname.split('/').pop() || '');
+    $('[data-host]').textContent = target.host;
+    $('[data-name]').textContent = parsed.kind === 'url' ? fileName : 'A game or app';
+    $('[data-files]').textContent = parsed.kind === 'url' ? '' : 'A manifest';
+    $('[data-item]').hidden = false;
+    document.title = `Install ${parsed.kind === 'url' ? fileName : 'with FramePort'}`;
+
+    // the manifest's own name and description, when its host allows reading it from a page (CORS)
+    if (parsed.kind === 'manifest') {
+      const ctl = new AbortController();
+      setTimeout(() => ctl.abort(), 6000);
+      fetch(parsed.target, { signal: ctl.signal, credentials: 'omit', referrerPolicy: 'no-referrer' })
+        .then((r) => (r.ok && Number(r.headers.get('content-length') ?? 0) <= 256 * 1024 ? r.json() : null))
+        .then((data) => {
+          const m = readManifest(data);
+          if (!m) return;
+          $('[data-name]').textContent = m.name;
+          document.title = `Install ${m.name} with FramePort`;
+          $('[data-files]').textContent = m.files.join(', ');
+          if (m.description) { $('[data-desc]').textContent = m.description; $('[data-desc]').hidden = false; }
+          if (m.icon) {
+            const img = new Image(64, 64);
+            img.alt = '';
+            img.referrerPolicy = 'no-referrer';
+            img.onload = () => $('[data-icon]').replaceChildren(img);
+            img.src = m.icon;
+          }
+        })
+        .catch(() => { /* the address alone is shown */ });
+    }
+
+    // hand the link to FramePort; if this page is still in front afterwards, FramePort probably isn't there
+    let left = false;
+    const away = () => { left = true; };
+    window.addEventListener('blur', away);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) away(); });
+    const open = () => {
+      left = false;
+      show('opening');
+      location.href = parsed.link;
+      setTimeout(() => { if (!left && !document.hidden) show('fallback'); }, 1600);
+    };
+    $('[data-open]').addEventListener('click', open);
+    $<HTMLAnchorElement>('[data-open-link]').href = parsed.link;
+    $('[data-copy]').addEventListener('click', async (ev) => {
+      const b = ev.currentTarget as HTMLButtonElement;
+      try { await navigator.clipboard.writeText(parsed.link); b.textContent = 'Copied'; }
+      catch { window.prompt('Copy this link:', parsed.link); }
+      setTimeout(() => { b.textContent = 'Copy link'; }, 1800);
+    });
+    open();
+  }
+</script>
+
+<style>
+  .page { min-height: calc(100vh - 66px - 160px); background: var(--portal-glow); padding-block: clamp(40px, 7vw, 88px); }
+  .inner { max-width: 760px; display: grid; gap: 28px; }
+  .badge { width: 216px; height: 60px; }
+
+  [hidden] { display: none !important; }
+  .item { display: flex; gap: 20px; align-items: flex-start; padding: 22px; border-radius: var(--radius-md);
+    background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-art); }
+  .item-icon { flex: none; width: 64px; height: 64px; border-radius: 14px; display: grid; place-items: center; overflow: hidden;
+    color: var(--accent); background: linear-gradient(135deg, var(--secondary-soft), var(--accent-soft)); }
+  .item-icon :global(img) { width: 64px; height: 64px; object-fit: cover; }
+  .item-text { min-width: 0; display: grid; gap: 6px; }
+  .item-kicker { font: 600 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2); }
+  .item h1 { font-size: clamp(24px, 4vw, 32px); line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+  .item-desc { color: var(--text-2); white-space: pre-line; }
+  .item-from { font: 400 13px/1.5 var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; }
+  .item-from b { color: var(--text); font-weight: 500; }
+
+  [data-when] { display: none; }
+  .page[data-state="opening"] [data-when~="opening"],
+  .page[data-state="fallback"] [data-when~="fallback"],
+  .page[data-state="error"] [data-when~="error"] { display: grid; }
+  .page[data-state="opening"] .already, .page[data-state="fallback"] .already { display: block; }
+
+  .status { gap: 14px; }
+  .status h2 { font-size: clamp(24px, 3.4vw, 32px); }
+  .status-opening { grid-template-columns: auto 1fr; align-items: center; gap: 18px; }
+  .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--surface-3);
+    border-top-color: var(--secondary); border-right-color: var(--accent); animation: spin 900ms linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 14px; }
+  .steps > li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; padding: 22px; border-radius: var(--radius-md);
+    background: var(--surface); border: 1px solid var(--border); }
+  .steps > li > div { display: grid; gap: 12px; min-width: 0; }
+  .n { font: 800 40px/0.9 var(--font-display); }
+  .n.pc { color: var(--secondary); }
+  .n.frame { color: var(--accent); }
+  .dls, .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .other { font-size: 14px; color: var(--text-2); }
+  .other[aria-current] { color: var(--accent); }
+  .small { font-size: 14px; }
+  .muted b { color: var(--text); font-weight: 600; }
+  .error-text { padding: 14px 16px; border-radius: var(--radius-sm); background: rgba(255, 97, 102, 0.08);
+    border: 1px solid rgba(255, 97, 102, 0.35); color: var(--text); }
+  code { font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+  .already { font-size: 14px; color: var(--text-2); }
+  @media (max-width: 600px) {
+    .item { flex-direction: column; }
+    .steps > li { grid-template-columns: 1fr; gap: 8px; padding: 18px; }
+  }
+</style>

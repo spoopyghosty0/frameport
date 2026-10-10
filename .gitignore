@@ -20,3 +20,10 @@ CLAUDE.local.md
 REPORT.md
 .ruff_cache/
 .claude/worktrees/
+
+# project page (site/)
+site/node_modules/
+site/dist/
+site/.astro/
+site/public/media/
+site/src/assets/media/

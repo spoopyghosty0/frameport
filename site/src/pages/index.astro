@@ -1,0 +1,37 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Nav from '../components/Nav.astro';
+import Hero from '../components/Hero.astro';
+import TransitLog from '../components/TransitLog.astro';
+import AppTour from '../components/AppTour.astro';
+import CompatBoard from '../components/CompatBoard.astro';
+import FieldNotes from '../components/FieldNotes.astro';
+import Install from '../components/Install.astro';
+import Footer from '../components/Footer.astro';
+import { loadSnapshot } from '../data/catalog';
+import type { Game } from '../scripts/catalog';
+
+const games = Object.values(loadSnapshot().files).map((f) => f.game).filter((g): g is Game => !!g);
+// the hero's travellers: tested Quest games that work, most recently checked first
+const crossing = games
+  .filter((g) => g.status === 'works' && g.platform === 'Quest' && g.package && g.engine && g.xr && g.title.length <= 24)
+  .sort((a, b) => b.checked.localeCompare(a.checked) || a.title.localeCompare(b.title))
+  .slice(0, 10)
+  .map(({ title, package: pkg, engine, xr }) => ({ title, package: pkg, engine, xr }));
+// the install log follows one real recipe
+const example = games.find((g) => g.package === 'com.Armature.VR4') ?? games.find((g) => g.status === 'works')!;
+---
+<Layout
+  title="FramePort · Quest games on your Steam Frame"
+  description="FramePort converts, patches and installs Quest games, Android apps and PC VR games on the Valve Steam Frame and adds them to your Steam library. Free and open source.">
+  <Nav />
+  <main>
+    <Hero games={crossing} />
+    <TransitLog example={{ title: example.title, engine: example.engine, xr: example.xr, verified: example.checked }} />
+    <AppTour />
+    <CompatBoard />
+    <FieldNotes />
+    <Install />
+  </main>
+  <Footer />
+</Layout>

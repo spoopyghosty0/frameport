@@ -1,0 +1,60 @@
+---
+import '../styles/global.css';
+import { DOWNLOADS, downloadUrl, url } from '../data/site';
+
+interface Props { title: string; description: string; noindex?: boolean }
+const { title, description, noindex = false } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const poster = new URL(url('media/frameport-tour.jpg'), Astro.site);
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#0d0e12" />
+    <meta name="color-scheme" content="dark" />
+    {noindex && <meta name="robots" content="noindex" />}
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href={url('favicon.svg')} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={poster} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script is:inline>document.documentElement.classList.add('js');</script>
+  </head>
+  <body>
+    <slot />
+    <script define:vars={{ downloads: DOWNLOADS.map((d) => ({ ...d, href: downloadUrl(d.asset) })) }}>
+      // The download buttons offer the build for this computer; the other platforms stay listed next to them.
+      const ua = navigator.userAgent;
+      const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+      let os = null;
+      if (/Win/i.test(platform) || /Windows/.test(ua)) os = 'windows';
+      else if (/Mac/i.test(platform) || /Mac OS X/.test(ua)) os = /iPhone|iPad/.test(ua) ? null : 'macos';
+      else if (/Linux/i.test(platform) && !/Android/.test(ua)) os = /aarch64|arm64/i.test(platform + ua) ? 'linux-arm64' : 'linux';
+      const pick = downloads.find((d) => d.os === os);
+      if (pick) {
+        for (const a of document.querySelectorAll('[data-download]')) {
+          a.href = pick.href;
+          const label = a.querySelector('[data-download-label]');
+          if (label) label.textContent = `Download for ${pick.label}`;
+        }
+        for (const el of document.querySelectorAll(`[data-os="${pick.os}"]`)) el.setAttribute('aria-current', 'true');
+      }
+    </script>
+    <script>
+      // Sections fade in once as they reach the viewport (not with reduced motion: CSS shows them at once).
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+        }
+      }, { rootMargin: '0px 0px -12% 0px' });
+      document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+    </script>
+  </body>
+</html>

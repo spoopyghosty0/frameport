@@ -1,0 +1,190 @@
+---
+// The logo, told as a scene: a game goes into the portal on the PC's side (blue) as an APK and comes out on the
+// Frame's side (orange) as a game in the Steam library. Two copies of one moving card, each clipped to its side of
+// the tilted portal, so the card changes at the seam exactly as the logo cuts the monitor and the headset.
+// Stage units: 100 × 75 (aspect 4:3); portal centre (50, 37.5), tilted 18°, so the seam runs from x 62.18 at the
+// top to x 37.82 at the bottom.
+export interface CrossingGame { title: string; package: string; engine: string; xr: string }
+interface Props { games: CrossingGame[]; compact?: boolean }
+const { games, compact = false } = Astro.props;
+const first = games[0];
+---
+<div class:list={['stage', { compact }]} data-crossing>
+  <svg class="props" viewBox="0 0 100 75" aria-hidden="true">
+    <!-- the PC: the logo's monitor -->
+    <g class="pc" transform="translate(-6.5 1) scale(1.2)">
+      <path d="M9 15h27a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V18a3 3 0 0 1 3-3z" />
+      <path d="M22.5 41v6M15.5 47h14" />
+    </g>
+    <!-- the Frame: the logo's visor -->
+    <g class="hmd" transform="translate(33.6 3) scale(1.05)">
+      <path d="M30 31.5H32M56.5 31.5H58.5" />
+      <path d="M35.5 21h17.5a8 8 0 0 1 8 8v5a8 8 0 0 1-8 8H48.65a3 3 0 0 1-2.6-1.5l-1-1.7a.9.9 0 0 0-1.6 0l-1 1.7a3 3 0 0 1-2.6 1.5H35.5a8 8 0 0 1-8-8v-5a8 8 0 0 1 8-8z" />
+    </g>
+  </svg>
+
+  <div class="lane lane-pc" aria-hidden="true">
+    <div class="track">
+      <div class="card apk">
+        <div class="apk-top"><span>Quest</span><span>.apk</span></div>
+        <div class="apk-pkg" data-f="package">{first.package}</div>
+        <div class="apk-lines"><i></i><i></i><i></i><i></i></div>
+        <div class="apk-meta"><span data-f="engine">{first.engine}</span> · <span data-f="xr">{first.xr}</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="lane lane-frame" aria-hidden="true">
+    <div class="track">
+      <div class="card game">
+        <div class="game-art"></div>
+        <div class="game-title" data-f="title">{first.title}</div>
+        <div class="game-foot">
+          <span class="pill pill-ok">Works</span>
+          <span class="game-where">In your Steam library</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <svg class="portal" viewBox="0 0 100 75" aria-hidden="true">
+    <defs>
+      <linearGradient id="rim" gradientUnits="userSpaceOnUse" x1="42" y1="0" x2="58" y2="0">
+        <stop offset=".3" stop-color="#3AA8FF" /><stop offset=".7" stop-color="#FF8A1F" />
+      </linearGradient>
+      <radialGradient id="hole" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="#050608" /><stop offset=".8" stop-color="#08090c" /><stop offset="1" stop-color="#101218" />
+      </radialGradient>
+      <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" /></filter>
+    </defs>
+    <g transform="rotate(18 50 37.5)">
+      <ellipse class="glow" cx="50" cy="37.5" rx="8" ry="32" fill="none" stroke="url(#rim)" stroke-width="5" filter="url(#soft)" />
+      <ellipse cx="50" cy="37.5" rx="6.2" ry="31" fill="url(#hole)" />
+      <ellipse class="flash" cx="50" cy="37.5" rx="6.2" ry="31" fill="none" stroke="url(#rim)" stroke-width="3.2" />
+      <ellipse cx="50" cy="37.5" rx="6.2" ry="31" fill="none" stroke="url(#rim)" stroke-width="1.6" />
+    </g>
+  </svg>
+  <p class="caption" aria-live="off">
+    <span class="mono"><span data-f="package">{first.package}</span></span>
+    <span class="arrow">→</span>
+    <span data-f="title">{first.title}</span>
+  </p>
+</div>
+
+<script type="application/json" data-crossing-games set:html={JSON.stringify(games).replaceAll('<', '\\u003c')} />
+
+<script>
+  // A different catalog game crosses on every lap (swapped while the card is out of sight).
+  const stage = document.querySelector<HTMLElement>('[data-crossing]');
+  const data = document.querySelector('[data-crossing-games]');
+  if (stage && data) {
+    const games = JSON.parse(data.textContent || '[]') as Record<string, string>[];
+    let i = 0;
+    const track = stage.querySelector('.track');
+    track?.addEventListener('animationiteration', () => {
+      i = (i + 1) % games.length;
+      for (const el of stage.querySelectorAll<HTMLElement>('[data-f]')) el.textContent = games[i][el.dataset.f!] ?? '';
+    });
+  }
+</script>
+
+<style>
+  .stage {
+    --lap: 8.5s;
+    position: relative;
+    aspect-ratio: 4 / 3;
+    width: 100%;
+    container-type: inline-size;
+  }
+  /* the two sides' light, fading out well inside the stage so it has no edges */
+  .stage::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(closest-side, rgba(58, 168, 255, 0.13), transparent) 0 50% / 55% 90% no-repeat,
+      radial-gradient(closest-side, rgba(255, 138, 31, 0.12), transparent) 100% 50% / 55% 90% no-repeat; }
+  .props { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke-width: 1.1;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .props .pc { stroke: rgba(58, 168, 255, 0.22); }
+  .props .hmd { stroke: rgba(255, 138, 31, 0.22); }
+
+  .lane { position: absolute; inset: 0; }
+  .lane-pc { clip-path: polygon(-50% 0, 62.18% 0, 37.82% 100%, -50% 100%); }
+  .lane-frame { clip-path: polygon(62.18% 0, 150% 0, 150% 100%, 37.82% 100%); }
+  .track { position: absolute; inset: 0; animation: lap var(--lap) infinite; will-change: transform, opacity; }
+
+  .card {
+    position: absolute; left: 5%; top: 23.33%; width: 30%; height: 53.33%;
+    border-radius: 2.2cqi; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  /* the PC's side: a file */
+  .apk {
+    background: linear-gradient(180deg, #14202d, var(--surface) 70%);
+    border: 1px solid var(--secondary-line);
+    padding: 2.4cqi;
+    gap: 1.6cqi;
+    clip-path: polygon(0 0, 78% 0, 100% 16%, 100% 100%, 0 100%);
+    font-family: var(--font-mono);
+  }
+  .apk::after { content: ""; position: absolute; right: 0; top: 0; width: 22%; height: 16%;
+    background: linear-gradient(225deg, transparent 50%, rgba(58, 168, 255, 0.35) 50%); }
+  .apk-top { display: flex; gap: 1.2cqi; font-size: 1.9cqi; letter-spacing: .12em; text-transform: uppercase; }
+  .apk-top span:first-child { color: var(--on-accent); background: var(--secondary); padding: .3cqi 1cqi; border-radius: .6cqi; }
+  .apk-top span:last-child { color: var(--secondary); padding: .3cqi 0; }
+  .apk-pkg { color: var(--text); font-size: 2.3cqi; line-height: 1.35; overflow-wrap: anywhere; margin-top: 1cqi; }
+  .apk-lines { display: grid; gap: 1.1cqi; margin-top: auto; }
+  .apk-lines i { display: block; height: .7cqi; border-radius: 1cqi; background: rgba(58, 168, 255, 0.18); }
+  .apk-lines i:nth-child(2) { width: 72%; } .apk-lines i:nth-child(3) { width: 86%; } .apk-lines i:nth-child(4) { width: 54%; }
+  .apk-meta { color: var(--text-2); font-size: 1.9cqi; }
+
+  /* the Frame's side: a game in the library */
+  .game {
+    background: var(--surface);
+    border: 1px solid rgba(255, 138, 31, 0.45);
+    box-shadow: var(--shadow-art-hover);
+  }
+  .game-art { position: absolute; inset: 0;
+    background:
+      radial-gradient(90% 60% at 70% 20%, rgba(255, 138, 31, 0.32), transparent 70%),
+      radial-gradient(70% 50% at 10% 90%, rgba(58, 168, 255, 0.18), transparent 70%),
+      linear-gradient(165deg, var(--accent-soft), #121318 75%); }
+  .game-art::after { content: ""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(-72deg, transparent 0 2.2cqi, rgba(255, 255, 255, 0.025) 2.2cqi 2.4cqi); }
+  .game-title { position: relative; margin-top: auto; padding: 0 2.4cqi; font: 800 4.2cqi/1.05 var(--font-display);
+    letter-spacing: -0.01em; color: var(--text); overflow-wrap: anywhere; text-wrap: balance; }
+  .game-foot { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1cqi;
+    padding: 1.6cqi 2.4cqi 2.4cqi; }
+  .game-foot .pill { font-size: 1.8cqi; line-height: 1.3; padding: .35cqi 1.1cqi .35cqi .9cqi; gap: .7cqi; }
+  .game-foot .pill::before { width: .9cqi; height: .9cqi; }
+  .game-where { font: 500 1.8cqi/1.2 var(--font-sans); color: var(--text-2); }
+
+  .portal { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .portal .glow { opacity: .35; animation: breathe 5.5s ease-in-out infinite; }
+  .portal .flash { opacity: 0; animation: flash var(--lap) infinite; }
+
+  .caption { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 10px;
+    font: 500 13px/1.4 var(--font-sans); color: var(--text-2); }
+  .caption .mono { font-family: var(--font-mono); color: var(--secondary); }
+  .caption [data-f="title"] { color: var(--accent); font-weight: 600; }
+  .caption .arrow { color: var(--text-3); }
+
+  /* one lap: arrive on the PC's side, wait, cross, rest on the Frame's side, leave */
+  @keyframes lap {
+    0% { transform: translateX(-26%); opacity: 0; animation-timing-function: var(--ease-out); }
+    9% { transform: translateX(0); opacity: 1; }
+    24% { transform: translateX(0); opacity: 1; animation-timing-function: cubic-bezier(.62, 0, .3, 1); }
+    54% { transform: translateX(60%); opacity: 1; }
+    88% { transform: translateX(60%); opacity: 1; animation-timing-function: ease-in; }
+    97%, 100% { transform: translateX(68%); opacity: 0; }
+  }
+  @keyframes flash {
+    0%, 33% { opacity: 0; }
+    39% { opacity: 1; }
+    52%, 100% { opacity: 0; }
+  }
+  @keyframes breathe { 0%, 100% { opacity: .28; } 50% { opacity: .5; } }
+
+  /* reduced motion: the logo's own moment, the card halfway through */
+  @media (prefers-reduced-motion: reduce) {
+    .track { animation: none; transform: translateX(31%); opacity: 1; }
+    .portal .glow, .portal .flash { animation: none; }
+  }
+</style>

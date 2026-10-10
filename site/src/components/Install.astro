@@ -1,0 +1,136 @@
+---
+import Glyph from './Glyph.astro';
+import { DOWNLOADS, RELEASES, blob, downloadUrl, url } from '../data/site';
+
+const pageUrl = new URL(url('install/'), Astro.site).href;
+const badgeUrl = new URL(url('media/install-with-frameport.svg'), Astro.site).href;
+const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-game.json">
+  <img src="${badgeUrl}"
+       alt="Install with FramePort" width="216" height="60">
+</a>`;
+---
+<section class="section" id="install">
+  <div class="wrap">
+    <div class="head reveal">
+      <p class="label"><b>05</b> Install</p>
+      <h2>Three steps. The first two only once.</h2>
+    </div>
+
+    <ol class="steps">
+      <li class="step reveal">
+        <span class="num pc">1</span>
+        <div class="body">
+          <h3>Download FramePort</h3>
+          <p>Unzip it and start FramePort. It updates itself after that. On Windows, SmartScreen may warn the first time:
+            the app is signed with a free, self-signed certificate.</p>
+          <div class="dls">
+            {DOWNLOADS.map((d) => (
+              <a class="dl" href={downloadUrl(d.asset)} data-os={d.os}>
+                <strong>{d.label}</strong><span>{d.detail}</span>
+              </a>
+            ))}
+          </div>
+          <a class="small" href={RELEASES}>Release notes and checksums</a>
+        </div>
+      </li>
+      <li class="step reveal">
+        <span class="num mid">2</span>
+        <div class="body">
+          <h3>Connect the Frame</h3>
+          <p>In FramePort click <b>Steam Frame → Show setup command</b>. On the Frame open the <b>SteamVR dashboard →
+            Desktop</b>, then <b>Konsole</b>, and type the command FramePort shows, with your computer's address and a
+            one-time code:</p>
+          <div class="cmd"><code><span class="prompt">$</span>curl -fsS <span class="ph">&lt;pc-address&gt;</span>:8765/<span class="ph">&lt;code&gt;</span> | bash</code></div>
+          <p class="small-p">No root, no <code>sudo</code>, no password. A USB cable works too.
+            <a href={blob('docs/FRAME_SETUP.md')}>What it changes on the Frame</a></p>
+        </div>
+      </li>
+      <li class="step reveal">
+        <span class="num frame">3</span>
+        <div class="body">
+          <h3>Add games, install</h3>
+          <p><b>Add games → Scan a folder</b>, pick a game, <b>Install on Frame</b>. When it's done the game is in your
+            Steam library on the Frame.</p>
+          <a class="video" href={url('media/frameport-install.mp4')}>
+            <img src={url('media/frameport-install.jpg')} alt="" width="1280" height="720" loading="lazy" decoding="async" />
+            <span><Glyph name="live" size={18} /> The install tutorial · 90 s</span>
+          </a>
+        </div>
+      </li>
+    </ol>
+
+    <div class="makers reveal" id="button">
+      <div class="makers-copy">
+        <p class="label"><b>For game makers</b></p>
+        <h3>An “Install with FramePort” button</h3>
+        <p class="muted">Put it on your download page. A click opens FramePort, which asks, downloads and installs your
+          build on the visitor's Frame. Without FramePort, the button's page explains how to get it.</p>
+        <img class="badge" src={url('media/install-with-frameport-animated.svg')} alt="Install with FramePort" width="216" height="60" />
+        <a class="small" href={blob('docs/INSTALL_BUTTON.md')}>The button, the manifest format and the rules</a>
+      </div>
+      <div class="snippet">
+        <div class="snippet-bar"><span>HTML</span><button type="button" class="btn btn-ghost btn-small" data-copy>Copy</button></div>
+        <pre><code data-snippet>{snippet}</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const btn = document.querySelector<HTMLButtonElement>('[data-copy]');
+  btn?.addEventListener('click', async () => {
+    const text = document.querySelector('[data-snippet]')?.textContent ?? '';
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; }
+    catch { btn.textContent = 'Select and copy'; }
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+  });
+</script>
+
+<style>
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; counter-reset: none; }
+  .step { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 24px; padding: 28px; border-radius: var(--radius-md);
+    background: var(--surface); border: 1px solid var(--border); }
+  .num { font: 800 64px/0.9 var(--font-display); letter-spacing: -0.04em; }
+  .num.pc { color: var(--secondary); }
+  .num.mid { background: var(--portal); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .num.frame { color: var(--accent); }
+  .body { display: grid; gap: 14px; align-content: start; min-width: 0; }
+  .body h3 { font-size: 22px; }
+  .body p { color: var(--text-2); max-width: 70ch; }
+  .body b { color: var(--text); font-weight: 600; }
+  .small, .small-p { font-size: 14px; }
+  .small-p code { font-size: 13px; color: var(--text); }
+  .dls { display: flex; flex-wrap: wrap; gap: 10px; }
+  .dl { display: grid; gap: 2px; padding: 10px 16px; min-width: 150px; border-radius: var(--radius-sm); text-decoration: none;
+    border: 1px solid var(--border-strong); color: var(--text); transition: border-color 220ms, background-color 220ms; }
+  .dl span { font: 400 12px/1.4 var(--font-mono); color: var(--text-2); }
+  .dl:hover { border-color: var(--secondary-line); background: rgba(58, 168, 255, 0.06); }
+  .dl[aria-current] { border-color: var(--accent); background: rgba(255, 138, 31, 0.08); }
+  .dl[aria-current] strong::after { content: " · this computer"; font-weight: 400; color: var(--accent); font-size: 13px; }
+  .video { position: relative; display: block; max-width: 520px; border-radius: var(--radius-sm); overflow: hidden;
+    border: 1px solid var(--border); box-shadow: var(--shadow-art); text-decoration: none;
+    transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out); }
+  .video img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
+  .video span { position: absolute; left: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: var(--radius-pill); background: rgba(13, 14, 18, 0.75); color: var(--text);
+    font: 600 13px/1 var(--font-sans); }
+  .video:hover { transform: translateY(-3px); box-shadow: var(--shadow-art-hover); }
+
+  .makers { margin-top: clamp(48px, 7vw, 80px); display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 32px;
+    padding: 32px; border-radius: var(--radius-md); border: 1px dashed var(--border-strong); background: var(--portal-glow); }
+  .makers-copy { display: grid; gap: 14px; align-content: start; }
+  .makers-copy .label { margin-bottom: 0; }
+  .makers-copy h3 { font-size: 24px; }
+  .badge { width: 216px; height: 60px; margin-block: 6px; }
+  .snippet { min-width: 0; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border);
+    overflow: hidden; align-self: start; }
+  .snippet-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 16px;
+    border-bottom: 1px solid var(--border); font: 600 11px/1 var(--font-mono); letter-spacing: .12em; color: var(--text-2); }
+  .snippet pre { margin: 0; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.6; color: var(--text); }
+
+  @media (max-width: 760px) {
+    .step { grid-template-columns: 1fr; gap: 8px; padding: 22px 18px; }
+    .num { font-size: 48px; }
+    .makers { grid-template-columns: 1fr; padding: 22px 18px; }
+  }
+</style>

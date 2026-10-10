@@ -1,0 +1,138 @@
+---
+// How it works, as the install log of one real catalog game: the stages on the PC in blue, the ones on the Frame in
+// orange, the portal between them.
+import Glyph from './Glyph.astro';
+
+interface Props { example: { title: string; engine: string; xr: string; verified?: string } }
+const { example } = Astro.props;
+
+type Stage = { glyph: Parameters<typeof Glyph>[0]['name']; name: string; detail: string; text: string };
+const pc: Stage[] = [
+  { glyph: 'pc', name: 'scan', detail: `${example.title} · APK + OBB`,
+    text: 'Point FramePort at a folder. It finds Quest games with their data files, PC VR game folders, Android and Linux apps.' },
+  { glyph: 'container', name: 'analyze', detail: `${example.engine} · ${example.xr} · arm64`,
+    text: 'Reads the engine, the VR API and the libraries the game needs, without running it.' },
+  { glyph: 'recipe', name: 'recipe', detail: example.verified ? `tested recipe · ${example.verified}` : 'tested recipe',
+    text: 'Uses the tested recipe when the game is in the catalog, otherwise suggests patches from the analysis. Every patch is explained in plain words.' },
+  { glyph: 'port', name: 'convert', detail: 'OVRPort · → OpenXR',
+    text: "OVRPort translates Meta's VR runtime calls to OpenXR, which the Frame speaks." },
+  { glyph: 'patch', name: 'patch', detail: 'FrameBridge + Frame patches',
+    text: 'FrameBridge, FramePort’s OpenXR adapter, fills in what the Frame lacks: passthrough, the room, curved and 360° layers.' },
+  { glyph: 'keys', name: 'sign', detail: "the game's own key",
+    text: 'Each game keeps one signing key, so an update installs over the old build and your saves stay.' },
+  { glyph: 'test', name: 'check', detail: 'static checks',
+    text: 'Missing libraries and 32-bit-only builds are reported before anything is uploaded.' },
+];
+const frame: Stage[] = [
+  { glyph: 'sync', name: 'upload', detail: 'SSH · resumable',
+    text: 'Straight to the Frame over your network or a USB cable. Big files continue where they stopped.' },
+  { glyph: 'frame', name: 'library', detail: 'Steam shortcut + artwork',
+    text: 'The game appears in your Steam library with its artwork and tags. Start it like any other game.' },
+  { glyph: 'live', name: 'test', detail: 'launch test',
+    text: "A launch test starts the game, reads its logs and names the likely fix when it didn't start." },
+];
+---
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="head reveal">
+      <p class="label"><b>01</b> How it works</p>
+      <h2>Ten stages between your PC and the Frame.<br /><span class="muted">You click once.</span></h2>
+    </div>
+
+    <div class="log reveal" data-log>
+      <div class="log-bar">
+        <span class="log-title"><Glyph name="frame" size={18} /> Installing {example.title} on Steam Frame</span>
+        <span class="log-progress" aria-hidden="true"><i></i></span>
+      </div>
+
+      <p class="side side-pc"><Glyph name="pc" size={16} /> On your PC</p>
+      <ol class="stages">
+        {pc.map((s, i) => (
+          <li class="stage pc" style={`--i:${i}`}>
+            <span class="g"><Glyph name={s.glyph} size={20} /></span>
+            <code class="n">{s.name}</code>
+            <p class="t">{s.text}</p>
+            <code class="d">{s.detail}</code>
+            <span class="ok" aria-label="done">ok</span>
+          </li>
+        ))}
+      </ol>
+
+      <div class="seam" aria-hidden="true"><span>through the portal</span></div>
+
+      <p class="side side-frame"><Glyph name="frame" size={16} /> On the Frame</p>
+      <ol class="stages" start={8}>
+        {frame.map((s, i) => (
+          <li class="stage frame" style={`--i:${i + 7}`}>
+            <span class="g"><Glyph name={s.glyph} size={20} /></span>
+            <code class="n">{s.name}</code>
+            <p class="t">{s.text}</p>
+            <code class="d">{s.detail}</code>
+            <span class="ok" aria-label="done">ok</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+    <p class="foot muted reveal">
+      {example.title}'s real recipe from the catalog. Games outside the catalog get the same stages with suggested patches.
+    </p>
+  </div>
+</section>
+
+<style>
+  .log { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .log-bar { display: flex; align-items: center; gap: 16px; padding: 14px 20px; background: var(--sidebar);
+    border-bottom: 1px solid var(--border); }
+  .log-title { display: inline-flex; align-items: center; gap: 10px; font: 600 14px/20px var(--font-sans); }
+  .log-title .glyph { color: var(--accent); }
+  .log-progress { margin-left: auto; width: min(220px, 30%); height: 4px; border-radius: 4px; background: var(--surface-3);
+    overflow: hidden; }
+  .log-progress i { display: block; height: 100%; width: 100%; background: var(--portal); transform-origin: left;
+    transform: scaleX(1); }
+  .js .log:not(.in) .log-progress i { transform: scaleX(0); }
+  .js .log.in .log-progress i { transition: transform 2.6s var(--ease-out) .2s; }
+
+  .side { display: flex; align-items: center; gap: 8px; padding: 18px 20px 6px; margin: 0;
+    font: 600 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; }
+  .side-pc { color: var(--secondary); }
+  .side-frame { color: var(--accent); }
+
+  .stages { list-style: none; margin: 0; padding: 0 8px 8px; }
+  .stage { display: grid; grid-template-columns: 36px 92px minmax(0, 1fr) minmax(0, 250px) 28px; gap: 4px 14px;
+    align-items: baseline; padding: 12px; border-radius: var(--radius-sm); }
+  .stage + .stage { border-top: 1px solid rgba(42, 45, 55, 0.6); }
+  .stage:hover { background: rgba(237, 238, 242, 0.03); }
+  .g { align-self: center; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; }
+  .pc .g { color: var(--secondary); background: rgba(58, 168, 255, 0.12); }
+  .frame .g { color: var(--accent); background: rgba(255, 138, 31, 0.12); }
+  .n { font-size: 14px; font-weight: 600; }
+  .pc .n { color: var(--secondary); }
+  .frame .n { color: var(--accent); }
+  .t { color: var(--text-2); font-size: 15px; line-height: 1.55; }
+  .d { color: var(--text-2); font-size: 12.5px; text-align: right; overflow-wrap: anywhere; }
+  .ok { font: 600 11px/1 var(--font-mono); color: var(--ok); text-transform: uppercase; justify-self: end; }
+
+  /* the lines arrive one after another, like the app's activity log */
+  .js .log:not(.in) .stage { opacity: 0; transform: translateX(-8px); }
+  .js .log.in .stage { transition: opacity 500ms var(--ease-out), transform 500ms var(--ease-out);
+    transition-delay: calc(var(--i) * 140ms + 200ms); }
+  .js .log:not(.in) .ok { opacity: 0; }
+  .js .log.in .ok { transition: opacity 300ms; transition-delay: calc(var(--i) * 140ms + 520ms); }
+
+  .seam { position: relative; height: 40px; margin: 6px 0; display: grid; place-items: center; }
+  .seam::before { content: ""; position: absolute; left: 20px; right: 20px; top: 50%; height: 2px; background: var(--portal);
+    opacity: .7; }
+  .seam span { position: relative; padding: 4px 12px; background: var(--surface); font: 500 12px/1 var(--font-mono);
+    color: var(--text-2); letter-spacing: .06em; }
+
+  .foot { margin-top: 18px; font-size: 14px; }
+
+  @media (max-width: 860px) {
+    .stage { grid-template-columns: 36px minmax(0, 1fr) auto; }
+    .g { grid-row: span 3; align-self: start; }
+    .n { grid-column: 2; }
+    .ok { grid-column: 3; grid-row: 1; }
+    .t { grid-column: 2 / 4; }
+    .d { grid-column: 2 / 4; text-align: left; }
+  }
+</style>

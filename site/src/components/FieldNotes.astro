@@ -1,0 +1,61 @@
+---
+// What doesn't work, said plainly. The facts are from the project's own testing (docs/PLAYBOOK.md, the catalog).
+import { blob } from '../data/site';
+
+const notes = [
+  { tag: 'hardware', title: 'No 32-bit apps',
+    text: "The Frame's processor can't run 32-bit-only (armeabi-v7a) builds. No patch changes that; for some of these games the PC VR version is the way." },
+  { tag: 'meta services', title: "Meta's online services",
+    text: "Games that need a Meta account, Meta's store or its entitlement checks don't get them on the Frame. FramePort doesn't bypass entitlement checks." },
+  { tag: 'pc vr', title: 'Oculus-only PC games',
+    text: "Rift games built on Oculus' own runtime run through Revive on your PC. Games made for SteamVR or OpenXR also run on the Frame itself, through Proton." },
+  { tag: 'testing', title: 'A test can’t wear the headset',
+    text: 'Tracking only starts with the headset on, so automatic launch tests prove that a game starts and draws frames. Whether it looks right is checked by people, in the headset.' },
+] as const;
+---
+<section class="section" id="notes">
+  <div class="wrap">
+    <div class="head reveal">
+      <p class="label"><b>04</b> Field notes</p>
+      <h2>What doesn't work, and why.</h2>
+      <p class="lead">FramePort is a proof of concept. Most of what it does is done by the projects it wraps; it adds the
+        Frame-specific patches and the glue. Some limits are the hardware's.</p>
+    </div>
+
+    <ol class="notes">
+      {notes.map((n, i) => (
+        <li class="note reveal" style={`--d:${i * 80}ms`}>
+          <p class="note-tag"><span>{String(i + 1).padStart(2, '0')}</span> {n.tag}</p>
+          <h3>{n.title}</h3>
+          <p>{n.text}</p>
+        </li>
+      ))}
+    </ol>
+
+    <blockquote class="notice reveal">
+      <p><strong>Notice:</strong> FramePort explicitly does NOT download, share, or unlock games. You must provide
+        legally obtained game executables. Core features of FramePort simply download and wrap other published tools
+        (see <a href="#credits">Built on</a>) with patches provided by FramePort adding a hardware compatibility layer.
+        This enables users to use games/apps legally purchased on sites like
+        <a href="https://sidequestvr.com/">SideQuest</a>.</p>
+      <p class="more"><a href={blob('docs/PLAYBOOK.md')}>The playbook: symptoms and fixes</a></p>
+    </blockquote>
+  </div>
+</section>
+
+<style>
+  .notes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .note { background: var(--bg); padding: 24px 22px 26px; display: grid; gap: 10px; align-content: start;
+    transition-delay: var(--d); }
+  .note-tag { font: 600 11px/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-2);
+    display: flex; gap: 10px; align-items: center; }
+  .note-tag span { color: var(--accent); }
+  .note h3 { font-size: 19px; }
+  .note p:last-child { color: var(--text-2); font-size: 15px; line-height: 1.6; }
+
+  .notice { margin: 32px 0 0; padding: 20px 24px; border-radius: var(--radius-sm); background: rgba(92, 208, 230, 0.06);
+    border: 1px solid rgba(92, 208, 230, 0.3); border-left: 3px solid var(--info); display: grid; gap: 10px; max-width: 900px; }
+  .notice p { color: var(--text); font-size: 15px; line-height: 1.6; }
+  .notice .more { font-size: 14px; }
+</style>
