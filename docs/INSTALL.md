@@ -1,312 +1,259 @@
-# Installing FramePort
+# Install and first steps
 
-▶ **[Watch the install tutorial](media/frameport-install.mp4)** (about 90 seconds, MP4; also attached to every
-release as `FramePort-install.mp4`): from the download to the first game on the Frame.
+▶ **[Watch the install tutorial](media/frameport-install.mp4)** (about 90 seconds): from the download to the first
+game on the Steam Frame.
 
 [![The install tutorial](media/frameport-install.jpg)](media/frameport-install.mp4)
 
-Download the archive for your computer from the [latest release](https://github.com/spoopyghosty0/frameport/releases/latest)
-and extract it anywhere. No installer or admin rights are needed. On first start FramePort downloads its Java
-runtime, the OVRPort CLI and apksigner into its data folder (Settings → Tools shows them).
+Download the file for your PC from the [latest release](https://github.com/spoopyghosty0/frameport/releases/latest)
+and unpack it anywhere. No installer or admin rights are needed.
 
-| Computer | Archive | Start |
+| Your PC | Download | Start |
 |---|---|---|
 | Windows 10/11 (x64) | `FramePort-windows-x64.zip` | `FramePort.exe` |
 | macOS (Apple Silicon) | `FramePort-macos-arm64.zip` | `FramePort.app` |
-| Linux (x64, GTK 3; Ubuntu 22.04 or newer) | `FramePort-linux-x64.tar.gz` | `FramePort/FramePort` |
-| Linux (ARM64, GTK 3; Ubuntu 22.04 or newer) | `FramePort-linux-arm64.tar.gz` | `FramePort/FramePort` |
-| Command line only (Python 3.11+) | `frameport-<version>-py3-none-any.whl` | `frameport --help` |
+| Linux (x64, Ubuntu 22.04 or newer) | `FramePort-linux-x64.tar.gz` | `FramePort/FramePort` |
+| Linux (ARM64, Ubuntu 22.04 or newer) | `FramePort-linux-arm64.tar.gz` | `FramePort/FramePort` |
 
-The command-line version installs from the wheel's release link with `uv tool install <link>` (or pipx / pip).
+On first start FramePort downloads the tools it uses (Settings → Tools shows them).
 
 ## First launch
 
-The builds are signed with a free self-signed certificate (Windows) and an ad-hoc signature (macOS), so the first
-start shows a warning:
+FramePort isn't signed with a paid certificate, so the first start shows a warning:
 
-- **Windows:** "Windows protected your PC" → **More info** → **Run anyway**. Optional: import
-  `FramePort-selfsigned.cer` (attached to each release) into *Trusted Root Certification Authorities* (Current User) to
-  show FramePort as the publisher; the certificate can only sign code. Remove it with `certmgr.msc`.
-- **macOS:** right-click `FramePort.app` → **Open** → **Open** (once), or `xattr -dr com.apple.quarantine FramePort.app`.
-- **Linux:** `tar xzf FramePort-linux-x64.tar.gz && ./FramePort/FramePort` (ARM64: `FramePort-linux-arm64.tar.gz`).
+- **Windows:** "Windows protected your PC" → **More info** → **Run anyway**.
+- **macOS:** right-click `FramePort.app` → **Open** → **Open** (once).
+- **Linux:** `tar xzf FramePort-linux-x64.tar.gz && ./FramePort/FramePort`.
 
 ## Connecting the Steam Frame
 
-The Frame and the computer must be on the same network (or connected with a USB cable, below).
+The Frame and your PC must be on the same network (or connected with a [USB cable](#with-a-usb-cable)).
 
-1. In FramePort open **Steam Frame** and click **Start setup**. Keep that page open: FramePort announces itself on
-   your network while it is.
-2. First time only, on the Frame:
-   1. Open the **SteamVR dashboard → Launch a program → Desktop**: the Linux desktop opens on a virtual screen.
-   2. Open the app menu (bottom-left corner of that desktop) → **System → Konsole** (or search for Konsole).
-   3. Run the same line on every Frame (on-screen keyboard or any USB/Bluetooth keyboard), then press **Enter**:
+1. In FramePort open **Steam Frame** and click **Start setup**. Keep that page open.
+2. On the Frame, first time only:
+   1. Open the **SteamVR dashboard → Launch a program → Desktop**. The Frame's desktop opens.
+   2. Open the app menu (bottom left) → **System → Konsole**, the Frame's terminal.
+   3. Type this setup line and press **Enter** (on-screen keyboard or any USB or Bluetooth keyboard):
 
       ```
-      curl -sL spoopyghosty0.github.io/frameport/s | bash
+      curl -sL frameport.app/s | bash
       ```
 
-      No keyboard at hand? Open [the setup page](https://spoopyghosty0.github.io/frameport/setup/) in Chromium on the
-      Frame (in Steam, the **+** on the taskbar installs it), tap **Copy**, then paste it into Konsole.
-   4. The terminal finds FramePort and shows a 4-digit code. FramePort shows the same code with **Allow**: click it.
-      Nothing changes on the Frame before that.
-   5. After a few seconds the desktop closes by itself (Steam restarts once); that's expected. If
-      Steam asks to install **Lepton** (Valve's Android runtime), confirm it.
+      No keyboard? Open [the setup page](https://frameport.app/setup/) in Chromium on the Frame,
+      tap **Copy** and paste it into Konsole.
+   4. Konsole shows a 4-digit code. When FramePort shows the same code, click **Allow**. Nothing changes on the Frame
+      before that.
+   5. Steam restarts once and the desktop closes. If Steam asks to install **Lepton** (Valve's Android runtime),
+      confirm it.
 
-   FramePort connects by itself within a minute. No password is needed. The command lets FramePort in and turns on
-   **Developer Mode** (which includes SSH); everything it changes is listed in [FRAME_SETUP.md](FRAME_SETUP.md).
-3. Later starts: a Frame in Developer Mode appears in the list and FramePort connects to it automatically. (If you
-   turn Developer Mode off in Settings → System → Developer, turn it on again there.)
+FramePort connects within a minute. No password is needed. The setup turns on **Developer Mode**;
+[What the setup changes](FRAME_SETUP.md) lists everything.
 
-**The setup command (no search):** **Use the setup command** shows a line with your computer's address and a one-time
-code instead, such as `curl -fsS 192.168.1.20:8765/1a2b3c4d | bash`. It needs neither the project page nor the
-network search (for networks that block mDNS); it runs the same setup.
+Later, FramePort connects to the Frame by itself. If you turn Developer Mode off (Settings → System → **Enable
+Developer Mode**), turn it on again there.
 
-**Without Konsole, without a click on the PC:** turn on Developer Mode yourself (Settings → System → Developer),
-then open Settings → Developer → **Pair new host** on the Frame. FramePort, open on your PC, notices the Frame by
-itself and sends its pairing request; approve FramePort in the headset and it connects (Valve's own devkit pairing; it
-only sends this computer's key to the Frame). Switch it off on the Steam Frame page (**Pair Frames in Developer Mode
-automatically**) if you don't want FramePort to ask Frames on your network. Install
-Lepton from the Steam Frame page afterwards if it's missing.
+**Setup command:** if your network blocks FramePort's search, click **Use the setup command**. It shows a line with
+your PC's address and a one-time code, e.g. `curl -fsS 192.168.1.20:8765/1a2b3c4d | bash`. Run it in Konsole instead.
+
+**Without Konsole:** turn on Developer Mode yourself (Settings → System → **Enable Developer Mode**), then open
+Settings → Developer → **Pair new host** on the Frame. FramePort finds the Frame and asks to connect; approve it in the
+headset. Install Lepton from FramePort's Steam Frame page afterwards if it's missing.
 
 ### With a USB cable
 
-For networks that block the setup (guest Wi-Fi, firewalls, discovery not working), and for faster uploads:
+A cable works on networks that block the setup, and uploads are faster (about 37 MB/s, three times typical Wi-Fi).
 
-1. On the Frame, turn on **Developer Mode** (Settings → System → Developer Mode). The Frame's USB network only exists
-   in Developer Mode.
-2. Connect the Frame's USB-C port to the computer.
-3. In FramePort: **Steam Frame → Set up with a USB cable**. FramePort detects the cable and shows the setup command,
-   which reaches the computer over the cable. Already set up? It connects over the cable right away.
+1. On the Frame, turn on Developer Mode (Settings → System → **Enable Developer Mode**). The cable only works in
+   Developer Mode.
+2. Connect the Frame's USB-C port to your PC. No driver is needed.
+3. In FramePort click **Steam Frame → Set up with a USB cable** and follow the steps.
 
-The cable needs no driver on Windows 10/11, macOS or Linux, and the computer gets an address from the Frame
-automatically. Uploads use the cable whenever it's plugged in (about 37 MB/s, ~3× typical Wi-Fi), even when FramePort
-connected over Wi-Fi. Unplug it any time: FramePort finds the Frame on Wi-Fi again by itself.
+Uploads use the cable whenever it's plugged in. Unplug it any time: FramePort finds the Frame on Wi-Fi again.
 
 ### Firewalls
 
-If the setup command only says "timed out", a firewall on your computer blocks the Frame; the setup page
-says which after about 45 seconds. Details per system: [FRAME_SETUP.md](FRAME_SETUP.md#network-and-firewalls).
+If the setup only says "timed out", a firewall on your PC blocks the Frame. After about 45 seconds the setup page
+says which. Details: [Network and firewalls](FRAME_SETUP.md#network-and-firewalls).
 
 ## Running FramePort on the Frame (experimental)
 
-FramePort can run on the Steam Frame itself, without a PC: in **Desktop Mode**, download
-`FramePort-linux-arm64.tar.gz`, unpack it (`tar xzf FramePort-linux-arm64.tar.gz`) and start `FramePort/FramePort`.
-Turn on **Developer Mode** first (Steam → Settings → System); FramePort then manages "This Frame" directly, with
-no pairing. Games are added to the Steam library when you go back to **Gaming Mode** (Steam has to restart for it,
-which would end Desktop Mode). This is new: please report anything odd with **Report a problem**.
+FramePort can run on the Frame itself, without a PC:
+
+1. Turn on Developer Mode (Settings → System → **Enable Developer Mode**).
+2. In Desktop Mode, download `FramePort-linux-arm64.tar.gz`, unpack it (`tar xzf FramePort-linux-arm64.tar.gz`) and
+   start `FramePort/FramePort`.
+
+Games appear in the Steam library when you go back to Gaming Mode. Please report anything odd with **Report a
+problem…**.
 
 ## Installing games
 
-- **Install on Frame** on a game's page (or select several in the Library and install them together). Installs run
-  one after another in the background; **Activity** shows the current one at the top.
-- **Update all** reinstalls every game whose build changed (e.g. after a FramePort update). Questions that need an
-  answer (e.g. Oculus games that can't run on the Frame) are asked once, for all games.
-- If the Frame goes to sleep, turns off or leaves the Wi-Fi, the queue **waits** and continues once it's back; uploads
-  pick up where they stopped. While installs run, FramePort keeps the Frame from going to sleep. Before a large batch
-  it checks the Frame has enough free space.
-- **microSD card / other drives:** the **Steam Frame** page's **Storage** section lists the Frame's drives and sets
-  where new games go (**Install new games to**). Games go into a `FramePort` folder on the card. To move a game that's
-  installed already, right-click it → **Move to…** (the game must be closed; saves, settings and the Steam entry stay).
-  A game on the card only starts while the card is inserted (FramePort then says "SD Card not inserted"). Cards
-  formatted as FAT, exFAT or NTFS can't hold games: format the card in SteamOS first.
-- Your own game files are never changed. The converted copy is temporary: it's removed once the game is on the Frame
-  (Settings → Installing: keep them, or remove all now).
-- **Game settings…** (game menu or the Steam Frame page): sharpness, refresh rate, controllers, menus, 360° video and
-  mixed-reality options in plain words, only those that matter for the game. Changes are kept with the game and,
-  when it's installed, used the next time it starts.
-- Ordinary Android apps (no VR) are installed unchanged and shown as a flat window in the headset. Android's
-  back/home/recents buttons are hidden by default (patch **Hide Android's navigation bar**). If FramePort guesses
-  wrong (a phone app shows nothing in the headset, or a VR app opens as a flat window), choose **VR** or **Flat
-  window** under **Show as VR or as a flat window** in the game's **Customize** section, then **Update on Frame**.
-- **Add games → Add a Windows program…** adds a single Windows program; the Frame runs it through Proton (as a
-  window unless it is a VR game). A program sitting in Downloads, the home folder or a drive root is copied on its
-  own first, so the install doesn't upload everything next to it.
-- In the packaged app you can also **drag files onto the Library**: APKs, Linux apps (AppImage, `.zip`/`.tar.gz`),
-  Windows programs (`.exe`), folders, or a FrameDrop manifest (`.json`).
-
-### Install links ("Install with FrameDrop" buttons)
-
-Some developers put an **Install with FrameDrop** button on their site (the one-click protocol of the FrameDrop
-sideloader, documented at framedropvr.com/docs). FramePort understands the same links:
-
-- **Clicking a button** opens FramePort (or the window that's already open) on Windows and Linux. FramePort shows
-  the title, the files, their size and whether a checksum is given, and asks before it downloads anything. Then it
-  downloads the build, adds it to your library and starts the usual install on the Frame. If no Frame is connected,
-  the game is added now and installs once the Frame is back.
-- **Add games → Add from a link…** takes the button's address (right-click → Copy link), a `framedrop://` or
-  `frameport://` link, a manifest (`.json`) or a direct link to an APK, a Linux build or a Windows program. Use it on
-  macOS, where web pages can't hand links to FramePort yet.
-- **Settings → Install links** has one switch for `framedrop://` links (the buttons) and one for FramePort's own
-  `frameport://` links. Both are on by default. If FrameDrop is installed too and already opens `framedrop://`
-  links, FramePort leaves them to it; **Use FramePort for these links** takes them over (turn the switch off to give
-  them back).
-- **For developers:** a FrameDrop manifest works as it is
-  (`{"schema": "framedrop.install/v1", "name": "…", "files": [{"url": "https://…", "sha256": "…"}]}`). FramePort
-  also reads an optional `"frameport": {"description": "…", "icon": "https://….png"}` object (FrameDrop ignores
-  it): the install question then shows the icon and description, and they become the game's icon and "About this
-  game" text when no store has them. For your page there's an "Install with FramePort" button:
-  [INSTALL_BUTTON.md](INSTALL_BUTTON.md). Without a manifest (a bare file link) FramePort guesses the title from the
-  file name and replaces it with the app's own name once it's downloaded.
-- Only `https://` links to public servers are used (plain `http://` only on this PC, for testing); links with a
-  user name or password, or pointing into your local network, are refused. Only install from sites you trust.
-
 ![Game page](images/game.png)
 
-Each game has **Game settings** in plain words (sharpness, refresh rate, controllers, menus, 360° video, mixed
-reality), showing only what matters for that game. Changes are kept with the game and reach the Frame right away.
+- **Install on Frame** on a game's page, or select several games in the Library and install them together. Installs
+  run in the background; **Activity** shows the current one.
+- **Update all** updates every game whose build changed, e.g. after a FramePort update.
+- If the Frame sleeps or leaves the Wi-Fi, installs wait and continue when it's back. While installs run, the Frame
+  stays awake.
+- Your own game files are never changed. The patched copy is deleted once the game is on the Frame (Settings →
+  Installing).
+- In the downloaded app you can also **drag files onto the Library**: games, Linux apps, Windows programs or folders.
+
+**Game settings…** (in the game's menu) shows the settings that matter for that game in plain words: sharpness,
+refresh rate, controllers, menus, 360° video and mixed reality. Changes are used the next time the game starts.
 
 ![Game settings](images/game-settings.png)
 
+### microSD cards and other drives
+
+- The **Steam Frame** page's **Storage** section sets where new games go (**Install new games to**).
+- To move an installed game, right-click it → **Move to…**. The game must be closed; saves and the Steam entry stay.
+- A game on a card only starts while the card is inserted.
+- Cards formatted as FAT, exFAT or NTFS can't hold games: format the card in SteamOS first.
+
+### Android apps and Windows programs
+
+- Android apps without VR are installed unchanged and shown as a window in the headset. If one shows nothing (or a
+  VR app opens as a window), open **Customize** on the game's page, set **Show as VR or as a flat window** and click
+  **Update on Frame**.
+- **Add games → Add a Windows program…** adds a single Windows program. The Frame runs it as a window through Proton
+  (Valve's tool for running Windows programs).
+
+### Install links ("Install with FrameDrop" buttons)
+
+Some websites have an **Install with FrameDrop** button. FramePort understands these buttons too:
+
+- **Click a button** on Windows or Linux: FramePort opens, shows what it would download and asks first. Then it adds
+  the game and installs it on the Frame.
+- **Add games → Add from a link…** takes a button's address (right-click → Copy link) or a direct download link. Use
+  it on macOS, where buttons can't open FramePort yet.
+- **Settings → Install links** turns the buttons on or off. If FrameDrop is installed too, it keeps its buttons until
+  you click **Use FramePort for these links**.
+- Only `https://` links to public servers are used. Only install from sites you trust.
+
+Website owners: see [Install button](INSTALL_BUTTON.md).
+
 ## Typing on the Frame
 
-- **Type on Frame** (its own tab in the sidebar; also on the Steam Frame page): while the tab is
-  open, this computer's keyboard works as a keyboard plugged into the Frame. Select a text field in the headset (in
-  an app, Steam or the desktop) and type; Esc and shortcuts go to the Frame too. Paste longer text into the box to
-  type it in one go (US keyboard layout). Opening another tab disconnects the keyboard.
-- **Steam's on-screen keyboard** opens for text fields of apps shown as a window (2D apps, and VR apps with
-  **Show the app's Android window**). Steam lists that window as **Gamescope** (the Frame's display compositor);
-  leave it open: it's what receives the typing, the VR view isn't affected.
-- **Unity apps whose text fields close at once** (a caret flashes, nothing can be typed): FramePort suggests
-  **Make Unity text fields work** for them. The first time, it downloads Cpp2IL (a tool that finds the right spot in the
-  game's code, ~17 MB). Games added before this version: open the game's menu → **Analyze again**, then reinstall.
+- **Type on Frame** (in the sidebar): while this tab is open, your PC's keyboard types on the Frame. Select a text
+  field in the headset and type, or paste longer text into the box.
+- **Steam's on-screen keyboard** works in apps shown as a window. Steam lists that window as **Gamescope**: leave it
+  open.
+- **Unity games whose text fields close at once:** FramePort suggests the patch **Make Unity text fields work**.
+  Games added before this patch existed: open the game's menu → **Analyze again**, then reinstall.
 
-## Watching the Frame (Monitor)
+![Type on Frame](images/type-on-frame.png)
 
-- **Monitor** (its own tab in the sidebar) shows live what the Frame is doing while the tab is open: the running game
-  with its frame rate (Quest games), CPU, graphics chip, memory, the hottest temperature with the fan speed, power
-  draw and battery time left, each with a 2-minute chart. **Show details** adds every CPU core, all temperature
-  sensors, where the power goes and the network.
-- **Processes**: **Game** (default) lists the running game's processes, **Steam & SteamVR** and **All** show more.
-  Right-click a process (or use **⋯**) to end it, force-kill it or end its whole game; **End game** on the game card
-  closes the game the way Steam's Exit game does. A lock marks programs whose end would close Steam, SteamVR or the
-  desktop: FramePort asks again before ending those.
-- The numbers come every second (or every 2/5 s) and cost the Frame about 1 % of one CPU core; nothing keeps
-  running on the Frame after you leave the tab.
+## Watching the Frame
+
+- **Monitor** (in the sidebar) shows the running game's frame rate, CPU, graphics, memory, temperature, power and
+  battery, each with a 2-minute chart. **Show details** shows more.
+- Under **Processes**, right-click a process to end it. **End game** closes the game like Steam's Exit game. A lock
+  marks programs Steam or the desktop needs; FramePort asks again before ending those.
+- **Live view** streams what the headset shows, with sound, to your browser. It uses about one CPU core of the Frame,
+  so stop it when you're done.
+- **Screenshots** shows the screenshots you took in the headset, sorted by game and day, to view or download.
 
 ## Updating
 
-**Game configs** (the tested recipes in the catalog) update by themselves: FramePort checks GitHub every 6 hours for
-newly confirmed or fixed configs and uses them without a FramePort update; a game whose recipe changed then shows
-**Update on Frame**. Configs that need a newer FramePort are skipped until you update. Settings → Data shows the last
-check (**Check now**) and turns this off.
+FramePort checks for a new version at start and every 6 hours. When there is one, the Library shows **Update now**:
+FramePort downloads it, checks it, restarts and keeps your games and settings. **Later** skips that version.
 
-
-FramePort checks for a new release at start and every 6 hours (it only downloads the release information). When one
-exists, the Library shows **Update now**: FramePort downloads the new version, verifies it against the release's
-`SHA256SUMS.txt` (on Windows also the signature), restarts and opens as the new version. Games, settings, signing keys
-and the Frame connection are kept. Running installs finish first. **Later** skips that version.
-
-Settings → **Updates**: turn the check off, or turn on **Install updates automatically** (downloads in the background,
-installs at the next start). If FramePort's folder isn't writable, **Update now** opens the release page instead. The
-update log is `logs/update.log` in the data folder.
-
-**Dev builds:** when you're asked to test a fix before it's released, use Settings → Updates → **Install the latest
-dev build…**. It shows what to test, then installs like an update (same checks). Dev builds are less tested; the next
-release is offered to you as a normal update.
-
-Command line: `frameport update` (`--check` only checks, exit code 10 = update available; `--yes` doesn't ask).
-`FRAMEPORT_NO_UPDATE_CHECK=1` turns all checks off.
+- Settings → **Updates** turns the check off or turns on **Install updates automatically**.
+- **Recipes** (the tested patches and settings for each game) update by themselves. A game whose recipe changed shows
+  **Update on Frame**.
+- **Dev builds:** if you're asked to test a change before its release, use Settings → Updates → **Install the latest
+  dev build…**. The next release then arrives as a normal update.
 
 ## PC VR games
 
-PC VR games are Windows VR games (OpenXR, SteamVR or Oculus). Scan a folder of them (one folder per game) or use
-**Add games → Add a PC game folder…**. FramePort finds the game's program and asks when there is more than one
-candidate. **Already patched** on a game page installs a copy unchanged. Oculus-only games need Revive: FramePort uses
-an installed Revive, or downloads a portable copy.
+PC VR games are Windows VR games. Scan a folder of them (one folder per game) or use **Add games → Add a PC game
+folder…**. FramePort asks which program starts the game if it finds more than one.
 
-- **Play from this PC:** Windows with Steam and SteamVR. **Install on this PC** adds the game to Steam; stream it to the
-  Frame with Steam Link. If a game can't keep up with the refresh rate, FramePort lowers the rate and enables motion
-  smoothing in SteamVR's per-game settings the next time you press Play.
-- **Play on the Frame (experimental):** Steam Frame → *PC VR games (Proton)* → **Install**, then **Install on Frame**
-  on the game page.
-- Games that use the Oculus Platform SDK check the licence through the Oculus app, so they run on the PC only.
+- **Play from this PC** (Windows with Steam and SteamVR): **Install on this PC** adds the game to Steam. Stream it to
+  the Frame with Steam Link.
+- **Play on the Frame (experimental):** on the Steam Frame page, install *PC VR games (Proton)*, then click **Install
+  on Frame** on the game's page.
+- **Oculus games** (made for Meta's Rift headset) need Revive, which FramePort downloads. Games that check their
+  license through the Oculus app only run on your PC.
 
-**Windows games without VR:** **Add games → Add a PC game folder…** with the game's folder (pick the program that
-starts it if asked). FramePort installs it on the Frame and Proton runs it as a window, like Steam's own Windows games;
-it shows up in the Frame's Steam library tagged "Windows game on Frame". Whether a game runs depends on Proton on ARM
-(x86 games run through emulation).
+**Windows games without VR:** use **Add games → Add a PC game folder…** too. The Frame runs them as a window through
+Proton, like Steam's own Windows games. Whether a game runs depends on Proton.
 
 ## Linux apps
 
-The Frame runs SteamOS on an arm64 CPU, so native Linux apps built for **aarch64/arm64** run on it directly (no
-Android container, no Proton). **Add games → Add a Linux app…** takes an AppImage or a `.zip`/`.tar.gz`/
-`.tar.xz` archive; **Add a Linux app folder…** takes an unpacked app. FramePort finds the program that starts it (the
-game page's **Change…** picks another one) and whether it's a VR (OpenXR) app. **Install on Frame** uploads it
-unchanged and adds it to the Frame's Steam library, tagged "Linux app on Frame"; Play, launch tests and Uninstall
-work like for other games.
+**Add games → Add a Linux app…** takes an AppImage (a single-file Linux app) or a `.zip`/`.tar.gz`/`.tar.xz`
+archive; **Add a Linux app folder…** takes an unpacked app. **Install on Frame** uploads it unchanged and adds it to
+the Steam library.
 
-- **x86_64 builds** run through **FEX**, Valve's x86 translator, with the x86 system libraries SteamOS ships for it
-  (the way Steam on the Frame runs x86 Linux games). The first install of one installs FEX on the Frame (Steam
-  restarts once and downloads it, a few MB). They run slower than arm64 builds: when an app offers both, FramePort picks the arm64 one. The game
-  page shows which CPU a build is for.
-- The app must bring the libraries SteamOS doesn't have (checked for arm64 builds; x86_64 builds use FEX's x86
-  system, which has glibc and Mesa, and aren't checked ahead). If some are missing, the install reports them and the game
-  page lists them: look for a build that includes them.
-- **Desktop Mode:** Linux apps also appear in Desktop Mode's application menu and as an icon on its desktop. Some
-  apps work better there, with a mouse and keyboard, than in Gaming Mode (where Steam Input turns the controllers into
-  a gamepad). Switch it off per app on the game page (**Desktop Mode**).
-- From the command line: `frameport add-linux <AppImage, folder or archive> [--exe <program>]`.
+- Apps built for **arm64** (the Frame's processor) run directly. Apps built for **x86_64** (most PCs) run through FEX,
+  a translator Steam installs on the Frame the first time; they run slower. The game page shows which kind you have.
+- If the app needs libraries the Frame doesn't have, the game page lists them: look for a build that includes them.
+- Linux apps also appear in **Desktop Mode**'s app menu. Turn this off on the game
+  page (**Desktop Mode**).
 
-## Files on the Frame (videos, documents, mods, saves)
+## Files on the Frame
 
-The **Files** tab manages files on the Frame over the same connection as installs; no other transfer app is needed.
-Pick a location, browse folders, and use **Upload files** / **Upload folder**, **New folder**, or the download, rename
-and delete buttons on each entry. Right-click an entry (or the empty space) for the same actions in a menu. Tick
-several entries (or the box above the list for all), or click and drag across them, to download or delete them
-together; a right-click on one of them then acts on all. The **Screenshots** tab and the **Library** work the same
-way: right-click for a menu, drag across cards to select several. In the downloaded app you can also drag files and folders from Explorer / Finder / your file manager onto
-the list to upload them into the open folder. Uploads and downloads run in the Activity panel, resume after an interruption and
-skip files that are already there.
+The **Files** tab copies files between your PC and the Frame: videos, documents, mods and saves.
 
-- **Videos**, **Downloads** and **Documents** appear inside every Quest game as `/sdcard/Movies`, `/sdcard/Download`
-  and `/sdcard/Documents`. Apps find files by browsing folders; Android's media index doesn't work on the Frame.
-- Under **Game storage**, each installed game has its own `/sdcard` (mods, saves). A game's menu → **Add videos and
-  files…** opens it. Video players that list only their own folder (e.g. 4XVR's "Internal Storage" = `4XPlayer`) find
-  videos uploaded into that folder.
-- **Home folder** shows everything in the Frame's home folder (hidden files with **Show hidden files**).
+![Files](images/files.png)
 
-Command line: `frameport frame send <files> --dest videos` (`frameport frame storage` lists the destinations).
+- Use **Upload files**, **Upload folder** and **New folder**; right-click an entry to download, rename or delete
+  it. Drag across entries to select several.
+- In the downloaded app you can drag files from your PC onto the list.
+- **Videos**, **Downloads** and **Documents** are shared by every Quest game (inside the game: `/sdcard/Movies`,
+  `/sdcard/Download`, `/sdcard/Documents`).
+- **Game storage** holds each game's own files. A game's menu → **Add videos and files…** opens it.
 
-## Sharing a working game, reporting a problem
+## Share a recipe or report a problem
 
-- **Share working recipe…** (game menu): opens a prefilled GitHub issue with the game's patches and settings. Accepted
-  configs become built-in recipes. Untested games ask on their page once they've been installed or tested: **It
-  works**, **It has issues** or **It doesn't run**.
-- **Report a problem…** (game menu, or Settings → Problems and feedback): saves a diagnostics zip to Documents (logs,
-  recipe, device details; IP addresses, user names, home folders and Steam ids replaced) and opens a prefilled GitHub
-  issue to attach it to. Command line: `frameport diag report <game>`, `frameport share-recipe <game>`.
+- **Share working recipe…** (in the game's menu) opens a GitHub issue with the game's recipe filled in. Accepted
+  recipes become built-in for everyone. Untested games ask how they run after you install or test them.
+- **Report a problem…** (in the game's menu, or Settings → Problems and feedback) saves a diagnostics zip with
+  personal data removed and opens a GitHub issue to attach it to.
 
-## Command line
-
-Everything the app does is also a `frameport` command (in a source checkout: `uv run frameport`); `frameport --help`
-and `frameport <command> --help` describe every option. The main ones:
-
-| Command | What it does |
-|---|---|
-| `scan <folder>` / `list` / `show <game>` | add games, list the library, show a game's analysis and patches |
-| `add-linux <path>` | add a Linux app, arm64 or x86_64 (AppImage, folder or archive) |
-| `recipe <game> --enable/--disable <patch>` | change a game's patches (`patches` lists them all) |
-| `build <game>` / `install <game>` / `test <game>` | build, install on the Frame (`--to pc` for PC VR on this PC), launch test |
-| `frame discover` / `frame connect` / `frame info` | find, pair with and describe the Frame |
-| `frame send` / `frame storage` / `frame cleanup` | copy files to the Frame, show where they go, free space |
-| `frame drives` / `frame move <game> --to <drive>` / `install --dest <drive>` | the Frame's drives (microSD), move a game, install to a drive |
-| `tools status` / `tools install` | the tools FramePort downloads |
-| `open-link "<link>"` | install from an "Install with FrameDrop" button's address or a manifest/APK/zip link (`--yes`, `--no-install`) |
-| `diag report <game>` / `share-recipe <game>` | report a problem / share a working recipe |
-| `update` | update FramePort |
-
-Exit codes: 0 done, 1 something failed, 2 wrong usage, 10 (`update --check`) a newer version exists. Errors are
-one line on stderr; `FRAMEPORT_DEBUG=1` shows the full traceback.
+Without the app: [share a recipe](https://github.com/spoopyghosty0/frameport/issues/new?template=working-config.yml)
+· [report a problem](https://github.com/spoopyghosty0/frameport/issues/new?template=bug-report.yml).
 
 ## Uninstalling
 
-Settings → **Uninstall FramePort…** (or `frameport uninstall-app`) removes its data folder, the Steam shortcuts it
-added on this computer and, optionally, its games on the Frame (saves can be kept). It first saves your signing keys
-to Documents: game updates must be signed with the same key. Then delete the program folder.
+Settings → **Uninstall FramePort…** removes FramePort's data and, if you choose, its games on the Frame (saves can be
+kept). It first saves your signing keys to Documents: you need them to update your games later. Then delete the
+FramePort folder.
 
 ## Verify a download
 
-Each archive has a GitHub build attestation:
-`gh attestation verify FramePort-windows-x64.zip -R spoopyghosty0/frameport`. `SHA256SUMS.txt` lists the checksums
-(`sha256sum -c SHA256SUMS.txt`). Windows certificate SHA-256 fingerprint:
+`SHA256SUMS.txt` in each release lists the files' checksums: `sha256sum -c SHA256SUMS.txt`. Each file also has a
+GitHub build attestation (proof that GitHub built it from this repository):
+`gh attestation verify FramePort-windows-x64.zip -R spoopyghosty0/frameport`.
+
+Windows: to show FramePort as the publisher, import `FramePort-selfsigned.cer` (attached to each release) into
+*Trusted Root Certification Authorities* (Current User). The certificate can only sign code; remove it with
+`certmgr.msc`. Its SHA-256 fingerprint:
 `4E:12:98:91:62:C0:E4:50:FB:65:1D:34:BB:73:00:09:7B:78:BE:88:5C:A7:6C:42:23:46:9B:92:A1:59:A7:6E`.
+
+## For power users: the command line
+
+The **command-line version** (Python 3.11 or newer) installs from the release's
+`frameport-<version>-py3-none-any.whl` with `uv tool install <link>` (or pipx or pip).
+
+Everything the app does is also a `frameport` command; `frameport --help` and `frameport <command> --help` list every
+option. The main ones:
+
+| Command | What it does |
+|---|---|
+| `scan <folder>` / `list` / `show <game>` | add games, list the library, show a game's patches |
+| `add-linux <path> [--exe <program>]` | add a Linux app (AppImage, folder or archive) |
+| `recipe <game> --enable/--disable <patch>` | change a game's patches (`patches` lists them all) |
+| `build <game>` / `install <game>` / `test <game>` | build, install on the Frame (`--to pc` for this PC), launch test |
+| `frame discover` / `frame connect` / `frame info` | find, connect to and describe the Frame |
+| `frame send <files> --dest videos` / `frame storage` / `frame cleanup` | copy files to the Frame, list where they can go, free space |
+| `frame drives` / `frame move <game> --to <drive>` / `install --dest <drive>` | list the Frame's drives, move a game, install to a drive |
+| `tools status` / `tools install` | the tools FramePort downloads |
+| `open-link "<link>"` | install from an install button's address or a download link (`--yes`, `--no-install`) |
+| `diag report <game>` / `share-recipe <game>` | report a problem / share a working recipe |
+| `update` | update FramePort (`--check` only checks: exit code 10 = update available) |
+| `uninstall-app` | uninstall FramePort |
+
+Exit codes: 0 done, 1 failed, 2 wrong usage. `FRAMEPORT_DEBUG=1` shows full error details;
+`FRAMEPORT_NO_UPDATE_CHECK=1` turns update checks off.

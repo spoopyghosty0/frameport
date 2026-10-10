@@ -53,7 +53,7 @@ shots:
       - wait_for: "Ready to play"
 
   - name: files
-    docs: [docs/COMPATIBILITY.md]
+    docs: [docs/INSTALL.md]
     steps:
       - go: files
       - wait_for: "Upload files…"
@@ -76,7 +76,7 @@ shots:
       - wait_for: "Close"
 
   - name: type-on-frame
-    docs: [README.md]
+    docs: [docs/INSTALL.md]
     steps:
       - hook: type_tab
       - wait_for: "Keyboard connected"

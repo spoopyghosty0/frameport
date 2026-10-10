@@ -42,7 +42,7 @@ scenes:
       - wait: 1.6
 
   - name: game
-    caption: ["Every game gets its own recipe", "Known-good fixes from the catalog, or suggested from the game itself"]
+    caption: ["Every game gets its own recipe", "Tested patches, or patches suggested for the game"]
     steps:
       - click: {name: "Riven", dy: 0.35}   # (the title: the card's middle is its Install button)
       - wait: 1.8
@@ -54,7 +54,7 @@ scenes:
       - wait: 0.5
 
   - name: install
-    caption: ["One click to install", "Patched, signed, uploaded, added to Steam and launch-tested"]
+    caption: ["One click to install", "Patched, uploaded, added to Steam and tested"]
     teaser: [0.6, 4.0]
     hold: 1.2
     steps:
@@ -108,7 +108,7 @@ scenes:
       - wait: 0.4
 
   - name: files
-    caption: ["Files on the Frame", "Videos, mods and saves: upload, download, select with a drag"]
+    caption: ["Files on the Frame", "Upload and download videos, mods and saves"]
     steps:
       - nav: "Files"
       - wait: 1.6

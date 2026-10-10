@@ -1,5 +1,5 @@
 name: catalog-from-issue
-# A maintainer adds the label `catalog-accepted` to a "Working configuration" issue → this opens a PR adding the
+# A maintainer adds the label `catalog-accepted` to a "Working recipe" issue → this opens a PR adding the
 # recipe to catalog/games/. Never runs for unlabelled issues; the issue text is only read by the validating script
 # (never interpolated into shell commands). Needs Settings → Actions → "Allow GitHub Actions to create pull requests".
 on:

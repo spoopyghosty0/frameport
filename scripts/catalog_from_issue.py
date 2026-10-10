@@ -1,4 +1,4 @@
-"""Turn a "Working configuration" issue (.github/ISSUE_TEMPLATE/working-config.yml) into catalog/games/<pkg>.yaml.
+"""Turn a "Working recipe" issue (.github/ISSUE_TEMPLATE/working-config.yml) into catalog/games/<pkg>.yaml.
 
 Used by .github/workflows/catalog-from-issue.yml after a maintainer labels the issue `catalog-accepted`; can also be
 run by hand:  gh issue view 12 --json body -q .body | python scripts/catalog_from_issue.py --issue 12

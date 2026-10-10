@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # FramePort setup from the project page: the same for every Frame and every PC, nothing to copy from the PC. Run in
 # the Frame's desktop terminal (SteamVR dashboard -> Launch a program -> Desktop, then System -> Konsole):
-#   curl -sL spoopyghosty0.github.io/frameport/s | bash
+#   curl -sL frameport.app/s | bash
 # with FramePort open on your PC at Steam Frame -> Connect. Options: --pc <address[:port]> (skip the search).
 #
 # What it does:
@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 for tool in curl python3; do
-    command -v "$tool" >/dev/null || { echo "This needs $tool, which SteamOS normally has. Use the setup command FramePort shows instead."; exit 1; }
+    command -v "$tool" >/dev/null || { echo "This needs $tool, which SteamOS normally has. Run the setup command FramePort shows instead."; exit 1; }
 done
 
 # FramePort PCs, one per line: name<TAB>address:port<TAB>words. Stdlib Python: avahi isn't always answering on the
@@ -168,14 +168,14 @@ if [[ -n "$PC" ]]; then
     [[ "$PC" == *:* ]] || PC="$PC:${PORTS%% *}"
     WORDS=""
 else
-    echo "Looking for FramePort on your network (open Steam Frame > Connect in FramePort on your PC)..."
+    echo "Looking for FramePort on your network (in FramePort on your PC: Steam Frame → Start setup)..."
     mapfile -t pcs < <(find_pcs)
     if [[ ${#pcs[@]} -eq 0 ]]; then
         echo
         echo "FramePort wasn't found. Check that:"
-        echo "  - FramePort is open on your PC, at Steam Frame > Connect"
-        echo "  - the Frame and the PC are on the same Wi-Fi (or the Frame is plugged into the PC with a USB cable)"
-        echo "Or run the setup command FramePort shows there; it includes your PC's address."
+        echo "  - FramePort is open on your PC, at Steam Frame → Start setup"
+        echo "  - the Frame and the PC are on the same Wi-Fi (or connected with a USB cable)"
+        echo "Or run the setup command FramePort shows there (Use the setup command)."
         exit 1
     fi
     pick=0
@@ -202,12 +202,12 @@ fi
 nonce=$(python3 -c 'import secrets; print(secrets.token_hex(12))')
 digits=$(python3 -c 'import hashlib, sys; print(f"{int(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:8], 16) % 10000:04d}")' "$nonce")
 reply=$(curl -fsS -G --data-urlencode "host=$(hostname)" --data-urlencode "nonce=$nonce" "http://$PC/hello") || {
-    echo "FramePort at $PC didn't answer. Is it still open at Steam Frame > Connect?"; exit 1; }
+    echo "FramePort at $PC didn't answer. Is it still open at Steam Frame → Start setup?"; exit 1; }
 id=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["id"])' "$reply")
 WORDS=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1]).get("words", ""))' "$reply")
 
-say "On your PC, FramePort asks whether to set up this Frame"
-printf '   Click Allow there if it shows the code  \033[1;33m%s\033[0m  (this PC: %s)\n' "$digits" "${WORDS:-?}"
+say "FramePort on your PC asks to set up this Frame"
+printf '   Click Allow there if it shows  \033[1;33m%s\033[0m  (PC: %s)\n' "$digits" "${WORDS:-?}"
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
 code=""
@@ -217,10 +217,10 @@ for _ in $(seq 12); do  # up to about 20 minutes
         200) code=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["code"])' "$tmp"); break ;;
         202) continue ;;
         403) echo "Not allowed on the PC. Nothing was changed on this Frame."; exit 1 ;;
-        *) echo "Lost FramePort at $PC (HTTP $status). Run this again, or use the setup command FramePort shows."; exit 1 ;;
+        *) echo "Lost FramePort at $PC (HTTP $status). Run this again, or run the setup command FramePort shows."; exit 1 ;;
     esac
 done
-[[ -n "$code" ]] || { echo "Nobody allowed it in time. Run this again when you're at the PC."; exit 1; }
+[[ -n "$code" ]] || { echo "Not allowed in time. Run this again when you're at your PC."; exit 1; }
 
-say "Allowed. Running FramePort's setup from $PC"
+say "Allowed. Running the setup from $PC"
 curl -fsS "http://$PC/$code" | bash

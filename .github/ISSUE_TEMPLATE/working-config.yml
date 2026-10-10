@@ -1,32 +1,32 @@
-name: Working configuration
-description: Submit a recipe that works on the Steam Frame (FramePort → game menu → "Share working config…" fills this in).
-title: "[Working config] "
+name: Working recipe
+description: Share a recipe that works on the Steam Frame (FramePort fills this in: game menu → "Share working recipe…").
+title: "[Working recipe] "
 labels: ["working-config"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks! A maintainer reviews the recipe; once it's labelled `catalog-accepted`, a pull request adding it to
-        `catalog/games/` is opened automatically. Please don't paste game files or links to them.
+        Thanks! Once a maintainer accepts the recipe, it becomes built-in for everyone. Please don't share game files
+        or links to them.
   - type: input
     id: game
     attributes:
       label: Game
-      description: Title — package id (platform, version, engine / XR API)
+      description: Title and package name (e.g. Lucky's Tale — com.playful.LuckysTale)
     validations:
       required: true
   - type: input
     id: result
     attributes:
       label: Result
-      description: works or issues (+ the last headless launch test)
+      description: works or issues
     validations:
       required: true
   - type: textarea
     id: recipe
     attributes:
       label: Recipe
-      description: The catalog entry (catalog/games/<package>.yaml). Don't edit the package line.
+      description: Filled in by FramePort. Don't edit the package line.
       render: yaml
     validations:
       required: true
@@ -34,16 +34,16 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: FramePort, tool and SteamOS versions
+      description: FramePort and SteamOS versions
   - type: textarea
     id: notes
     attributes:
       label: Notes
-      description: What you checked in the headset, known issues, anything unusual
+      description: What you checked in the headset and any known issues
   - type: checkboxes
     id: confirm
     attributes:
       label: Confirmation
       options:
-        - label: I played the game in the headset with this recipe (headless launch tests can't check the picture).
+        - label: I played the game in the headset with this recipe.
           required: true

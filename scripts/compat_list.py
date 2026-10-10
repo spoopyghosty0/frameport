@@ -13,8 +13,6 @@ from frameport.recommend import catalog  # noqa: E402
 
 STATUS = {"works": "✅ Works", "issues": "⚠️ Works with issues", "unsupported": "❌ Doesn't run"}
 ORDER = {"works": 0, "issues": 1, "unsupported": 2}
-ISSUES = "https://github.com/spoopyghosty0/frameport/issues/new?template="
-SHARE, REPORT = ISSUES + "working-config.yml", ISSUES + "bug-report.yml"
 
 
 def short(note: str) -> str:
@@ -34,10 +32,8 @@ def render() -> str:
         note = "" if e.status == "works" else short(e.notes).replace("|", "/")
         rows.append(f"| {e.title} | {platform} | {STATUS[e.status]} | {note} |")
     return ("# Tested games\n\n"
-            "Games tested on the Steam Frame with FramePort's recipes. Games not listed here may work too: FramePort "
-            "suggests patches for them, and a working recipe can be shared from the app (**Share working recipe…**).\n"
-            f"Tested a game? [Share a working config]({SHARE}) or [report a problem]({REPORT}) (in the app: the game's "
-            "**…** menu does both and fills in the details).\n"
+            "Games tested on the Steam Frame with FramePort. Games not listed may work too: FramePort suggests "
+            "patches for them. Got one working? [Share its recipe](INSTALL.md#share-a-recipe-or-report-a-problem).\n\n"
             "Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.\n\n"
             + "\n".join(rows) + "\n")
 

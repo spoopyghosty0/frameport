@@ -30,13 +30,13 @@ user_systemd() {
 
 say "FramePort setup for $(hostname) ($(. /etc/os-release; echo "$NAME $VERSION_ID"))"
 
-say "Authorizing the FramePort app's key"
+say "Letting FramePort log in"
 key=$(curl -fsS "$PC_URL/key?code=$PAIR_CODE")
-[[ "$key" == ssh-ed25519\ * ]] || { echo "Could not fetch the app's key from $PC_URL (is the app still open?)"; exit 1; }
+[[ "$key" == ssh-ed25519\ * ]] || { echo "Couldn't reach FramePort at $PC_URL. Is it still open?"; exit 1; }
 mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
 grep -qxF "$key" ~/.ssh/authorized_keys || echo "$key" >> ~/.ssh/authorized_keys
 
-say "Configuring podman for Lepton"
+say "Setting up Lepton's containers"
 # rootless podman leaks one kernel keyring per container start; ~200 game launches would exhaust the quota
 mkdir -p ~/.config/containers
 grep -qs '^ *keyring *=' ~/.config/containers/containers.conf || printf '[containers]\nkeyring = false\n' >> ~/.config/containers/containers.conf
@@ -117,7 +117,7 @@ JOB
 if [[ -f /etc/steamos-devkit-enabled ]]; then
     say "Developer Mode is on"
     bash "$JOB" finish "$PC_URL" "$PAIR_CODE" "$STEAM_CONFIG" "$DEVKIT_HELPER" 2>&1 | tee "$LOG"
-    say "Done. Return to FramePort on your PC: this Frame should now appear as connected."
+    say "Done. FramePort on your PC shows this Frame as connected."
     exit 0
 fi
 
@@ -126,9 +126,8 @@ if [[ ! -x "$DEVKIT_HELPER" || ! -f "$STEAM_CONFIG" ]] || \
         ! user_systemd systemd-run --user --collect --quiet --unit="frameport-setup-$$" \
             bash -c 'bash "$0" "$@" >"$HOME/.cache/frameport-setup.log" 2>&1' \
             "$JOB" devmode "$PC_URL" "$PAIR_CODE" "$STEAM_CONFIG" "$DEVKIT_HELPER"; then
-    echo "Couldn't turn it on automatically. Turn it on in Settings > System > Developer, then run this command again."
+    echo "Couldn't turn it on. Turn it on in Settings → System → Enable Developer Mode, then run this again."
     exit 1
 fi
-echo "Steam restarts to turn it on. That closes the desktop in a few seconds and the Frame returns to its"
-echo "normal view; setup finishes on its own. If Steam asks to install Lepton, confirm it."
-echo "Then return to FramePort on your PC: the Frame appears as connected within a minute."
+echo "Steam restarts and the desktop closes. Confirm Lepton if asked."
+echo "Then check FramePort on your PC."

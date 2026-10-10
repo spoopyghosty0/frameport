@@ -1,9 +1,9 @@
 # FAQ
 
-## How should I lay out a game that has OBB files (an APK plus a data folder)?
+## How should I lay out a game that has OBB files?
 
-Give every game its own folder, put the APK in it, and put the game's data next to the APK in a folder named
-after the game's **package name** (the name the `.obb` files contain, e.g. `com.Armature.VR4`):
+Some Quest games come as an APK (the app file) plus `.obb` files (the game's data). Give every game its own folder,
+put the APK in it and put the data in a folder named after the game's **package name** (e.g. `com.Armature.VR4`):
 
 ```
 Games/                                  ← scan this folder (Add games → Scan a folder)
@@ -16,16 +16,12 @@ Games/                                  ← scan this folder (Add games → Scan
     └── com.beatgames.beatsaber.apk     ← games without OBBs: just the APK
 ```
 
-- **Data folder name:** the package name (`com.Armature.VR4` above), or `obb`. FramePort uses the first of the two
-  that exists and isn't empty.
-- **Everything in that folder is copied** to the game's `Android/obb/<package>/` on the Frame, subfolders included.
-  So games that ship raw data files instead of `.obb` files work the same way.
-- **One game per folder.** Several APKs in one folder count as one game; FramePort uses the first and keeps the others
-  as alternates.
+- **Data folder name:** the package name (`com.Armature.VR4` above) or `obb`.
+- **Everything in that folder is copied** to the Steam Frame, subfolders included, so other data files work too.
+- **One game per folder.** Several APKs in one folder count as one game.
 - **Scanning:** pick the folder that contains the game folders (`Games/` above) to add them all, or one game's folder
   to add just that game. FramePort looks up to 5 levels deep.
-- **A single game:** Add games → Add an APK… works with a lone APK too. Its data is found when the data folder sits next
-  to the APK, named as above.
+- **A single game:** **Add games → Add an APK…** also finds the data folder next to the APK.
 
-Not sure of the package name? Look at the OBB file names: `main.<version>.<package name>.obb`. Or add the APK
-first: the game's page shows the package name under **Details**.
+Not sure of the package name? It's in the OBB file names (`main.<version>.<package name>.obb`), and the game's page
+shows it under **Details**.

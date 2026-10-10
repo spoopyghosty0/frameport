@@ -1,31 +1,30 @@
 name: Problem report
-description: A game or FramePort doesn't work (FramePort → "Report a problem…" fills this in and saves a diagnostics zip).
+description: A game or FramePort doesn't work (FramePort fills this in: "Report a problem…").
 title: "[Problem] "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Please attach the **diagnostics zip** FramePort saved (drag it into the "Diagnostics" box below). It contains
-        logs, the recipe and device details with personal data removed — no game files. Without the app, it can be
-        read with `frameport diag inspect <zip>`.
+        Please attach the **diagnostics zip** FramePort saved: drag it into the "Diagnostics" box below. It holds logs
+        and device details with personal data removed, and no game files.
   - type: input
     id: game
     attributes:
       label: Game
-      description: Title — package id (version, engine / XR API); empty for app problems
+      description: Title and package name; leave empty for problems with FramePort itself
   - type: textarea
     id: description
     attributes:
       label: What happens?
-      description: What you did, what you expected, what you saw (in the headset, if it started)
+      description: What you did, what you expected and what happened
     validations:
       required: true
   - type: textarea
     id: findings
     attributes:
-      label: Launch test / triage
-      description: Filled in by FramePort from the last launch test
+      label: Launch test
+      description: Filled in by FramePort
   - type: textarea
     id: recipe
     attributes:

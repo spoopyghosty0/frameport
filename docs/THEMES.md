@@ -1,6 +1,6 @@
 # Themes
 
-FramePort comes with three colour themes, all dark:
+FramePort comes with three color themes, all dark:
 
 | Theme | Look |
 |---|---|
@@ -16,7 +16,7 @@ A theme is a small JSON file. To make one:
 
 1. In **Settings → Appearance**, pick the theme closest to what you want and click **Copy this theme as a file**.
 2. Paste it into a text editor and save it as `something.json`.
-3. Change the name and the colours you want different. You can delete every colour you keep: missing colours come
+3. Change the name and the colors you want different. You can delete every color you keep: missing colors come
    from the `base` theme.
 4. Back in **Settings → Appearance**, click **Install theme file…** and choose the file. FramePort checks it,
    switches to it and keeps a copy in its data folder (`themes/`), so you can delete the original.
@@ -40,11 +40,11 @@ To remove an installed theme, click the bin icon on its card.
 | Field | Meaning |
 |---|---|
 | `name` | Shown on the theme's card (up to 40 characters). |
-| `base` | The built-in theme that fills in every colour the file leaves out: `portal` (default), `portal_oled` or `original`. |
-| `dual` | `true`: two-colour touches like Portal's (blue-to-orange sidebar edge, two-colour "FramePort", the selected tab's fade, blue secondary buttons). `false`: one accent, like Original. Default: the base's. |
-| `colors` | Any of the colours below, as `#RRGGBB` or `#RGB`. Names may be upper or lower case. |
+| `base` | The built-in theme that fills in every color the file leaves out: `portal` (default), `portal_oled` or `original`. |
+| `dual` | `true`: two-color touches like Portal's (blue-to-orange sidebar edge, two-color "FramePort", the selected tab's fade, blue secondary buttons). `false`: one accent, like Original. Default: the base's. |
+| `colors` | Any of the colors below, as `#RRGGBB` or `#RGB`. Names may be upper or lower case. |
 
-| Colour | Used for |
+| Color | Used for |
 |---|---|
 | `BG` | Window background |
 | `SIDEBAR` | Sidebar and activity panel |
@@ -57,5 +57,5 @@ To remove an installed theme, click the bin icon on its card.
 | `PC` | PC VR games and "on this PC" |
 
 FramePort refuses a theme file it can't show well, and says why: a light window background (FramePort is dark only),
-text that's hard to read on cards, an unknown colour name or a value that isn't a colour. An example is in
+text that's hard to read on cards, an unknown color name or a value that isn't a color. An example is in
 [`themes/example-theme.json`](themes/example-theme.json).

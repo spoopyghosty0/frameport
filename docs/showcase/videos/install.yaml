@@ -23,7 +23,7 @@ title:
   seconds: 3.4
 end:
   heading: You're set
-  line: Your game is in the Frame's Steam library. More help in docs/INSTALL.md
+  line: Your game is in the Frame's Steam library. More help at frameport.app/docs/install/
   footer: github.com/spoopyghosty0/frameport
   seconds: 4.0
 
@@ -31,12 +31,12 @@ scenes:
   - name: download
     seconds: 7.5
     card:
-      eyebrow: "Step 1 · On your computer"
+      eyebrow: "Step 1 · On your PC"
       heading: Download FramePort
       steps:
         - "Open **github.com/spoopyghosty0/frameport** → **Releases** → the latest one"
-        - "Download the archive for your computer: **FramePort-windows-x64.zip**, **FramePort-macos-arm64.zip** or **FramePort-linux-x64.tar.gz**"
-        - "Extract it anywhere. There's no installer and no admin rights are needed"
+        - "Download the file for your PC: **FramePort-windows-x64.zip**, **FramePort-macos-arm64.zip** or **FramePort-linux-x64.tar.gz**"
+        - "Unpack it anywhere. No installer or admin rights needed"
 
   - name: first-start
     seconds: 7.5
@@ -47,10 +47,10 @@ scenes:
         - "**Windows:** open **FramePort.exe**. At “Windows protected your PC” choose **More info** → **Run anyway**"
         - "**macOS:** right-click **FramePort.app** → **Open** → **Open**"
         - "**Linux:** run **FramePort/FramePort**"
-      note: "FramePort is signed with a free certificate, so your system asks once."
+      note: "FramePort isn't signed with a paid certificate, so your system asks once."
 
   - name: welcome
-    caption: ["FramePort gets itself ready", "It downloads the tools it uses (Java, OVRPort, apksigner) by itself"]
+    caption: ["FramePort gets ready", "It downloads the tools it uses"]
     hold: 1.0
     steps:
       - wait: 1.0
@@ -59,7 +59,7 @@ scenes:
       - wait: 1.0
 
   - name: connect
-    caption: ["Connect your Steam Frame", "Once: one line on the Frame, the same for everyone"]
+    caption: ["Connect your Steam Frame", "Once: one line on the Frame"]
     hold: 1.5
     steps:
       - click: "Set up the Frame"
@@ -78,9 +78,9 @@ scenes:
       steps:
         - "In the SteamVR dashboard: **Launch a program** → **Desktop**"
         - "Open the app menu (bottom left) → **System** → **Konsole**"
-        - "Type the line and press **Enter** (or open **spoopyghosty0.github.io/frameport/setup** in Chromium and paste it)"
-      code: "curl -sL spoopyghosty0.github.io/frameport/s | bash"
-      note: "It finds FramePort on your network and shows a 4-digit code. Nothing changes on the Frame until you allow it on the PC. Developer Mode already on? Just open **Settings → Developer → Pair new host** and approve FramePort in the headset."
+        - "Type the line and press **Enter** (or copy it from **frameport.app/setup** in Chromium)"
+      code: "curl -sL frameport.app/s | bash"
+      note: "Nothing changes on the Frame until you allow it on the PC."
 
   - name: allow
     caption: ["Allow it on your PC", "FramePort shows the same code as the Frame"]
@@ -100,8 +100,8 @@ scenes:
       eyebrow: "On the Frame, by itself"
       heading: The setup finishes on its own
       steps:
-        - "FramePort's key is let in and **Developer Mode** turns on (no password)"
-        - "The desktop closes and Steam restarts once: that's expected"
+        - "**Developer Mode** turns on (no password)"
+        - "Steam restarts once and the desktop closes"
         - "If Steam asks to install **Lepton**, confirm it"
 
   - name: connected
@@ -127,7 +127,7 @@ scenes:
       - wait: 1.0
 
   - name: install
-    caption: ["Install a game", "FramePort patches it, installs it and adds it to the Frame's Steam library"]
+    caption: ["Install a game", "FramePort patches it and adds it to the Frame's Steam library"]
     hold: 1.2
     steps:
       - click: {name: "Lucky's Tale", dy: 0.35}   # (the title: the card's middle is its Install button)

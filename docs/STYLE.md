@@ -13,7 +13,7 @@ Short rules so every screen, help text, doc and web page sounds the same. Code s
 - Tools by their names: OVRPort, Revive, Proton, Lepton, SteamVR.
 - **Install** (first time), **Update** (a newer build), **Reinstall** (the same build again); **Play** starts a game.
 - **Set up** = the one-time setup of a Frame; **connect** = linking FramePort to it. **Pair** only in Valve's own
-  **Pair new host**. The **setup line** is the fixed `curl -sL spoopyghosty0.github.io/frameport/s | bash`; the
+  **Pair new host**. The **setup line** is the fixed `curl -sL frameport.app/s | bash`; the
   **setup command** is the one with this PC's address and a one-time code. FramePort's button is **Allow**.
 - **Konsole** is the Frame's terminal. The way there is "SteamVR dashboard → Launch a program → Desktop, then app
   menu → System → Konsole": say it in full once per page, then just "Konsole".
