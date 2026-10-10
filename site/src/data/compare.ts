@@ -53,7 +53,7 @@ export const ROWS: Row[] = [
     y('All three; you install Proton first'),
     p('Yes; 2D Android apps need an extra file')] },
   { label: 'PC VR games?', cells: [y('On your PC; some also on the Frame'), n('Not supported'), n('Not supported')] },
-  { label: 'Do "Install with …" buttons on websites work?', cells: [y("Its own and FrameDrop's"), y("FrameDrop's (it defined them)"), n('No')] },
+  { label: 'Do "Install with …" buttons on websites work?', cells: [y('Yes (frameport.app links)'), y('Its own'), n('No')] },
   { label: "What if a game doesn't start?", cells: [y('A launch test reads the logs and suggests a patch'), p('A log viewer shows the log'), n('No help')] },
   { label: 'Can I see and use the Frame from my PC?', cells: [y('Live view, Monitor, Files, Screenshots, Type on Frame'), u(), n('No')] },
 ];
@@ -61,6 +61,5 @@ export const ROWS: Row[] = [
 export const SOURCES = [
   { label: 'FrameDrop: about', href: 'https://framedropvr.com/about' },
   { label: 'FrameDrop: how-to', href: 'https://framedropvr.com/how-to' },
-  { label: 'FrameDrop: install buttons', href: 'https://framedropvr.com/docs' },
   { label: 'Valve: loading games on Steam Frame', href: 'https://partner.steamgames.com/doc/steamhardware/steamframe/loadgames' },
 ];

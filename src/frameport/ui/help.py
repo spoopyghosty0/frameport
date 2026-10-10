@@ -65,8 +65,8 @@ HELP: dict[str, str] = _Translated({
     "last_session": "After you play a game on the Frame, FramePort reads that session's log: crashes, frame rate and "
                     "moments the game lost focus. Game settings apply at the next start; other patches reinstall the "
                     "game. Your saves stay.",
-    "install_links": "Some websites have \"Install with FrameDrop\" buttons. FramePort opens these links, shows what "
-                     "they offer and installs it when you agree. On macOS, use Add games → Add from a link… instead.",
+    "install_links": "Some websites have \"Install with FramePort\" buttons (frameport.app links). FramePort opens "
+                     "these links, shows what they offer and installs it when you agree. On macOS, use Add games → Add from a link… instead.",
     "linux_x86": "The Frame has an arm64 processor. Programs built for x86_64 PCs run through Valve's translator, "
                  "like Steam's x86 Linux games, but slower. Use an arm64 build when there is one.",
     "flatscreen": "How the app shows in the headset: in VR, or as a flat window like a phone or tablet app. "

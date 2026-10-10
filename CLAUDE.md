@@ -329,7 +329,7 @@ Repo is on an NTFS drive (`core.fileMode=false`); line endings are LF (`.gitattr
   give new icon-only controls a tooltip. The `showcase` workflow renders on UI pushes to main (+ the videos whose
   storyboard changed, or the ones named on dispatch) and opens PR `showcase/update`; releases attach every video as
   `FramePort-<name>.mp4`. `scripts/scrub_library.py` (the owner's own library) is only for private screenshots now.
-  README rules (owner): states the project is a proof of concept, provides no piracy tools, credits the wrapped
+  README rules (owner): says not every game runs (no longer "proof of concept" since 1.0), provides no piracy tools, credits the wrapped
   projects (most functionality is theirs); neutral technical wording; no Quest2Frame mentions anywhere.
 - GUI smoke test: `uv pip install flet-web playwright && playwright install chromium`, then
   `FRAMEPORT_HOME=<test dir> python scripts/ui_smoke.py --out <dir> [--game <pkg>] [--frame steamos@<host>] [--update]` (`--update` = fake release: banner, dialog, Settings → Updates) and look

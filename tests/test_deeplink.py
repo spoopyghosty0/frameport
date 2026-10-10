@@ -23,6 +23,8 @@ MANIFEST = "https://cdn.example.com/game.framedrop.json"
 @pytest.mark.parametrize("link", [
     f"framedrop://install?manifest={quote(MANIFEST, safe='')}",
     f"frameport://install?manifest={quote(MANIFEST, safe='')}",
+    f"https://frameport.app/install?manifest={quote(MANIFEST, safe='')}",
+    f"https://frameport.app/install/?manifest={MANIFEST}",
     f"https://framedropvr.com/install?manifest={quote(MANIFEST, safe='')}",
     f"https://framedropvr.com/install/?manifest={MANIFEST}",
     MANIFEST,

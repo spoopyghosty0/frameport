@@ -2,7 +2,7 @@
 
 A button for web pages and READMEs that opens a game straight in FramePort. Clicking it hands FramePort an install
 link; FramePort shows what it would download and asks before it does anything (see
-[Install links](INSTALL.md#install-links-install-with-framedrop-buttons)).
+[Install links](INSTALL.md#install-links-install-with-frameport-buttons)).
 
 <p>
   <img src="badges/install-with-frameport-animated.svg" alt="Install with FramePort" width="216" height="60">
@@ -23,14 +23,23 @@ Both animated versions stop moving for visitors who turn on reduced motion in th
 
 ## The link
 
-The button links to an install link, which names either a manifest or one file:
+The button links to FramePort's install page, which names either a manifest or one file:
+
+```
+https://frameport.app/install?manifest=<URL-encoded https address of a manifest .json>
+https://frameport.app/install?url=<URL-encoded https address of an .apk, a Linux build (.zip, .tar.*, .AppImage) or a Windows .exe>
+```
+
+The page shows what the link installs, opens FramePort with the matching `frameport://` link and, when FramePort
+isn't installed, offers the download. Pages that only target people who already have FramePort can link to the
+`frameport://` form directly:
 
 ```
 frameport://install?manifest=<URL-encoded https address of a manifest .json>
 frameport://install?url=<URL-encoded https address of an .apk, a Linux build (.zip, .tar.*, .AppImage) or a Windows .exe>
 ```
 
-The manifest is the FrameDrop format, which FramePort reads as it is:
+The manifest:
 
 ```json
 {
@@ -42,7 +51,7 @@ The manifest is the FrameDrop format, which FramePort reads as it is:
 ```
 
 `name` becomes the game's title in Steam. `sha256` is optional but recommended: FramePort checks the download
-against it. The `frameport` object is optional and ignored by FrameDrop; its icon and description are shown in the
+against it. The `frameport` object is optional; its icon and description are shown in the
 install question. Only public `https://` addresses are accepted.
 
 To build a link from Python: `frameport.deeplink.make_link(manifest_url="https://…/my-game.json")`.
@@ -68,26 +77,24 @@ give the link an accessible name:
 
 Host the files yourself, or load them from jsDelivr, which serves them with the right content type:
 `https://cdn.jsdelivr.net/gh/spoopyghosty0/frameport@main/docs/badges/install-with-frameport.svg` (replace `main`
-with a release tag such as `v0.12.0` to pin a version; jsDelivr caches `@main` for up to 12 hours).
+with a release tag such as `v1.0.0` to pin a version; jsDelivr caches `@main` for up to 12 hours).
 
 ## In a GitHub README
 
 GitHub removes links that don't start with `https://` or `http://` from READMEs, so a `frameport://` link there is
-not clickable. Link the button to an `https://` page instead, for example your release page with instructions, or
-FrameDrop's install page, which opens `framedrop://` links (FramePort opens those too while Settings → Install links
-→ `framedrop://` is on):
+not clickable. Use the `https://frameport.app/install?…` link:
 
 ```markdown
-[![Install with FramePort](https://cdn.jsdelivr.net/gh/spoopyghosty0/frameport@main/docs/badges/install-with-frameport-animated.svg)](https://framedropvr.com/install?manifest=https%3A%2F%2Fexample.com%2Fmy-game.json)
+[![Install with FramePort](https://cdn.jsdelivr.net/gh/spoopyghosty0/frameport@main/docs/badges/install-with-frameport-animated.svg)](https://frameport.app/install?manifest=https%3A%2F%2Fexample.com%2Fmy-game.json)
 ```
 
 Use the animated or still SVG: GitHub shows SVGs as images, so the hover version doesn't react there.
 
 ## If a visitor doesn't have FramePort
 
-A `frameport://` link does nothing visible (or shows the browser's "no app for this link" message) when FramePort
-isn't installed. Put a line next to the button such as "Needs [FramePort](https://github.com/spoopyghosty0/frameport)
-on Windows or Linux." On macOS, web pages can't hand links to FramePort yet: users paste the link into Add games →
+The `https://frameport.app/install?…` link handles this: its page offers the download and a second try. A bare
+`frameport://` link does nothing visible (or shows the browser's "no app for this link" message) when FramePort
+isn't installed; put a line next to such a button, for example "Needs [FramePort](https://frameport.app)". On macOS, web pages can't hand links to FramePort yet: users paste the link into Add games →
 Add from a link….
 
 ## Usage rules

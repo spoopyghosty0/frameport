@@ -119,16 +119,15 @@ refresh rate, controllers, menus, 360° video and mixed reality. Changes are use
 - **Add games → Add a Windows program…** adds a single Windows program. The Frame runs it as a window through Proton
   (Valve's tool for running Windows programs).
 
-### Install links ("Install with FrameDrop" buttons)
+### Install links ("Install with FramePort" buttons)
 
-Some websites have an **Install with FrameDrop** button. FramePort understands these buttons too:
+Some websites have an **Install with FramePort** button (a `https://frameport.app/install?…` link):
 
 - **Click a button** on Windows or Linux: FramePort opens, shows what it would download and asks first. Then it adds
   the game and installs it on the Frame.
 - **Add games → Add from a link…** takes a button's address (right-click → Copy link) or a direct download link. Use
   it on macOS, where buttons can't open FramePort yet.
-- **Settings → Install links** turns the buttons on or off. If FrameDrop is installed too, it keeps its buttons until
-  you click **Use FramePort for these links**.
+- **Settings → Install links** turns the buttons on or off.
 - Only `https://` links to public servers are used. Only install from sites you trust.
 
 Website owners: see [Install button](INSTALL_BUTTON.md).

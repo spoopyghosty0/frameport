@@ -19,7 +19,8 @@ Frame, patches each game so it runs there, uploads it and adds it to your Steam 
 > [SideQuest](https://sidequestvr.com/). FramePort downloads published open-source tools (see [Built on](#built-on))
 > and adds its own patches so games run on the Frame.
 >
-> FramePort is a proof of concept.
+> Not every game runs on the Frame: recipes are tested by the community, and some games need Meta's services or
+> hardware the Frame lacks.
 
 ## Features
 
@@ -31,7 +32,8 @@ Frame, patches each game so it runs there, uploads it and adds it to your Steam 
   plain words.
 - **Game settings:** sharpness, refresh rate, controllers, 360° video and mixed reality as simple switches.
 - **More than Quest games:** Android apps in a window, Linux apps, PC VR games and Windows programs.
-- **Install links:** "Install with FrameDrop" buttons on websites open in FramePort.
+- **Install links:** "Install with FramePort" buttons on websites ([frameport.app](https://frameport.app) links) open
+  in FramePort.
 - **Your Frame from your PC:** Type on Frame (your keyboard on the Frame), Files, Screenshots, Live view (what the
   headset shows, in your browser) and Monitor (frame rate, temperatures, battery, processes).
 - **Updates itself**, and reports problems without personal data.
@@ -93,7 +95,7 @@ FrameDrop and Valve's own tools install an app as it is. FramePort differs in fo
 | In the Steam library | Yes, with artwork and tags | As a "Devkit Game" shortcut | As "Devkit Game: &lt;title&gt;"; not with adb |
 | Android apps, Linux apps, Windows programs | All three; Proton (runs Windows programs) is installed for you | All three; install Proton first | Yes; 2D Android apps need an extra file |
 | PC VR games | On your PC; some also on the Frame | Not supported | Not supported |
-| "Install with …" buttons on websites | Its own and FrameDrop's | FrameDrop's (it defined them) | No |
+| "Install with …" buttons on websites | Yes ([frameport.app](https://frameport.app) links) | Its own | No |
 | A game doesn't start | A launch test reads the logs and suggests a patch | A log viewer | No help |
 | Use the Frame from your PC | Live view, Monitor, Files, Screenshots, Type on Frame | Not stated | No |
 
@@ -101,7 +103,7 @@ FrameDrop and Valve's own tools install an app as it is. FramePort differs in fo
 
 Other tools as described on their own pages, checked 2026-10-09:
 [FrameDrop about](https://framedropvr.com/about) · [how-to](https://framedropvr.com/how-to) ·
-[install buttons](https://framedropvr.com/docs) · [Valve: loading games on Steam Frame](https://partner.steamgames.com/doc/steamhardware/steamframe/loadgames).
+[Valve: loading games on Steam Frame](https://partner.steamgames.com/doc/steamhardware/steamframe/loadgames).
 Out of date? [Report a problem](https://github.com/spoopyghosty0/frameport/issues/new).
 
 ## Built on

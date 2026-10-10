@@ -4,7 +4,8 @@ FrameDrop (framedropvr.com) defined it: a page links to `https://framedropvr.com
 `?url=<direct file URL>`), which opens `framedrop://install?manifest=…|url=…`. The manifest is JSON:
 `{"schema": "framedrop.install/v1", "name": "<Steam title>", "files": [{"url": "https://…/x.apk", "sha256": "…"}]}`
 with an arm64 APK or a zipped Linux ARM64 build. FramePort accepts the same links (`framedrop://` when it is the
-system's handler, its own `frameport://`, or the https link pasted into "Install from link…"), follows the same
+system's handler, its own `frameport://`, FramePort's `https://frameport.app/install?…` button page, or an https link
+pasted into "Install from link…"), follows the same
 rules (https only, http only on this PC, no credentials, no LAN addresses, a URL that ends in a file name) and
 always asks before it downloads anything a web page sent. `urlhandler.py` registers the schemes.
 """
@@ -22,7 +23,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from .core.events import Reporter
 
 SCHEMES = ("framedrop", "frameport")
-WEB_HOSTS = ("framedropvr.com", "www.framedropvr.com")
+# the https pages an install button links to: FramePort's own landing page, and FrameDrop's (older buttons)
+WEB_HOSTS = ("frameport.app", "www.frameport.app", "framedropvr.com", "www.framedropvr.com")
 SCHEMA = "framedrop.install/v1"
 MAX_MANIFEST = 256 << 10
 MAX_FILES = 16

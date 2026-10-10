@@ -25,7 +25,7 @@ def kind_label(kind: str | None) -> str:
 
 def show_paste_dialog(app: FramePortApp) -> None:
     """Add games → "Install from link…": paste a FrameDrop/FramePort button link, a manifest or a file URL."""
-    field = C.field(label=tr("Link"), hint_text="https://framedropvr.com/install?manifest=…", autofocus=True,
+    field = C.field(label=tr("Link"), hint_text="https://frameport.app/install?manifest=…", autofocus=True,
                     expand=True)
 
     def go(e=None):
@@ -38,7 +38,7 @@ def show_paste_dialog(app: FramePortApp) -> None:
     app.page.show_dialog(C.dialog(
         tr("Install from a link"),
         ft.Column([
-            C.body(tr("Paste an install link: a FrameDrop button's address, a manifest (.json) or a direct link to "
+            C.body(tr("Paste an install link: an install button's address, a manifest (.json) or a direct link to "
                       "an APK, .zip or .exe.")),
             ft.Row([field, C.help_icon("install_links")]),
         ], tight=True, spacing=T.S3),
