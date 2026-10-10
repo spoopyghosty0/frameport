@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # FramePort setup from the project page: the same for every Frame and every PC, nothing to copy from the PC. Run in
 # the Frame's desktop terminal (SteamVR dashboard -> Launch a program -> Desktop, then System -> Konsole):
-#   curl -sL frameport.app/s | bash
+#   curl -fsSL https://frameport.app/s | bash
 # with FramePort open on your PC at Steam Frame -> Connect. Options: --pc <address[:port]> (skip the search).
 #
 # What it does:

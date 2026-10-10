@@ -34,8 +34,8 @@ HINT_AFTER = 45  # seconds without any request from the Frame before the UI sugg
 
 # the static setup: one fixed address on the project page serves bootstrap/setup.sh (copied there by the site build)
 SETUP_PAGE = "https://frameport.app/setup/"
-SETUP_URL = "frameport.app/s"
-SETUP_LINE = f"curl -sL {SETUP_URL} | bash"
+SETUP_URL = "https://frameport.app/s"
+SETUP_LINE = f"curl -fsSL {SETUP_URL} | bash"
 SERVICE = "_frameport-pair._tcp.local."
 MAX_ASKS = 3  # open requests at a time (more get 429)
 WAIT = 100  # seconds one /wait may hold before the Frame asks again

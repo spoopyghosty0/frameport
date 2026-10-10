@@ -7,7 +7,7 @@ import Nav from '../../components/Nav.astro';
 import Footer from '../../components/Footer.astro';
 import { downloadPage, url } from '../../data/site';
 
-const line = 'curl -sL frameport.app/s | bash';
+const line = 'curl -fsSL https://frameport.app/s | bash';
 ---
 <Layout title="Set up your Steam Frame · FramePort"
   description="Set up a Steam Frame for FramePort: run one line on the Frame, click Allow on your PC.">
@@ -98,7 +98,7 @@ const line = 'curl -sL frameport.app/s | bash';
   const term = document.querySelector<HTMLElement>('[data-term]');
   const digits = String(1000 + Math.floor(Math.random() * 9000));
   const LINES: [number, string, string?][] = [
-    [0, '$ curl -sL frameport.app/s | bash', 'tcmd'],
+    [0, '$ curl -fsSL https://frameport.app/s | bash', 'tcmd'],
     [600, '==> FramePort setup for steamframe', 'h'],
     [300, 'Looking for FramePort on your network...'],
     [1400, 'Found FramePort on DESKTOP-PC (192.168.1.20:8765), PC words: amber-otter'],

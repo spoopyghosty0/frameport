@@ -36,7 +36,7 @@ The Frame and your PC must be on the same network (or connected with a [USB cabl
    3. Type this setup line and press **Enter** (on-screen keyboard or any USB or Bluetooth keyboard):
 
       ```
-      curl -sL frameport.app/s | bash
+      curl -fsSL https://frameport.app/s | bash
       ```
 
       No keyboard? Open [the setup page](https://frameport.app/setup/) in Chromium on the Frame,

@@ -282,7 +282,7 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
 - `agent/frameport_agent.py` — runs **on the Frame** (python3 stdlib only), JSON over SSH. Owns the install layout,
   launch.sh template, Steam shortcuts (binary VDF), launch tests. Bump `AGENT_VERSION` when changing it.
 - `bootstrap/bootstrap.sh` — one-time Frame setup served by the pairing server (app key, podman fix, Developer Mode, Lepton).
-  `bootstrap/setup.sh` — the setup URL (`curl -sL frameport.app/s | bash`, copied to the site by
+  `bootstrap/setup.sh` — the setup URL (`curl -fsSL https://frameport.app/s | bash`, copied to the site by
   `site/scripts/sync-media.mjs`): finds the PC (stdlib mDNS on 5353 for `_frameport-pair._tcp`, which the pairing
   server announces while open; else the USB address and a /24 scan of `/ping`), `/hello` → the user clicks Allow (4
   digits on both sides, `ask_digits`) → `/wait` hands over the code → runs bootstrap.sh exactly like the typed line.

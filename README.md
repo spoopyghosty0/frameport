@@ -52,7 +52,7 @@ Details for each: [Install and first steps](docs/INSTALL.md).
    Konsole**, and run:
 
    ```
-   curl -sL frameport.app/s | bash
+   curl -fsSL https://frameport.app/s | bash
    ```
 
 4. Click **Allow** in FramePort when it shows the same 4-digit code as the Frame. Steam restarts once; if it asks to
