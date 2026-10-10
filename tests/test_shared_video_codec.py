@@ -152,6 +152,17 @@ def test_unconverted_old_codec_folder_stays(monkeypatch, tmp_path):
     assert (base / "frameport-codec/bin/podman").exists()
 
 
+
+def test_old_codec_folder_goes_when_the_recipe_has_the_patch(monkeypatch, tmp_path):
+    """Seen on the dev Frame: Batman's recipe already listed frame.hw_video_decode, so wants_hw_video answered from the
+    recipe and saved nothing; the old folder must still go once the launcher is converted."""
+    agent = agent_module(monkeypatch, tmp_path)
+    _, base = anchor(agent, tmp_path, "com.camouflaj.manta", LEPTON.format(line=agent.OLD_CODEC_LINES[0]),
+                     patches=["frame.adapter", "frame.hw_video_decode"], legacy=True)
+    assert agent.upgrade_launchers() == ["com.camouflaj.manta"]
+    assert agent.remove_old_codec_dirs() == ["com.camouflaj.manta"]
+    assert not (base / "frameport-codec").exists()
+
 def test_new_launchers_follow_the_recipe(monkeypatch, tmp_path):
     agent = agent_module(monkeypatch, tmp_path)
     for want in (True, False):

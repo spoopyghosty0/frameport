@@ -2375,7 +2375,8 @@ def set_codec_line(text, want):
 
 def remove_old_codec_dirs():
     """Agent <= 70 extracted a per-game codec into <base>/frameport-codec; the shared codec replaced it. Removed
-    once the game's launcher no longer needs it (wants_hw_video saved the choice, or the game never had a wrapper)."""
+    once the game's launcher no longer uses it (upgrade_launchers converted it; the choice is in deployment.json or
+    the recipe's patches)."""
     removed = []
     for dep_path in glob.glob(os.path.join(ANCHORS, "*/deployment.json")):
         try:
@@ -2387,7 +2388,12 @@ def remove_old_codec_dirs():
         old = os.path.join(base, "frameport-codec") if isinstance(base, str) else ""
         if not old or not os.path.isdir(old) or os.path.islink(old):
             continue
-        if os.path.exists(os.path.join(old, "bin/podman")) and "hw_video_decode" not in dep:
+        try:
+            with open(os.path.join(os.path.dirname(dep_path), "launch.sh")) as f:
+                launcher = f.read()
+        except OSError:
+            launcher = ""
+        if "frameport-codec" in launcher:
             continue  # its launcher hasn't been converted yet
         shutil.rmtree(old, ignore_errors=True)
         removed.append(dep.get("package") or os.path.basename(os.path.dirname(dep_path)))
