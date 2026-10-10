@@ -10,7 +10,7 @@ import Compare from '../components/Compare.astro';
 import Install from '../components/Install.astro';
 import Footer from '../components/Footer.astro';
 import { loadSnapshot } from '../data/catalog';
-import type { Game } from '../scripts/catalog';
+import { short, type Game } from '../scripts/catalog';
 
 const games = Object.values(loadSnapshot().files).map((f) => f.game).filter((g): g is Game => !!g);
 // the hero's travellers: tested Quest games that work, most recently checked first
@@ -28,7 +28,8 @@ const mockGames = [
 ].map(({ title, engine, xr, status, platform }) => ({ title, engine, xr, status: status as 'works' | 'issues', platform }));
 // the install log follows one real recipe
 const example = games.find((g) => g.package === 'com.Armature.VR4') ?? games.find((g) => g.status === 'works')!;
-const asLog = (g: Game) => ({ title: g.title, engine: g.engine, xr: g.xr, verified: g.checked, patches: g.patches.length });
+const asLog = (g: Game) => ({ title: g.title, package: g.package, engine: g.engine, xr: g.xr, verified: g.checked,
+  patches: g.patches, version: g.version, app: g.app, note: g.status === 'works' ? short(g.details) : g.note });
 const logGames = games.filter((g) => g.status !== 'unsupported' && g.platform === 'Quest' && g.engine && g.xr).map(asLog);
 ---
 <Layout

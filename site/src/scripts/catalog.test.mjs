@@ -7,10 +7,10 @@ test('catalog entries become rows like docs/GAMES.md', () => {
   assert.equal(toGame(null), null);
   const g = toGame({ title: 'A', package: 'p', status: 'issues', engine: 'Unity', xr: 'OpenXR', kind: 'rift',
     notes: 'First sentence. Second one.', details: 'More.', tested_version: '1.2', frame: ['frame.x'],
-    alt_overport: ['patch_y'], adapter: { focus_hold: 1 }, verified: { date: new Date('2026-10-02T00:00:00Z'), app: '0.9.0' } });
+    alt_overport: ['patch_y'], overport_extra: ['patch_z'], adapter: { focus_hold: 1 }, verified: { date: new Date('2026-10-02T00:00:00Z'), app: '0.9.0' } });
   assert.deepEqual(g, { title: 'A', package: 'p', status: 'issues', platform: 'PC VR', engine: 'Unity', xr: 'OpenXR',
     note: 'First sentence.', checked: '2026-10-02', details: 'First sentence. Second one. More.',
-    patches: ['frame.x', 'overport.patch_y', 'adapter.focus_hold'], version: '1.2', app: '0.9.0' });
+    patches: ['frame.x', 'overport.patch_y', 'overport.patch_z', 'adapter.focus_hold'], version: '1.2', app: '0.9.0' });
   assert.equal(toGame({ title: 'B', status: 'works', notes: 'hidden' }).note, '');
 });
 

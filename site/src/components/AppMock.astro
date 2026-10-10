@@ -2,6 +2,8 @@
 // A clickable, simplified FramePort window (logic in scripts/mock.ts): explore a demo setup, or take the guided tour
 // from a fresh start. Games are real catalog titles with generated covers; the Frame is pretend.
 import type { MockGame, Route } from '../scripts/mock';
+import Wordmark from './Wordmark.astro';
+import { url } from '../data/site';
 
 /** compact: one live screen (no window bar, sidebar or tour), for the carousel's slides */
 interface Props { games: MockGame[]; compact?: boolean; route?: Route; live?: boolean }
@@ -25,13 +27,14 @@ const ICON: Record<string, string> = {
 <div class:list={['mock', { compact }]} data-mock={compact ? undefined : ''} data-mock-compact={compact ? '' : undefined}
   data-route={route} data-live={live ? '' : undefined}>
   <div class="bar">
-    <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    <img src={url('favicon.svg')} alt="" width="16" height="16" />
     <span class="name">FramePort</span>
     <span class="demo">Demo · a pretend Frame, nothing is installed</span>
+    <span class="wc" aria-hidden="true"><i>–</i><i>▢</i><i>✕</i></span>
   </div>
   <div class="body">
     <aside class="side" data-sidebar>
-      <div class="brand"><span class="f">Frame</span><span class="pm" aria-hidden="true"></span><span class="p">Port</span></div>
+      <div class="brand"><img src={url('favicon.svg')} alt="" width="30" height="30" /><Wordmark id={`mock-${route ?? 'main'}${compact ? '-c' : ''}`} /></div>
       <nav aria-label="FramePort demo">
         {nav.map(([r, label]) => (
           <button type="button" data-route={r}>
@@ -90,8 +93,8 @@ const ICON: Record<string, string> = {
   }
   .bar { flex: none; display: flex; align-items: center; gap: 12px; padding: 9px 14px; background: var(--sidebar);
     border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-2); }
-  .dots { display: flex; gap: 6px; }
-  .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-3); }
+  .wc { display: flex; gap: 18px; margin-left: 18px; font-size: 12px; color: var(--text-2); }
+  .wc i { font-style: normal; }
   .name { color: var(--text); font-weight: 600; }
   .demo { margin-left: auto; font-family: var(--font-mono); font-size: 11px; }
   .body { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--side) minmax(0, 1fr); }
@@ -103,7 +106,9 @@ const ICON: Record<string, string> = {
     background: linear-gradient(180deg, var(--secondary), var(--accent)); opacity: .7; }
   .mock[data-dual="false"] .side::after { background: var(--border); opacity: 1; }
   .mock[data-dual="false"] nav button[aria-current="true"] { background: var(--accent-soft); }
-  .brand { display: flex; align-items: center; padding: 0 8px 6px; font: 800 20px/1 var(--font-display); }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 0 6px 10px; }
+  .brand img { border-radius: 7px; }
+  .brand :global(.wordmark) { font-size: 17px; }
   .brand .f { color: var(--accent); } .brand .p { color: var(--secondary); }
   .brand .pm { width: 9px; height: 20px; margin: 0 2px; border-radius: 50%; border: 2px solid var(--secondary);
     border-right-color: var(--accent); border-bottom-color: var(--accent); transform: rotate(14deg); background: #08090c; }
@@ -271,7 +276,7 @@ const ICON: Record<string, string> = {
   .view :global(.up::after) { content: ""; position: absolute; inset: 0; background: var(--portal); transform-origin: left; animation: fillx 2.4s var(--ease-out) both; }
 
   /* live view */
-  .view :global(.screen) { position: relative; aspect-ratio: 16 / 9; max-height: 340px; border-radius: var(--radius-md); overflow: hidden; display: grid;
+  .view :global(.screen) { position: relative; aspect-ratio: 16 / 9; max-height: 360px; border-radius: var(--radius-md); overflow: hidden; display: grid;
     place-items: center; background: #050608; border: 1px solid var(--border); margin-bottom: 12px; }
   .view :global(.scene3d) { position: absolute; inset: 0; perspective: 300px; }
   .view :global(.scene3d .sky) { position: absolute; inset: 0; background: linear-gradient(180deg, #0f2a40, #3a2512 60%, #0d0e12 60%); }
@@ -281,6 +286,10 @@ const ICON: Record<string, string> = {
   .view :global(.scene3d .orb) { position: absolute; left: 50%; top: 38%; width: 70px; height: 70px; margin: -35px; border-radius: 50%;
     background: radial-gradient(circle at 35% 35%, #fff, var(--accent) 45%, #3a2512); box-shadow: 0 0 40px rgba(255, 138, 31, .6);
     animation: bob 3s ease-in-out infinite; }
+  .view :global(.vr-host) { position: absolute; inset: 0; z-index: 1; cursor: grab; }
+  .view :global(.vr-host:active) { cursor: grabbing; }
+  .view :global(.screen.gl .scene3d) { display: none; }
+  .view :global(.badge) { z-index: 2; max-width: calc(100% - 24px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .view :global(.badge) { position: absolute; left: 12px; top: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(8, 9, 12, .7);
     font: 500 11.5px/1.3 var(--font-mono); color: var(--ok); }
 
@@ -447,6 +456,96 @@ const ICON: Record<string, string> = {
   .mock.compact { height: 100%; border: 0; border-radius: 0; box-shadow: none; }
   .compact .bar, .compact .side { display: none; }
   .compact .body { grid-template-columns: minmax(0, 1fr); }
+
+  /* round 5: closer to the real app (Flutter, Material 3 look) */
+  .view :global(.tag) { white-space: nowrap; }
+  .view :global(.tag svg) { flex: none; }
+  .view :global(.card .tags) { top: 7px; left: 7px; right: 7px; gap: 3px; flex-wrap: wrap; }
+  .view :global(.card .tag) { padding: 2px 6px; font-size: 9.5px; gap: 3px; }
+  .view :global(.card .tag svg) { width: 10px; height: 10px; }
+  .view :global(.grid) { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; }
+  nav button { padding: 7px 10px !important; }
+  .side { gap: 10px !important; padding-top: 12px !important; }
+  .mock:not(.compact) { height: clamp(600px, 64vw, 720px) !important; }
+  .view :global(.card .cv .ic) { display: none; }
+  .side { overflow: hidden auto; scrollbar-width: none; }
+  .view :global(.search-w .search) { width: 210px; }
+  .view :global(.vh h3), .view :global(.hero h3), .view :global(.cv .tt), .view :global(.empty h4) { font-family: Roboto, "Segoe UI", system-ui, sans-serif !important;
+    font-weight: 700 !important; letter-spacing: 0 !important; }
+  .view :global(.cv .tt) { font-size: 13.5px !important; font-weight: 600 !important; }
+  .view :global(.meta) { font-family: Roboto, "Segoe UI", system-ui, sans-serif !important; letter-spacing: .02em !important; }
+  .mock { font-family: Roboto, "Segoe UI", system-ui, sans-serif; }
+  nav button { position: relative; }
+  nav :global(button.live)::after { content: ""; position: absolute; right: 10px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px;
+    border-radius: 50%; background: var(--ok); }
+  .view :global(.lib-h) { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; row-gap: 10px; }
+  .view :global(.lib-h .vh-act) { flex-wrap: wrap; justify-content: flex-end; }
+  .view :global(.add-w) { grid-column: 2; justify-self: end; }
+  .view :global(.search-w) { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 34px; border-radius: 8px; background: var(--surface-3);
+    color: var(--text-2); }
+  .view :global(.search-w .search) { background: transparent; padding: 0; width: 180px; }
+  .view :global(.search-w .search:focus) { box-shadow: none; }
+  .view :global(.lib-h .btn-s) { gap: 6px; }
+  .view :global(.lib-h .btn-s svg) { color: var(--secondary); }
+  .view :global(.filters) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 14px; }
+  .view :global(.seg) { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; border: 1px solid var(--border-strong); }
+  .view :global(.seg button) { all: unset; padding: 5px 11px; border-radius: 999px; font-size: 12px; color: var(--text-2); cursor: pointer; }
+  .view :global(.seg button[aria-pressed="true"]) { color: var(--text); background: linear-gradient(90deg, rgba(58, 168, 255, .25), rgba(255, 138, 31, .25)); }
+  .view :global(.dd) { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border-strong);
+    font-size: 12px; color: var(--text-2); }
+  .view :global(.dd b) { color: var(--text); font-weight: 500; }
+  .view :global(.dd.sort) { margin-left: auto; }
+  .view :global(.shelf-h) { font: 600 15px/1.2 var(--font-sans); margin: 4px 0 10px; }
+  .view :global(.shelf) { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(170px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 6px;
+    scrollbar-width: thin; }
+  .view :global(.shelf[hidden]), .view :global(.shelf-h[hidden]), .view :global(.all-h[hidden]) { display: none; }
+  .view :global(.wide) { all: unset; position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; cursor: pointer; display: flex;
+    align-items: flex-end; padding: 10px; background: linear-gradient(170deg, hsl(var(--h) 45% 32%), hsl(var(--h) 40% 10%) 85%);
+    border: 1px solid var(--border); transition: transform 220ms var(--ease-out), box-shadow 220ms; }
+  .view :global(.wide:hover) { transform: translateY(-3px); box-shadow: var(--shadow-art-hover); }
+  .view :global(.wide .sun) { position: absolute; left: var(--sx); top: var(--sy); width: 80%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    border-radius: 50%; background: radial-gradient(circle, hsl(var(--h2) 90% 70% / .7), transparent 65%); mix-blend-mode: screen; }
+  .view :global(.wide::after) { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(8, 9, 12, .85)); }
+  .view :global(.wide b) { position: relative; z-index: 1; font: 600 13px/1.2 var(--font-sans); color: #fff; }
+  .view :global(.all-h) { display: flex; align-items: center; gap: 12px; margin: 16px 0 12px; font: 600 11px/1 var(--font-sans);
+    letter-spacing: .12em; text-transform: uppercase; color: var(--text-2); }
+  .view :global(.all-h::after) { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--secondary), var(--accent)); opacity: .6; }
+  .view :global(.tag) { display: inline-flex; align-items: center; gap: 4px; }
+  .view :global(.tag.on) { color: #0d0e12; background: var(--ok); }
+  .view :global(.cv) { border: 1px solid var(--border); }
+  .view :global(.cvt) { position: relative; z-index: 1; display: grid; gap: 4px; }
+  .view :global(.cv .st) { display: inline-flex; align-items: center; gap: 5px; font: 400 11px/1 var(--font-sans); color: var(--text-2); }
+  .view :global(.dot), .framecard :global(.dot) { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); margin-right: 5px; }
+  .view :global(.dot.ok), .framecard :global(.dot.ok) { background: var(--ok); }
+  .view :global(.dot.warn) { background: var(--warn); }
+  .view :global(.cv .ic) { top: 38px; }
+  .view :global(.sec-h) { font: 600 15px/1.2 var(--font-sans); margin: 18px 0 10px; }
+  .view :global(.where) { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
+  .view :global(.where div) { display: grid; gap: 2px; font-size: 13px; }
+  .view :global(.where small) { color: var(--text-2); font-size: 12px; }
+  .view :global(.where .ok) { color: var(--ok); }
+  .view :global(.wico) { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: var(--ok); background: rgba(61, 214, 140, .12); }
+  .view :global(.wico svg) { width: 20px; height: 20px; }
+  .view :global(.hero) { margin: 0 0 14px !important; border-radius: 12px; border: 1px solid var(--border); }
+  .view :global(.p-on) { display: inline-flex; align-items: center; gap: 4px; color: #0d0e12 !important; background: var(--ok) !important; }
+  .view :global(.p-ok) { color: var(--ok); }
+  .framecard :global(.fc-row small) { color: var(--text-2); font-size: 11px; }
+  .framecard :global(.np) { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; padding: 8px;
+    border-radius: 8px; background: var(--surface-2); border-top: 0; }
+  .framecard :global(.np-cv) { width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(150deg, hsl(var(--h) 60% 45%), hsl(var(--h) 55% 18%)); }
+  .framecard :global(.np-t) { display: grid; min-width: 0; }
+  .framecard :global(.np-t b) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+  .framecard :global(.np-t small) { color: var(--text-2); font-size: 10.5px; }
+  .framecard :global(.fps) { display: grid; justify-items: end; line-height: 1; }
+  .framecard :global(.fps b) { font-size: 15px; color: var(--ok); }
+  .framecard :global(.fps small) { font-size: 10px; color: var(--text-2); font-weight: 400; }
+  .framecard :global(.np-sp) { grid-column: 1 / -1; width: 100%; height: 14px; }
+  .framecard :global(.np-sp path) { fill: rgba(61, 214, 140, .25); stroke: var(--ok); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .framecard :global(.pwr) { display: grid; grid-template-columns: repeat(3, 1fr); margin: 2px -4px -4px; border-top: 1px solid var(--border); padding-top: 6px; }
+  .framecard :global(.pwr button) { all: unset; display: grid; justify-items: center; gap: 3px; padding: 4px 0; font-size: 10.5px; color: var(--text-2);
+    cursor: pointer; border-radius: 6px; }
+  .framecard :global(.pwr button:hover) { color: var(--text); background: rgba(237, 238, 242, .05); }
+  .side :global(.act.idle) { display: flex; align-items: center; justify-content: center; gap: 6px; }
 
   @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
   @keyframes spin { to { transform: rotate(360deg); } }

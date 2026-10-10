@@ -3,15 +3,9 @@
 // that restarts the lap restarts the scene too), and turns pointer drags, hover and phone tilt into a look around.
 import { hasWebGL, type FrameSide } from './types';
 
-export type Mode = 'world' | 'particles';
-const KEY = 'frameport.hero.frameside';  // TEMPORARY: remembers the comparison toggle's choice
 const STILL_LAP = 0.75;                  // reduced motion: the moment the game has fully arrived
 
-export interface Controller { setGame(title: string): void; setMode(mode: Mode): void; mode(): Mode; dragged(): boolean }
-
-export function savedMode(): Mode {
-  try { return localStorage.getItem(KEY) === 'particles' ? 'particles' : 'world'; } catch { return 'world'; }
-}
+export interface Controller { setGame(title: string): void; dragged(): boolean }
 
 export function initFrameSide(stage: HTMLElement, host: HTMLElement, firstTitle: string): Controller {
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -22,7 +16,6 @@ export function initFrameSide(stage: HTMLElement, host: HTMLElement, firstTitle:
     return typeof p === 'number' ? p : STILL_LAP;
   };
 
-  let mode: Mode = savedMode();
   let title = firstTitle;
   let side: FrameSide | null = null;
   let canvas: HTMLCanvasElement | null = null;
@@ -49,15 +42,15 @@ export function initFrameSide(stage: HTMLElement, host: HTMLElement, firstTitle:
   };
   const kick = () => { if (still) drawOnce(); else if (!running && visible && side) requestAnimationFrame(loop); };
 
-  async function start(m: Mode) {
+  async function start() {
     const ticket = ++loading;
     side?.dispose();
     side = null;
     canvas?.remove();
     host.classList.remove('live');
     try {
-      const mod = m === 'world' ? await import('./world') : await import('./particles');
-      if (ticket !== loading) return;                   // switched again while loading
+      const mod = await import('./world');
+      if (ticket !== loading) return;
       canvas = document.createElement('canvas');
       canvas.className = 'fs-canvas';
       host.append(canvas);
@@ -65,7 +58,6 @@ export function initFrameSide(stage: HTMLElement, host: HTMLElement, firstTitle:
       side.setGame(title);
       size();
       host.classList.add('live');
-      host.dataset.mode = m;
       kick();
     } catch {
       // no WebGL (or the module failed): the CSS scene underneath stays
@@ -78,7 +70,7 @@ export function initFrameSide(stage: HTMLElement, host: HTMLElement, firstTitle:
   const webgl = hasWebGL();
   new IntersectionObserver((es) => {
     visible = es.some((e) => e.isIntersecting);
-    if (visible && !side && !loading && webgl) start(mode);
+    if (visible && !side && !loading && webgl) start();
     kick();
   }, { rootMargin: '120px' }).observe(stage);
   document.addEventListener('visibilitychange', kick);
@@ -145,14 +137,6 @@ export function initFrameSide(stage: HTMLElement, host: HTMLElement, firstTitle:
 
   return {
     setGame(t) { title = t; side?.setGame(t); if (still) drawOnce(); },
-    setMode(m) {
-      if (m === mode) return;
-      mode = m;
-      try { localStorage.setItem(KEY, m); } catch { /* private mode */ }
-      if (!webgl) return;
-      if (visible) start(m); else { side?.dispose(); side = null; canvas?.remove(); canvas = null; loading = 0; }
-    },
-    mode: () => mode,
     dragged: () => performance.now() - lastDrag < 400,
   };
 }

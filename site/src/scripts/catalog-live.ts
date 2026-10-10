@@ -5,7 +5,7 @@
 import { toGame, type Game, type Snapshot } from './catalog';
 
 const LIST = 'https://api.github.com/repos/spoopyghosty0/frameport/contents/catalog/games?ref=main';
-const KEY = 'frameport.catalog.v2';  // v2: rows carry the recipe
+const KEY = 'frameport.catalog.v3';  // v3: recipes include overport_extra/pcvr/lepton_env
 const TTL = 6 * 3600 * 1000;
 
 type Files = Snapshot['files'];

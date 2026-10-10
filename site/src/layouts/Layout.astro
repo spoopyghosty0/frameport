@@ -57,16 +57,6 @@ const poster = new URL(url('media/frameport-tour.jpg'), Astro.site);
       }, { rootMargin: '0px 0px -12% 0px' });
       document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
       initInteractions();
-      // the big buttons lean toward the pointer
-      if (matchMedia('(pointer: fine)').matches && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        document.querySelectorAll<HTMLElement>('.hero .btn, .nav .btn-primary').forEach((b) => {
-          b.addEventListener('pointermove', (e) => {
-            const r = b.getBoundingClientRect();
-            b.style.translate = `${((e.clientX - r.left) / r.width - 0.5) * 10}px ${((e.clientY - r.top) / r.height - 0.5) * 8}px`;
-          });
-          b.addEventListener('pointerleave', () => { b.style.translate = ''; });
-        });
-      }
     </script>
   </body>
 </html>

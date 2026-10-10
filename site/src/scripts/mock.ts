@@ -4,6 +4,7 @@
 // files dropped on the Files tab never leave the browser; the window says so.
 import { coverVars, initials } from './cover';
 import { checkUrl, fileName as urlFileName } from './install-link';
+import type { VrScene } from './vrscene';
 
 export interface MockGame { title: string; engine: string; xr: string; status: 'works' | 'issues'; platform: string }
 
@@ -68,9 +69,19 @@ const human = (b: number) => b >= 1 << 30 ? `${(b / (1 << 30)).toFixed(1)} GiB` 
 
 const PLAY = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>';
 
-function cover(g: MockGame, cls = '') {
+const svg = (d: string, size = 15) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const HMD = svg('<path d="M3 9.5A3.5 3.5 0 0 1 6.5 6h11A3.5 3.5 0 0 1 21 9.5v4a3.5 3.5 0 0 1-3.5 3.5h-2.2a2 2 0 0 1-1.7-.95l-.75-1.2a1 1 0 0 0-1.7 0l-.75 1.2A2 2 0 0 1 8.7 17H6.5A3.5 3.5 0 0 1 3 13.5z"/>', 12);
+const CHECK = svg('<circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="m8 12 3 3 5-6" stroke="#0d0e12"/>', 12);
+const SEARCH = svg('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>', 16);
+const UPD = svg('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 8v7M9 12l3 3 3-3"/>');
+const RESCAN = svg('<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/>');
+const SELECT = svg('<path d="M4 7l2 2 3-3M4 15l2 2 3-3M12 8h8M12 16h8"/>');
+const TAG = svg('<path d="M3 12V4h8l9 9-8 8z"/><circle cx="7.5" cy="7.5" r="1.2"/>', 13);
+
+function cover(g: MockGame, cls = '', status = '') {
   return `<div class="cv ${cls}" style="${coverVars(g.title)}"><i class="sun"></i><i class="band"></i>`
-    + `<span class="ic">${esc(initials(g.title))}</span><b class="tt">${esc(g.title)}</b></div>`;
+    + `<span class="ic">${esc(initials(g.title))}</span><span class="cvt"><b class="tt">${esc(g.title)}</b>`
+    + (status ? `<span class="st">${status}</span>` : '') + `</span></div>`;
 }
 
 /** compact: one screen only (no window bar, sidebar or tour), for the live slides of the screenshot carousel. */
@@ -127,23 +138,66 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
   // ------------------------------------------------------------------ rendering
   function render() {
     renderChrome();
+    const keep = vr && s.route === 'live' && s.live && vr.title === liveTitle() ? vr : null;
+    if (keep) keep.host.remove(); else dropVr();
     view.innerHTML = VIEWS[s.route]();
+    if (s.route === 'live' && s.live) mountLive(keep);
     afterRender();
+  }
+
+  // The live view shows a real 3D world (the hero's worlds, seen through two lenses); the CSS scene stays underneath
+  // as the fallback without WebGL. One scene lives across re-renders of the tab (quality changes), none elsewhere.
+  let vr: { host: HTMLElement; title: string; scene: VrScene | null; dead: boolean } | null = null;
+  const liveTitle = () => s.playing ?? s.games[0]?.title ?? 'FramePort';
+  function dropVr() {
+    if (!vr) return;
+    vr.dead = true;
+    vr.scene?.dispose();
+    vr.host.remove();
+    vr = null;
+  }
+  function mountLive(keep: typeof vr) {
+    const screen = view.querySelector<HTMLElement>('.screen');
+    if (!screen) return;
+    if (keep) {
+      screen.prepend(keep.host);
+      if (keep.scene) screen.classList.add('gl');
+      return;
+    }
+    const host = document.createElement('div');
+    host.className = 'vr-host';
+    screen.prepend(host);
+    const mine = { host, title: liveTitle(), scene: null as VrScene | null, dead: false };
+    vr = mine;
+    import('./vrscene').then(({ mountVrScene }) => mountVrScene(host, { title: mine.title, stereo: true, interactive: true }))
+      .then((scene) => {
+        if (!scene) return;
+        if (mine.dead) { scene.dispose(); return; }
+        mine.scene = scene;
+        host.closest('.screen')?.classList.add('gl');
+      })
+      .catch(() => {});
   }
   /** The sidebar only (the Frame card, the activity card): progress ticks must not rebuild the page you're on. */
   function renderChrome() {
     side.querySelectorAll<HTMLElement>('[data-route]').forEach((b) => b.setAttribute('aria-current', String(b.dataset.route === s.route
       || (s.route === 'game' && b.dataset.route === 'library'))));
-    frameCard.innerHTML = s.connected
+    side.querySelector('[data-route="frame"]')?.classList.toggle('live', s.connected);
+    const playing = s.games.find((g) => g.title === s.playing);
+    frameCard.innerHTML = (s.connected
       ? `<div class="fc-row"><span class="ring" style="--p:82"><b>82</b></span><div><b>steamframe</b>`
-        + `<span class="ok">● ${s.link === 'usb' ? 'USB cable' : 'Wi-Fi'}</span></div></div>`
-        + (s.playing ? `<div class="np"><span>${esc(s.playing)}</span><span class="fps">72 <small>fps</small></span></div>` : '')
-      : `<div class="fc-row off"><span class="ring" style="--p:0"><b>–</b></span><div><b>Steam Frame</b><span>Not connected</span></div></div>`;
+        + `<span class="ok"><i class="dot ok"></i>Connected${s.link === 'usb' ? ' · USB' : ''}</span><small>Quest ✓ &nbsp; PC VR ✓</small></div></div>`
+        + (playing ? `<div class="np"><span class="np-cv" style="${coverVars(playing.title)}"></span><span class="np-t"><b>${esc(playing.title)}</b><small>playing · 27 min</small></span>`
+          + `<span class="fps"><b>72</b><small>fps</small></span><svg class="np-sp" viewBox="0 0 100 14" preserveAspectRatio="none"><path d="M0 13 L0 4 L100 4 L100 13 Z"/></svg></div>` : '')
+      : `<div class="fc-row off"><span class="ring" style="--p:0"><b>–</b></span><div><b>Steam Frame</b><span><i class="dot"></i>Not set up</span></div></div>`)
+      + (s.connected ? `<div class="pwr"><button data-act="toast" data-msg="The Frame goes to sleep">${svg('<path d="M20 14a8 8 0 1 1-10-10 6 6 0 0 0 10 10z"/>')}<span>Sleep</span></button>`
+        + `<button data-act="toast" data-msg="The Frame restarts">${RESCAN}<span>Restart</span></button>`
+        + `<button data-act="toast" data-msg="The Frame shuts down">${svg('<path d="M12 3v8M6.3 6.3a8 8 0 1 0 11.4 0"/>')}<span>Shut down</span></button></div>` : '');
     activity.innerHTML = s.installing
       ? `<div class="act"><b>Installing ${esc(s.installing.title)}</b><span>${STAGES[Math.min(s.installing.stage, 9)]}…`
         + (s.queue.length ? ` · ${s.queue.length} queued` : '') + `</span>`
         + `<i style="--w:${((s.installing.stage + 1) / STAGES.length) * 100}%"></i></div>`
-      : '<div class="act idle">No activity</div>';
+      : `<div class="act idle">${svg('<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/>', 14)}No activity</div>`;
   }
 
   const inTab = (g: MockGame) => s.filter === 'all' || (s.filter === 'frame') === s.onFrame.has(g.title);
@@ -155,32 +209,44 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
     library: () => {
       const list = s.games.filter(inTab);
       const shown = list.filter(matches).length;
-      const chips = ([['all', 'All'], ['frame', 'On Frame'], ['pc', 'On this PC']] as const)
-        .map(([k, l]) => `<button class="chip" data-filter="${k}" aria-pressed="${s.filter === k}">${l}</button>`).join('');
-      return `<header class="vh"><div><h3>Library</h3><p>${plural(s.games.length, 'game')} · ${s.onFrame.size} on your Frame</p></div>`
-        + `<div class="vh-act"><input class="search" data-search placeholder="Search games and tags" value="${esc(s.query)}" aria-label="Search games">`
-        + `<button class="btn-s" data-act="select" aria-pressed="${s.selecting}">${s.selecting ? 'Done' : 'Select'}</button>`
-        + `<span class="menu-wrap"><button class="btn-p" data-act="add">+ Add games</button>`
+      const seg = (items: [string, string][], cur: string, attr: string) => `<span class="seg">${items.map(([k, l]) =>
+        `<button ${attr}="${k}" aria-pressed="${cur === k}">${l}</button>`).join('')}</span>`;
+      const status = (g: MockGame) => g.status === 'works' ? '<i class="dot ok"></i>Works' : '<i class="dot warn"></i>Works with issues';
+      const onFrame = s.games.filter((g) => s.onFrame.has(g.title));
+      const card = (g: MockGame, i: number) => {
+        const on = s.onFrame.has(g.title);
+        return `<button class="card ${s.selected.has(g.title) ? 'sel' : ''}" data-game="${esc(g.title)}" style="--d:${Math.min(i, 12) * 40}ms"`
+          + ` data-text="${esc(`${g.title} ${g.engine} ${g.xr} ${g.platform}`.toLowerCase())}" ${matches(g) ? '' : 'hidden'}>`
+          + cover(g, '', status(g))
+          + `<span class="tags"><span class="tag">${HMD}${g.platform === 'PC VR' ? 'PC VR' : 'Quest'}</span>`
+          + (on ? `<span class="tag on">${CHECK}On Frame</span>` : '') + '</span>'
+          + (s.selecting ? `<span class="check">${s.selected.has(g.title) ? '✓' : ''}</span>` : '')
+          + (on && !s.selecting ? `<span class="cplay" data-act="quickplay" data-title="${esc(g.title)}" title="Play on Frame">${PLAY}</span>` : '')
+          + '</button>';
+      };
+      return `<header class="vh lib-h"><div><h3>Library</h3><p>${plural(s.games.length, 'game')} · ${s.onFrame.size} on your Frame</p></div>`
+        + `<div class="vh-act"><label class="search-w">${SEARCH}<input class="search" data-search placeholder="Type to search games and tags" value="${esc(s.query)}" aria-label="Search games"></label>`
+        + `<button class="btn-s" data-act="toast" data-msg="Every game is up to date">${UPD}Update all</button>`
+        + `<button class="btn-s" data-act="scan">${RESCAN}Rescan folders</button>`
+        + `<button class="btn-s" data-act="select" aria-pressed="${s.selecting}">${SELECT}${s.selecting ? 'Done' : 'Select'}</button></div>`
+        + `<span class="menu-wrap add-w"><button class="btn-p" data-act="add">+&nbsp; Add games</button>`
         + `<span class="menu" data-menu hidden><button data-act="scan">Scan a folder…</button>`
-        + `<button data-act="link">Install from a link…</button><button disabled>Add a Linux app…</button></span></span></div></header>`
-        + `<div class="chips">${chips}<span class="hintr">Right-click a game for more</span></div>`
+        + `<button data-act="link">Install from a link…</button><button disabled>Add a Linux app…</button></span></span></header>`
+        + `<div class="filters">${seg([['all', 'All'], ['frame', 'On Frame'], ['pc', 'On this PC']], s.filter, 'data-filter')}`
+        + `<span class="seg"><button aria-pressed="true">All</button><button>Android</button><button>PC VR</button></span>`
+        + `<span class="dd">Status: <b>Any</b> ▾</span><span class="dd">${TAG}Tags: <b>Any</b> ▾</span>`
+        + `<span class="dd sort">Sort: <b>Name</b> ▾</span></div>`
         + (s.scanning ? '<p class="scan">Scanning <code>D:\\VR games</code>…</p>' : '')
         + (s.selecting ? `<div class="selbar"><span>${plural(s.selected.size, 'game')} selected</span>`
           + `<button class="btn-p" data-act="batch" ${s.selected.size && s.connected ? '' : 'disabled'}>Install on Frame</button>`
           + `<button class="btn-s" data-act="selall">Select all</button></div>` : '')
         + (s.games.length
-          ? (list.length ? `<div class="grid ${s.selecting ? 'selecting' : ''}">${list.map((g, i) => {
-            const on = s.onFrame.has(g.title);
-            return `<button class="card ${s.selected.has(g.title) ? 'sel' : ''}" data-game="${esc(g.title)}" style="--d:${Math.min(i, 12) * 40}ms"`
-              + ` data-text="${esc(`${g.title} ${g.engine} ${g.xr} ${g.platform}`.toLowerCase())}" ${matches(g) ? '' : 'hidden'}>`
-              + cover(g) + `<span class="tags"><span class="tag">${g.platform === 'PC VR' ? 'PC VR' : 'Quest'}</span>`
-              + (on ? '<span class="tag on">On Frame</span>' : '') + '</span>'
-              + (s.selecting ? `<span class="check">${s.selected.has(g.title) ? '✓' : ''}</span>` : '')
-              + `<span class="sub">${g.status === 'works' ? '<i class="ok">●</i> Works' : '<i class="warn">●</i> Works with issues'}</span>`
-              + (on && !s.selecting ? `<span class="cplay" data-act="quickplay" data-title="${esc(g.title)}" title="Play on Frame">${PLAY}</span>` : '')
-              + '</button>';
-          }).join('')}</div><p class="none" ${shown ? 'hidden' : ''}>No game matches “${esc(s.query)}”.</p>`
-            : '<p class="none">Nothing here yet.</p>')
+          ? ((onFrame.length && s.filter === 'all' && !s.query && !s.selecting
+            ? `<h4 class="shelf-h">On your Frame</h4><div class="shelf">${onFrame.map((g) =>
+              `<button class="wide" data-game="${esc(g.title)}" style="${coverVars(g.title)}"><i class="sun"></i><i class="band"></i><b>${esc(g.title)}</b></button>`).join('')}</div>`
+            + '<p class="all-h">All games</p>' : '')
+            + (list.length ? `<div class="grid ${s.selecting ? 'selecting' : ''}">${list.map(card).join('')}</div>`
+              + `<p class="none" ${shown ? 'hidden' : ''}>No game matches “${esc(s.query)}”.</p>` : '<p class="none">Nothing here yet.</p>'))
           : `<div class="empty"><div class="portal-ico"></div><h4>Ready when you are</h4><p>Add a folder with your games. FramePort finds Quest games, PC VR games, Android and Linux apps in it.</p>`
             + `<button class="btn-p" data-act="scan">Scan a folder…</button></div>`);
     },
@@ -199,8 +265,9 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
       return `<div class="hero" style="${coverVars(g.title)}"><i class="sun"></i><i class="band"></i>`
         + `<button class="back" data-route="library">← Library</button>`
         + `<div class="hero-t"><p class="meta">${g.platform === 'PC VR' ? 'PC VR' : 'Meta Quest'} · ${esc(g.engine)} · ${esc(g.xr)}</p>`
-        + `<h3>${esc(g.title)}</h3><p class="pills"><span class="${g.status === 'works' ? 'p-ok' : 'p-warn'}">● ${g.status === 'works' ? 'Works' : 'Works with issues'}</span>`
-        + (on ? `<span class="p-on">On Frame · ${s.link === 'usb' ? 'USB' : 'Wi-Fi'}</span>` : '') + `</p><div class="row">${main}`
+        + `<h3>${esc(g.title)}</h3><p class="pills"><span class="${g.status === 'works' ? 'p-ok' : 'p-warn'}">${g.status === 'works' ? 'Works' : 'Works with issues'}</span>`
+        + (on ? `<span class="p-on">${CHECK}On Frame</span>` : '') + `</p><div class="row">${main}`
+        + (on && !busy ? `<button class="btn-s" data-act="install">${HMD}Reinstall on Frame</button>` : '')
         + `<span class="menu-wrap"><button class="btn-s" data-act="more" aria-label="More actions">…</button><span class="menu" data-more hidden>`
         + `<button data-act="toast" data-msg="Steam artwork updated on the Frame">Update Steam art on Frame</button>`
         + `<button data-act="toast" data-msg="Artwork picker: store art, or your own images">Find artwork…</button>`
@@ -215,8 +282,11 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
         + `<label class="sw tech"><span><b>Show technical details</b></span><input type="checkbox" data-details ${s.details ? 'checked' : ''}><i></i></label>`
         + PATCHES.map(([k, t, d, id]) => `<label class="sw"><span><b>${t}</b><small>${d}</small>${s.details ? `<code>${id}</code>` : ''}</span>`
           + `<input type="checkbox" data-patch="${k}" ${s.patches[k] ? 'checked' : ''}><i></i></label>`).join('')
-        + `</details><div class="kv"><span>Size</span><b>${size(g.title)}</b><span>Recipe</span><b>Tested recipe from the catalog</b>`
-        + `<span>Where</span><b>${on ? 'Steam Frame · Steam library' : 'This PC'}</b></div>`;
+        + `</details><h4 class="sec-h">Where it's installed</h4>`
+        + `<div class="where"><span class="wico">${HMD}</span><div><b>Steam Frame</b>`
+        + (on ? `<span class="ok">Installed</span><small>Last launch test: pass · furthest: Submitting frames</small>`
+          : `<span class="muted">Not installed</span><small>${size(g.title)} · tested recipe from the catalog</small>`)
+        + `</div></div>`;
     },
     frame: () => s.connected
       ? `<header class="vh"><div><h3>Steam Frame</h3><p>steamframe · SteamOS · connected ${s.link === 'usb' ? 'with a USB cable' : 'over Wi-Fi'}</p></div>`
@@ -250,7 +320,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
     live: () => `<header class="vh"><div><h3>Live view</h3><p>What the headset shows, with sound, in a browser window.</p></div>`
       + `<label class="qsel">Quality <select data-quality>${['Full', 'Balanced', 'Smooth'].map((q) => `<option ${q === s.quality ? 'selected' : ''}>${q}</option>`).join('')}</select></label></header>`
       + `<div class="screen ${s.live ? 'on' : ''}">${s.live
-        ? `<div class="scene3d"><i class="sky"></i><i class="floor"></i><i class="orb"></i></div><span class="badge">● Live · ${s.quality === 'Full' ? '1920×1080' : s.quality === 'Balanced' ? '1280×720' : '960×540'} · 32 fps · hardware encoder</span>`
+        ? `<div class="scene3d" aria-hidden="true"><i class="sky"></i><i class="floor"></i><i class="orb"></i></div><span class="badge">● Live · ${s.quality === 'Full' ? '1920×1080' : s.quality === 'Balanced' ? '1280×720' : '960×540'} · 32 fps · hardware encoder</span>`
         : `<button class="btn-p" data-act="live" ${s.connected ? '' : 'disabled'}>Start live view</button>`}</div>`
       + (s.live ? '<button class="btn-s" data-act="live">Stop</button>' : ''),
     keys: () => `<header class="vh"><div><h3>Type on Frame</h3><p>Your keyboard, typing on the Frame: in VR apps, Steam and the desktop.</p></div></header>`
@@ -600,6 +670,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
       // filter in place: re-rendering would replay every card's entrance
       s.query = t.value;
       const q = s.query.trim().toLowerCase();
+      view.querySelectorAll<HTMLElement>('.shelf, .shelf-h, .all-h').forEach((e) => { e.hidden = !!q; });
       let shown = 0;
       view.querySelectorAll<HTMLElement>('.grid .card').forEach((c) => {
         const ok = !q || (c.dataset.text ?? '').includes(q);

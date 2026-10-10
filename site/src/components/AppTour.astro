@@ -4,19 +4,29 @@
 import AppMock from './AppMock.astro';
 import Carousel from './Carousel.astro';
 import type { MockGame } from '../scripts/mock';
+import library from '../assets/media/library.png';
+import game from '../assets/media/game.png';
+import monitor from '../assets/media/monitor.png';
+import live from '../assets/media/live-view.png';
+import files from '../assets/media/files.png';
+import keys from '../assets/media/type-on-frame.png';
+import screenshots from '../assets/media/screenshots.png';
+import progress from '../assets/media/install-progress.png';
+import patches from '../assets/media/patches.png';
 import { url } from '../data/site';
 
 interface Props { games: MockGame[] }
 const { games } = Astro.props;
-const screens = [
-  { route: 'library' as const, title: 'Library', text: 'Your games with their artwork. Search, filter, right-click, select several.' },
-  { route: 'game' as const, title: 'Game page', text: 'One click to install or play. Patches and game settings under Customize.' },
-  { route: 'monitor' as const, title: 'Monitor', text: "The game's frame rate, the Frame's load and temperatures, live. End a process." },
-  { route: 'live' as const, title: 'Live view', text: 'What the headset shows, in a browser window on your computer.', live: true },
-  { route: 'shots' as const, title: 'Screenshots', text: 'The pictures you took in the headset, by game. Open one.' },
-  { route: 'files' as const, title: 'Files', text: "The Frame's files. Drop a file from your desktop on it." },
-  { route: 'keys' as const, title: 'Type on Frame', text: 'Type here; it appears on the Frame.' },
-  { route: 'settings' as const, title: 'Themes', text: 'Pick a theme; the screen changes at once.' },
+const shots = [
+  { img: library, title: 'Library', text: 'Your games with their artwork. Search, tags and filters; install several at once.' },
+  { img: game, title: 'Game page', text: 'One click to install or play. Patches and game settings under Customize.' },
+  { img: progress, title: 'Installing', text: 'Every stage on the way to the Frame, with speed and time left.' },
+  { img: monitor, title: 'Monitor', text: "The game's frame rate, the Frame's load, temperatures, power and battery, live." },
+  { img: live, title: 'Live view', text: 'What the headset shows, with sound, in a browser window on your computer.' },
+  { img: screenshots, title: 'Screenshots', text: 'The pictures you took in the headset, sorted by game and day.' },
+  { img: files, title: 'Files', text: "The Frame's videos, downloads and each game's storage. Drag and drop." },
+  { img: keys, title: 'Type on Frame', text: "Your computer's keyboard, typing in VR apps, Steam and the desktop." },
+  { img: patches, title: 'Patches', text: 'What each patch does, in plain words; switch any of them.', fit: 'contain' as const },
 ];
 const videos = [
   { id: 'tour', title: 'The tour', text: 'Library, install, play, monitor · about 90 s' },
@@ -35,8 +45,8 @@ const videos = [
     <div class="reveal"><AppMock games={games} /></div>
 
     <div class="shots reveal">
-      <p class="watch-k">Every screen, live: click, type, drop a file</p>
-      <Carousel slides={screens} games={games} />
+      <p class="watch-k">The real app, screenshot by screenshot</p>
+      <Carousel slides={shots} />
     </div>
 
     <div class="watch reveal">

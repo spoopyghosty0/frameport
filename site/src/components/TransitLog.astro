@@ -2,34 +2,35 @@
 // How it works, as the install log of one real catalog game: the stages on the PC in blue, the ones on the Frame in
 // orange, the portal between them.
 import Glyph from './Glyph.astro';
+import { patchLabel, stageDetails, type LogGame } from '../scripts/logdetails';
 
-export interface LogGame { title: string; engine: string; xr: string; verified?: string; patches: number }
 interface Props { example: LogGame; others: LogGame[] }
 const { example, others } = Astro.props;
+const d = stageDetails(example);
 
 type Stage = { glyph: Parameters<typeof Glyph>[0]['name']; name: string; detail: string; text: string };
 const pc: Stage[] = [
-  { glyph: 'pc', name: 'scan', detail: `${example.title} · APK + OBB`,
+  { glyph: 'pc', name: 'scan', detail: d.scan,
     text: 'Point FramePort at a folder. It finds Meta Quest games with their data files, PC VR game folders, Android and Linux apps.' },
-  { glyph: 'container', name: 'analyze', detail: `${example.engine} · ${example.xr} · arm64`,
+  { glyph: 'container', name: 'analyze', detail: d.analyze,
     text: 'Reads the engine, the VR API and the libraries the game needs, without running it.' },
-  { glyph: 'recipe', name: 'recipe', detail: example.verified ? `tested recipe · ${example.verified}` : 'tested recipe',
+  { glyph: 'recipe', name: 'recipe', detail: d.recipe,
     text: 'Uses the tested recipe when the game is in the catalog, otherwise suggests patches from the analysis. Every patch is explained in plain words.' },
-  { glyph: 'port', name: 'convert', detail: 'OVRPort · → OpenXR',
+  { glyph: 'port', name: 'convert', detail: d.convert,
     text: "OVRPort translates Meta's VR runtime calls to OpenXR, which the Frame speaks." },
-  { glyph: 'patch', name: 'patch', detail: example.patches ? `FrameBridge + ${example.patches} from the recipe` : 'FrameBridge + Frame patches',
+  { glyph: 'patch', name: 'patch', detail: d.patch,
     text: 'FrameBridge, FramePort’s OpenXR adapter, fills in what the Frame lacks: passthrough, the room, curved and 360° layers.' },
-  { glyph: 'keys', name: 'sign', detail: "the game's own key",
+  { glyph: 'keys', name: 'sign', detail: d.sign,
     text: 'Each game keeps one signing key, so an update installs over the old build and your saves stay.' },
-  { glyph: 'test', name: 'check', detail: 'static checks',
+  { glyph: 'test', name: 'check', detail: d.check,
     text: 'Missing libraries and 32-bit-only builds are reported before anything is uploaded.' },
 ];
 const frame: Stage[] = [
-  { glyph: 'sync', name: 'upload', detail: 'SSH · resumable',
+  { glyph: 'sync', name: 'upload', detail: d.upload,
     text: 'Straight to the Frame over your network or a USB cable. Big files continue where they stopped.' },
-  { glyph: 'frame', name: 'library', detail: 'Steam shortcut + artwork',
+  { glyph: 'frame', name: 'library', detail: d.library,
     text: 'The game appears in your Steam library with its artwork and tags. Start it like any other game.' },
-  { glyph: 'live', name: 'test', detail: 'launch test',
+  { glyph: 'live', name: 'test', detail: d.test,
     text: "A launch test starts the game, reads its logs and names the likely fix when it didn't start." },
 ];
 ---
@@ -75,7 +76,12 @@ const frame: Stage[] = [
       </ol>
     </div>
     <p class="foot muted reveal">
-      <span data-lg="foot">{example.title}</span>'s real recipe from the catalog. Games outside the catalog get the same stages with suggested patches.
+      <span class="recipe-box" aria-live="polite">
+        <span class="rb-k">Recipe</span>
+        <span class="rb-p" data-lg-patches>{example.patches.length ? example.patches.map((x) => <code>{patchLabel(x)}</code>) : <code>FrameBridge defaults</code>}</span>
+        <span class="rb-n" data-lg-note>{example.note}</span>
+      </span>
+      <span class="foot-t"><span data-lg="foot">{example.title}</span>'s real recipe from the catalog. Games outside the catalog get the same stages with suggested patches.</span>
       <button type="button" class="btn btn-secondary btn-small again" data-again>↻ Try another game</button>
     </p>
   </div>
@@ -84,10 +90,11 @@ const frame: Stage[] = [
 <script type="application/json" data-log-games set:html={JSON.stringify(others).replaceAll('<', '\\u003c')} />
 
 <script>
+  import { patchLabel, stageDetails, type LogGame } from '../scripts/logdetails';
   // another tested game, its real engine, VR API and recipe; the log plays again
   const log = document.querySelector<HTMLElement>('[data-log]');
   const games = JSON.parse(document.querySelector('[data-log-games]')?.textContent || '[]') as
-    { title: string; engine: string; xr: string; verified?: string; patches: number }[];
+    LogGame[];
   let last = -1;
   document.querySelector('[data-again]')?.addEventListener('click', () => {
     if (!log || !games.length) return;
@@ -97,10 +104,17 @@ const frame: Stage[] = [
     const g = games[k];
     const set = (key: string, v: string) => document.querySelectorAll(`[data-lg="${key}"]`).forEach((el) => { el.textContent = v; });
     set('title', g.title); set('foot', g.title);
-    set('scan', `${g.title} · APK + OBB`);
-    set('analyze', `${g.engine} · ${g.xr} · arm64`);
-    set('recipe', g.verified ? `tested recipe · ${g.verified}` : 'tested recipe');
-    set('patch', g.patches ? `FrameBridge + ${g.patches} from the recipe` : 'FrameBridge + Frame patches');
+    for (const [k, v] of Object.entries(stageDetails(g))) set(k, v);
+    const chips = document.querySelector('[data-lg-patches]');
+    if (chips) {
+      chips.replaceChildren(...(g.patches.length ? g.patches : ['FrameBridge defaults']).map((x) => {
+        const c = document.createElement('code');
+        c.textContent = g.patches.length ? patchLabel(x) : x;
+        return c;
+      }));
+    }
+    const note = document.querySelector('[data-lg-note]');
+    if (note) note.textContent = g.note;
     log.classList.remove('sweep');
     void log.offsetWidth;  // restart the sweep
     log.classList.add('sweep');
@@ -158,6 +172,15 @@ const frame: Stage[] = [
     color: var(--text-2); letter-spacing: .06em; }
 
   .foot { margin-top: 18px; font-size: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .recipe-box { flex-basis: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; align-items: baseline;
+    padding: 14px 16px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); }
+  .rb-k { font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  .rb-p { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rb-p code { font-size: 12px; padding: 3px 8px; border-radius: 6px; background: rgba(58, 168, 255, .1); color: var(--secondary);
+    animation: chip .35s var(--ease-out) both; }
+  .rb-n { grid-column: 2; color: var(--text-2); font-size: 14px; }
+  .rb-n:empty { display: none; }
+  @keyframes chip { from { opacity: 0; transform: translateY(4px); } }
   .again { font-size: 13px; }
 
   @media (max-width: 860px) {

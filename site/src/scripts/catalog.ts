@@ -54,6 +54,9 @@ export function toGame(raw: unknown): Game | null {
     patches: [
       ...(Array.isArray(d.frame) ? d.frame : []), ...(Array.isArray(d.device) ? d.device : []),
       ...(Array.isArray(d.alt_overport) ? d.alt_overport.map((p: string) => `overport.${p}`) : []),
+      ...(Array.isArray(d.overport_extra) ? d.overport_extra.map((p: string) => `overport.${p}`) : []),
+      ...(Array.isArray(d.pcvr) ? d.pcvr.map(String) : []),
+      ...(d.lepton_env && typeof d.lepton_env === 'object' ? Object.keys(d.lepton_env).map((k) => `env.${k}`) : []),
       ...(d.adapter && typeof d.adapter === 'object' ? Object.keys(d.adapter).map((k) => `adapter.${k}`) : []),
     ].map(String),
     version: text(d.tested_version),

@@ -1,5 +1,5 @@
-// What the hero's Frame side draws: the game, arrived through the portal. Two renderers share this shape (world.ts,
-// particles.ts); frameside.ts drives whichever is on, from the CSS lap of the APK card.
+// What the hero's Frame side draws: the game, arrived through the portal (world.ts, with the worlds from envs.ts);
+// frameside.ts drives it from the CSS lap of the APK card.
 import { hue, seed } from '../cover';
 
 export interface FrameSide {
