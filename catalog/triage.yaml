@@ -1,6 +1,9 @@
 # Log signature -> diagnosis -> suggested patches. Matched against the game's launch.log (Lepton logcat mirror).
 # `pattern` is a Python regex (case-sensitive). `suggest` lists patch ids (+ optional params) the UI offers as
-# "apply and rebuild". `severity`: fatal (the game can't run) | error | warning | info.
+# "apply and rebuild"; an entry `adapter.<key>=<value>` sets that value (else 1). `severity`: fatal (the game can't
+# run) | error | warning | info. `question`: a symptom only the player sees (play sessions, GUI "Last session"): its
+# fix is offered as that question, never applied on its own. `report: true` = the useful next step is a problem report
+# with diagnostics. Launch tests and real play sessions (agent session_log, `frameport session`) are both matched.
 # Sources: every failure we hit porting 34 games to the Steam Frame (see docs/PLAYBOOK.md).
 signatures:
   - id: no-launcher
@@ -34,7 +37,7 @@ signatures:
     diagnosis: 'The game''s graphics crashed, so the picture freezes or stays gray. Unity''s render thread crashed in the Frame''s GL driver (Mesa/Zink); known triggers are an OVROverlay copy (try "Unity: skip OVROverlay layers", for example The Room VR), MSAA switched on at runtime and a GPU hang (zink DEVICE LOST).'
     suggest: [frame.unity_no_overlay_copy, frame.unity_runtime_msaa_off]
   - id: unreal-msrtt-crash
-    pattern: 'fault addr 0x10000 in tid \d+ \((RHIThread|RenderThread)'
+    pattern: 'fault addr 0x10000 in tid \d+ \((RHIThread|RenderThread)|libgallium_dri\.so \(find_rp_state'
     severity: fatal
     diagnosis: The game's graphics crashed a few seconds after start. Its render thread jumped to address 0x10000 in the Frame's GL driver (Mesa/Zink), which reads past a render-pass cache when a game uses multisampled render-to-texture (Unreal's mobile MSAA, for example Star Wars Pinball VR); the GL shim hides that extension.
     suggest: [frame.unreal_gl_shim, frame.unity_gl_shim]
@@ -43,6 +46,13 @@ signatures:
     severity: fatal
     diagnosis: The game crashed on a CPU check the Quest ignores but the Frame enforces. Its code checks a return address (autiasp) it never signed; some OpenSSL assembly in game engines does this (for example Star Wars Pinball VR on its first network connection, thread HttpManager).
     suggest: [frame.pac_hints]
+  - id: cube-swapchain-refused
+    pattern: 'xrCreateSwapchain \d+x\d+ .*faces=6 .*result=-\d+'
+    unless: 'cube_standin: runtime refused'
+    severity: fatal
+    diagnosis: The game asked for a cube-map swapchain (for example an OVROverlay skybox or loading cube), which the Frame's runtime doesn't have. OVRPlugin goes on without images and crashes in ovrp_EndFrame4 (Unity's render thread SIGSEGV in memset, for example Budget Cuts Ultimate). FrameBridge from FramePort 0.12 serves such swapchains itself and drops their cube layers (cube_standin, GLES games) - rebuild and reinstall the game.
+    suggest: [frame.adapter]
+    supersedes: [unity-render-crash, native-crash]
   - id: swapchain-rect-invalid
     pattern: 'xrEndFrame failed -25\b'
     severity: fatal
@@ -75,11 +85,45 @@ signatures:
     severity: error
     diagnosis: The Frame rejected the game's image format. GLES games must use sRGB formats without MSAA.
     suggest: [adapter.swapchain_fix]
+  - id: zink-shader-fix-mismatch
+    pattern: 'shader fix layer: a \d+-byte module differs from fix'
+    severity: warning
+    diagnosis: The game's OpenGL ES shader fix (zink_shader_fix) no longer matches the shader the Frame's GL driver (Zink)
+      builds - a Frame or Lepton update changed the driver's output - so the shader it fixes (for example Vader Immortal's
+      lightspeed jump) may hang the GPU again. Capture the new modules with zink_shader_dump=1 (files/fp_spirv/ in the
+      game's storage) and update the fix.
+    suggest: [adapter.zink_shader_dump]
+  - id: zink-shader-layer-inactive
+    pattern: 'shader fix layer: NOT active'
+    severity: warning
+    diagnosis: FramePort's shader-fix Vulkan layer couldn't add itself to the game's Vulkan layers (Android's
+      GraphicsEnv functions it uses were not found or behaved differently, for example after a Lepton update), so the game's
+      OpenGL ES shader fixes (zink_shader_fix) don't apply.
+    suggest: []
   - id: zink-device-lost
     pattern: 'zink.*DEVICE[_ ]LOST|VK_ERROR_DEVICE_LOST'
     severity: fatal
-    diagnosis: The GPU hung, so the game froze or closed. For GLES Unity games (Zink/Mesa) MSAA render-to-texture is the usual cause.
+    diagnosis: The GPU hung, so the game froze or closed. For GLES Unity games (Zink/Mesa) MSAA render-to-texture is the usual cause; at one effect only, a shader reading undefined loop counters (for example Vader Immortal's lightspeed jump, patch frame.zink_shader_fix).
     suggest: [frame.unity_no_msaa, frame.unity_runtime_msaa_off]
+  - id: gpu-hang
+    pattern: 'kernel: .*(?i:hangcheck|gpu fault|msm_drm.*(hang|recover)|kgsl.*(hang|fault)|adreno.*(hang|fault))'
+    severity: fatal
+    diagnosis: The Frame's GPU hung while the game ran (the kernel reset it; the game froze or closed). Usually one
+      shader or effect the Frame's driver can't handle (for example Vader Immortal's lightspeed jump, a VR4 cutscene).
+      FramePort can't fix that on its own; capture the game's shaders (the shader dump), play to the hang once more and
+      send a problem report with diagnostics, so a shader fix can be added for this game.
+    # triage keeps only the dump for the graphics API the session used (FrameBridge's swapchain formats)
+    suggest: [adapter.vk_shader_dump, adapter.zink_shader_dump]
+    report: true
+  - id: space-warp-used
+    pattern: 'xrCreateSwapchain \d+x\d+ format=(97|129) '
+    unless: 'per-game: hide_space_warp=1'
+    severity: info
+    diagnosis: The game uses Meta's space warp (it renders half of its frames plus motion vectors, and the runtime makes
+      up the rest). On the Frame that can make textures flicker, jump or smear while you move (for example Into The Radius 2,
+      Metro Awakening). Turning it off makes the game render every frame itself.
+    question: Did textures flicker, jump or smear while you moved?
+    suggest: [adapter.hide_space_warp]
   - id: unity-runtime-msaa
     pattern: 'recommended MSAA level is [248]\. Switching to the recommended level'
     severity: info
@@ -125,6 +169,13 @@ signatures:
     severity: error
     diagnosis: The game's shaders don't compile on the Frame, so parts of the picture are missing. Shaders written for Quest drivers fail on Mesa's stricter GLSL.
     suggest: [frame.gl_shim]
+  - id: gl-multiview-twin-failed
+    pattern: 'GLMV\s*: twin of program \d+(: stage| failed)'
+    severity: warning
+    diagnosis: The multiview interposer (frame.gl_multiview_fbo) couldn't build a single-view copy of one of the
+      game's shader programs (the line has the compiler's message); draws of that program into flat panels (HUD,
+      menus) still stay black. Please report it with the log; turning the patch off changes nothing else.
+    suggest: []
   - id: vrapi-unsupported-layer
     pattern: 'OVRPortVrApi.*Unsupported VrApi layer type (\d+)'
     severity: error
@@ -231,6 +282,12 @@ signatures:
     diagnosis: The game's own graphics plugin crashes or hangs it before the first frame (for example BONELAB 1.2974). Stress Level Zero's plugin (libSLZQuestNative.so) hooks Unity's Vulkan start-up and calls an invalid function there on the Frame.
     suggest: [frame.slz_vulkan_hooks]
     supersedes: [java-crash, native-crash]
+  - id: vivox-api31
+    pattern: 'NoSuchMethodError: No virtual method \w*CommunicationDevice\w*\(.*Landroid/media/AudioManager'
+    severity: fatal
+    diagnosis: The game's Vivox voice-chat SDK calls Android 12 audio-routing methods (AudioManager communication devices) without checking the Android version; Lepton runs Android 11, so the app crashes (for example Green Hell VR). The patch makes Vivox's audio-route check return early (voice chat keeps the default route).
+    suggest: [frame.vivox_audio_route]
+    supersedes: [java-crash]
   - id: native-crash
     pattern: 'Fatal signal (\d+) \(SIG[A-Z]+\)'
     severity: fatal
@@ -253,8 +310,14 @@ signatures:
     suggest: []
   - id: container-not-started
     pattern: "is not a running context|OCI runtime error"
+    unless: 'Boot complete!'  # Lepton 3.x prints the error while its container is still starting, then boots fine
     severity: fatal
     diagnosis: The game's Android container (Lepton) failed to start. See the error above it in launch.log.
+    suggest: []
+  - id: unity-data-missing
+    pattern: 'Unable to open archive file|is corrupted! Remove it and launch unity again|Failed to read data for the AssetBundle'
+    severity: fatal
+    diagnosis: The game can't read its own data files (OBB/data folder) - they are incomplete or from another version of the game than the APK. Copy the whole data folder again from the same install as the APK, add the game again and reinstall.
     suggest: []
   - id: permission-denied-save
     pattern: 'Permission denied.*(Android/data|/sdcard)|EACCES.*Android/data'
@@ -336,6 +399,19 @@ signatures:
     severity: fatal
     diagnosis: The game crashed (Unreal's crash reporter started). Common causes are that no VR runtime reached the game (Revive off) or a GPU or driver problem under Proton; see the game log and crash summary in the log.
     suggest: [pcvr.revive, pcvr.proton_log, pcvr.no_crash_reporter]
+  - id: unity-vr-init
+    kind: pcvr
+    pattern: '(?i)OpenVR failed initialization|VRInitError_(?!None\b)\w+|Initialization of device \w+ failed|Failed to (load|initialize|start) (VR|XR|OpenVR|Oculus)\b'
+    severity: error
+    diagnosis: The game's Unity log shows that a VR device failed to start. Unity games built for both the Oculus and the SteamVR (OpenVR) runtime choose one with an argument; without it they may try Oculus, which the Frame doesn't have, and run without VR or quit. Start the game with -vrmode OpenVR (Game arguments).
+    suggest: [pcvr.launch_args]
+  - id: unity-crash
+    kind: pcvr
+    pattern: 'Crash!!!|caused an Access Violation|caused an Unhandled Exception'
+    severity: fatal
+    diagnosis: The game crashed (Unity's crash handler wrote a report; the Unity log in the launch log shows the stack). Common causes are that no VR runtime reached the game or a GPU or driver problem under Proton.
+    suggest: [pcvr.proton_log]
+    supersedes: [wine-crash]
   - id: wine-crash
     kind: pcvr
     pattern: 'Unhandled exception: page fault|wine: Unhandled|Backtrace:'
@@ -346,7 +422,7 @@ signatures:
   - id: save-folder-permission
     pattern: "(We don't have write permission to|UnauthorizedAccessException: Access to the path \"/(sdcard|storage/emulated/0)/Android/data/)"
     severity: error
-    diagnosis: The game can't write to a folder it created, so it may quit at start (for example SUPERHOT's cloud/data, mode 1700). FramePort's launcher (agent 41 or newer) gives such folders owner and group write permission at every launch; reinstall the game to get the new launcher.
+    diagnosis: The game can't write to a folder it created, so it may quit at start (for example SUPERHOT's cloud/data, mode 1700). FramePort's launcher (agent 41 or newer) gives such folders owner and group write permission before and during every launch; reinstall the game to get the new launcher. A folder the game creates and checks in the same moment on its very first start can't be repaired in time, so start the game again.
     suggest: []
   - id: surface-swapchain-emulated
     pattern: 'surface_emul: emulated Android surface swapchain'
@@ -357,6 +433,14 @@ signatures:
     pattern: 'surface_emul: (setup failed|upload failed|EGL context failed|Vulkan upload path unavailable)'
     severity: warning
     diagnosis: A video panel stays empty, and a game waiting for its intro video may stay black (for example I Am Monkey's intro). FrameBridge couldn't emulate the Android video panel (XR_KHR_android_surface_swapchain).
+    suggest: []
+  - id: hw-video-decoder-busy
+    pattern: 'Iris \S+ unavailable; keeping Android|Iris \S+ initialization failed \(-1[26]\); using software'
+    severity: info
+    diagnosis: FramePort's hardware video decoder (frame.hw_video_decode) couldn't open a session, because other
+      decoder sessions held the hardware (Steam's own hardware video decoding, SteamVR's link while a game starts);
+      the video was decoded in software instead, which is slow for 4K/8K. Turn off hardware video decoding in Steam's
+      settings, restart Steam, then start the game again.
     suggest: []
 milestones:  # progress markers, in order; the furthest one reached is reported
   - {id: pcvr-launch, kind: pcvr, pattern: 'FramePort: launching|Launched injector with', label: Launcher started}

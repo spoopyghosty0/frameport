@@ -42,6 +42,8 @@ SUMMARIES = {
     "frame.launcher": "Makes the game start from the Frame's Steam library.",
     "frame.start_activity": "Opens the app straight in VR, skipping its flat launcher screen. Turn off to use the "
                             "launcher, for example to import new content.",
+    "frame.gl_multiview_fbo": "Experimental: shows HUDs, menus and other flat panels that stay black on the Frame "
+                              "(for example Doom3Quest's HUD and PDA).",
     "frame.ltw_depth": "Stops a black picture in Minecraft launchers (for example QuestCraft).",
     "frame.unity_gl_shim": "Stops a gray or frozen screen in Unity games that turn on anti-aliasing while running "
                            "(for example The Room VR).",
@@ -67,12 +69,18 @@ SUMMARIES = {
     "frame.unity_runtime_msaa_off": "Keeps a smoothing setting off that the game turns on itself and that can freeze "
                                     "the Frame.",
     "frame.sdl_clipboard": "Lets SDL and LÖVE games start on the Frame (they'd crash looking for a clipboard).",
+    "frame.vivox_audio_route": "Lets games with Vivox voice chat start on the Frame (they'd crash on an Android 12 "
+                               "audio call).",
     "frame.unity_oculus_check": "Lets older Unity games start VR without Meta's system apps (they'd stay on a 2D "
                                 "screen).",
     "frame.unity_multipass": "Draws each eye separately. Try it when one eye shows a gray or broken picture.",
     "frame.swapchain_limit": "Allows very large pictures (8K video, theaters) instead of quitting.",
     "frame.vrapi_stub": "Stops Meta's old VR library from closing the game at start (for example Jurassic World "
                         "Aftermath).",
+    "adapter.zink_shader_fix": "Repairs OpenGL ES shaders that hang the graphics chip, from the game's recipe.",
+    "adapter.surface_native": "Shows Batman: Arkham Shadow's cutscenes; set by that game's recipe.",
+    "frame.hw_video_decode": "Plays the game's videos on the Frame's video hardware, so 4K and 8K video runs "
+                             "smoothly.",
     "frame.tbxr_vendor": "Lets Team Beef ports (for example Lambda1VR) start on the Frame.",
     "frame.asset_files": "Lets the game find extra content it keeps next to its data (for example Star Wars Tales' "
                          "seasons).",
@@ -85,6 +93,14 @@ SUMMARIES = {
     "frame.oculusos": "Provides stand-ins for Quest system calls some games make at start.",
     "frame.unity_text_input": "Lets you type into this app's text fields on the Frame (they'd close at once).",
     "frame.vk_sanitize": "Cleans up graphics data that crashes some Unreal games on the Frame.",
+    "frame.unreal_quest_precompile": "Lets the game leave its loading screen: it waited for a Quest-only step that "
+                                     "never starts on the Frame (for example Vader Immortal).",
+    "frame.unreal_quest_keymap": "Makes grip, trigger and touch controls reach the game's hands (it picked the "
+                                 "empty Gear VR controls on the Frame, for example Vader Immortal).",
+    "frame.unreal_thumb_touch": "Makes the hands' thumbs follow what your thumb touches (they always pointed up: the "
+                                "Frame doesn't sense a thumb hovering, for example Vader Immortal).",
+    "frame.zink_shader_fix":"Repairs shaders that hang the graphics chip at certain effects, from the game's "
+                             "recipe (for example Vader Immortal's lightspeed jump).",
     # Files and environment on the Frame
     "device.files": "Puts settings files next to the game on the Frame, for example to turn off an unsupported "
                     "effect.",
@@ -93,6 +109,8 @@ SUMMARIES = {
                                 "keeps working.",
     "device.display_mode": "Choose Flat window if a phone or tablet app shows nothing in the headset, VR if a VR app "
                            "opens as a flat window.",
+    "device.steam_gamepad": "Lets the game use your controllers as a gamepad instead of a pointer, for 2D games with "
+                            "touch controls (for example SDL games).",
     "device.lepton_env": "Extra settings for the Android container (for testing).",
     "device.foveation": "Try Fixed or Off if one eye shimmers or jitters while menus look fine.",
     # PC VR

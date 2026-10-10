@@ -3,7 +3,7 @@
 ## How should I lay out a game that has OBB files?
 
 Some Quest games come as an APK (the app file) plus `.obb` files (the game's data). Give every game its own folder,
-put the APK in it and put the data in a folder named after the game's **package name** (e.g. `com.Armature.VR4`):
+put the APK in it and put the data in a folder named after the game's **package name** (for example `com.Armature.VR4`):
 
 ```
 Games/                                  ← scan this folder (Add games → Scan a folder)

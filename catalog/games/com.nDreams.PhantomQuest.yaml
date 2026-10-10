@@ -1,18 +1,25 @@
 package: com.nDreams.PhantomQuest
 title: 'Phantom: Covert Ops'
-tested_version: '1.2'
-source_hint: 'Phantom- Covert Ops'
-engine: Unreal
-xr: VrApi
 status: issues
 notes: DLC/store button crashes (no Meta store). Installs the no-ForceQuit build.
 details: The regular build quits itself on the Frame (System.exit after a failed platform check), so the no-ForceQuit
-  build is installed.
+  build is installed. Shares Vader Immortal's Unreal 4 Oculus input (GitHub 49) - thumbs follow the touches (frame.unreal_thumb_touch)
+  and controller poses are located at the right time (pose_time_fix); added 2026-10-09 from Vader's headset results,
+  not yet checked in this game.
+tested_version: '1.2'
+engine: Unreal
+xr: VrApi
 alt_overport:
 - patch_remove_unreal_force_quit
 use_alt: true
+frame:
+- frame.unreal_thumb_touch
+adapter:
+  pose_time_fix: 1
 verified:
   date: '2026-09-28'
   overport_cli: 1.2.3
   overport_runtime: 3.4.3-23204ea
   known_good_sha256: bb02b20a23fbe5e7a580ecde15a3cd015a4183421a51aab4a4dbcddbe7a09d1d
+updated: '2026-10-09'
+source_hint: Phantom- Covert Ops

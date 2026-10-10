@@ -91,6 +91,13 @@
   `device.foveation`: `fixed` = `FDM_DEBUG=disable_offsets`, `off` = `VK_INSTANCE_LAYERS=""`. Lepton passes `FDM`,
   `FDM_DEBUG`, `FOVE_LEVEL` and `FDM_SWAPCHAIN_SIZE` through to the container (liblepton/mounting.sh PASSTHROUGH_VARS);
   the layers are chosen on the host, so setting them inside the game does nothing.
+- How Lepton loads them: `liblepton/vulkan_layers.sh` mounts the chosen layers (only those in the OS image's
+  `/usr/share/guestos/android/vendor/vulkan_layers`) into the app's lib dir and writes their names to Android's
+  `settings global gpu_debug_layers` for `gpu_debug_app` = the game; Android's loader reads that list from GraphicsEnv
+  at each vkCreateInstance and searches the app's lib dir (`/data/app/…/lib/arm64`). A layer bundled in the APK is
+  found there too; FramePort's shader-fix layer (`frame.zink_shader_fix`) adds its own name to GraphicsEnv's list from
+  inside the process (`android::GraphicsEnv::setDebugLayers`, exported by the guest's libgraphicsenv.so, Lepton 3.0.5).
+  That is the only way to reach the Vulkan side of OpenGL ES games (Zink creates the instance inside Mesa).
 - GL ES: Zink (Mesa GL on Vulkan). Strict GLSL (see PLAYBOOK) and occasional `DEVICE LOST` with MSAA render-to-texture.
 
 ## Proton / Windows games (surveyed 2026-09-29; running a Rift game under it not yet verified)

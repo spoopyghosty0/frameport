@@ -85,7 +85,10 @@ def settings_diff(game: dict, frame_info: dict | None) -> tuple[list[str], list[
     if not isinstance(rec, dict) or "patches" not in rec:
         return None
     installed, now = set(rec["patches"]), set((game.get("recipe") or {}).get("patches") or {})
-    added, removed = sorted(now - installed), sorted(installed - now)
+    # patches a build left out because the OVRPort runtime already has the fix (patches/upstream.py) are not missing:
+    # counting them kept "Update on Frame" up after every update (e.g. haptic_fix with runtime 3.4.3-aa54c3f)
+    superseded = set((game.get("build") or {}).get("superseded") or {})
+    added, removed = sorted(now - installed - superseded), sorted(installed - now)
     return (added, removed) if added or removed else None
 
 
@@ -145,6 +148,9 @@ def install_state(game: dict, frame_info: dict | None) -> str | None:
         return "outdated"
     if built and dep.get("sha256") in built and recipe_changed(game):
         return "outdated"  # the recipe changed since this build (e.g. a catalog fix): it needs a new build
+    if built and dep.get("sha256") in built and b.get("source_version") and \
+            b["source_version"] != (game.get("analysis") or {}).get("version"):
+        return "outdated"  # a newer (or older) APK of the game was added since this build (GitHub #161)
     return "outdated" if settings_diff(game, frame_info) else "installed"
 
 
@@ -155,8 +161,8 @@ def recipe_changed(game: dict) -> bool:
     if not recipe:
         return False
     if b.get("recipe_fp"):
-        return b["recipe_fp"] != recipe_fingerprint(recipe)
-    return revised_since_unrecorded(recipe)
+        return b["recipe_fp"] != recipe_fingerprint(recipe, game.get("package", ""))
+    return revised_since_unrecorded(recipe, game.get("package", ""))
 
 
 def pc_outdated(g: dict, dep: dict) -> bool:

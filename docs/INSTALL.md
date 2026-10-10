@@ -53,7 +53,7 @@ Later, FramePort connects to the Frame by itself. If you turn Developer Mode off
 Developer Mode**), turn it on again there.
 
 **Setup command:** if your network blocks FramePort's search, click **Use the setup command**. It shows a line with
-your PC's address and a one-time code, e.g. `curl -fsS 192.168.1.20:8765/1a2b3c4d | bash`. Run it in Konsole instead.
+your PC's address and a one-time code, for example `curl -fsS 192.168.1.20:8765/1a2b3c4d | bash`. Run it in Konsole instead.
 
 **Without Konsole:** turn on Developer Mode yourself (Settings → System → **Enable Developer Mode**), then open
 Settings → Developer → **Pair new host** on the Frame. FramePort finds the Frame and asks to connect; approve it in the
@@ -92,7 +92,7 @@ problem…**.
 
 - **Install on Frame** on a game's page, or select several games in the Library and install them together. Installs
   run in the background; **Activity** shows the current one.
-- **Update all** updates every game whose build changed, e.g. after a FramePort update.
+- **Update all** updates every game whose build changed, for example after a FramePort update.
 - If the Frame sleeps or leaves the Wi-Fi, installs wait and continue when it's back. While installs run, the Frame
   stays awake.
 - Your own game files are never changed. The patched copy is deleted once the game is on the Frame (Settings →

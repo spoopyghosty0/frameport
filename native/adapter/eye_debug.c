@@ -40,6 +40,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL eye_hook_xrReleaseSwapchainImage(XrSwapcha
                                                                        const XrSwapchainImageReleaseInfo *info) {
     PFN_xrReleaseSwapchainImage fn = (PFN_xrReleaseSwapchainImage)lookup(active_instance, "xrReleaseSwapchainImage");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
+    if (is_standin(swapchain)) return XR_SUCCESS;
     if (release_wait_active()) eye_wait_for_gpu();
     XrResult result = fn(swapchain, info);
     if (eye_debug) {

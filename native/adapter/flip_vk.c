@@ -47,6 +47,7 @@ typedef struct {
     VkImage images[MAX_IMAGES];
     uint32_t image_count;
     uint32_t last_acquired;
+    uint32_t acquired[MAX_IMAGES], acquired_count, waited_count;
     XrSwapchain shadow;
     XrRect2Di shadow_rect;
     VkImage shadow_images[MAX_IMAGES];
@@ -105,7 +106,10 @@ static void flip_on_enumerate_images(XrSwapchain handle, uint32_t count, const X
 static void flip_on_acquire(XrSwapchain handle, uint32_t index) {
     pthread_mutex_lock(&flip_lock);
     tracked_swapchain *t = find_tracked(handle, 0);
-    if (t) t->last_acquired = index;
+    if (t) {
+        t->last_acquired = index;
+        if(t->acquired_count<MAX_IMAGES)t->acquired[t->acquired_count++]=index;
+    }
     pthread_mutex_unlock(&flip_lock);
 }
 

@@ -15,7 +15,7 @@ Frame, patches each game so it runs there, uploads it and adds it to your Steam 
 ▶ [Watch the full tour](docs/media/frameport-tour.mp4) · New to FramePort? [Watch the install tutorial](docs/media/frameport-install.mp4)
 (about 90 seconds each)
 
-> **Notice:** FramePort doesn't download, share or unlock games. Use games you got legally, e.g. from
+> **Notice:** FramePort doesn't download, share or unlock games. Use games you got legally, for example from
 > [SideQuest](https://sidequestvr.com/). FramePort downloads published open-source tools (see [Built on](#built-on))
 > and adds its own patches so games run on the Frame.
 >

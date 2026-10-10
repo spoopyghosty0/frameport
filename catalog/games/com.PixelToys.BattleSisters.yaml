@@ -1,12 +1,14 @@
 package: com.PixelToys.BattleSisters
 title: BattleSisters
 status: works
-notes: Starts in VR; controller buttons and vibration work.
-details: Unity 2019.4 with Unity's built-in Oculus support. frame.unity_oculus_check starts VR (Meta's system-app check),
-  adds the frame wait its legacy loop never makes (without it the GPU hung, black screen) and lets Unity's Oculus
-  input accept Lepton's device model (it only reported controllers on a device named "Oculus ...", so buttons were
-  dead). haptic_fix stops the first controller vibration from freezing the Frame (OVRPort's loader read its duration
-  in nanoseconds as seconds and the game ran out of memory).
+notes: Plays; controller buttons and vibration work, hands follow the controllers (pose_time_fix).
+details: Unity 2019.4 with Unity's built-in Oculus support. frame.unity_oculus_check starts VR (Meta's system-app
+  check), adds the frame wait its legacy loop never makes (without it the GPU hung, black screen) and lets Unity's
+  Oculus input accept Lepton's device model (it only reported controllers on a device named "Oculus ...", so buttons
+  were dead). haptic_fix stops the first controller vibration from freezing the Frame (OVRPort's loader read its
+  duration in nanoseconds as seconds and the game ran out of memory). With pose_time_fix the hands follow the controllers
+  - OVRPlugin asked for hand poses at Android's monotonic "now", which on SteamOS 0.4.5 is 2.56 s behind the runtime's
+  XrTime, so the hands lagged far behind.
 tested_version: 1.2.4
 engine: Unity
 xr: VrApi
@@ -18,9 +20,10 @@ frame:
 - frame.unity_gl_shim
 adapter:
   haptic_fix: 1
+  pose_time_fix: 1
 verified:
-  date: '2026-10-06'
+  date: '2026-10-08'
   issue: 48
-updated: '2026-10-06'
-min_app: 0.11.1
+updated: '2026-10-08'
+min_app: 0.12.1
 source_hint: Battle Sister

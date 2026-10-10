@@ -1,20 +1,36 @@
 package: com.ILMxLAB.VaderImmortal.ep1
 title: 'Vader Immortal: Episode I'
-status: issues
-notes: Starts in VR and plays the intro, then stays on the loading card (Vader's portrait with a progress bar).
-details: Unreal Engine 4 (GLES). After the Lucasfilm intro the game shows its loading card and never loads the next
-  scene; it keeps rendering at 72 fps and ignores input. Ruled out so far - Meta platform requests (all answered),
-  video playback (the intro is a video and plays), the no-ForceQuit build, frame and swapchain handling. The Frame's
-  SteamVR runtime also leaks about 20 MB of memory a second while the game runs, which slows it down after a few
-  minutes. Next steps - find what the loading code waits for in the game's engine library (no symbols) and report
-  the runtime leak to Valve. GitHub issue 49.
+status: works
+notes: 'Plays (owner''s headset test): loading card, grip/trigger, hands and the lightspeed sequence fixed. Thumbs
+  follow the touches with frame.unreal_thumb_touch (Klownicle''s engine fix).'
+details: Unreal Engine 4 (GLES). Found and verified in gameplay on a Frame by Klownicle (GitHub issue 49); FramePort
+  reimplements them as patches that match the game's code exactly and change nothing when it differs. The engine's
+  Quest checks (IsRunningOnSantaCruz) answer "not a Quest" on the Frame - the menu waited for a Quest-only shader
+  precompile that never starts (frame.unreal_quest_precompile makes the non-Quest branch report 100 %), and the
+  game's key map picked the empty Gear VR controls (frame.unreal_quest_keymap keeps the Quest set). Two lightspeed
+  shaders, as the Frame's GL driver (Zink) compiles them, read loop counters and accumulators before setting them
+  and hang the GPU; a Vulkan layer under Zink inserts the stores that zero them (frame.zink_shader_fix, zink_shader_fix;
+  the captured modules are from Lepton 2.8.14 and stop matching if a Frame update changes the driver's output -
+  the layer logs that). OVRPlugin asks for poses at its own clock (pose_time_fix). Unreal's Oculus input animates the
+  thumbs from near-touch, which the Frame never reports (frame.unreal_thumb_touch reads the touches instead; binding
+  the proximity to the touch inputs in FrameBridge didn't reach the game). The Frame's SteamVR runtime
+  leaks about 20 MB a second while the game runs (reported to Valve).
 tested_version: 1.1.1+667256.cl.387770
 engine: Unreal
 xr: VrApi
 alt_overport:
 - patch_remove_unreal_force_quit
+frame:
+- frame.unreal_quest_precompile
+- frame.unreal_quest_keymap
+- frame.unreal_thumb_touch
+- frame.zink_shader_fix
+adapter:
+  pose_time_fix: 1
+  zink_shader_fix: 12016:b2919629761ad268e0b21c72ac8520f81b76e72c3adc26897f97eae9a3e70a66:3092:0x0003003e,166,82,0x0003003e,177,82,0x0003003e,183,82,0x0003003e,189,82,0x0003003e,256,82,0x0003003e,266,82,0x0003003e,272,82,0x0003003e,278,82,0x0003003e,318,82,0x0003003e,328,82,0x0003003e,334,82,0x0003003e,340,82;11436:6f18be49f2aaa2452f962eb16f7af744c5c22a7b25f37ce681e0d6399e35a869:2932:0x0003003e,164,80,0x0003003e,175,80,0x0003003e,181,80,0x0003003e,187,80,0x0003003e,254,80,0x0003003e,264,80,0x0003003e,270,80,0x0003003e,276,80,0x0003003e,316,80,0x0003003e,326,80,0x0003003e,332,80,0x0003003e,338,80
 verified:
-  date: '2026-10-06'
+  date: '2026-10-09'
   issue: 49
-updated: '2026-10-06'
+updated: '2026-10-09'
+min_app: 0.12.1
 source_hint: Vader Immortal- Episode I

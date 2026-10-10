@@ -11,6 +11,8 @@ FramePort is GPL-3.0-only (see `LICENSE`). It includes or downloads the followin
 | Android NDK runtime (statically linked libc++) | native Android libraries | Apache-2.0 with LLVM exception, plus legacy notices (`native/vrapi-bridge/licenses/ANDROID-NDK.txt`) |
 | Flet and Flutter (desktop app runtime) | release bundles | Apache-2.0 / BSD-3-Clause |
 | flet-dropzone / desktop_drop (drag-and-drop) | release bundles | Apache-2.0 / MIT |
+| FFmpeg 7.1.1 hardware HEVC wrapper (LGPL configuration, without GPL/nonfree components) | `artifacts/hevc/libstagefrighthw.so`; source/rebuild instructions in `native/hevc/build.py` and `native/hevc/README.md` | LGPL-2.1-or-later (`artifacts/hevc/COPYING.FFmpeg`); unmodified source: https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz |
+| AOSP Android 11 native media/utility headers | `native/hevc/platform/` | Apache-2.0; copyright/license notices retained in the headers |
 | Python packages (paramiko, zeroconf, psutil, pyelftools, capstone, UnityPy, PyYAML, requests, typer, pyaxmlparser, Pillow, cryptography, …) | release bundles | their own licenses (see each package's metadata) |
 
 FramePort's own native code (the FrameBridge adapter, GL/Vulkan/OpenXR shims, the Windows helpers) is GPL-3.0-only.

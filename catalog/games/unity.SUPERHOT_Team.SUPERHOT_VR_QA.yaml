@@ -3,9 +3,11 @@ title: SUPERHOT VR
 status: works
 notes: Quest version. Needs FramePort's launcher from agent 41 (reinstall once) so the game can write its saves.
 details: Unity 2018.4 with built-in Oculus support (GLES). Its eye swapchains (GL_RGBA8, then a 16-bit format) are
-  created as sRGB by the adapter's swapchain_fix. The game creates its cloud save folder with mode 1700 and quits at
-  start when it can't write there ("Something failed to initialize. Quitting!"); the launcher now gives every folder
-  in the game's storage owner and group write permission.
+  created as sRGB by the adapter's swapchain_fix. The game creates its cloud save folder with mode 1700 and quits
+  at start when it can't write there ("Something failed to initialize. Quitting!"); the launcher now gives every
+  folder in the game's storage owner and group write permission. On the very first start it creates that folder
+  and checks it in the same moment (GitHub 120), so the recipe creates the folder at install (device_files) and
+  the launcher fixes it before the game starts.
 tested_version: '1.161'
 engine: Unity
 xr: VrApi
@@ -16,7 +18,9 @@ frame:
 - frame.unity_runtime_msaa_off
 device:
 - device.text_input_window
+device_files:
+  cloud/data/.frameport: ''
 verified:
   date: '2026-10-04'
-updated: '2026-10-04'
+updated: '2026-10-09'
 source_hint: SUPERHOT VR

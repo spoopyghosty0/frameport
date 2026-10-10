@@ -1,0 +1,11 @@
+package: quest.eleven.forfunlabs
+title: Eleven Table Tennis
+status: unsupported
+notes: Stops at the splash screen. The game needs Meta's online services after start, which aren't available on
+  the Frame.
+engine: Unity
+xr: OpenXR
+pcvr_alternative: The PC VR (Rift) version works on the Frame through FramePort.
+verified:
+  date: '2026-10-10'
+  issue: 160

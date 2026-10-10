@@ -2,7 +2,7 @@
 
 Adapter settings end up in lib/<abi>/libframe_settings.so (build time) and in <install>/settings.conf +
 Android/data/<pkg>/files/framebridge.conf on the Frame (can be changed later without re-patching).
-The GL shim reads framebridge.conf too (gl_hide_multiview).
+The GL shim reads framebridge.conf too (gl_hide_multiview), as does the multiview interposer (gl_mv_debug).
 """
 from __future__ import annotations
 
@@ -33,6 +33,14 @@ SETTINGS = [
      "tracking (for example Silhouette)."),
     ("swapchain_fix", "int", 1, "Swapchain format fallback",
      "Retry rejected GLES formats/MSAA with sRGB, samples=1."),
+    ("cube_standin", "int", 1, "Stand-in cube swapchains",
+     "The Frame's runtime has no cube-map layers and refuses their swapchains; OVRPlugin then crashes when it submits "
+     "the next frame (for example Budget Cuts Ultimate). FrameBridge serves such a swapchain itself (a GL cube map, "
+     "GLES games) and drops its layers, so the game runs on without that layer."),
+    ("surface_native", "int", 0, "Native video surfaces (Batman renderer)",
+     "Plays the game's Android video surface through GPU-shared buffers and composes it as a stereo panorama (Batman: "
+     "Arkham Shadow's cutscenes, see docs/SURFACE_VIDEO.md). Specific to that game's renderer: set by its recipe, not "
+     "shown in Game settings. Use with frame.hw_video_decode."),
     ("layer_fix", "int", 1, "Drop invalid layers",
      "Drop layers whose swapchain failed or whose extension isn't enabled."),
     ("passthrough_emul", "int", 1, "Emulate passthrough",
@@ -129,6 +137,21 @@ SETTINGS = [
      "Repeat xrLocateViews queries for the same display time get the first, fully tracked answer again. Games that "
      "ask several times per frame got slightly different poses and rendered parts of the frame with different heads: "
      "judder (for example I Am Cat; proposed by Klownicle, GitHub #8)."),
+    ("pose_time_fix", "int", 0, "Locate poses at the right time",
+     "Poses a game asks for at a CLOCK_MONOTONIC time, or more than 0.5 s before the frame's display time, are located "
+     "at the same moment in the runtime's time (or now). Meta's OVRPlugin passes the monotonic clock on as the "
+     "OpenXR time, which on the Frame runs seconds behind the runtime's clock, so its \"now\" poses (Unity's physics "
+     "step, controller poses) came from the past: hands trailing the controllers (for example BattleSisters, Sniper "
+     "Elite VR)."),
+    ("proximity_emul", "int", 0, "Finger proximity from touch",
+     "Meta's OVRPlugin reports a thumb (or index finger) resting near the controller through "
+     "XR_FB_touch_controller_proximity, which the Frame's runtime lacks: \"near\" stays false and games that animate "
+     "the hands from it show a thumb that never moves (for example Vader Immortal; found by Klownicle, GitHub #49). "
+     "Binds the game's proximity actions to the capacitive touch inputs instead: 1 = thumb (thumbstick, face buttons "
+     "or thumb rest touched), 2 = also the index finger (trigger touched). Only when the runtime lacks the extension."),
+    ("pose_debug", "int", 0, "Pose time diagnostics (log)",
+     "Every 5 s, logs per located space how far the requested times are from the frame's predicted display time, and "
+     "the runtime clock's offset from the monotonic clock. No effect on the game."),
     ("haptic_fix", "int", 0, "Fix controller vibration freezes",
      "Routes OVRPlugin through FramePort's extension shim, which turns Meta's amplitude-envelope vibrations into "
      "plain ones: OVRPort's loader reads their nanosecond duration as seconds and allocates gigabytes, freezing the "
@@ -148,6 +171,21 @@ SETTINGS = [
      "for example stores that initialize locals a shader reads before writing (an undefined loop counter hung the GPU "
      "in VR4's campaign). Format: <size>:<sha256>:<byte offset>:<word>,<word>,...; several separated by ';'. Comes "
      "from a game's recipe."),
+    ("zink_shader_fix", "str", "", "OpenGL ES shader fixes",
+     "Shader-fix Vulkan layer (frame.zink_shader_fix) for OpenGL ES games, whose GLSL the Frame's GL driver (Zink) "
+     "turns into SPIR-V: modules matching size + SHA-256 get words inserted at a byte offset, for example stores that "
+     "set loop counters and accumulators a shader reads before writing (Vader Immortal's lightspeed jump hung the GPU; "
+     "found by Klownicle, GitHub #49). Same format as vk_shader_fix. Comes from a game's recipe; the driver's "
+     "output can change with a Frame update, then the fix no longer matches (logged)."),
+    ("zink_shader_dump", "int", 0, "OpenGL ES shader dump (diagnostics)",
+     "Shader-fix Vulkan layer (frame.zink_shader_fix): writes every distinct SPIR-V module the GL driver creates to "
+     "Android/data/<package>/files/fp_spirv/<size>_<sha256>.spv, to capture a shader for a new zink_shader_fix. No "
+     "effect on the game."),
+    ("vk_shader_dump", "int", 0, "Vulkan shader dump (diagnostics)",
+     "Vulkan shim (frame.vk_sanitize): writes every distinct SPIR-V module the game creates to "
+     "Android/data/<package>/files/fp_vk_shaders/<size>_<sha256>.spv, with index.txt listing every creation in order "
+     "with its time, to find the shader behind a GPU hang and capture it for a new vk_shader_fix. Diagnostics include "
+     "the newest modules. No effect on the game."),
     ("vk_query_slots", "int", 0, "Vulkan shim: slots per occlusion query",
      "Vulkan shim (frame.vk_sanitize): on gives every occlusion query room for both eyes. In multiview passes the "
      "Frame's driver writes a zero result for the second eye into the next query, so engines that count on one slot "
@@ -161,6 +199,9 @@ SETTINGS = [
     ("vk_validation", "int", 0, "Vulkan shim: validation layer",
      "Diagnostics: the Vulkan shim (frame.vk_sanitize) adds Khronos' validation layer to the game's instance; its "
      "findings go to launch.log. The layer library (libVkLayer_khronos_validation.so) must be in the APK."),
+    ("gl_mv_debug", "int", 0, "Multiview interposer: diagnostics",
+     "Diagnostics for frame.gl_multiview_fbo: checks for GL errors after every single-view draw of a multiview "
+     "shader and logs counters every 5 seconds (tag GLMV in launch.log)."),
     ("gl_hide_msrtt", "int", 1, "GL shim: hide multisampled render-to-texture",
      "GL shim only: hide GL_EXT_multisampled_render_to_texture(2) (Zink crashes rendering Unity's runtime MSAA eye "
      "buffer through it, for example The Room VR)."),
@@ -188,6 +229,9 @@ SETTINGS = [
 # since 0.12.1: no game is known to need that, and a bump would mark every OVRPlugin game's build outdated
 REVISIONS = {"vk_shader_fix": 2, "vk_query_slots": 3, "vk_spec_fixes": 2, "haptic_fix": 2, "pose_consistency": 2}
 
+# Settings a game's recipe sets that the Game settings dialog doesn't show (engine-specific, not user choices)
+HIDDEN = {"surface_native"}
+
 # How the "Game settings" dialog shows each setting to non-technical users: group, level (common settings are always
 # shown; advanced ones only under "Show advanced settings"), a plain label and one-line help, the control, and the
 # setting it depends on (only shown while that one is on). The technical title/description above stay for the CLI.
@@ -211,6 +255,14 @@ UI: dict[str, dict] = {
                              help="For games that judder or shimmer while you hold your head still (for "
                                   "example I Am Cat).",
                              control=("switch",)),
+    "pose_time_fix": dict(group="controllers", level="advanced", label="Fix hands lagging behind controllers",
+                          help="For games whose hands trail the controllers when you move them (for example "
+                               "BattleSisters).",
+                          control=("switch",)),
+    "proximity_emul": dict(group="controllers", level="advanced", label="Animate fingers from touch",
+                           help="For games whose hands' thumbs never move when you touch the buttons or thumbstick "
+                                "(for example Vader Immortal).",
+                           control=("choice", [(0, "Off"), (1, "Thumbs"), (2, "Thumbs and index fingers")])),
     "haptic_fix": dict(group="controllers", level="advanced", label="Fix freezes when controllers vibrate",
                        help="For games that freeze the Frame when a controller vibrates (for example Lucky's Tale). "
                             "Needs a rebuild.",
@@ -345,6 +397,18 @@ UI: dict[str, dict] = {
     "ovrp_hold_physics": dict(group="troubleshooting", level="advanced", label="Steadier hands (older Unity)",
                 help="For older Unity games whose hands trail the controllers (for example Sniper Elite "
                      "VR). In others the hands lag.", control=("switch",)),
+    "cube_standin": dict(group="troubleshooting", level="advanced", label="Stand in for cube layers",
+                help="Keeps games running that use a 360° cube layer the Frame lacks (for example Budget Cuts "
+                     "Ultimate). Leave it on.", control=("switch",)),
+    "pose_debug": dict(group="troubleshooting", level="advanced", label="Pose timing diagnostics (log)",
+                help="Logs how game poses line up with the Frame's clock. No effect on the game.", control=("switch",)),
+    "zink_shader_dump": dict(group="troubleshooting", level="advanced", label="OpenGL ES shader dump (diagnostics)",
+                help="Saves the game's shaders to capture one for a fix. No effect on the game.", control=("switch",)),
+    "vk_shader_dump": dict(group="troubleshooting", level="advanced", label="Vulkan shader dump (diagnostics)",
+                help="Saves the game's shaders to find one that hangs the GPU. No effect on the game.",
+                control=("switch",)),
+    "gl_mv_debug": dict(group="troubleshooting", level="advanced", label="Flat panel diagnostics (log)",
+                help="Logs details when flat panels stay black. No effect on the game.", control=("switch",)),
 }
 
 
@@ -367,7 +431,7 @@ class AdapterSetting(Patch):
         return UI.get(self.key, {}).get("help") or super().summary
 
     def detect(self, a):
-        from .applicability import needs_scene, uses_equirect_layers, uses_render_models
+        from .applicability import needs_scene, uses_equirect_layers, uses_render_models, uses_room_model
 
         if self.key == "controller_fix" and a.extra.get("hand_tracking_only"):
             return Suggestion(True, "Hand tracking is required by the game: pass hands through instead of reporting "
@@ -380,6 +444,15 @@ class AdapterSetting(Patch):
                                     "vibrations into gigabyte allocations that freeze the Frame (for example Lucky's "
                                     "Tale, BattleSisters): vibrations are converted before they reach it.",
                               {"value": 1})
+        if (self.key == "pose_time_fix" and a.engine == "Unity" and "libOVRPlugin.so" in a.libs
+                and not a.extra.get("oculus_xr_plugin") and "libOculusXRPlugin.so" not in a.libs):
+            return Suggestion(True, "Unity's built-in Oculus support reads controller poses through OVRPlugin at its "
+                                    "monotonic \"now\", seconds in the past on the Frame: they are located at the "
+                                    "right time (for example BattleSisters, Sniper Elite VR).", {"value": 1})
+        if self.key == "pose_time_fix" and a.engine == "Unreal" and (a.extra or {}).get("unreal_thumb_touch"):
+            return Suggestion(True, "Unreal 4's Oculus input of this OVRPlugin generation asks for controller poses "
+                                    "at OVRPlugin's own clock, which is behind the Frame's: they are located at the "
+                                    "right time (for example Vader Immortal).", {"value": 1})
         if self.key == "equirect_emul" and uses_equirect_layers(a):
             return Suggestion(True, "The game draws 360° layers (for example a video player's theater or 360° "
                                     "videos), which the Frame's runtime can't show: show them as panels around you.",
@@ -392,6 +465,12 @@ class AdapterSetting(Patch):
         if self.key == "scene_emul" and needs_scene(a):
             return Suggestion(True, "Mixed-reality game that builds its level from the room model: emulate a "
                                     "guardian-sized room (for example Demeter).", {"value": 1})
+        if self.key == "scene_emul" and uses_room_model(a):
+            # also VR games that only ask for the room (VR HOT's room setup retried forever without it)
+            return Suggestion(True, "The game asks Meta's system for your room layout (scene), which the Frame "
+                                    "doesn't have: emulate a room from the play area (for example VR HOT's room "
+                                    "setup).",
+                              {"value": 1})
         return None
 
     def applies(self, a):
@@ -410,13 +489,21 @@ class AdapterSetting(Patch):
             "swapchain_fix": ap.is_gles,
             "gl_hide_multiview": lambda a: a.direct_vrapi and ap.is_gles(a),
             "gl_hide_msrtt": ap.is_gles,
+            "gl_mv_debug": lambda a: bool((a.extra or {}).get("gl_multiview_libs")) and ap.is_gles(a),
             "ovrp_begin_gate": lambda a: a.engine == "Unity" and "libOVRPlugin.so" in a.libs,
             "ovrp_hold_physics": lambda a: a.engine == "Unity" and "libOVRPlugin.so" in a.libs,
             "vk_shader_fix": lambda a: a.engine == "Unreal",  # read by the Vulkan shim, which only Unreal games get
             "vk_hide_fdm": lambda a: a.engine == "Unreal",  # Unreal's Vulkan isn't always detected (Metro Awakening)
             "vk_query_slots": lambda a: a.engine == "Unreal" and ap.is_vulkan(a),
             "vk_validation": lambda a: a.engine == "Unreal",
+            # wherever the Vulkan shim can be (vk_sanitize); Unreal's Vulkan builds are rarely detected as such
+            "vk_shader_dump": lambda a: a.engine in ("Unreal", "Other") and "arm64-v8a" in a.abis,
+            "zink_shader_fix": ap.is_gles,
+            "zink_shader_dump": ap.is_gles,
             "haptic_fix": lambda a: "libOVRPlugin.so" in a.libs,
+            "surface_native": lambda a: "arm64-v8a" in a.abis,  # the xrshim it needs is arm64 only
+            "pose_time_fix": lambda a: "libOVRPlugin.so" in a.libs,
+            "proximity_emul": lambda a: "libOVRPlugin.so" in a.libs,
             "vk_spec_fixes": lambda a: a.engine == "Unreal" and ap.is_vulkan(a),
             "controller_models": ap.may_use_render_models,
             **{k: ap.is_gles for k in ("equirect_emul", "equirect_face", "equirect_res", "equirect_flip",
@@ -509,6 +596,34 @@ class HideNavBar(Patch):
         ctx.env.update(self.ENV)
 
 
+class SteamGamepad(Patch):
+    id = "device.steam_gamepad"
+    title = "Controllers as a gamepad (Steam Input)"
+    description = ("Lepton's Android only gets a keyboard, a pointer and touch from the Frame, so a 2D game never sees "
+                   "a controller (the controllers only move the pointer; SDL games show their touch controls). This "
+                   "passes Steam Input's virtual gamepad (\"Microsoft X-Box 360 pad\", made by Steam for the Frame's "
+                   "controllers and paired Bluetooth pads) into this app's container with an Xbox 360 key layout, and "
+                   "tells SDL games to use it (SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD). Steam Input must be "
+                   "on for the game's shortcut; the controllers must be on when the game starts (a pad Steam makes "
+                   "later isn't seen until the next start). The APK isn't changed. Off for one start: "
+                   "FRAMEPORT_NO_GAMEPAD=1 in the game's launch options.")
+    category = "device"
+    needs_vr = False
+    stage = "install"  # the agent reads it from the recipe at finalize (deployment.json steam_gamepad)
+
+    def applies(self, a):
+        return a.vr_kind == "none"
+
+    def detect(self, a):
+        if a.vr_kind == "none" and (a.extra or {}).get("gamepad"):
+            return Suggestion(True, "2D app that declares gamepad support (android.hardware.gamepad or Android TV's "
+                                    "launcher): pass the controllers to it as a gamepad.")
+        return None
+
+    def install(self, ctx: InstallContext) -> None:
+        pass  # the launcher line (agent: GAMEPAD_LINE) exports SDL's hint and puts the Podman wrapper on PATH
+
+
 class Foveation(Patch):
     id = "device.foveation"
     title = "Eye-tracked foveation (Valve)"
@@ -576,6 +691,7 @@ for _spec in SETTINGS:
 register(DeviceFiles)
 register(LeptonEnv)
 register(HideNavBar)
+register(SteamGamepad)
 register(TextInputWindow)
 register(DisplayMode)
 register(Foveation)

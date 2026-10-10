@@ -304,6 +304,15 @@ def _norm(s: str) -> str:
 
 
 # ------------------------------------------------------------------------------------------ ranking
+def is_electron(exe: Path) -> bool:
+    """An Electron (Chromium) app: e.g. a game's own launcher next to the game (SUPERHOT VR's SHVR.exe, GitHub #105).
+    Its files sit next to the exe; a Unity/Unreal game's own exe has its `<name>_Data` folder instead."""
+    d = exe.parent
+    if (d / f"{exe.stem}_Data").is_dir():
+        return False
+    return (d / "resources" / "app.asar").is_file() or ((d / "icudtl.dat").is_file() and any(d.glob("*.pak")))
+
+
 def rank_exes(folder: Path, cands: list[Path], manifest: dict | None = None,
               dlls: dict[str, Path] | None = None) -> list[dict]:
     """Candidates best-first: {path (relative, /), score, reasons, size, machine}."""
@@ -321,9 +330,13 @@ def rank_exes(folder: Path, cands: list[Path], manifest: dict | None = None,
         if stem.endswith("-win64-shipping") or stem.endswith("-win32-shipping"):
             score += 50
             reasons.append("Unreal game build")
-        elif (p.parent / "UnityPlayer.dll").exists() or (p.parent / f"{p.stem}_Data").is_dir():
+        elif (p.parent / f"{p.stem}_Data").is_dir() or ((p.parent / "UnityPlayer.dll").exists()
+                                                         and not is_electron(p)):
             score += 50
             reasons.append("Unity game (next to its data)")
+        if is_electron(p):
+            score -= 30
+            reasons.append("Electron launcher (starts the game)")
         if list(p.parent.glob(f"*/Binaries/Win64/{p.stem}-Win64-Shipping.exe")):
             score -= 30
             reasons.append("Unreal launcher (starts the real game build)")

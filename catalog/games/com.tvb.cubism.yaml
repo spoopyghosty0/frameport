@@ -1,0 +1,22 @@
+package: com.tvb.cubism
+title: cubism
+status: works
+tested_version: 1.8.0
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+  scale: 2.0
+verified:
+  date: '2026-10-09'
+  known_good_sha256: e4e000392e53111a991c1c78653c9241b8007f81dcdb126a4f4b2003033f5a6e
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 121
+source_hint: com.tvb.cubism

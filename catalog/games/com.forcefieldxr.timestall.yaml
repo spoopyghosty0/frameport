@@ -1,18 +1,24 @@
 package: com.forcefieldxr.timestall
 title: Time Stall
-tested_version: '1.0'
-source_hint: Time Stall
-engine: Unreal
-xr: VrApi
 status: issues
 notes: Both eyes distort during movement (unresolved).
-details: Legacy VrApi via OVRPlugin.
+details: Legacy VrApi via OVRPlugin. Shares Vader Immortal's Unreal 4 Oculus input (GitHub 49) - thumbs follow the
+  touches (frame.unreal_thumb_touch) and controller poses are located at the right time (pose_time_fix); added 2026-10-09
+  from Vader's headset results, not yet checked in this game.
+tested_version: '1.0'
+engine: Unreal
+xr: VrApi
 alt_overport:
 - patch_remove_unreal_force_quit
 frame:
+- frame.unreal_thumb_touch
 - frame.nodebug
+adapter:
+  pose_time_fix: 1
 verified:
   date: '2026-09-28'
   overport_cli: 1.2.3
   overport_runtime: 3.4.3-23204ea
   known_good_sha256: 50c4d05b663b2f1851f5a7d650a89fd34587d65fafba13cc58671c96f7016db6
+updated: '2026-10-09'
+source_hint: Time Stall

@@ -1,0 +1,24 @@
+package: com.ILMxLAB.VaderImmortal.ep2
+title: 'Vader Immortal: Episode II'
+status: works
+notes: Plays (owner's headset test, 2026-10-09) with Episode I's fixes, which FramePort finds in this episode's
+  code too.
+details: 'Unreal Engine 4 (GLES), the same engine build as Episode I: the Quest-only shader precompile and key map
+  (frame.unreal_quest_precompile, frame.unreal_quest_keymap), thumbs from the capacitive touches (frame.unreal_thumb_touch)
+  and poses at OVRPlugin''s clock (pose_time_fix). Episode I''s lightspeed shader fix doesn''t apply. The campaign
+  intro once stayed black with its dialogue playing; it rendered on the next run.'
+tested_version: 2.0.3+667261.cl.387778
+engine: Unreal
+xr: VrApi
+alt_overport:
+- patch_remove_unreal_force_quit
+frame:
+- frame.unreal_quest_precompile
+- frame.unreal_quest_keymap
+- frame.unreal_thumb_touch
+adapter:
+  pose_time_fix: 1
+verified:
+  date: '2026-10-09'
+min_app: 0.12.1
+source_hint: Vader Immortal- Episode II

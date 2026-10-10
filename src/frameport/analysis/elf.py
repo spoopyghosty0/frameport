@@ -59,6 +59,38 @@ def _dyn_symbols_cached(data: bytes, defined: bool) -> frozenset[str]:
     return frozenset(out)
 
 
+def find_symbols(data: bytes, names) -> dict[str, tuple[int, int]]:
+    """(address, size) of the defined dynamic symbols `names` (ELF64 little-endian). Looks the names up in .dynstr and
+    their entries in .dynsym by byte search instead of reading every symbol: engine libraries (libUE4.so) have
+    hundreds of thousands."""
+    import struct
+
+    if not is_elf(data) or data[4] != 2 or data[5] != 1:
+        return {}
+    elf = _elf(data)
+    dynsym, dynstr = elf.get_section_by_name(".dynsym"), elf.get_section_by_name(".dynstr")
+    if dynsym is None or dynstr is None:
+        return {}
+    sym_off, sym_size = dynsym["sh_offset"], dynsym["sh_size"]
+    str_off, str_end = dynstr["sh_offset"], dynstr["sh_offset"] + dynstr["sh_size"]
+    out = {}
+    for name in names:
+        raw = name.encode() + b"\0"
+        at = data.find(raw, str_off, str_end)
+        while at >= 0 and name not in out:
+            needle = struct.pack("<I", at - str_off)
+            hit = data.find(needle, sym_off, sym_off + sym_size)
+            while hit >= 0:
+                if (hit - sym_off) % 24 == 0:
+                    _, _, _, shndx, value, size = struct.unpack_from("<IBBHQQ", data, hit)
+                    if shndx and value:
+                        out[name] = (value, size)
+                        break
+                hit = data.find(needle, hit + 1, sym_off + sym_size)
+            at = data.find(raw, at + 1, str_end)
+    return out
+
+
 def is_64bit(data: bytes) -> bool:
     return is_elf(data) and data[4] == 2
 

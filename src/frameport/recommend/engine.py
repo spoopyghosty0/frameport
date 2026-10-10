@@ -96,19 +96,36 @@ def suggest(analysis: Analysis, use_catalog: bool = True) -> Recipe:
     return recipe
 
 
+LAUNCH_PATCHES = ("pcvr.repack_launcher", "pcvr.launch_args")  # how a Rift game starts (from its files)
+
+
+def _xr_set(xr: str) -> set[str]:
+    return {x.strip().lower() for x in (xr or "").split("+") if x.strip() and x.strip() != "?"}
+
+
+def _other_build(entry, analysis: Analysis) -> bool:
+    """The catalog recipe was verified with a different build of the game (another VR API set), e.g. SUPERHOT VR's
+    OpenXR build vs its older Oculus + SteamVR build (GitHub #105): the build's own launch arguments then stay."""
+    mine, theirs = _xr_set(analysis.xr), _xr_set(entry.xr)
+    return bool(mine and theirs and mine != theirs)
+
+
 def _rift_recipe(analysis: Analysis, recipe: Recipe, entry) -> None:
     extra = analysis.extra
     if entry:
         recipe.source = f"catalog ({entry.origin})"
         recipe.status, recipe.notes, recipe.title = entry.status, entry.notes, entry.title or recipe.title
         why = f"Known-good recipe for {entry.title} (tested {entry.verified.get('date', '?')})."
+        other_build = _other_build(entry, analysis)
         for pid in entry.pcvr:
+            if pid == "pcvr.launch_args" and pid not in recipe.patches:
+                continue  # the arguments come from the game files: none found (e.g. an OpenXR build) = none to add
             recipe.patches.setdefault(pid, {})
             recipe.reasons[pid] = why
         for pid in entry.pcvr_remove:
             recipe.patches.pop(pid, None)
-        for pid in ("pcvr.repack_launcher", "pcvr.launch_args"):  # a verified recipe decides how the game starts
-            if pid not in entry.pcvr:
+        for pid in LAUNCH_PATCHES:  # a verified recipe decides how the game starts ...
+            if pid not in entry.pcvr and not other_build:  # ... unless it was verified with another build
                 recipe.patches.pop(pid, None)
                 recipe.reasons.pop(pid, None)
         if entry.proton_env:
@@ -118,6 +135,11 @@ def _rift_recipe(analysis: Analysis, recipe: Recipe, entry) -> None:
             recipe.patches["pcvr.proton_tool"] = {"tool": entry.proton_tool}
             recipe.reasons["pcvr.proton_tool"] = why
         recipe.as_is = entry.as_is
+        if other_build:
+            args = recipe.params("pcvr.launch_args").get("args")
+            recipe.notes = (recipe.notes + " " if recipe.notes else "") + \
+                (f"The recipe was verified with another build of the game ({entry.xr}); this one uses "
+                 f"{analysis.xr}" + (f" and starts with {args}." if args else "."))
         # drop patches whose requirement the catalog removed (e.g. revive_openvr once revive is gone), so the
         # requirement pass in suggest() doesn't re-add it
         for pid in list(recipe.patches):

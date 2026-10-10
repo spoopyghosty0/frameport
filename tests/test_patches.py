@@ -70,6 +70,62 @@ def test_adapter_refreshes_existing_wrapper(tmp_path, quest_manifest):
         assert not patch.apply(ctx)
 
 
+def test_native_video_follows_the_recipe_not_the_package(tmp_path, quest_manifest):
+    """Batman's cutscene setup = frame.hw_video_decode + adapter.surface_native (its recipe), for any package. The
+    decoder itself is installed once per Frame by the agent, never embedded in a game's APK."""
+    from pathlib import Path
+
+    plugin = (Path(__file__).with_name("fixtures") / "libfakeovrplugin_arm64.so").read_bytes()
+    video = {"frame.adapter": {}, "frame.hw_video_decode": {}, "adapter.surface_native": {"value": 1}}
+    for package, recipe, enabled in (("com.camouflaj.manta", video, True), ("com.example.questgame", video, True),
+                                     ("com.camouflaj.manta", {"frame.adapter": {}}, False)):
+        apk = _apk(tmp_path, quest_manifest)
+        with zipfile.ZipFile(apk, "a") as z:
+            z.writestr("lib/arm64-v8a/libOVRPlugin.so", plugin)
+        with ApkWorkspace(apk) as ws:
+            ctx = base.ApkContext(ws, _analysis(package=package), {}, Reporter(), recipe)
+            assert base.get("frame.adapter").apply(ctx)
+            assert (b"surface_native=1\n" in ws.read_lib("libframe_settings.so")) is enabled
+            assert ws.has(ws.lib("libframe_xrshim.so")) is enabled
+            assert not any(n.startswith("assets/frameport/hevc/") for n in ws.names())
+            if enabled:
+                assert b"libframe_xrshim.so\0" in ws.read_lib("libOVRPlugin.so")
+            assert not base.get("frame.adapter").apply(ctx)
+
+
+def test_adapter_removes_unneeded_codec_without_touching_video_assets(tmp_path, quest_manifest):
+    """Updating earlier test builds leaves no codec wrapper active in unrelated games."""
+    apk = _apk(tmp_path, quest_manifest)
+    with zipfile.ZipFile(apk, "a") as z:
+        for name in ("manifest.json", "libstagefrighthw.so", "media_codecs_frameport.xml", "podman.py",
+                     "COPYING.FFmpeg"):
+            z.writestr("assets/frameport/hevc/" + name, b"old test codec")
+        z.writestr("assets/movie.mp4", b"original movie")
+    with ApkWorkspace(apk) as ws:
+        ctx = base.ApkContext(ws, _analysis(), {}, Reporter(), {"frame.adapter": {}})
+        assert base.get("frame.adapter").apply(ctx)
+        assert not any(n.startswith("assets/frameport/hevc/") for n in ws.names())
+        assert not base.get("frame.adapter").apply(ctx)
+        out = ws.write(tmp_path / "scoped.apk")
+    with zipfile.ZipFile(out) as z:
+        assert z.read("assets/movie.mp4") == b"original movie"
+        assert not any(n.startswith("assets/frameport/hevc/") for n in z.namelist())
+
+
+def test_arm32_does_not_get_the_arm64_codec_or_shim(tmp_path):
+    apk = tmp_path / "arm32.apk"
+    with zipfile.ZipFile(apk, "w") as z:
+        z.writestr("lib/armeabi-v7a/libopenxr_loader_generic.so", b"original loader")
+    recipe = {"frame.adapter": {}, "frame.hw_video_decode": {}, "adapter.surface_native": {"value": 1}}
+    analysis = _analysis(package="com.camouflaj.manta", abis=["armeabi-v7a"])
+    assert not base.get("frame.hw_video_decode").applies(analysis)
+    with ApkWorkspace(apk) as ws:
+        ctx = base.ApkContext(ws, analysis, {}, Reporter(), recipe)
+        assert base.get("frame.adapter").apply(ctx)
+        assert not ws.has(ws.lib("libframe_xrshim.so"))
+        assert not any(n.startswith("assets/frameport/hevc/") for n in ws.names())
+
+
 def test_controller_models_adds_xrshim(tmp_path, quest_manifest):
     from pathlib import Path
 
@@ -426,10 +482,11 @@ def test_game_settings_dialog_shows_relevant_settings_and_saves_only_changes():
 
     from frameport.core import library
     from frameport.core.models import Recipe
-    from frameport.patches.settings import SETTINGS, UI
+    from frameport.patches.settings import HIDDEN, SETTINGS, UI
     from frameport.ui.views import adapter_dialog as ad
 
-    assert set(UI) == {k for k, kind, *_ in SETTINGS if kind != "str"}  # every number/switch has a label/control
+    # every number/switch has a label/control, except recipe-only ones
+    assert set(UI) == {k for k, kind, *_ in SETTINGS if kind != "str"} - HIDDEN
     vulkan = _analysis()
     gles = _analysis(graphics="GLES (declared in manifest)")
     assert ad.relevant(vulkan, "flip_emul", 1) and not ad.relevant(gles, "flip_emul", 1)  # Vulkan-only

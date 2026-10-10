@@ -23,7 +23,6 @@ PC VR (Oculus Rift) games packed for the Frame (id "rift.<slug>"), run by Proton
     <dest>/<id>/compatdata/                      Proton prefix = saves (kept across reinstalls), launch.log
 """
 import base64
-import fcntl
 import glob
 import hashlib
 import json
@@ -34,16 +33,51 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import time
+import zipfile
 import zlib
 from types import SimpleNamespace
 
-AGENT_VERSION = 66
+try:
+    import fcntl
+except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
+    fcntl = None
+
+AGENT_VERSION = 73
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
 LEPTON_APPID = "3029110"  # fallback when no appmanifest names Lepton
 PKG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$")
+VIDEO_CODEC_DIR = os.path.join(HOME, ".local/share/frameport/video-codec")
+VIDEO_CODEC_FILES = ("libstagefrighthw.so", "media_codecs_frameport.xml", "podman.py", "COPYING.FFmpeg")
+# Hardware video decoding (patch frame.hw_video_decode, per game): only launchers of games whose recipe has it put the
+# shared codec's Podman wrapper first on Lepton's PATH (it adds the codec plugin to that game's container). Off for
+# every game: FramePort's setting (VIDEO_CODEC_DIR/disabled); one game: FRAMEPORT_NO_HW_VIDEO=1 in its launch options.
+VIDEO_CODEC_LINE = ('codec_dir="$HOME/.local/share/frameport/video-codec"\n'
+                    '[[ "${FRAMEPORT_NO_HW_VIDEO:-0}" != 0 || -e "$codec_dir/disabled" || '
+                    '! -x "$codec_dir/current/bin/podman" ]] || export PATH="$codec_dir/current/bin:$PATH"')
+HW_VIDEO_PATCH = "frame.hw_video_decode"
+# earlier codec lines: agent <= 70 (per-game codec extracted from the APK, line in every launcher) and PR #128's
+# shared line (in every Lepton launcher)
+OLD_CODEC_LINES = ('[[ ! -x "$app_dir/frameport-codec/bin/podman" ]] || '
+                   'export PATH="$app_dir/frameport-codec/bin:$PATH"',
+                   'codec_bin="$HOME/.local/share/frameport/video-codec/current/bin"\n'
+                   '[[ ! -x "$codec_bin/podman" ]] || export PATH="$codec_bin:$PATH"')
+# Steam Input's virtual gamepad for 2D Android apps (patch device.steam_gamepad, per game, GitHub #162): Lepton's
+# Android only gets keyboard/pointer/touch from the Wayland seat, so a game never sees a controller. The launcher of a
+# game that has it puts FramePort's own Podman wrapper (PODMAN_WRAPPER, written next to the agent, independent of the
+# video codec) first on Lepton's PATH; for that game's `podman run` it bind-mounts Steam's virtual pads
+# (/dev/input/eventN) and a key layout, then hands on to the next Podman on PATH (the codec wrapper, if that game has
+# it, else Podman itself). LEPTON_ENV_SDL_... = SDL's hint that stops it ignoring Steam's virtual pad (Lepton passes
+# LEPTON_ENV_<NAME> to the app as <NAME>). Off for one game: FRAMEPORT_NO_GAMEPAD=1 in its launch options.
+GAMEPAD_PATCH = "device.steam_gamepad"
+PODMAN_BIN = os.path.join(HOME, ".local/share/frameport/agent/bin")
+GAMEPAD_LINE = ('[[ "${FRAMEPORT_NO_GAMEPAD:-0}" != 0 ]] || { export FRAMEPORT_GAMEPAD=1 '
+                'LEPTON_ENV_SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=1; '
+                '[[ ! -x "$HOME/.local/share/frameport/agent/bin/podman" ]] || '
+                'export PATH="$HOME/.local/share/frameport/agent/bin:$PATH"; }')
 
 
 class AgentError(Exception):
@@ -676,11 +710,21 @@ def ensure_host_fixes():
             f.write(text)
         changed.append("podman keyring=false")
     try:
+        ensure_podman_wrapper()  # used only by launchers with the gamepad line (device.steam_gamepad)
+    except OSError:
+        pass
+    try:
         upgraded = upgrade_launchers()
     except Exception:  # noqa: BLE001
         upgraded = []
     if upgraded:
         changed.append(f"launchers: exit watchdog, dashboard, play log ({len(upgraded)})")
+    try:
+        old = remove_old_codec_dirs()
+    except Exception:  # noqa: BLE001
+        old = []
+    if old:
+        changed.append(f"per-game video codec folders removed ({len(old)})")
     try:
         entries = refresh_desktop_entries()
     except Exception:  # noqa: BLE001
@@ -1450,6 +1494,7 @@ def cmd_list_installed(args):
             apk = os.path.join(dep["base"], "lepton-app/game.apk")
             dep["apk_present"] = os.path.exists(apk)
             dep["apk_size"] = os.path.getsize(apk) if dep["apk_present"] else 0
+        dep["last_play"] = last_play(dep["anchor"])  # agent v70: the PC triages a finished play session's log
         games.append(dep)
     return {"games": games}
 
@@ -1927,6 +1972,42 @@ def play_sessions():
     return [tuple(s) for s in sessions]
 
 
+TEST_MARK_WINDOW = 60  # s: a "test <unix>" line in plays.log marks a session starting this soon after as a launch test
+
+
+def last_play(anchor):
+    """The newest play session in <anchor>/plays.log: {start, end (None while it runs, and for Proton launchers, which
+    exec the game), test (started by a launch test, not by the player)}, or None."""
+    text = _tail(os.path.join(anchor, PLAYS_LOG), 8192)
+    if not text:
+        return None
+    start = end = None
+    tests = []
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) < 2 or not parts[1].isdigit():
+            continue
+        t = int(parts[1])
+        if parts[0] == "start":
+            start, end = t, None
+        elif parts[0] == "end" and start is not None and t >= start:
+            end = t
+        elif parts[0] == "test":
+            tests.append(t)
+    if start is None:
+        return None
+    return {"start": start, "end": end, "test": any(0 <= start - t <= TEST_MARK_WINDOW for t in tests)}
+
+
+def mark_launch_test(anchor):
+    """A launch test runs the game's launcher, which logs a play session: mark it so the PC doesn't triage it as one."""
+    try:
+        with open(os.path.join(anchor, PLAYS_LOG), "a") as f:
+            f.write(f"test {int(time.time())}\n")
+    except OSError:
+        pass
+
+
 def session_game(t, sessions):
     """Package whose play session contains time t (the latest start wins), else None."""
     hit = None
@@ -2262,6 +2343,7 @@ export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 export IS_PARENT=true
 {extra_env}
+{video_codec}
 child=''
 stop() {{
     trap - EXIT INT TERM
@@ -2277,6 +2359,7 @@ trap 'exit 143' TERM
 setsid {lepton_q} start >"$app_dir/launch.log" 2>&1 &
 child=$!
 {dashboard}
+{logcat}
 wait "$child"
 """)
 
@@ -2304,8 +2387,20 @@ SINGLE_LINE = ('exec 9>"$app_dir/.launch.lock"; flock -n 9 || '
                'exit 0; }')
 
 
+# Lepton mirrors the game's logcat into launch.log, and that reader sometimes dies right after the game starts
+# ("logcat: Unexpected EOF!", seen with Vader Immortal on Lepton 3.0.5 and Under Cover on 2.8.14). The game runs on,
+# but launch.log stays empty: no dashboard auto-hide, no launch-test result. _logcat_keeper then reads the
+# container's logcat itself and appends it to launch.log.
+LOGCAT_LINE = ('python3 {agent_q} _logcat_keeper "$app_dir/launch.log" "$SteamAppId" $$ '
+               '>"$app_dir/logcat-keeper.log" 2>&1 9>&- &')
+
+
 def dashboard_line():
     return DASHBOARD_LINE.format(agent_q=shlex.quote(os.path.abspath(__file__)))
+
+
+def logcat_line():
+    return LOGCAT_LINE.format(agent_q=shlex.quote(os.path.abspath(__file__)))
 
 
 def plays_lines(anchor):
@@ -2326,12 +2421,19 @@ def upgrade_launchers():
         except OSError:
             continue
         new = text
+        # the codec line follows the game's deployment (only Lepton launchers have this variable; Proton/Linux
+        # launchers are never touched). Running launchers keep reading their old file.
+        if "export LEPTON_ENV_FRAMEBRIDGE_CONFIG=" in new:
+            new = set_codec_line(new, wants_hw_video(os.path.dirname(path)))
+            new = set_gamepad_line(new, wants_gamepad(os.path.dirname(path)))
         if "a Linux app. Generated by FramePort" in new and "FRAMEPORT_DESKTOP" not in new:
             new = upgrade_linux_launcher(new)
         if OLD_WATCHDOG in new and "parent=$PPID" not in new:
             new = new.replace(OLD_WATCHDOG, WATCHDOG, 1)
         if "_dashboard_worker" not in new and 'child=$!\nwait "$child"' in new:
             new = new.replace('child=$!\nwait "$child"', 'child=$!\n' + dashboard_line() + '\nwait "$child"', 1)
+        if "_logcat_keeper" not in new and "_dashboard_worker" in new and '\nwait "$child"' in new:
+            new = new.replace('\nwait "$child"', '\n' + logcat_line() + '\nwait "$child"', 1)
         guard = '[[ -d "$app_dir/lepton-app" ]] ||'
         if ".launch.lock" not in new and guard in new:
             i = new.index("\n", new.index(guard)) + 1
@@ -2357,6 +2459,315 @@ def upgrade_launchers():
     return changed
 
 
+def wants_hw_video(anchor):
+    """Whether this game's launcher gets the shared codec (frame.hw_video_decode): deployment.json's choice (written
+    at finalize), else its recipe's patches. A game that had agent <= 70's per-game codec (extracted from its APK:
+    Batman) keeps it; that choice is saved, since ensure_host_fixes then removes the old codec folder."""
+    path = os.path.join(anchor, "deployment.json")
+    try:
+        with open(path) as f:
+            dep = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(dep, dict):
+        return False
+    if "hw_video_decode" in dep:
+        return bool(dep["hw_video_decode"])
+    recipe = dep.get("recipe") if isinstance(dep.get("recipe"), dict) else {}
+    if HW_VIDEO_PATCH in (recipe.get("patches") or []):
+        return True
+    base = dep.get("base")
+    if isinstance(base, str) and os.path.exists(os.path.join(base, "frameport-codec/bin/podman")):
+        dep["hw_video_decode"] = True
+        with open(path + ".tmp", "w") as f:
+            json.dump(dep, f, indent=2)
+        os.replace(path + ".tmp", path)
+        return True
+    return False
+
+
+def set_codec_line(text, want):
+    """A Lepton launcher with the current codec line where it belongs (want) or none; earlier lines are dropped."""
+    at = -1
+    for line in (VIDEO_CODEC_LINE, *OLD_CODEC_LINES):
+        i = text.find(line + "\n")
+        while i >= 0:
+            text = text[:i] + text[i + len(line) + 1:]
+            at = i if at < 0 else min(at, i)  # the earliest one's place (text before it is unchanged)
+            i = text.find(line + "\n")
+    if want:
+        if at < 0:
+            for anchor in ("\nchild=''\n", "\nsetsid "):
+                if anchor in text:
+                    at = text.index(anchor) + 1
+                    break
+        if at >= 0:
+            text = text[:at] + VIDEO_CODEC_LINE + "\n" + text[at:]
+    return text
+
+
+def wants_gamepad(anchor):
+    """Whether this game's launcher passes Steam Input's virtual gamepad into its container (device.steam_gamepad):
+    deployment.json's choice (written at finalize), else its recipe's patches."""
+    try:
+        with open(os.path.join(anchor, "deployment.json")) as f:
+            dep = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(dep, dict):
+        return False
+    if "steam_gamepad" in dep:
+        return bool(dep["steam_gamepad"])
+    recipe = dep.get("recipe") if isinstance(dep.get("recipe"), dict) else {}
+    return GAMEPAD_PATCH in (recipe.get("patches") or [])
+
+
+def wrapper_lines(hw_video, gamepad):
+    """The launcher's Podman wrapper lines (empty, one or both). The gamepad line comes last, so FramePort's wrapper is
+    first on PATH and hands on to the codec wrapper."""
+    return "\n".join(line for line, want in ((VIDEO_CODEC_LINE, hw_video), (GAMEPAD_LINE, gamepad)) if want)
+
+
+def set_gamepad_line(text, want):
+    """A Lepton launcher with the gamepad line (want) or without it. It always follows the codec line (when there is
+    one), else stands where the codec line would."""
+    text = text.replace(GAMEPAD_LINE + "\n", "")
+    if not want:
+        return text
+    i = text.find(VIDEO_CODEC_LINE + "\n")
+    if i >= 0:
+        at = i + len(VIDEO_CODEC_LINE) + 1
+    else:
+        at = next((text.index(a) + 1 for a in ("\nchild=''\n", "\nsetsid ") if a in text), -1)
+    return text if at < 0 else text[:at] + GAMEPAD_LINE + "\n" + text[at:]
+
+
+# Android's layout for an Xbox 360 pad (AOSP's Vendor_045e_Product_028e.kl, with Select as BUTTON_SELECT instead of
+# BACK, which would close many apps): Steam's virtual pad reports Valve's ids, so Android would fall back to Generic.kl
+# (triggers on Z/RZ, right stick on RX/RY: games then mix up the right stick and the triggers).
+GAMEPAD_KL = """# Steam Input virtual gamepad (Xbox 360 layout). Written by FramePort (device.steam_gamepad).
+key 304   BUTTON_A
+key 305   BUTTON_B
+key 307   BUTTON_X
+key 308   BUTTON_Y
+key 310   BUTTON_L1
+key 311   BUTTON_R1
+key 314   BUTTON_SELECT
+key 315   BUTTON_START
+key 316   BUTTON_MODE
+key 317   BUTTON_THUMBL
+key 318   BUTTON_THUMBR
+axis 0x00 X flat 4096
+axis 0x01 Y flat 4096
+axis 0x03 Z flat 4096
+axis 0x04 RZ flat 4096
+axis 0x02 LTRIGGER
+axis 0x05 RTRIGGER
+axis 0x10 HAT_X
+axis 0x11 HAT_Y
+"""
+BTN_SOUTH = 0x130  # BTN_A / BTN_GAMEPAD: Linux's gamepad button range starts here
+
+
+def has_key_bit(caps, code):
+    """Whether a sysfs capabilities/key bitmap (hex words, most significant first, one per long) has `code`."""
+    words = caps.split()
+    bits = 8 * struct.calcsize("l")  # the kernel's long (64 on the Frame); words aren't zero-padded
+    index = len(words) - 1 - code // bits
+    try:
+        return index >= 0 and bool(int(words[index], 16) >> (code % bits) & 1)
+    except ValueError:
+        return False
+
+
+def steam_gamepads(sys_root="/sys", dev_root="/dev"):
+    """Steam Input's virtual gamepads ([{event, product, name}]): input devices Steam creates through uinput
+    (/sys/devices/virtual/input) with Valve's vendor id (28de) and gamepad buttons. Steam names them "Microsoft X-Box
+    360 pad N" (seen on the Frame; older clients "Steam Virtual Gamepad"); Valve's other virtual devices (e.g.
+    steamos-manager's keys, 28de:0000) have no gamepad buttons."""
+    pads = []
+    for sys_event in sorted(glob.glob(os.path.join(sys_root, "class/input/event*")),
+                            key=lambda p: int(re.sub(r"\D", "", os.path.basename(p)) or 0)):
+        event = os.path.basename(sys_event)
+        device = os.path.join(sys_event, "device")
+
+        def read(rel, device=device):
+            try:
+                with open(os.path.join(device, rel)) as f:
+                    return f.read().strip()
+            except OSError:
+                return ""
+        if read("id/vendor").lower() != "28de" or not has_key_bit(read("capabilities/key"), BTN_SOUTH):
+            continue
+        if "/devices/virtual/" not in os.path.realpath(device) + "/":
+            continue  # Valve hardware itself (a Steam Deck's controls): Steam Input reads it and makes a virtual pad
+        node = os.path.join(dev_root, "input", event)
+        if not os.path.exists(node) or not os.access(node, os.R_OK | os.W_OK):
+            continue
+        pads.append({"event": event, "product": read("id/product").lower() or "0000", "name": read("name")})
+    return pads
+
+
+def podman_run_args(args, env, sys_root="/sys", dev_root="/dev"):
+    """FramePort's Podman wrapper (PODMAN_WRAPPER) for `podman run`: the game's own container
+    (lepton-steamlaunch-<SteamAppId>, launcher env) gets Steam's virtual gamepads and their key layout when its
+    launcher asked for them (FRAMEPORT_GAMEPAD=1, the gamepad line). Anything else: the arguments unchanged. Lepton
+    mounts a tmpfs over /dev, so a `--device` node would vanish under it: bind mounts, like Lepton's own GPU nodes."""
+    if args[:1] != ["run"] or env.get("FRAMEPORT_GAMEPAD") != "1" or \
+            env.get("FRAMEPORT_NO_GAMEPAD", "0") not in ("", "0"):
+        return args
+    appid = env.get("SteamAppId", "")
+    name = None
+    for i, arg in enumerate(args):
+        if arg == "--name" and i + 1 < len(args):
+            name = args[i + 1]
+        elif arg.startswith("--name="):
+            name = arg.partition("=")[2]
+    if not re.fullmatch(r"[0-9]+", appid) or name != f"lepton-steamlaunch-{appid}":
+        return args
+    taken = set()
+    for i, arg in enumerate(args):  # destinations Lepton mounts itself (a future Lepton passing pads through)
+        spec = args[i + 1] if arg == "--mount" and i + 1 < len(args) else arg.partition("=")[2] \
+            if arg.startswith("--mount=") else ""
+        for item in spec.split(","):
+            key, _, value = item.partition("=")
+            if key in ("destination", "target", "dst"):
+                taken.add(value)
+    pads = steam_gamepads(sys_root, dev_root)
+    extra = []
+    for pad in pads:
+        node = f"/dev/input/{pad['event']}"
+        if node not in taken:
+            extra += ["--mount", f"type=bind,source={os.path.join(dev_root, 'input', pad['event'])},"
+                                 f"destination={node},rw"]
+    layout = gamepad_layout_file() if extra else ""
+    for product in sorted({p["product"] for p in pads}):
+        target = f"/system/usr/keylayout/Vendor_28de_Product_{product}.kl"
+        if layout and target not in taken and re.fullmatch(r"[0-9a-f]{4}", product):
+            extra += ["--mount", f"type=bind,source={layout},destination={target},ro"]
+    names = ", ".join(f"{p['event']} ({p['name']}, 28de:{p['product']})" for p in pads) or "none"
+    print(f"FramePort gamepad: Steam Input virtual gamepads for this container: {names}", file=sys.stderr)
+    return [args[0], *extra, *args[1:]] if extra else args
+
+
+def gamepad_layout_file():
+    path = os.path.join(os.path.dirname(PODMAN_BIN), "steam-gamepad.kl")
+    try:
+        with open(path) as f:
+            if f.read() == GAMEPAD_KL:
+                return path
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        f.write(GAMEPAD_KL)
+    os.replace(tmp, path)
+    return path
+
+
+# FramePort's Podman wrapper (agent/bin/podman). Small on purpose: every Podman call Lepton makes goes through it while
+# a launcher has it on PATH, so only `run` loads the agent (podman_run_args); everything else, and any failure, goes
+# straight to the next Podman on PATH: the one after this folder (the codec wrapper of a game with hardware video
+# decoding, else Podman itself), with this folder taken off PATH so the next wrapper can't come back here.
+PODMAN_WRAPPER = r'''#!/usr/bin/python3
+"""FramePort's Podman wrapper (written by frameport_agent.py: ensure_podman_wrapper; see podman_run_args)."""
+import os
+import shutil
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+
+
+def chain():
+    """The next Podman (after this folder on PATH, else the first other one) and PATH without this folder."""
+    own = os.path.realpath(__file__)
+    entries = os.environ.get("PATH", os.defpath).split(os.pathsep)
+    mine = [i for i, e in enumerate(entries) if os.path.realpath(e or os.curdir) == HERE]
+    order = entries[mine[0] + 1:] if mine else entries
+    for entry in order + ["/usr/local/bin", "/usr/bin", "/bin"]:
+        folder = os.path.realpath(entry or os.curdir)
+        found = shutil.which("podman", path=folder) if folder != HERE else None
+        if found and os.path.realpath(found) != own:
+            return found, os.pathsep.join(e for i, e in enumerate(entries) if i not in mine)
+    sys.exit("FramePort: no Podman found after its wrapper")
+
+
+podman, path = chain()
+args = sys.argv[1:]
+env = dict(os.environ, PATH=path)
+if args[:1] == ["run"]:
+    try:
+        sys.path.insert(0, os.path.dirname(HERE))
+        import frameport_agent
+        args = frameport_agent.podman_run_args(args, env)
+    except Exception as exc:  # a gamepad problem must never stop the game's container from starting
+        print(f"FramePort: Podman wrapper left the arguments unchanged: {exc}", file=sys.stderr)
+        args = sys.argv[1:]
+os.execve(podman, [podman, *args], env)
+'''
+
+
+def ensure_podman_wrapper():
+    """Write FramePort's Podman wrapper (PODMAN_BIN/podman) when it is missing or differs; returns whether it was
+    written. Launchers only use it while their gamepad line is there."""
+    path = os.path.join(PODMAN_BIN, "podman")
+    try:
+        with open(path) as f:
+            if f.read() == PODMAN_WRAPPER and os.access(path, os.X_OK):
+                return False
+    except OSError:
+        pass
+    os.makedirs(PODMAN_BIN, exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        f.write(PODMAN_WRAPPER)
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, path)
+    return True
+
+
+def remove_old_codec_dirs():
+    """Agent <= 70 extracted a per-game codec into <base>/frameport-codec; the shared codec replaced it. Removed
+    once the game's launcher no longer uses it (upgrade_launchers converted it; the choice is in deployment.json or
+    the recipe's patches)."""
+    removed = []
+    for dep_path in glob.glob(os.path.join(ANCHORS, "*/deployment.json")):
+        try:
+            with open(dep_path) as f:
+                dep = json.load(f)
+            base = dep.get("base")
+        except (OSError, ValueError, AttributeError):
+            continue
+        old = os.path.join(base, "frameport-codec") if isinstance(base, str) else ""
+        if not old or not os.path.isdir(old) or os.path.islink(old):
+            continue
+        try:
+            with open(os.path.join(os.path.dirname(dep_path), "launch.sh")) as f:
+                launcher = f.read()
+        except OSError:
+            launcher = ""
+        if "frameport-codec" in launcher:
+            continue  # its launcher hasn't been converted yet
+        shutil.rmtree(old, ignore_errors=True)
+        removed.append(dep.get("package") or os.path.basename(os.path.dirname(dep_path)))
+    return removed
+
+
+def cmd_video_codec_switch(args):
+    """FramePort's setting "Hardware video decoding" for every game on this Frame: off writes VIDEO_CODEC_DIR/disabled,
+    which launchers and the wrapper check at every start (no launcher rewrite, running games keep what they have)."""
+    flag = os.path.join(VIDEO_CODEC_DIR, "disabled")
+    if args.get("enabled", True):
+        if os.path.exists(flag):
+            os.remove(flag)
+    else:
+        os.makedirs(VIDEO_CODEC_DIR, exist_ok=True)
+        with open(flag, "w") as f:
+            f.write("switched off in FramePort\n")
+    return cmd_video_codec_status({})
+
+
 def upgrade_linux_launcher(text):
     """A Linux app's launcher from before agent v63, made fit for Desktop Mode's menu entry (GitHub #84): no Steam
     parent watchdog and no display taken from Steam when FRAMEPORT_DESKTOP is set."""
@@ -2369,12 +2780,14 @@ def upgrade_linux_launcher(text):
     return text
 
 
-def write_launcher(anchor, base, pkg, title, appid, lepton, env):
+def write_launcher(anchor, base, pkg, title, appid, lepton, env, hw_video=False, gamepad=False):
     extra = "".join(f"export {k}={shlex.quote(str(v))}\n" for k, v in (env or {}).items()
                     if re.fullmatch(r"[A-Z_][A-Z0-9_]*", k))
     text = LAUNCH_SH.format(title=title.replace("\n", " "), pkg=pkg, base_q=shlex.quote(base), appid=appid,
                             lepton_q=shlex.quote(lepton), extra_env=extra, watchdog=WATCHDOG,
-                            dashboard=dashboard_line(), single=SINGLE_LINE, plays_start=plays_lines(anchor)[0],
+                            dashboard=dashboard_line(), logcat=logcat_line(), single=SINGLE_LINE,
+                            video_codec=wrapper_lines(hw_video, gamepad),
+                            plays_start=plays_lines(anchor)[0],
                             plays_end=plays_lines(anchor)[1])
     path = os.path.join(anchor, "launch.sh")
     with open(path + ".tmp", "w") as f:
@@ -2385,6 +2798,114 @@ def write_launcher(anchor, base, pkg, title, appid, lepton, env):
 
 def data_files_dir(base, pkg):
     return os.path.join(base, "lepton-data/external/Android/data", pkg, "files")
+
+
+def cmd_video_codec_status(args):
+    """The shared codec installed on this Frame ({digest, revision}, {} if none or damaged) and whether FramePort's
+    setting switched it off for every game ("disabled")."""
+    status = video_codec_installed()
+    status["disabled"] = os.path.exists(os.path.join(VIDEO_CODEC_DIR, "disabled"))
+    return status
+
+
+def video_codec_installed():
+    path = os.path.join(VIDEO_CODEC_DIR, "current", "manifest.json")
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+        manifest = json.loads(raw)
+        with open(os.path.join(os.path.dirname(path), "deployment.json")) as f:
+            config = json.load(f)
+        if not isinstance(config, dict) or config.get("scope") != "shared" or \
+                config.get("runtime_sha256") != manifest["runtime_sha256"]:
+            return {}
+        for name in VIDEO_CODEC_FILES:
+            local = "bin/podman" if name == "podman.py" else name
+            if sha256_file(os.path.join(os.path.dirname(path), local)) != manifest["files"][name]:
+                return {}
+        return {"digest": hashlib.sha256(raw).hexdigest(), "revision": manifest.get("revision", 1)}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def prune_video_codec_versions(versions, keep):
+    """Each revision is ~15 MB. Keep the active one and the one it replaced (a launch that resolved the old
+    'current' just before the switch still mounts its files); running containers hold their mounts anyway."""
+    for name in os.listdir(versions):
+        if name in keep or not re.fullmatch(r"[0-9a-f]{64}(\.previous-[0-9]+)?|\.install-.*", name):
+            continue
+        path = os.path.join(versions, name)
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path, ignore_errors=True)
+
+
+def cmd_install_video_codec(args):
+    """Verify a shared payload, then publish its complete version in one step."""
+    encoded = args["bundle"]
+    if not isinstance(encoded, str) or len(encoded) > 32 * 1024 * 1024:
+        raise AgentError("oversized video codec bundle")
+    import io
+
+    raw = base64.b64decode(encoded, validate=True)
+    data = {}
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        if set(archive.namelist()) != {"manifest.json", *VIDEO_CODEC_FILES} or len(archive.infolist()) != 5:
+            raise AgentError("unexpected video codec bundle files")
+        for name in ("manifest.json", *VIDEO_CODEC_FILES):
+            if archive.getinfo(name).file_size > 16 * 1024 * 1024:
+                raise AgentError(f"oversized video codec asset: {name}")
+            data[name] = archive.read(name)
+    manifest = json.loads(data["manifest.json"])
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("files"), dict) or \
+            not isinstance(manifest.get("revision", 1), int) or manifest.get("revision", 1) < 1:
+        raise AgentError("invalid video codec manifest")
+    digest = hashlib.sha256(data["manifest.json"]).hexdigest()
+    if digest != args["digest"]:
+        raise AgentError("video codec manifest checksum mismatch")
+    for name in VIDEO_CODEC_FILES:
+        if hashlib.sha256(data[name]).hexdigest() != manifest["files"][name]:
+            raise AgentError(f"video codec asset checksum mismatch: {name}")
+    # A second PC with older FramePort must not downgrade the shared codec.
+    os.makedirs(VIDEO_CODEC_DIR, exist_ok=True)
+    with open(os.path.join(VIDEO_CODEC_DIR, "install.lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = video_codec_installed()
+        if current.get("digest") not in (None, digest) and current.get("revision", 0) >= manifest.get("revision", 1):
+            # another PC's FramePort installed this revision (or a newer one) built differently: keep it, two
+            # PCs mustn't replace each other's codec at every connection
+            return dict(current, kept=True)
+        versions = os.path.join(VIDEO_CODEC_DIR, "versions")
+        os.makedirs(versions, exist_ok=True)
+        version = os.path.join(versions, digest)
+        previous = os.path.basename(os.path.realpath(os.path.join(VIDEO_CODEC_DIR, "current")))
+        if current.get("digest") != digest:
+            stage = tempfile.mkdtemp(prefix=".install-", dir=versions)
+            try:
+                os.mkdir(os.path.join(stage, "bin"))
+                # Config first, executable last, then expose the entire version.
+                config = {"scope": "shared", "runtime_sha256": manifest["runtime_sha256"]}
+                with open(os.path.join(stage, "deployment.json"), "w") as f:
+                    json.dump(config, f)
+                for name in ("manifest.json", *[n for n in VIDEO_CODEC_FILES if n != "podman.py"], "podman.py"):
+                    target = os.path.join(stage, "bin/podman" if name == "podman.py" else name)
+                    with open(target, "wb") as f:
+                        f.write(data[name])
+                    os.chmod(target, 0o755 if name == "podman.py" else 0o644)
+                if os.path.lexists(version):
+                    # Preserve an interrupted/corrupt prior version for diagnosis.
+                    os.rename(version, version + f".previous-{time.time_ns()}")
+                os.rename(stage, version)
+                link = os.path.join(VIDEO_CODEC_DIR, f".current-{os.getpid()}")
+                if os.path.lexists(link):
+                    os.unlink(link)
+                os.symlink(os.path.join("versions", digest), link)
+                os.replace(link, os.path.join(VIDEO_CODEC_DIR, "current"))
+            finally:
+                if os.path.isdir(stage):
+                    shutil.rmtree(stage)
+        prune_video_codec_versions(versions, {digest, previous})
+        upgraded = upgrade_launchers()
+    return {"digest": digest, "revision": manifest.get("revision", 1), "launchers": upgraded}
 
 
 def set_flatscreen(app_dir, on):
@@ -2467,7 +2988,12 @@ def cmd_finalize(args):
         with open(target, "w") as f:
             f.write(content)
     models = install_controller_models(files_dir, str(settings.get("controller_models", 0)) not in ("0", "0.0"))
-    write_launcher(anchor, base, pkg, title, appid, lepton, args.get("env"))
+    recipe = args.get("recipe") if isinstance(args.get("recipe"), dict) else {}
+    hw_video = HW_VIDEO_PATCH in (recipe.get("patches") or [])  # the shared codec (install_video_codec)
+    gamepad = GAMEPAD_PATCH in (recipe.get("patches") or [])  # Steam Input's virtual gamepad (PODMAN_WRAPPER)
+    if gamepad:
+        ensure_podman_wrapper()
+    write_launcher(anchor, base, pkg, title, appid, lepton, args.get("env"), hw_video, gamepad)
     art_in = os.path.join(base, "incoming-artwork")
     if os.path.isdir(art_in):
         shutil.rmtree(os.path.join(anchor, "artwork"), ignore_errors=True)
@@ -2475,7 +3001,8 @@ def cmd_finalize(args):
     dep = {"package": pkg, "appid": int(appid), "base": base, "title": title, "tags": args.get("tags") or [],
            "apk": args.get("apk_name", "game.apk"),
            "sha256": args.get("apk_sha256"), "recipe": args.get("recipe"), "installed_by": "frameport",
-           "agent_version": AGENT_VERSION, "time": time.time()}
+           "hw_video_decode": hw_video, "steam_gamepad": gamepad, "agent_version": AGENT_VERSION,
+           "time": time.time()}
     with open(os.path.join(anchor, "deployment.json"), "w") as f:
         json.dump(dep, f, indent=2)
     return {"ok": True, "base": base, "appid": appid, "moved_data_files": moved, "controller_models": models}
@@ -3734,7 +4261,7 @@ def cmd_uninstall(args):
         raise AgentError("the game is running")
     keep_data = args.get("keep_data", True)
     names = ("game", "revive", "xrlayer", "shadercache", "incoming", "incoming-artwork") if pcvr else \
-        ("app", "incoming", "incoming-artwork", "launch.log") if linux else \
+        ("app", "incoming", "incoming-artwork", "launch.log", "session.log") if linux else \
         ("lepton-app", "lepton-shaders", "incoming", "previous-game.apk")
     for name in names:
         p = os.path.join(base, name)
@@ -3760,7 +4287,7 @@ def cmd_uninstall(args):
     if not keep_data or base != anchor:
         remove_tree(anchor)
     else:  # saves live next to the launcher (Quest games): keep them, drop what marks the game as installed
-        for name in ("deployment.json", "launch.sh", "artwork", "launch.log", "launch-test.log"):
+        for name in ("deployment.json", "launch.sh", "artwork", "launch.log", "launch-test.log", "session.log"):
             p = os.path.join(anchor, name)
             remove_tree(p)
     return {"removed": True, "kept_saves": keep_data, "shortcut_removed": removed_sc}
@@ -4098,10 +4625,56 @@ PCVR_LOGS = ("compatdata/pfx/drive_c/users/steamuser/AppData/Local/Revive/Revive
 LOCAL_APPDATA = "compatdata/pfx/drive_c/users/steamuser/AppData/Local"
 
 
+LOCAL_LOW = "compatdata/pfx/drive_c/users/steamuser/AppData/LocalLow"
+
+
+def _head_tail(path, head=300, tail=1500):
+    lines = open(path, errors="replace").read().splitlines()
+    if len(lines) > head + tail:
+        lines = lines[:head] + [f"[... {len(lines) - head - tail} lines left out ...]"] + lines[-tail:]
+    return "\n".join(lines)
+
+
+def unity_logs(base, since=0.0):
+    """Unity's own logs of a PC VR game: LocalLow/<Company>/<Product>/Player.log + Player-prev.log (Unity 2018.3+;
+    company and product from <game>/<Name>_Data/app.info, else every Player log in LocalLow), the older
+    <Name>_Data/output_log.txt and the crash handler's Temp/<Company>/<Product>/Crashes/*/error.log. Unity logs VR
+    start-up (which SDK, init errors) at the top, so the head is kept as well as the tail."""
+    game = os.path.join(base, "game")
+    low = os.path.join(base, LOCAL_LOW)
+    temp = os.path.join(base, LOCAL_APPDATA, "Temp")
+    names = []
+    for info in glob.glob(os.path.join(glob.escape(game), "*_Data", "app.info")):
+        try:
+            lines = [ln.strip() for ln in open(info, errors="replace").read().splitlines()]
+        except OSError:
+            continue
+        if len(lines) >= 2 and lines[0] and lines[1] and "/" not in lines[0] + lines[1] and \
+                ".." not in (lines[0], lines[1]):
+            names.append((lines[0], lines[1]))
+    dirs = [os.path.join(low, c, p) for c, p in names if os.path.isdir(os.path.join(low, c, p))]
+    logs = []
+    for d in dirs or glob.glob(os.path.join(glob.escape(low), "*", "*")):
+        logs += [os.path.join(d, n) for n in ("Player.log", "Player-prev.log")]
+    logs += glob.glob(os.path.join(glob.escape(game), "*_Data", "output_log.txt"))
+    crash_dirs = [os.path.join(temp, c, p) for c, p in names] or glob.glob(os.path.join(glob.escape(temp), "*", "*"))
+    crashes = [x for d in crash_dirs for x in glob.glob(os.path.join(glob.escape(d), "Crashes", "*", "error.log"))]
+    out = []
+    for log in [x for x in logs if os.path.isfile(x)]:
+        if os.path.getmtime(log) < since:  # left over from an earlier run
+            continue
+        out.append(f"===== unity log {os.path.relpath(log, base)}\n" + _head_tail(log))
+    for err in sorted(crashes, key=os.path.getmtime, reverse=True)[:2]:
+        if os.path.getmtime(err) >= since:
+            out.append(f"===== unity crash {os.path.relpath(err, base)}\n" + _head_tail(err, 100, 400))
+    return out
+
+
 def game_logs(base, since=0.0):
     """The game's own logs from the Proton prefix, newest first: Unreal Saved/Logs/*.log (tail) and crash summaries
-    (Saved/Crashes/*/CrashContext.runtime-xml → error message + call stack), Revive's logs."""
-    out = []
+    (Saved/Crashes/*/CrashContext.runtime-xml → error message + call stack), Unity's Player.log / crash error.log
+    (agent v67), Revive's logs."""
+    out = unity_logs(base, since)
     local = os.path.join(base, LOCAL_APPDATA)
     for log in sorted(glob.glob(os.path.join(local, "*", "Saved", "Logs", "*.log")), key=os.path.getmtime,
                       reverse=True)[:1]:
@@ -4126,6 +4699,9 @@ def game_logs(base, since=0.0):
     return out
 
 
+LAUNCH_INSTALL_GRACE = 240  # s a launch test waits at most for Lepton's boot + app install before its own window
+
+
 def cmd_launch_test(args):
     """Start the game headless (as Steam would), wait, classify, stop. Without the headset worn the OpenXR session
     never reaches FOCUSED, so this proves startup, not visuals."""
@@ -4147,19 +4723,30 @@ def cmd_launch_test(args):
     keys = key_usage()
     unit = f"frameport-test-{appid}"
     run(["systemctl", "--user", "reset-failed", unit])
+    mark_launch_test(anchor)
     p = run(["systemd-run", "--user", "--collect", "--quiet", f"--unit={unit}", os.path.join(anchor, "launch.sh")])
     if p.returncode:
         raise AgentError("could not start the launcher: " + p.stderr[-300:])
     start = time.time()
     state = "RUNNING"
-    while time.time() - start < seconds:
+    app_start = None  # when Lepton started the app ("Waiting for app"): the test window counts from there
+    while True:
         time.sleep(3)
+        now = time.time()
         text = open(log, errors="replace").read() if os.path.exists(log) else ""
         if "Exited!" in text:
             state = "EXITED"
             break
-        if "Early-exit" in text or not_started(text, time.time() - start):
+        if "Early-exit" in text or not_started(text, now - start):
             state = "NEVER_STARTED"
+            break
+        if app_start is None and "Waiting for app" in text:
+            app_start = now
+        # the first start after an APK change boots Lepton and installs the app first (a minute or more): stopping the
+        # container then left a half-installed APK ("base.apk is not zip") that never started again (VR HOT)
+        if app_start is not None and now - app_start >= seconds:
+            break
+        if now - start >= seconds + LAUNCH_INSTALL_GRACE:
             break
     elapsed = round(time.time() - start)
     if state == "EXITED":  # Lepton dumps the container's logcat buffers (crash backtraces) after "Exited!"
@@ -4186,6 +4773,7 @@ def launch_test_linux(dep, anchor, log, seconds):
         raise AgentError("the app is already running")
     unit = f"frameport-test-{appid}"
     run(["systemctl", "--user", "reset-failed", unit])
+    mark_launch_test(anchor)
     start = time.time()
     p = run(["systemd-run", "--user", "--quiet", f"--unit={unit}", "--property=RemainAfterExit=no",
              os.path.join(anchor, "launch.sh")])
@@ -4219,6 +4807,7 @@ def launch_test_pcvr(dep, anchor, log, seconds):
         raise AgentError("the game is already running")
     unit = f"frameport-test-{appid}"
     run(["systemctl", "--user", "reset-failed", unit])
+    mark_launch_test(anchor)
     p = run(["systemd-run", "--user", "--quiet", f"--unit={unit}", "--property=RemainAfterExit=no",
              os.path.join(anchor, "launch.sh")])
     if p.returncode:
@@ -4255,6 +4844,92 @@ def launch_test_pcvr(dep, anchor, log, seconds):
         f.write("\n".join(parts))
     return {"state": state, "elapsed": elapsed, "log": combined, "log_size": os.path.getsize(combined),
             "kind": "pcvr", "game_process": bool(game_seen)}
+
+
+SESSION_LOG_MAX = 4 << 20  # bytes of a play session's log the PC triages
+SESSION_READ_MAX = 64 << 20  # a longer launch.log is read from its end
+SESSION_KEEP = re.compile(r"FrameBridge|focus|pacing|Fatal signal|FATAL|CRASH|#\d\d pc |Abort message|DEVICE.LOST|"
+                          r"AndroidRuntime|vrclient|Start proc|lepton", re.I)
+KERNEL_GPU = re.compile(r"hangcheck|gpu fault|adreno|kgsl|msm_drm.*(hang|recover)", re.I)
+
+
+def slice_session_log(text, max_bytes=SESSION_LOG_MAX):
+    """A long play session's log cut to max_bytes: its start (a quarter) and its end (half) whole, from the middle
+    only FrameBridge's, focus, pacing and crash lines (oldest first, while they fit). Returns (text, cut)."""
+    if len(text) <= max_bytes:
+        return text, False
+    head = text[:max_bytes // 4]
+    head = head[:head.rfind("\n") + 1]
+    tail = text[-(max_bytes // 2):]
+    tail = tail[tail.find("\n") + 1:]
+    middle = text[len(head):len(text) - len(tail)]
+    budget, kept = max_bytes - len(head) - len(tail) - 200, []
+    for line in middle.splitlines():
+        if SESSION_KEEP.search(line):
+            budget -= len(line) + 1
+            if budget < 0:
+                break
+            kept.append(line)
+    note = f"[FramePort: {len(middle)} bytes in the middle of this session cut, {len(kept)} lines kept]\n"
+    return head + note + "".join(ln + "\n" for ln in kept) + tail, True
+
+
+def session_kernel_lines(start, end):
+    """Kernel GPU lines (hangs, faults, recoveries) logged during a play session."""
+    until = (end or time.time()) + 120
+    try:
+        text = run(["journalctl", "-k", "--since", f"@{int(start)}", "--until", f"@{int(until)}", "-q", "--no-pager",
+                    "-o", "short-unix"]).stdout
+    except OSError:
+        return ""
+    lines = [ln for ln in text.splitlines() if KERNEL_GPU.search(ln)]
+    return "".join(f"kernel: {ln}\n" for ln in lines[-200:])
+
+
+def cmd_session_log(args):
+    """The log of the game's newest play session (agent v70), for triage on the PC: {session: {start, end, test},
+    log: path of the session's log (launch.log sliced to 4 MB; PC VR: + Revive's and the game's own logs), log_size,
+    cut, crash: that session's crash logcat (tombstones), kernel: GPU hang/fault lines from the kernel log}.
+    session is None when the game was never played."""
+    pkg = check_pkg(args["package"])
+    dep = deployment(pkg)
+    if not dep:
+        raise AgentError(f"{pkg} is not installed")
+    anchor, base = os.path.join(ANCHORS, pkg), dep["base"]
+    session = last_play(anchor)
+    out = {"session": session, "log": None, "log_size": 0, "cut": False, "crash": "", "kernel": "",
+           "kind": dep.get("kind", "quest")}
+    if not session:
+        return out
+    start, end = session["start"], session["end"]
+    parts = []
+    log = os.path.join(base, "launch.log")
+    if os.path.exists(log) and os.path.getmtime(log) >= start - 5:  # else no log of this session is left
+        size = os.path.getsize(log)
+        with open(log, "rb") as f:
+            if size > SESSION_READ_MAX:
+                f.seek(size - SESSION_READ_MAX)
+            parts.append(f.read().decode("utf-8", "replace"))
+    if dep.get("kind") == "pcvr":
+        for rel in PCVR_LOGS:
+            path = os.path.join(base, rel)
+            if os.path.exists(path) and os.path.getmtime(path) >= start - 5:
+                parts.append(f"===== {rel}\n" + (_tail(path, 400000) or ""))
+        parts += game_logs(base, since=start - 5)
+    text, cut = slice_session_log("\n".join(parts), int(args.get("max_bytes", SESSION_LOG_MAX)))
+    path = os.path.join(base, "session.log")
+    with open(path, "w") as f:
+        f.write(text)
+    out.update(log=path, log_size=os.path.getsize(path), cut=cut)
+    crash = os.path.join(STEAM, "logs", "lepton-logcats", f"steamlaunch-{dep['appid']}", "logcat-crash.log")
+    try:
+        mtime = os.path.getmtime(crash)
+        if start - 1 <= mtime <= (end or time.time()) + 120:
+            out["crash"] = _tail(crash, 256 * 1024) or ""
+    except OSError:
+        pass
+    out["kernel"] = session_kernel_lines(start, end)
+    return out
 
 
 def steam_library_report():
@@ -4340,6 +5015,50 @@ def _tail(path, max_bytes):
         return None
 
 
+# shader dumps in a game's files dir: the Vulkan shim's vk_shader_dump and the shader-fix layer's zink_shader_dump
+SHADER_DUMP_DIRS = ("fp_vk_shaders", "fp_spirv")
+SHADER_DUMP_BYTES = 4 << 20  # newest modules per diagnostics run, base64 on the wire
+SHADER_DUMP_FILES = 200
+
+
+def shader_dumps(files_dir, max_bytes=SHADER_DUMP_BYTES):
+    """{dir: {"index": tail of index.txt, "modules": {name: base64}, "total": n, "skipped": n}} for the dump folders
+    in a game's files dir: the newest modules (by time written) up to max_bytes, so the shader created right before a
+    GPU hang comes along. Unreadable files are skipped (the app writes them inside its container)."""
+    out = {}
+    for d in SHADER_DUMP_DIRS:
+        path = os.path.join(files_dir, d)
+        try:
+            names = [n for n in os.listdir(path) if n.endswith(".spv")]
+        except OSError:
+            continue
+        mods = []
+        for n in names:
+            try:
+                mods.append((os.path.getmtime(os.path.join(path, n)), n))
+            except OSError:
+                pass
+        mods.sort(reverse=True)
+        res = {"total": len(names), "modules": {}, "skipped": 0}
+        index = _tail(os.path.join(path, "index.txt"), 1 << 20)
+        if index is not None:
+            res["index"] = index
+        used = 0
+        for _, n in mods[:SHADER_DUMP_FILES]:
+            try:
+                with open(os.path.join(path, n), "rb") as f:
+                    data = f.read(max_bytes - used + 1)
+            except OSError:
+                res["skipped"] += 1
+                continue
+            if used + len(data) > max_bytes:
+                break
+            used += len(data)
+            res["modules"][n] = base64.b64encode(data).decode("ascii")
+        out[d] = res
+    return out
+
+
 def cmd_collect_diag(args):
     """Everything useful for debugging without the game or the PC app: host runtime facts and, with a package, the
     game's launcher, settings, deployment, logs (launch, Lepton logcat, Proton/Revive/Unreal) and its file listing.
@@ -4420,6 +5139,9 @@ def cmd_collect_diag(args):
     for p in sorted(cands, key=lambda p: next((i for i, k in enumerate(order) if k in os.path.basename(p)), 9)):
         name = os.path.basename(p)
         files[name if name.startswith("logcat") else "logcat-" + name] = _tail(p, max_bytes)
+    shaders = shader_dumps(data_files_dir(base, pkg), int(args.get("shader_bytes", SHADER_DUMP_BYTES)))
+    if shaders:
+        out["shaders"] = shaders
     try:
         listing = cmd_list_files({"package": pkg, "limit": 20000})
         out["listing"] = {"missing": listing["missing"], "truncated": listing["truncated"],
@@ -4756,6 +5478,51 @@ def user_opened_dashboard(log, pos):
             return USER_DASHBOARD_MARKER in f.read(), end
     except OSError:
         return False, pos
+
+
+LOGCAT_EOF = "logcat: Unexpected EOF"
+
+
+def logcat_keeper(log, appid, parent, poll=2.0, restarts=5, popen=None):
+    """Keep launch.log filling when Lepton's logcat mirror dies while the game runs (LOGCAT_LINE): once the log shows
+    LOGCAT_EOF after "Waiting for app", read the container's logcat ourselves (from its last 2000 lines, so the start
+    of the game isn't lost) and append it; restart it if it ends while the game still runs (at most `restarts` times).
+    Ends with the launcher."""
+    popen = popen or subprocess.Popen
+    container = f"lepton-steamlaunch-{appid}"
+
+    def alive():
+        try:
+            os.kill(int(parent), 0)
+            return True
+        except (OSError, ValueError):
+            return False
+
+    proc, started = None, 0
+    while alive():
+        if proc is None or proc.poll() is not None:
+            try:
+                with open(log, errors="replace") as f:
+                    text = f.read()
+            except OSError:
+                text = ""
+            i = text.find("Waiting for app")
+            if i >= 0 and LOGCAT_EOF in text[i:] and started < restarts:
+                started += 1
+                with open(log, "a") as f:
+                    f.write(f"FramePort: Lepton's logcat ended; reading {container}'s logcat again ({started})\n")
+                out = open(log, "ab")
+                try:
+                    proc = popen(["podman", "exec", container, "logcat", "-v", "threadtime", "-T", "2000"],
+                                 stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+                except OSError as exc:
+                    print(f"logcat_keeper: {exc}", flush=True)
+                    proc = None
+                finally:
+                    out.close()
+        time.sleep(poll)
+    if proc is not None and proc.poll() is None:
+        proc.terminate()
 
 
 def dashboard_worker(log, parent, wait_start=240, window=120, poll=0.5, ui_log=None, max_hides=10):
@@ -5661,6 +6428,9 @@ def main():
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "_xr_probe":
         xr_probe(sys.argv[2])
+        return 0
+    if len(sys.argv) >= 5 and sys.argv[1] == "_logcat_keeper":
+        logcat_keeper(sys.argv[2], sys.argv[3], sys.argv[4])
         return 0
     if len(sys.argv) >= 4 and sys.argv[1] == "_dashboard_worker":
         dashboard_worker(sys.argv[2], sys.argv[3])

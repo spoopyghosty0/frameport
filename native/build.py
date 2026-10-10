@@ -5,12 +5,12 @@ Everything is fetched on demand into native/.cache (git-ignored):
   - Android NDK r27c (27.2.12479018) from Google's repository (checksummed via repository2-3.xml)
   - OpenXR headers at the commits each component was written against (KhronosGroup/OpenXR-SDK)
   - Temurin JDK 21 (javac) and Android build-tools (d8) for the Java stub classes
-Then builds: FrameBridge adapter (arm64 + arm32), VrApi bridge, platform compat, language packs, GL shim, oculusos stub dex, the
+Then builds: FrameBridge adapter (arm64 + arm32), VrApi bridge, platform compat, language packs, GL shim, multiview twin interposer (glmv), oculusos stub dex, the
 timefix OpenXR layer for Proton games (linux-arm64, glibc; the NDK's clang builds it freestanding), the
 OculusHMDConnected helper for Rift games under Proton (win-x64 PE; the NDK's clang + lld-link, no Windows SDK), the
 live view's hardware H.264 encoder fp_venc (linux-arm64-bin, static freestanding executable), and rewrites artifacts/SHA256SUMS. Run `frameport parity` afterwards to see which games change.
 
-    python native/build.py [--only adapter,bridge,compat,langpack,glshim,eglfmt,ovrtrace,dex,xrlayer,oculushmd,xrshim,vkshim,ovrpshim,vrsettings,venc] [--ndk PATH]
+    python native/build.py [--only adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrshim,vkshim,zinkfix,ovrpshim,vrsettings,venc] [--ndk PATH]
 """
 from __future__ import annotations
 
@@ -275,6 +275,17 @@ def build_eglfmt(tc: Path):
          "-Wl,--no-as-needed", "-lEGL", "-Wl,--as-needed", "-ldl", "-llog", "-o", ART / "arm64-v8a/libfpg.so"], cwd=src)
 
 
+def build_glmv(tc: Path):
+    """Single-view draws of OVR_multiview programs (see glmv/glmv.c, frame.gl_multiview_fbo). Named libfpglmv.so: as
+    long as "libGLESv3.so", whose dlopen string in the engine is rewritten in place. Linked to libGLESv3 so a dlsym on
+    its handle still finds every GL function it doesn't wrap."""
+    src = HERE / "glmv"
+    run([exe(tc, "aarch64-linux-android29-clang"), "-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror",
+         "-fvisibility=hidden", f"-ffile-prefix-map={src}=native/glmv", "-Wl,-soname,libfpglmv.so",
+         "-Wl,-z,max-page-size=16384", "glmv.c", "-Wl,--no-as-needed", "-lGLESv3", "-Wl,--as-needed", "-lEGL", "-ldl",
+         "-llog", "-o", ART / "arm64-v8a/libfpglmv.so"], cwd=src)
+
+
 def build_ovrtrace(tc: Path):
     """Meta Platform SDK tracer (see ovrtrace/ovrtrace.c): diagnostics, the game's engine library loads it first."""
     src = HERE / "ovrtrace"
@@ -298,6 +309,14 @@ def build_vkshim(tc: Path):
          "-fvisibility=hidden", "-Wl,-soname,libfp_vk.so", "-Wl,-z,max-page-size=16384", "vkshim.c",
          "-Wl,--no-as-needed", "-lvulkan", "-Wl,--as-needed", "-ldl", "-llog", "-o", ART / "arm64-v8a/libfp_vk.so"],
         cwd=src)
+
+
+def build_zinkfix(tc: Path):
+    """Shader-fix Vulkan layer for OpenGL ES games (see zinkfix/zinkfix.c): between Zink and the driver."""
+    src = HERE / "zinkfix"
+    run([exe(tc, "aarch64-linux-android29-clang"), "-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror",
+         "-fvisibility=hidden", "-Wl,-soname,libVkLayer_fp_shaderfix.so", "-Wl,-z,max-page-size=16384", "zinkfix.c",
+         "-ldl", "-llog", "-o", ART / "arm64-v8a/libVkLayer_fp_shaderfix.so"], cwd=src)
 
 
 def build_ovrpshim(tc: Path):
@@ -352,7 +371,7 @@ def write_sums():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", default="adapter,bridge,compat,langpack,glshim,eglfmt,ovrtrace,dex,xrlayer,oculushmd,xrshim,vkshim,ovrpshim,vrsettings,venc")
+    ap.add_argument("--only", default="adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrshim,vkshim,zinkfix,ovrpshim,vrsettings,venc")
     ap.add_argument("--ndk")
     args = ap.parse_args()
     parts = set(args.only.split(","))
@@ -361,11 +380,12 @@ def main():
     tc = clang_dir(ndk(args.ndk)) if parts - {"dex"} else None
     steps = {"adapter": lambda: build_adapter(tc), "bridge": lambda: build_bridge(tc), "compat": lambda: build_compat(tc),
              "langpack": lambda: build_langpack(tc),
-             "glshim": lambda: build_glshim(tc), "eglfmt": lambda: build_eglfmt(tc), "ovrtrace": lambda: build_ovrtrace(tc), "xrshim": lambda: build_xrshim(tc), "dex": build_dex, "xrlayer": lambda: build_xrlayer(tc),
+             "glshim": lambda: build_glshim(tc), "eglfmt": lambda: build_eglfmt(tc), "glmv": lambda: build_glmv(tc), "ovrtrace": lambda: build_ovrtrace(tc), "xrshim": lambda: build_xrshim(tc), "dex": build_dex, "xrlayer": lambda: build_xrlayer(tc),
              "oculushmd": lambda: build_oculushmd(tc), "vkshim": lambda: build_vkshim(tc),
+             "zinkfix": lambda: build_zinkfix(tc),
              "ovrpshim": lambda: build_ovrpshim(tc),
              "vrsettings": lambda: build_vrsettings(tc), "venc": lambda: build_venc(tc)}
-    for name in ("adapter", "bridge", "compat", "langpack", "glshim", "eglfmt", "ovrtrace", "xrshim", "vkshim", "ovrpshim", "dex", "xrlayer", "oculushmd", "vrsettings", "venc"):
+    for name in ("adapter", "bridge", "compat", "langpack", "glshim", "eglfmt", "glmv", "ovrtrace", "xrshim", "vkshim", "zinkfix", "ovrpshim", "dex", "xrlayer", "oculushmd", "vrsettings", "venc"):
         if name in parts:
             log(f"build {name}")
             steps[name]()

@@ -1,0 +1,27 @@
+package: com.ilmxlab.tales
+title: 'Star Wars: Tales from the Galaxy''s Edge'
+status: unknown
+notes: Not working yet - after the intro logos and a loading animation the picture goes black (GitHub issue 61).
+  Gets the controller fixes found for Vader Immortal (same studio) to test.
+details: Unreal Engine 4 (GLES) by ILMxLAB, like Vader Immortal, but a different engine build - it has none of Vader's
+  Quest-only branches (no GetQuestShaderPrecompilePercent or RPOC key map; it precompiles shaders through Unreal's
+  own pipeline cache), so frame.unreal_quest_precompile/_keymap don't apply. Its seasons and Wwise banks are Meta
+  platform asset files (frame.asset_files). Vader's OVRPlugin findings apply to it as well - poses asked for at
+  OVRPlugin's own clock (pose_time_fix) and thumbs from near-touch, which the Frame never reports (frame.unreal_thumb_touch).
+  Ruled out for the black picture so far (see the diagnostics in issue 61) - asset-file paks, Valve's foveation,
+  GL errors; the game's own eye image reads back black.
+tested_version: 1.1.9+734762.cl.439699
+engine: Unreal
+xr: VrApi
+alt_overport:
+- patch_remove_unreal_force_quit
+frame:
+- frame.asset_files
+- frame.unreal_thumb_touch
+adapter:
+  pose_time_fix: 1
+verified:
+  issue: 61
+updated: '2026-10-09'
+min_app: 0.12.1
+source_hint: Star Wars- Tales from the Galaxys Edge

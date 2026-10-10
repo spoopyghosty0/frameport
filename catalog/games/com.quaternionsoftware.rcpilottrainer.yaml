@@ -1,0 +1,22 @@
+package: com.quaternionsoftware.rcpilottrainer
+title: RC Pilot Trainer
+status: works
+tested_version: 0.7.0.2
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+- frame.oculusos
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-10'
+  known_good_sha256: 1b98f0dea74f058a838ac17299a0e1c67362cb1ecfbc97e4cb2aad3bcbdfb173
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 152
+source_hint: com.quaternionsoftware.rcpilottrainer

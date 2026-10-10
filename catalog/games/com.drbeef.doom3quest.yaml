@@ -1,14 +1,23 @@
 package: com.drbeef.doom3quest
 title: Doom3Quest
-status: issues
-notes: PDA shows black screen.
+status: works
+notes: HUD and PDA show with frame.gl_multiview_fbo (Xandrix1987's headset test, GitHub 77, no frame-rate drop with
+  the PDA open). Walking and running can switch when the frame rate drops, which seems to be the game's own behaviour.
+details: Doom3Quest compiles every vertex shader for two views (OVR_multiview) and draws its HUD/PDA into single-view
+  framebuffers. Mesa (the Frame's GL) rejects that combination as the spec requires and drops the draw, so they
+  stayed black; frame.gl_multiview_fbo draws those passes with a single-view copy of the shader. Xandrix1987's framebuffer.cpp
+  fix went upstream as a PR to Team-Beef-Studios/Doom3Quest.
 tested_version: 1.4.8
 engine: Other
 xr: OpenXR
+frame:
+- frame.gl_multiview_fbo
 verified:
   date: '2026-10-06'
   known_good_sha256: 3c733f5cd08b6fa5d9e2775b1c1aee36b5943518b5d8451ba87e3c59a702afdf
   app: 0.12.0
   overport_cli: 1.2.3
   issue: 77
+updated: '2026-10-09'
+min_app: 0.12.1
 source_hint: doom3quest148

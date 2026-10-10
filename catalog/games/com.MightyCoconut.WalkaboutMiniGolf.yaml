@@ -1,0 +1,24 @@
+package: com.MightyCoconut.WalkaboutMiniGolf
+title: Walkabout Mini Golf
+status: works
+tested_version: '6.7'
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+- frame.oculusos
+device:
+- device.text_input_window
+adapter:
+  controller_models: 1
+  haptic_fix: 1
+  scale: 1.5
+verified:
+  date: '2026-10-08'
+  known_good_sha256: cf3b5cbe131af8a2baaa3f5c665b1c7001c8b299473abfcf98d90e3c02b08a2f
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 111
+source_hint: Walkabout Mini Golf

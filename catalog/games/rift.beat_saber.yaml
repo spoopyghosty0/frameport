@@ -1,0 +1,23 @@
+package: rift.beat_saber
+title: Beat Saber
+status: works
+notes: 'Supports SteamVR/OpenXR itself: runs directly, without Revive.'
+engine: Unity
+xr: OpenXR
+kind: rift
+quest_package: com.beatgames.beatsaber.lj369vr
+pcvr:
+- pcvr.xr_timefix
+- pcvr.steamvr_tuning
+pcvr_remove:
+- pcvr.revive
+as_is: true
+verified:
+  date: '2026-10-09'
+  known_good_sha256: dc80bd1f8e46e7b7cdc4fbf51a84e68f2918d7481581bee9c21f65e269c6bf8b
+  app: 0.12.1.dev232
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 67
+  issue: 117
+source_hint: Beat Saber

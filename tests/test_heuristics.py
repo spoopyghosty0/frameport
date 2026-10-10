@@ -92,3 +92,24 @@ def test_web_wrapper_only_warns():
     assert r.status != "unsupported" and "open https://mahjong-vr.pages.dev/ in a browser" in r.notes
     _, r = suggest(extra={"size": 1, "web_wrapper": {"url": None}})
     assert r.status != "unsupported" and "website" in r.notes
+
+
+def test_scene_emul_suggested_for_games_that_ask_for_the_room():
+    """VR HOT (not mixed-reality-only) declares USE_SCENE and its room setup retried forever without a room model."""
+    from frameport.patches import base
+
+    p = base.get("adapter.scene_emul")
+    a = _analysis(extra={"meta_permissions_used": ["com.oculus.permission.USE_SCENE"], "mr_only": False})
+    s = p.detect(a)
+    assert s and s.recommended and s.params == {"value": 1}
+    assert p.detect(_analysis(extra={"meta_permissions_used": ["com.oculus.permission.USE_ANCHOR_API"]})) is None
+
+
+def test_pose_time_fix_suggested_for_unreal4_oculus_input():
+    """Vader Immortal (UE4, OVRPlugin of the thumb-touch generation) asks for poses at OVRPlugin's own clock."""
+    from frameport.patches import base
+
+    p = base.get("adapter.pose_time_fix")
+    s = p.detect(_analysis(engine="Unreal", libs=["libUE4.so", "libOVRPlugin.so"], extra={"unreal_thumb_touch": True}))
+    assert s and s.recommended and s.params == {"value": 1}
+    assert p.detect(_analysis(engine="Unreal", libs=["libUnreal.so", "libOVRPlugin.so"], extra={})) is None

@@ -1,0 +1,23 @@
+package: rift.eleven_table_tennis_vr
+title: 'Eleven: Table Tennis VR'
+status: works
+notes: 'Supports SteamVR/OpenXR itself: runs directly, without Revive (arguments -vrmode OpenVR).'
+engine: Unity
+xr: LibOVR+OpenVR
+kind: rift
+pcvr:
+- pcvr.launch_args
+- pcvr.xr_timefix
+- pcvr.steamvr_tuning
+pcvr_remove:
+- pcvr.revive
+as_is: true
+verified:
+  date: '2026-10-09'
+  known_good_sha256: 2cdfe3b096aef0bf76726156699381f7847ca4d17e7222359521982778470705
+  app: 0.12.1.dev232
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 67
+  issue: 118
+source_hint: Eleven Table Tennis VR

@@ -1,0 +1,12 @@
+Test fixtures: the GLSL shader sources of Doom3Quest, unchanged.
+
+Source: https://github.com/Team-Beef-Studios/Doom3Quest
+        commit cfb5a20779e4229a375c83e4821a108e1f3c836f (v1.4.8 era),
+        app/src/main/jni/d3es-multithread-master/neo/renderer/glsl/*.cpp
+Origin: the D3wasm project (http://www.continuation-labs.com/projects/d3wasm),
+        Copyright (c) 2019 Gabriel Cuvillier, multiview changes by Team Beef.
+License: GNU General Public License, version 3 (see each file's header), the same as FramePort.
+
+Used only by tests/test_gl_multiview_fbo.py: native/glmv/glmv_rewrite.h must turn every vertex shader's
+`layout(num_views=NUM_VIEWS) in;` and every gl_ViewID_OVR into a single-view shader (frame.gl_multiview_fbo,
+GitHub #77). These are the same 19 shader strings the v1.4.8 APK's libdoom3.so contains.

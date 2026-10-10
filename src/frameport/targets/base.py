@@ -38,6 +38,10 @@ class Target(ABC):
         """Install a Linux app (only the Frame runs them; x86_64 ones through FEX)."""
         raise NotImplementedError(f"{self.label} can't install Linux apps")
 
+    def session_log(self, package: str) -> dict:
+        """The game's newest play session: {session: {start, end, test} | None, text (its log), crash, kernel}."""
+        raise NotImplementedError(f"{self.label} doesn't keep play-session logs")
+
     def collect_diag(self, package: str | None = None) -> dict:
         """Debug data from the target for a diagnostics bundle: {"host": {...}, "files": {name: text}, ...}."""
         return {}

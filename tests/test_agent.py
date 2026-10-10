@@ -438,6 +438,19 @@ def test_uninstall_quest_keeping_saves_drops_the_install_record(monkeypatch, tmp
     assert (anchor / "lepton-data/saves/slot1").read_text() == "progress"  # saves kept
 
 
+
+def test_uninstall_quest_deleting_data_removes_saves_and_mods(monkeypatch, tmp_path):
+    """GitHub #130: the Uninstall dialog's "Also delete its saves…" box (keep_data False) removes lepton-data too."""
+    a = load_agent(monkeypatch, tmp_path)
+    anchor = tmp_path / "Applications/quest-frame/com.x.y"
+    (anchor / "lepton-app").mkdir(parents=True)
+    (anchor / "lepton-data/external/ModData/songs").mkdir(parents=True)
+    (anchor / "lepton-data/external/ModData/songs/old.zip").write_bytes(b"x")
+    (anchor / "deployment.json").write_text(json.dumps({"package": "com.x.y", "base": str(anchor), "appid": 1}))
+    monkeypatch.setattr(a, "container_running", lambda appid: False)
+    assert a.cmd_uninstall({"package": "com.x.y", "keep_data": False})["removed"]
+    assert not (anchor / "lepton-data").exists()
+
 def test_prune_shortcuts_on_relaunch_change(monkeypatch, tmp_path):
     a = load_agent(monkeypatch, tmp_path)
     vdf = str(tmp_path / "shortcuts.vdf")
@@ -1415,8 +1428,8 @@ def test_second_launch_while_starting_is_ignored(monkeypatch, tmp_path):
     lepton.write_text(f"#!/bin/bash\necho started >>{tmp_path}/starts\nsleep ${{FAKE_RUN:-30}}\n")
     lepton.chmod(0o755)
     text = a.LAUNCH_SH.format(title="T", pkg="com.x.y", base_q=str(base), appid=1, lepton_q=str(lepton), extra_env="",
-                              watchdog=a.WATCHDOG, dashboard="true", single=a.SINGLE_LINE, plays_start="true",
-                              plays_end="true")
+                              watchdog=a.WATCHDOG, dashboard="true", logcat="true", single=a.SINGLE_LINE,
+                              plays_start="true", plays_end="true", video_codec="")
     launcher = tmp_path / "launch.sh"
     launcher.write_text(text)
     launcher.chmod(0o755)
@@ -1527,3 +1540,115 @@ def test_vr_screenshot_without_steamvr(monkeypatch, tmp_path):
     a = load_agent(monkeypatch, tmp_path)
     monkeypatch.setattr(a, "OPENVR_LIBS", (str(tmp_path / "missing.so"),))
     assert a.vr_screenshot() == "steamvr"
+
+
+def test_game_logs_collect_unity_player_log(monkeypatch, tmp_path):
+    """PC VR launch tests and diagnostics include Unity's Player.log (+ prev, crash error.log) from the Proton prefix
+    (GitHub #105: SUPERHOT VR quit without a trace in the Proton logs)."""
+    a = load_agent(monkeypatch, tmp_path)
+    base = tmp_path / "rift.superhot_vr"
+    data = base / "game/SUPERHOTVR_Data"
+    data.mkdir(parents=True)
+    (data / "app.info").write_text("SUPERHOT Team\nSUPERHOT VR")
+    low = base / a.LOCAL_LOW
+    mine = low / "SUPERHOT Team/SUPERHOT VR"
+    mine.mkdir(parents=True)
+    (mine / "Player.log").write_text("Mono path[0]\n" + "".join(f"line {i}\n" for i in range(3000))
+                                     + "XR: OpenVR Error! OpenVR failed initialization with error code "
+                                       "VRInitError_Init_HmdNotFound\n")
+    (mine / "Player-prev.log").write_text("previous run\n")
+    other = low / "Other/Game"
+    other.mkdir(parents=True)
+    (other / "Player.log").write_text("not this game\n")
+    crash = base / a.LOCAL_APPDATA / "Temp/SUPERHOT Team/SUPERHOT VR/Crashes/Crash_2026-10-09_1"
+    crash.mkdir(parents=True)
+    (crash / "error.log").write_text("SUPERHOTVR.exe caused an Access Violation (0xc0000005)\n")
+    parts = a.game_logs(str(base))
+    text = "\n".join(parts)
+    assert "===== unity log " in text and "Mono path[0]" in text and "VRInitError_Init_HmdNotFound" in text
+    assert "lines left out" in text and "previous run" in text and "not this game" not in text
+    assert "Access Violation" in text
+    # a launch test only takes logs written since it started
+    old = 1_000_000
+    os.utime(mine / "Player-prev.log", (old, old))
+    os.utime(crash / "error.log", (old, old))
+    recent = "\n".join(a.game_logs(str(base), since=old + 10))
+    assert "VRInitError" in recent and "previous run" not in recent and "Access Violation" not in recent
+    # no app.info: every Player log in LocalLow; old Unity: <Name>_Data/output_log.txt
+    (data / "app.info").unlink()
+    (data / "output_log.txt").write_text("old unity\n")
+    text = "\n".join(a.game_logs(str(base)))
+    assert "not this game" in text and "old unity" in text
+
+
+def test_logcat_keeper_reads_the_container_logcat_after_leptons_mirror_died(monkeypatch, tmp_path):
+    """Lepton's logcat mirror died right after Vader Immortal started ("logcat: Unexpected EOF!"): launch.log stayed
+    empty, so the dashboard was never closed. The keeper reads the container's logcat itself."""
+    a = load_agent(monkeypatch, tmp_path)
+    monkeypatch.setattr(a.time, "sleep", lambda s: None)
+    log = tmp_path / "launch.log"
+    log.write_text("Boot complete!\nWaiting for app com.x.y to exit...\nlogcat: Unexpected EOF!\n")
+    calls, alive = [], iter([True, True, False])
+    monkeypatch.setattr(a.os, "kill", lambda pid, sig: None if next(alive) else (_ for _ in ()).throw(OSError()))
+
+    class Proc:
+        def __init__(self, argv, stdout, **kw):
+            calls.append(argv)
+            stdout.write(b"10-09 10:01:00.000 1 2 I FrameBridge: new layer: type=35\n")
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            calls.append("terminated")
+
+    a.logcat_keeper(str(log), "123", os.getpid(), popen=Proc)
+    assert calls[0][:4] == ["podman", "exec", "lepton-steamlaunch-123", "logcat"] and calls[-1] == "terminated"
+    text = log.read_text()
+    assert "reading lepton-steamlaunch-123's logcat again" in text and "new layer: type=35" in text
+
+
+def test_logcat_keeper_does_nothing_while_leptons_mirror_works(monkeypatch, tmp_path):
+    a = load_agent(monkeypatch, tmp_path)
+    monkeypatch.setattr(a.time, "sleep", lambda s: None)
+    log = tmp_path / "launch.log"
+    log.write_text("Waiting for app com.x.y to exit...\n10-09 I FrameBridge: pacing: 72 fps\n")
+    alive = iter([True, True, False])
+    monkeypatch.setattr(a.os, "kill", lambda pid, sig: None if next(alive) else (_ for _ in ()).throw(OSError()))
+    a.logcat_keeper(str(log), "123", os.getpid(), popen=lambda *x, **k: pytest.fail("must not start logcat"))
+
+
+def test_upgrade_launchers_adds_logcat_keeper(monkeypatch, tmp_path):
+    a = load_agent(monkeypatch, tmp_path)
+    anchor = tmp_path / "Applications/quest-frame/com.x.y"
+    anchor.mkdir(parents=True)
+    (anchor / "launch.sh").write_text(f'{a.OLD_WATCHDOG}\nsetsid lepton start &\nchild=$!\nwait "$child"\n')
+    a.upgrade_launchers()
+    text = (anchor / "launch.sh").read_text()
+    assert "_logcat_keeper" in text and text.index("_logcat_keeper") < text.index('wait "$child"')
+
+
+def test_launch_test_window_starts_when_the_app_starts(monkeypatch, tmp_path):
+    """The first start after an APK change spends ~90 s booting Lepton and installing the app; a 45 s window counted
+    from the launcher stopped the container mid-install and left a broken APK copy ("base.apk is not zip", VR HOT)."""
+    a = load_agent(monkeypatch, tmp_path)
+    base = tmp_path / "base"
+    base.mkdir()
+    log = base / "launch.log"
+    log.write_text("Waiting for boot...\n")
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(a.time, "time", lambda: clock["t"])
+
+    def sleep(s):
+        clock["t"] += s
+        if clock["t"] >= 1090 and "Waiting for app" not in log.read_text():
+            log.write_text("Waiting for boot...\nBoot complete!\nInstalling game.apk...\nSuccess\n"
+                           "Waiting for app com.x.y to exit...\n")
+    monkeypatch.setattr(a.time, "sleep", sleep)
+    monkeypatch.setattr(a, "deployment", lambda pkg: {"base": str(base), "appid": 1})
+    monkeypatch.setattr(a, "container_running", lambda appid: False)
+    monkeypatch.setattr(a, "ensure_host_fixes", lambda: None)
+    monkeypatch.setattr(a, "key_usage", lambda: None)
+    monkeypatch.setattr(a, "run", lambda *x, **k: type("R", (), {"returncode": 0, "stderr": ""})())
+    res = a.cmd_launch_test({"package": "com.x.y", "seconds": 45})
+    assert res["state"] == "RUNNING" and res["elapsed"] >= 90 + 45

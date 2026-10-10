@@ -54,6 +54,12 @@ class FrameLeptonTarget(Target):
     def launch_test(self, package, reporter, seconds=45):
         return device.launch_test(self.connect().frame, package, reporter, seconds)
 
+    def session_log(self, package):
+        frame = self.connect().frame
+        res = frame.agent("session_log", package=package, timeout=180)  # agent >= 70
+        res["text"] = frame.get_text(res["log"]) if res.get("log") and res.get("log_size") else ""
+        return res
+
     def collect_diag(self, package=None):
         return self.connect().frame.agent("collect_diag", timeout=180, package=package)
 

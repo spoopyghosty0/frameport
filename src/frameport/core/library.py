@@ -280,7 +280,23 @@ def _migrate(data: dict) -> bool:
                     "pcvr.steamvr_tuning", "Adjusts the refresh rate / motion smoothing when the game can't keep up.")
         done.append("rift_steamvr_tuning")
         changed = True
+    if "batman_video_patches" not in done:
+        # Batman's cutscene playback (hardware HEVC + its native video renderer) was tied to its package name inside
+        # frame.adapter; it is now frame.hw_video_decode + adapter.surface_native, so user-owned recipes keep it
+        for pkg, g in (data.get("games") or {}).items():
+            r = g.get("recipe")
+            if pkg == BATMAN and isinstance(r, dict):
+                r.setdefault("patches", {}).setdefault("frame.hw_video_decode", {})
+                r["patches"].setdefault("adapter.surface_native", {"value": 1})
+                r.setdefault("reasons", {}).setdefault(
+                    "frame.hw_video_decode", "Its cutscenes are 8K HEVC video: decode them on the Frame's hardware.")
+                r["reasons"].setdefault("adapter.surface_native", "Shows its cutscenes as stereo panoramas.")
+        done.append("batman_video_patches")
+        changed = True
     return changed
+
+
+BATMAN = "com.camouflaj.manta"
 
 
 def _rift_launch_mode(g: dict) -> bool:

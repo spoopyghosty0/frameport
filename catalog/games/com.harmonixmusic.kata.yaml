@@ -1,0 +1,24 @@
+package: com.harmonixmusic.kata
+title: Audica
+status: works
+tested_version: 1.0.3.4
+engine: Unity
+xr: VrApi
+frame:
+- frame.unity_no_msaa
+- frame.unity_oculus_check
+- frame.unity_text_input
+- frame.unity_runtime_msaa_off
+- frame.unity_gl_shim
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-09'
+  known_good_sha256: bc2c00fe049fd97643a296e622e3a90e08f0bd796ee454b0278525e9d72f8139
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 126

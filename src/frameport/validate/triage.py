@@ -19,6 +19,8 @@ class Finding:
     suggest: list[str]
     evidence: str
     use_alt: bool = False
+    question: str = ""  # a symptom only the player sees: its fix is offered as "Did … ? Yes = apply", never on its own
+    report: bool = False  # nothing to switch on: diagnostics (a problem report) are what helps
 
 
 @dataclass
@@ -37,8 +39,11 @@ class TriageResult:
         return "fail" if fatal or self.state in ("EXITED", "NEVER_STARTED") else "unknown"
 
     def suggestions(self) -> list[str]:
+        """Fixes to offer without asking (findings with a symptom question are left to the player)."""
         out = []
         for f in self.findings:
+            if f.question:
+                continue
             for s in f.suggest:
                 if s not in out:
                     out.append(s)
@@ -53,6 +58,9 @@ def database() -> dict:
     if _db is None:
         _db = yaml.safe_load((catalog_dir() / "triage.yaml").read_text(encoding="utf-8"))
     return _db
+
+
+LOGCAT_LINE = re.compile(r"\d\d-\d\d \d\d:\d\d:\d\d\.\d+ ")
 
 
 def game_lines(log: str, package: str | None = None) -> list[str]:
@@ -70,20 +78,46 @@ def game_lines(log: str, package: str | None = None) -> list[str]:
     out = []
     for ln in lines:
         f = ln.split()
-        # logcat threadtime: date time pid tid level tag: msg
-        if len(f) > 3 and (f[2] in pids or not f[2].isdigit()):
+        # logcat threadtime: date time pid tid level tag: msg; everything else is Lepton's own output (e.g. its short
+        # "Boot complete!", which the container-not-started signature checks for: it used to be dropped here)
+        if not (len(f) > 3 and LOGCAT_LINE.match(ln) and f[2].isdigit()):
             out.append(ln)
-        elif "lepton" in ln.lower() or "APP_ACTIVITY" in ln:
+        elif f[2] in pids or "lepton" in ln.lower() or "APP_ACTIVITY" in ln or " FramePortVideo" in ln:
+            # FramePortVideo: the hardware codec plugin logs from Android's media service, not the game's process
             out.append(ln)
     return out
 
 
-def triage(log: str, state: str = "UNKNOWN", package: str | None = None, crash: str = "") -> TriageResult:
-    """`crash` = the container's crash logcat (tombstones come from crash_dump's pid, so it isn't pid-filtered)."""
+# suggestions that only work with one graphics API: the Vulkan shim's settings for Vulkan games, the shader-fix layer
+# under Zink for OpenGL ES games
+API_ONLY = {"adapter.vk_shader_dump": "vulkan", "adapter.vk_shader_fix": "vulkan",
+            "adapter.zink_shader_dump": "gles", "adapter.zink_shader_fix": "gles"}
+SWAPCHAIN_FORMAT = re.compile(r"xrCreateSwapchain \d+x\d+ format=(\d+) .*result=0\b")
+
+
+def graphics_api(text: str) -> str | None:
+    """"vulkan" or "gles" from the swapchain formats FrameBridge logged: OpenXR passes the API's own format numbers,
+    Vulkan's VkFormat values are small (e.g. 43 = sRGB), GL's internal formats are 0x8000+ (35907 = GL_SRGB8_ALPHA8).
+    None when the log has no (or both kinds of) swapchains."""
+    kinds = {"gles" if int(m) >= 0x1000 else "vulkan" for m in SWAPCHAIN_FORMAT.findall(text)}
+    return kinds.pop() if len(kinds) == 1 else None
+
+
+def split_suggestion(s: str) -> tuple[str, str | None]:
+    """A suggestion is a patch id, or a value for an adapter setting ("adapter.focus_hold_ms=2500")."""
+    pid, eq, value = s.partition("=")
+    return pid.strip(), (value.strip() if eq else None)
+
+
+def triage(log: str, state: str = "UNKNOWN", package: str | None = None, crash: str = "",
+           kernel: str = "") -> TriageResult:
+    """`crash` = the container's crash logcat (tombstones come from crash_dump's pid, so it isn't pid-filtered);
+    `kernel` = kernel log lines of a play session ("kernel: …", GPU hangs; agent session_log)."""
     db = database()
     kind = "pcvr" if package and package.startswith("rift.") else "quest"  # Proton/Revive logs vs Lepton logcat
     lines = game_lines(log, package) if kind == "quest" else [ANSI.sub("", ln) for ln in log.splitlines()]
     lines += [ANSI.sub("", ln) for ln in crash.splitlines()]
+    lines += [ANSI.sub("", ln) for ln in kernel.splitlines()]
     text = "\n".join(lines)
     res = TriageResult(state, None)
     for m in db["milestones"]:
@@ -101,7 +135,12 @@ def triage(log: str, state: str = "UNKNOWN", package: str | None = None, crash: 
         if hit:
             line = next((ln for ln in lines if re.search(sig["pattern"], ln)), hit.group(0))
             res.findings.append(Finding(sig["id"], sig["severity"], sig["diagnosis"], list(sig.get("suggest") or []),
-                                        line.strip()[:300], bool(sig.get("use_alt"))))
+                                        line.strip()[:300], bool(sig.get("use_alt")), sig.get("question") or "",
+                                        bool(sig.get("report"))))
+    api = graphics_api(text)
+    if api:  # a setting for the other graphics API can't help (e.g. the GPU-hang shader dumps)
+        for f in res.findings:
+            f.suggest = [s for s in f.suggest if API_ONLY.get(split_suggestion(s)[0], api) == api]
     # a root-cause finding hides the generic crash findings it explains
     hidden = {h for sig in db["signatures"] if any(f.id == sig["id"] for f in res.findings)
               for h in sig.get("supersedes") or []}

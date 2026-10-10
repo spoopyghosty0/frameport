@@ -1,0 +1,24 @@
+package: com.CyberneticWalrus.DoesitStackMeta
+title: Does it Stack?
+status: issues
+notes: Mixed reality mode does not work (works on Demeo), everything else seems to be OK
+tested_version: 1.02 (3683)
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+- frame.oculusos
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+  refresh_rate: 90.0
+verified:
+  date: '2026-10-09'
+  known_good_sha256: e9fce6ac812f1bb317a7a6959be89c5ff54e87f56af9ad4c42dff5fecad4efe8
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261006.6173745'
+  agent: 59
+  issue: 112
+source_hint: Does It Stack

@@ -11,7 +11,7 @@ from ... import pipeline
 from ...core import library
 from ...i18n import tr
 from ...patches import base
-from ...patches.settings import BASE_SETTINGS, GROUPS, SETTINGS, UI, adapter_settings
+from ...patches.settings import BASE_SETTINGS, GROUPS, HIDDEN, SETTINGS, UI, adapter_settings
 from .. import components as C
 from .. import theme as T
 
@@ -19,8 +19,9 @@ if TYPE_CHECKING:
     from ..app import FramePortApp
 
 # the dialog's settings: numbers and switches (text settings such as vk_shader_fix are recipe data: saving the dialog
-# keeps them as they are)
-SPECS = {key: (kind, default) for key, kind, default, _, _ in SETTINGS if kind in ("int", "float")}
+# keeps them as they are, as it keeps the HIDDEN ones)
+SPECS = {key: (kind, default) for key, kind, default, _, _ in SETTINGS
+         if kind in ("int", "float") and key not in HIDDEN}
 
 
 def default(key: str):

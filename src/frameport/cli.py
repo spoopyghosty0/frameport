@@ -10,6 +10,7 @@ Errors are one line on stderr; FRAMEPORT_DEBUG=1 shows the traceback.
     frameport frame discover | pair | info --frame steamos@frame.local
     frameport install <pkg> --frame steamos@frame.local [--apk-only]
     frameport test <pkg> --frame ...             # headless launch + triage
+    frameport session <pkg> [--apply]            # triage the last play session (crashes, fps, focus dips)
     frameport frame send <files> --dest videos   # copy files to the Frame (where every game sees them)
     frameport frame proton [--install]           # Proton on the Frame, for PC VR games
     frameport install rift.<game> --to pc|frame  # PC VR games: this PC (Steam) or the Frame (Proton)
@@ -25,6 +26,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -455,6 +457,39 @@ def test(package: Optional[str] = typer.Argument(None), all_: bool = typer.Optio
         s = pipeline.test_game(pkg, target, printing_reporter(False), seconds)
         typer.echo(f"{pkg}: {s['state']} ({s['verdict']}) furthest: {s['milestone']}"
                    + (f"; suggestions: {', '.join(s['suggestions'])}" if s["suggestions"] else ""))
+
+
+@app.command()
+def session(package: str = typer.Argument(..., help="the game (package or part of its title)"),
+            frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
+            apply: bool = typer.Option(False, "--apply", help="apply the suggested fixes (FrameBridge settings are "
+                                       "written on the Frame at once; other patches need `frameport install`)")):
+    """Triage the game's last play session on the Frame: crashes, frame rate, focus dips, and what to try."""
+    target = _target(frame)
+    for pkg in _pkgs(package, False):
+        s = pipeline.triage_session(pkg, target)
+        if not s:
+            typer.echo(f"{pkg}: no play session on the Frame yet")
+            continue
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(s.get("ended") or s.get("start") or 0))
+        fps = s.get("fps") or {}
+        typer.echo(f"{pkg}: session ended {when}" + (" (still running)" if not s.get("ended") else "")
+                   + (f"; median {fps['median']:g} fps, below {fps['target']} Hz {fps['slow_share']:.0%} of the time"
+                      if fps else "; no frames logged") + f"; {s.get('focus_dips', 0)} focus dips")
+        for f in s["findings"]:
+            typer.echo(f"  {f['severity']:7} {f['id']}: {f['diagnosis']}\n          {f['evidence'][:200]}"
+                       + (f"\n          question: {f['question']}" if f.get("question") else "")
+                       + (f"\n          suggest: {', '.join(f['suggest'])}" if f.get("suggest") else ""))
+        sugg = s.get("suggestions") or []
+        if not apply or not sugg:
+            if sugg:
+                typer.echo(f"  suggestions: {', '.join(sugg)} (--apply to apply them)")
+            continue
+        installed = pkg in {g["package"] for g in target.installed()}
+        if pipeline.apply_suggestions_live(pkg, sugg, target if installed else None):
+            typer.echo(f"  applied on the Frame: {', '.join(sugg)} (used from the game's next start)")
+        else:
+            typer.echo(f"  added to the recipe: {', '.join(sugg)}; rebuild and install with: frameport install {pkg}")
 
 
 @app.command()

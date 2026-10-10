@@ -604,3 +604,69 @@ def test_quest_folder_display_name(folder, name):
     from frameport.sources.quest_dump import display_name
 
     assert display_name(folder) == name
+
+
+def _dual_unity(tmp_path):
+    """SUPERHOT VR's older build (GitHub #105): Unity built-in VR with the Oculus and the OpenVR SDK + an Electron
+    launcher (SHVR.exe) next to it."""
+    g = tmp_path / "SUPERHOT VR"
+    (g / "SUPERHOTVR_Data/Plugins").mkdir(parents=True)
+    (g / "SUPERHOTVR.exe").write_bytes(make_pe(imports=("unityplayer.dll", "kernel32.dll")))
+    (g / "UnityPlayer.dll").write_bytes(make_pe())
+    (g / "SUPERHOTVR_Data/Plugins/openvr_api.dll").write_bytes(make_pe())
+    (g / "SUPERHOTVR_Data/Plugins/OVRPlugin.dll").write_bytes(make_pe(extra=b"LibOVRRT%hs_%d.dll"))
+    (g / "SHVR.exe").write_bytes(make_pe() + b"\0" * 1024)
+    (g / "resources").mkdir()
+    (g / "resources/app.asar").write_bytes(b"asar")
+    (g / "icudtl.dat").write_bytes(b"icu")
+    (g / "resources.pak").write_bytes(b"pak")
+    return g
+
+
+def test_electron_launcher_ranked_below_the_game(tmp_path):
+    g = _dual_unity(tmp_path)
+    assert rift.is_electron(g / "SHVR.exe") and not rift.is_electron(g / "SUPERHOTVR.exe")
+    ranked = rift.rank_exes(g, [g / "SUPERHOTVR.exe", g / "SHVR.exe"])
+    assert ranked[0]["path"] == "SUPERHOTVR.exe"
+    shvr = ranked[1]
+    assert "Electron launcher (starts the game)" in shvr["reasons"]
+    assert "Unity game (next to its data)" not in shvr["reasons"]
+    assert not rift.is_ambiguous(ranked)
+
+
+def test_catalog_from_another_build_keeps_launch_args(tmp_path, monkeypatch):
+    """A catalog recipe verified with another build (other VR APIs) must not drop this build's own launch arguments:
+    SUPERHOT VR's OpenXR build is in the catalog; the older Oculus + OpenVR build needs -vrmode OpenVR (#105)."""
+    from frameport.recommend import catalog
+
+    a = rift.analyze(_dual_unity(tmp_path))
+    assert a.xr == "LibOVR+OpenVR" and a.extra["launch_args"] == "-vrmode OpenVR"
+    a.package = "rift.superhot_vr"
+    entry = catalog.CatalogEntry(package="rift.superhot_vr", title="SUPERHOT VR", status="works", xr="OpenXR",
+                                 kind="rift", pcvr=["pcvr.xr_timefix"], pcvr_remove=["pcvr.revive"], as_is=True,
+                                 verified={"date": "2026-10-05"})
+    monkeypatch.setattr(catalog, "lookup", lambda pkg: entry)
+    r = engine.suggest(a)
+    assert r.patches["pcvr.launch_args"] == {"args": "-vrmode OpenVR"}
+    assert "another build" in r.notes and "-vrmode OpenVR" in r.notes
+    # the same build (same VR APIs): the verified recipe decides how the game starts, as before
+    entry.xr = "LibOVR+OpenVR"
+    r = engine.suggest(a)
+    assert "pcvr.launch_args" not in r.patches and "another build" not in r.notes
+    # a catalog entry that lists the arguments: the build's own ones, none for a build without any
+    entry.pcvr = ["pcvr.launch_args", "pcvr.xr_timefix"]
+    assert engine.suggest(a).patches["pcvr.launch_args"] == {"args": "-vrmode OpenVR"}
+    a.extra["launch_args"] = ""
+    assert "pcvr.launch_args" not in engine.suggest(a).patches
+
+
+def test_superhot_catalog_entry_fits_both_builds(tmp_path, monkeypatch):
+    from frameport.recommend import catalog
+
+    monkeypatch.setenv("FRAMEPORT_NO_CATALOG_UPDATE", "1")
+    entry = catalog.load(refresh=True).get("rift.superhot_vr")
+    assert entry and "pcvr.launch_args" in entry.pcvr
+    a = rift.analyze(_dual_unity(tmp_path))
+    a.package = "rift.superhot_vr"
+    monkeypatch.setattr(catalog, "lookup", lambda pkg: entry)
+    assert engine.suggest(a).patches["pcvr.launch_args"] == {"args": "-vrmode OpenVR"}

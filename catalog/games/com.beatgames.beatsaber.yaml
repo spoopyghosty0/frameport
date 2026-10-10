@@ -1,6 +1,7 @@
 package: com.beatgames.beatsaber
 title: Beat Saber
 status: works
+notes: Purchased DLC isn't detected (ownership comes from Meta's servers).
 tested_version: 1.40.8_7379
 engine: Unity
 xr: OpenXR

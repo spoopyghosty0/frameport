@@ -57,8 +57,14 @@ HELP: dict[str, str] = _Translated({
     "show_all": "Patches that can't matter for this game are hidden. Show them to turn one on anyway.",
     "where": "Steam Frame: installed on the Frame, with an entry in its Steam library. This PC: a Steam shortcut that "
              "starts the game through Revive, for a headset connected to this PC.",
+    "hw_video_decode": "Games with the Hardware video decoding patch play their videos on the Frame's video hardware. "
+                       "Turn it off if videos misbehave; games pick it up at their next start. For one game only, put "
+                       "FRAMEPORT_NO_HW_VIDEO=1 before %command% in its Steam launch options.",
     "launch_test": "Starts the game on the Frame while nobody wears the headset and reads the log: did it start and "
                    "draw frames. It can't check the picture.",
+    "last_session": "After you play a game on the Frame, FramePort reads that session's log: crashes, frame rate and "
+                    "moments the game lost focus. Game settings apply at the next start; other patches reinstall the "
+                    "game. Your saves stay.",
     "install_links": "Some websites have \"Install with FrameDrop\" buttons. FramePort opens these links, shows what "
                      "they offer and installs it when you agree. On macOS, use Add games → Add from a link… instead.",
     "linux_x86": "The Frame has an arm64 processor. Programs built for x86_64 PCs run through Valve's translator, "

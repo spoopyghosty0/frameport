@@ -1,7 +1,9 @@
 # The project page (site/, Astro) on GitHub Pages: https://frameport.app/
-# Rebuilt when the site, the catalog or the showcase renders change on main. The games board also refreshes itself
-# from the catalog on main in the visitor's browser, so a catalog change shows before the next build.
-# One-time setup: Settings → Pages → Source: GitHub Actions.
+# Rebuilt when the site, the docs it renders, the catalog or the showcase renders change on main, when a release is
+# published, and once a day (contributors, releases and the games board stay fresh). The games board also refreshes
+# itself from the catalog on main in the visitor's browser, so a catalog change shows before the next build.
+# One-time setup: Settings → Pages → Source: GitHub Actions; custom domain frameport.app (kept in the settings, not a
+# CNAME file: GitHub ignores that file for Actions deployments).
 name: pages
 
 on:
@@ -9,6 +11,7 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'docs/*.md'
       - 'catalog/games/**'
       - 'bootstrap/setup.sh'
       - 'docs/images/**'
@@ -18,6 +21,8 @@ on:
       - '.github/workflows/pages.yml'
   release:  # the changelog page shows every release (CI's own releases start this through workflow_dispatch)
     types: [published]
+  schedule:
+    - cron: '17 5 * * *'
   workflow_dispatch:
 
 permissions:

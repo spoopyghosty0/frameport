@@ -1,0 +1,25 @@
+package: com.endspace.quest
+title: End Space
+status: issues
+notes: Controls stop responding after the first mission loads.
+tested_version: 1.0.6.1
+engine: Unity
+xr: VrApi
+frame:
+- frame.unity_oculus_check
+- frame.unity_text_input
+- frame.unity_runtime_msaa_off
+- frame.unity_gl_shim
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-10'
+  known_good_sha256: c5eb892311a130686f238e6f61cbdb619324f5c21f8c0641c0fcd49d77369eaf
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 148
+source_hint: com.endspace.quest

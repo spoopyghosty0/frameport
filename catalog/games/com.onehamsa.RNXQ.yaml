@@ -1,0 +1,23 @@
+package: com.onehamsa.RNXQ
+title: 'Racket: Nx'
+status: works
+tested_version: 2.8.31
+engine: Unity
+xr: VrApi
+frame:
+- frame.unity_text_input
+- frame.unity_runtime_msaa_off
+- frame.unity_gl_shim
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-10'
+  known_good_sha256: f78de8051c5808e4244d9fa757050d6c131350112315ad6e01e2b1457f2e2053
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 151
+source_hint: '9030540110323274'

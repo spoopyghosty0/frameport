@@ -282,13 +282,60 @@ class GameView:
             *buttons,
         ], spacing=T.S3), expand=True)
 
+    def session_callout(self) -> ft.Control | None:
+        """"Last session": what FramePort found in the log of the game's last real play session on the Frame
+        (pipeline.triage_session): its frame rate, each finding in plain words and its fix, a question for symptoms
+        only the player sees, Dismiss."""
+        from ...validate.session import shown_findings
+
+        app, pkg = self.app, self.package
+        ls = self.g.get("last_session") or {}
+        findings = [f for f in shown_findings(ls) if f.get("id") not in (ls.get("answered") or [])]
+        if not ls or ls.get("dismissed") or not findings:
+            return None
+        applied = set(ls.get("applied") or [])
+        fps = ls.get("fps") or {}
+        head = tr("Last session · ended {ago}").format(ago=_ago(ls.get("ended") or ls.get("time")))
+        if fps:
+            head += " · " + tr("{fps} fps on a {hz} Hz display").format(fps=f"{fps['median']:g}", hz=fps["target"])
+        rows: list[ft.Control] = [ft.Row([C.body(head, T.TEXT, weight=ft.FontWeight.W_600),
+                                          C.help_icon("last_session")], spacing=T.px(4))]
+        for f in findings:
+            sugg = list(f.get("suggest") or [])
+            done = bool(sugg) and set(sugg) <= applied
+            buttons: list[ft.Control] = []
+            if f.get("question") and sugg and not done:
+                buttons += [C.meta(f["question"], T.TEXT),
+                            C.secondary(tr("Yes, fix it"), ft.Icons.HEALING_OUTLINED,
+                                        lambda e, s=sugg, i=f["id"]: app.apply_session_fix(pkg, s, i)),
+                            C.ghost(tr("No"), on_click=lambda e, i=f["id"]: app.answer_session_question(pkg, i))]
+            elif sugg and not done:
+                live = pipeline.adapter_only(sugg)
+                buttons.append(C.secondary(tr("Try this setting") if live else tr("Rebuild with this patch"),
+                                           ft.Icons.HEALING_OUTLINED, lambda e, s=sugg: app.apply_session_fix(pkg, s),
+                                           tooltip=C.tip(tr("Changes: ") + ", ".join(sugg))))
+            elif done:
+                buttons.append(C.meta(tr("Done — start the game again to see whether it helped."), T.OK))
+            if f.get("report"):
+                buttons.append(C.ghost(tr("Report a problem…"), ft.Icons.BUG_REPORT_OUTLINED,
+                                       lambda e: app.report_problem_dialog(pkg)))
+            rows.append(ft.Column([C.body(f["diagnosis"], T.TEXT_2, selectable=True),
+                                   *([ft.Row(buttons, spacing=T.S2, run_spacing=T.S2, wrap=True)] if buttons else [])],
+                                  spacing=T.px(6)))
+        rows.append(ft.Row([C.ghost(tr("Dismiss"), on_click=lambda e: app.dismiss_session(pkg))]))
+        severe = any(f.get("severity") in ("fatal", "error") for f in findings)
+        return C.callout(ft.Column(rows, spacing=T.S2), "warn" if severe else "info", ft.Icons.HISTORY_ROUNDED)
+
     def notes(self) -> list[ft.Control]:
         g, pkg = self.g, self.package
         recipe = library.recipe_from_dict(g["recipe"])
         entry = catalog.lookup(pkg)
         out = []
+        session = self.session_callout()
+        if session is not None:
+            out.append(session)
         extra = g["analysis"].get("extra", {})
-        missing = C.missing_libraries(g, self.app.frame_info) if self.linux else []
+        missing =C.missing_libraries(g, self.app.frame_info) if self.linux else []
         if missing:
             out.append(C.callout(ft.Column([
                 C.body(tr("It won't start on the Frame: SteamOS lacks these libraries and the app doesn't include "

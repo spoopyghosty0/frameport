@@ -30,6 +30,16 @@ def test_outdated():
     assert install_state(game("a"), frame({"package": "com.x", "sha256": "old"})) == "outdated"
 
 
+
+def test_outdated_after_a_newer_apk_was_added():
+    """GitHub #161: re-adding a newer APK of an installed game shows "Update on Frame", not "Reinstall"."""
+    g = game("a")
+    g["build"]["source_version"] = "1.0"
+    g["analysis"] = {"version": "1.0"}
+    assert install_state(g, frame({"package": "com.x", "sha256": "a"})) == "installed"
+    g["analysis"]["version"] = "1.1"
+    assert install_state(g, frame({"package": "com.x", "sha256": "a"})) == "outdated"
+
 # ------------------------------------------------------------------------------------------ library filters / tags
 def lib_games():
     return [
@@ -609,3 +619,19 @@ def test_window_geometry_restores_size_position_and_maximized():
     assert window_geometry({"pos": [-1800, 50]}, 1.0)["left"] == -1800
     for bad in ([-20000, 0], [100, -400], [99999, 0], ["a", 1], [1]):
         assert "left" not in window_geometry({"pos": bad}, 1.0)
+
+
+def test_superseded_patch_is_not_an_update():
+    """A build that left haptic_fix out because the OVRPort runtime already fixes it (patches/upstream.py) showed
+    "Update on Frame" forever: the recipe has the patch, the Frame's recorded recipe doesn't (VR HOT, Vader)."""
+    from frameport.ui import components as C
+
+    g = {"package": "com.x.y", "recipe": {"patches": {"frame.adapter": {}, "adapter.haptic_fix": {"value": 1}}},
+         "build": {"sha256": "aa", "superseded": {"adapter.haptic_fix": "ovrport.haptic_envelope"}}}
+    from frameport.patches.base import recipe_fingerprint
+
+    g["build"]["recipe_fp"] = recipe_fingerprint(g["recipe"])
+    fi = {"installed": [{"package": "com.x.y", "sha256": "aa", "recipe": {"patches": ["frame.adapter"]}}]}
+    assert C.settings_diff(g, fi) is None and C.install_state(g, fi) == "installed"
+    g["build"]["superseded"] = {}
+    assert C.settings_diff(g, fi) == (["adapter.haptic_fix"], [])

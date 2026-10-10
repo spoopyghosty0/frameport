@@ -42,7 +42,7 @@ typedef struct { XrStructureType type; void *next; uint32_t image; } emul_gles_i
     X(eglChooseConfig) X(eglCreatePbufferSurface) X(eglDestroySurface) X(eglGetCurrentContext) X(eglGetError) \
     X(eglQueryString)
 #define EMUL_GL_FUNCS(X) X(glFenceSync) X(glDeleteSync) X(glWaitSync) X(glClientWaitSync) X(glFlush) \
-    X(glGenFramebuffers) X(glBindFramebuffer) X(glFramebufferTexture2D) X(glCheckFramebufferStatus) X(glViewport) \
+    X(glGenFramebuffers) X(glDeleteFramebuffers) X(glBindFramebuffer) X(glFramebufferTexture2D) X(glCheckFramebufferStatus) X(glViewport) \
     X(glUseProgram) X(glCreateShader) X(glShaderSource) X(glCompileShader) X(glGetShaderiv) X(glGetShaderInfoLog) \
     X(glDeleteShader) X(glCreateProgram) X(glAttachShader) X(glLinkProgram) X(glGetProgramiv) X(glGetProgramInfoLog) \
     X(glGetUniformLocation) X(glUniform1i) X(glUniform1f) X(glUniform3f) X(glUniform4f) X(glUniformMatrix3fv) \
@@ -304,6 +304,7 @@ static void emul_on_destroy_swapchain(XrSwapchain handle) {
 static XRAPI_ATTR XrResult XRAPI_CALL hook_xrReleaseSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageReleaseInfo *info) {
     PFN_xrReleaseSwapchainImage fn = (PFN_xrReleaseSwapchainImage)lookup(active_instance, "xrReleaseSwapchainImage");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
+    if (is_standin(swapchain)) return XR_SUCCESS;
     pthread_mutex_lock(&emul_lock);
     emul_source *s = emul_active() ? emul_find_source(swapchain, 0) : NULL;
     int index = s && s->acquired_count ? (int)s->acquired[0] : -1;
@@ -335,6 +336,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL hook_xrReleaseSwapchainImage(XrSwapchain s
 static XRAPI_ATTR XrResult XRAPI_CALL hook_xrWaitSwapchainImage(XrSwapchain swapchain, const XrSwapchainImageWaitInfo *info) {
     PFN_xrWaitSwapchainImage fn = (PFN_xrWaitSwapchainImage)lookup(active_instance, "xrWaitSwapchainImage");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
+    if (is_standin(swapchain)) return XR_SUCCESS;
     XrResult result = emul_is_virtual(swapchain) ? XR_SUCCESS : fn(swapchain, info);
     pthread_mutex_lock(&emul_lock);
     emul_source *s = emul_active() ? emul_find_source(swapchain, 0) : NULL;

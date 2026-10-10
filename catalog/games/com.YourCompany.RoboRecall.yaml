@@ -1,16 +1,23 @@
 package: com.YourCompany.RoboRecall
 title: Robo Recall
-tested_version: '1.0'
-source_hint: 'Robo Recall- Unplugged'
-engine: Unreal
-xr: VrApi
 status: works
 notes: Needed the LAUNCHER category fix.
-details: Source APK is a community 'patch+savefix+90Hz' build.
+details: Source APK is a community 'patch+savefix+90Hz' build. Shares Vader Immortal's Unreal 4 Oculus input (GitHub
+  49) - thumbs follow the touches (frame.unreal_thumb_touch) and controller poses are located at the right time
+  (pose_time_fix); added 2026-10-09 from Vader's headset results, not yet checked in this game.
+tested_version: '1.0'
+engine: Unreal
+xr: VrApi
 alt_overport:
 - patch_remove_unreal_force_quit
+frame:
+- frame.unreal_thumb_touch
+adapter:
+  pose_time_fix: 1
 verified:
   date: '2026-09-28'
   overport_cli: 1.2.3
   overport_runtime: 3.4.3-23204ea
   known_good_sha256: 4ce6e3563da131e288645f4b62a634ac98043e55bc42b7c0ad5f461207d5f53c
+updated: '2026-10-09'
+source_hint: Robo Recall- Unplugged

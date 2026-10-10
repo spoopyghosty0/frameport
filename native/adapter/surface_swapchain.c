@@ -13,6 +13,29 @@
 //    copy on the session's queue; GLES: glTexSubImage2D in the app's context), then is submitted as usual.
 //  * Any failure: the call returns the runtime's own result (as before), so nothing gets worse.
 #include <jni.h>
+#include <android/hardware_buffer.h>
+#include <android/native_window_jni.h>
+#include <media/NdkImageReader.h>
+#include <EGL/eglext.h>
+#include <GLES2/gl2ext.h>
+#include "surface_video.h"
+
+#define SURF_NATIVE_SLOTS 4
+typedef struct {
+    AHardwareBuffer *buffer;
+    VkImage image;
+    VkImageView view;
+    VkDeviceMemory memory;
+    EGLImageKHR egl_image;
+    GLuint texture;
+    uint32_t width,height;
+    int state; // 0 reusable, 1 worker writing, 2 published, 3 current/pending Vulkan sampler
+    uint64_t seq;
+    uint32_t source_width,source_height;
+    int64_t source_time;
+    surf_video_job video;
+    int projected;
+} surf_native_slot;
 
 #define SURF_MAX 8
 
@@ -49,6 +72,9 @@ typedef struct {
     VkCommandBuffer cmd;
     VkFence fence;
     int in_flight;      // a copy was submitted and its fence not yet seen signalled
+    int native_mode, native_pending, native_current, native_project;
+    surf_video_job video_job;
+    surf_native_slot native_slots[SURF_NATIVE_SLOTS];
 } surf_swapchain;
 
 static pthread_mutex_t surf_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -68,7 +94,7 @@ static const char *surf_vs = "#version 300 es\nout vec2 uv;\nvoid main() {\n"
     "  uv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n}\n";
 // window row 0 (glReadPixels' first row) must hold the image's top: sample t = 1 - y (SurfaceTexture t=0 is the bottom)
 static const char *surf_fs = "#version 300 es\n#extension GL_OES_EGL_image_external_essl3 : require\n"
-    "precision mediump float;\nuniform samplerExternalOES tex;\nuniform mat4 st;\nin vec2 uv;\nout vec4 color;\n"
+    "precision highp float;\nuniform samplerExternalOES tex;\nuniform mat4 st;\nin vec2 uv;\nout vec4 color;\n"
     "void main() { color = texture(tex, (st * vec4(uv.x, 1.0 - uv.y, 0.0, 1.0)).xy); }\n";
 
 typedef void (*PFN_glReadPixels_)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *);
@@ -129,6 +155,8 @@ static void surf_fail(surf_swapchain *s, const char *why) {
     pthread_mutex_unlock(&surf_lock);
 }
 
+#include "surface_native.c"
+
 static void *surf_worker(void *arg) {
     surf_swapchain *s = arg;
     JNIEnv *env = NULL;
@@ -149,6 +177,7 @@ static void *surf_worker(void *arg) {
         surf_fail(s, "EGL context failed");
         goto out;
     }
+    if(s->native_mode){surf_native_worker(s,env,dpy);goto out;}
     // the SurfaceTexture's external texture, and the RGBA target the frames are drawn into
     p_glGenTextures(1, &ext_tex);
     p_glBindTexture(0x8D65 /* GL_TEXTURE_EXTERNAL_OES */, ext_tex);
@@ -202,10 +231,15 @@ static void *surf_worker(void *arg) {
         size_t bytes = (size_t)s->width * s->height * 4;
         uint8_t *buf = malloc(bytes);
         int64_t last_ts = -1, window_frames = 0, window_start = 0;
+        int64_t latch_ns = 0, read_ns = 0, copy_ns = 0, latch_calls = 0;
         while (!s->stop && buf) {
             struct timespec pause = {0, 8000000};  // ~120 checks a second: well above video frame rates
             nanosleep(&pause, NULL);
-            if (s_ast_update(ast) != 0) continue;
+            int64_t tick = monotonic_ns();
+            int latch_result = s_ast_update(ast);
+            latch_ns += monotonic_ns() - tick;
+            latch_calls++;
+            if (latch_result != 0) continue;
             int64_t ts = s_ast_timestamp(ast);
             if (ts == last_ts) continue;  // no new frame latched
             last_ts = ts;
@@ -221,11 +255,15 @@ static void *surf_worker(void *arg) {
             p_glBindVertexArray(vao);
             p_glDrawArrays(GL_TRIANGLES, 0, 3);
             s_glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            tick = monotonic_ns();
             s_glReadPixels(0, 0, (GLsizei)s->width, (GLsizei)s->height, GL_RGBA, GL_UNSIGNED_BYTE, buf);
+            read_ns += monotonic_ns() - tick;
             GLenum err = p_glGetError();
+            tick = monotonic_ns();
             pthread_mutex_lock(&surf_lock);
             if (!err && s->pixels) { memcpy(s->pixels, buf, bytes); s->seq++; s->frames++; }
             pthread_mutex_unlock(&surf_lock);
+            copy_ns += monotonic_ns() - tick;
             if (err) { static int warned; if (warned++ < 5) LOG("surface_emul: GL error 0x%x drawing a frame", err); }
             int64_t now = monotonic_ns();
             if (!window_start) {
@@ -235,7 +273,11 @@ static void *surf_worker(void *arg) {
             if (++window_frames && now - window_start > 5000000000ll) {
                 LOG("surface_emul: %.1f video frames/s, %d uploaded, %d upload failures", window_frames * 1e9 / (now - window_start),
                     s->uploads, s->upload_failures);
+                LOG("surface_emul: timing latch %.2f ms/call (%lld calls), readback %.2f ms/frame, publish %.2f ms/frame, timestamp %lld",
+                    latch_calls ? latch_ns / (1e6 * latch_calls) : 0.0, (long long)latch_calls,
+                    read_ns / (1e6 * window_frames), copy_ns / (1e6 * window_frames), (long long)ts);
                 window_frames = 0;
+                latch_ns = read_ns = copy_ns = latch_calls = 0;
                 window_start = now;
             }
         }
@@ -442,6 +484,10 @@ static XRAPI_ATTR XrResult XRAPI_CALL hook_xrCreateSwapchainAndroidSurfaceKHR(Xr
     s->handle = handle;
     s->width = info->width;
     s->height = info->height;
+    s->native_pending=-1;
+    s->native_current=-1;
+    s->native_mode=surface_native && surf_vulkan && surf_native_load();
+    s->native_project=s->native_mode;
     s->pixels = calloc((size_t)s->width * s->height, 4);
     uint32_t n = 0;
     if (surf_vulkan) {
@@ -470,6 +516,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL hook_xrCreateSwapchainAndroidSurfaceKHR(Xr
     if (!setup_ok) {
         LOG("surface_emul: setup failed (images %u, pixels %d): the panel stays empty", s->image_count, s->pixels != NULL);
         if (s->thread) { s->stop = 1; pthread_join(s->thread, NULL); }
+        surf_native_destroy(s);
         if (destroy) destroy(handle);
         free(s->pixels);
         pthread_mutex_lock(&surf_lock); s->used = 0; pthread_mutex_unlock(&surf_lock);
@@ -485,13 +532,16 @@ static XRAPI_ATTR XrResult XRAPI_CALL hook_xrCreateSwapchainAndroidSurfaceKHR(Xr
 }
 
 // xrDestroySwapchain: an emulated swapchain's worker and surface go with it
+static void surf_projection_destroy(surf_swapchain *s);
 static void surf_on_destroy(XrSwapchain handle) {
     pthread_mutex_lock(&surf_lock);
     surf_swapchain *s = surf_find(handle);
     pthread_mutex_unlock(&surf_lock);
     if (!s) return;
     s->stop = 1;
+    surf_projection_destroy(s);
     if (s->thread) pthread_join(s->thread, NULL);
+    surf_native_destroy(s);
     if (surf_vm && s->surface) {
         JNIEnv *env = NULL;
         int attached = 0;
@@ -508,3 +558,5 @@ static void surf_on_destroy(XrSwapchain handle) {
     pthread_mutex_unlock(&surf_lock);
     LOG("surface_emul: destroyed %p", (void *)(uintptr_t)handle);
 }
+
+#include "surface_projection.c"

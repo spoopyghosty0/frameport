@@ -1,0 +1,21 @@
+package: jp.co.amata.nvr
+title: The Tale of Onogoro
+status: works
+tested_version: 1.1.0248
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-08'
+  known_good_sha256: d6258a22a0a6e4588bbec36170f126bffc44ed64784f99e37cf4b03ad212fb79
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261006.6173745'
+  agent: 59
+  issue: 108
+source_hint: The Tale of Onogoro

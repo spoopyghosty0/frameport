@@ -38,6 +38,12 @@ def uses_scene(a: Analysis) -> bool:
     return any(p.endswith(("USE_SCENE", "USE_ANCHOR_API")) for p in perms)
 
 
+def uses_room_model(a: Analysis) -> bool:
+    """The game declares Meta's USE_SCENE permission: it asks the system for the room layout (scene model)."""
+    perms = a.extra.get("meta_permissions_used") or a.meta_permissions
+    return any(p.endswith("USE_SCENE") for p in perms)
+
+
 def needs_scene(a: Analysis) -> bool:
     """Mixed-reality-only game that builds its world from the room model."""
     perms = a.extra.get("meta_permissions_used") or a.meta_permissions

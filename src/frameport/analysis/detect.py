@@ -23,7 +23,14 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 # 1: sdl_java, min_sdk, web_wrapper, expects_obb, vr_activity, unity_version (2026-10)
 # 2: unity_split (a Unity split-binary build expects an OBB too: expects_obb) (2026-10)
 # 3: unreal_ovrp_lookups (the OVRPlugin functions Unreal's Oculus module looks up: frame.unreal_ovrp_entrypoints)
-ANALYSIS_VERSION = 3
+# 4: vivox_api31 (Vivox's audio routing calls Android 12 AudioManager methods: frame.vivox_audio_route) (2026-10)
+# 5: unreal_quest_gates (Quest-only branches in ILMxLAB's Unreal: frame.unreal_quest_precompile/_keymap) (2026-10)
+# 6: gl_multiview_libs (own-engine libraries with OVR_multiview GLSL: frame.gl_multiview_fbo) (2026-10)
+# 7: unreal_thumb_touch (UE4 OculusInput's ThumbUp from near-touch, matched exactly: frame.unreal_thumb_touch)
+# 8: media_codec (plays video through Android's decoders: MediaCodec/ExoPlayer/Media3 or VLC: frame.hw_video_decode)
+# 9: gamepad (the manifest declares gamepad support: android.hardware.gamepad / Android TV's LEANBACK_LAUNCHER:
+#    device.steam_gamepad) (2026-10)
+ANALYSIS_VERSION = 9
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
@@ -145,6 +152,9 @@ def vr_kind(libs: set[str], manifest_strings: list[str]) -> str:
     return "none"
 
 
+# dex type names of Android's video decoding APIs (frame.hw_video_decode)
+MEDIA_CODEC_MARKERS = (b"Landroid/media/MediaCodec;", b"Landroidx/media3/exoplayer", b"Lcom/google/android/exoplayer2/")
+
 # OpenXR composition-layer extensions the Frame runtime lacks (see docs/FRAME_RUNTIME.md).
 LAYER_EXTENSIONS = ("XR_KHR_composition_layer_cylinder", "XR_KHR_composition_layer_equirect",
                     "XR_KHR_composition_layer_equirect2", "XR_KHR_composition_layer_cube")
@@ -159,8 +169,13 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
         prefix = f"lib/{abi}/" if abi else None
         libs = sorted(n[len(prefix):] for n in names if prefix and n.startswith(prefix) and n.endswith(".so"))
         # SDL's Java side (SDL2 / LÖVE apps): crashes in Lepton without a clipboard service (frame.sdl_clipboard)
-        sdl_java = any(b"Lorg/libsdl/app/SDLClipboardHandler;" in z.read(n) for n in names
-                       if n.startswith("classes") and n.endswith(".dex"))
+        dexes = [z.read(n) for n in names if n.startswith("classes") and n.endswith(".dex")]
+        sdl_java = any(b"Lorg/libsdl/app/SDLClipboardHandler;" in d for d in dexes)
+        # Vivox voice chat calling Android 12 audio-routing methods: crashes in Lepton (Android 11)
+        vivox_api31 = any(b"Lcom/vivox/sdk/AudioChangeListener;" in d and b"CommunicationDevice" in d for d in dexes)
+        # video through Android's decoders (frame.hw_video_decode): Java MediaCodec, ExoPlayer/Media3, or libVLC
+        media_codec = any(m in d for d in dexes for m in MEDIA_CODEC_MARKERS) or "libvlc.so" in libs
+        del dexes
         manifest = z.read("AndroidManifest.xml")
         lib_bytes = {}
         if deep and prefix:
@@ -279,6 +294,10 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             # Meta's OVRManager raises MSAA at runtime (frame.unity_runtime_msaa_off); Oculus XR Plugin (multiview)
             "ovr_runtime_msaa": bool(il2cpp_meta) and b"\0useRecommendedMSAALevel\0" in il2cpp_meta,
             "sdl_java": sdl_java,
+            "vivox_api31": vivox_api31,
+            "media_codec": media_codec,
+            # declares gamepad support (SDL's manifest template has both): device.steam_gamepad
+            "gamepad": "android.hardware.gamepad" in features or axml.LEANBACK_LAUNCHER in cats,
             "oculus_xr_plugin": bool(il2cpp_meta) and b"\0m_StereoRenderingModeAndroid\0" in il2cpp_meta,
             # Unity's built-in Oculus support checks for Meta's system apps before VR (frame.unity_oculus_check)
             "unity_oculus_check": b"\0com.oculus.systemactivities\0" in lib_bytes.get("libunity.so", b""),
@@ -296,8 +315,57 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             # Unreal's Oculus module needs every OVRPlugin function it looks up (frame.unreal_ovrp_entrypoints)
             "unreal_ovrp_lookups": (ovrp_lookups(lib_bytes.get(engine_lib.rsplit("/", 1)[1], b""))
                                     if engine_lib and "libOVRPlugin.so" in libset else []),
+            # Quest-only branches that leave ILMxLAB's Unreal games stuck on the Frame (frame.unreal_quest_*)
+            "unreal_quest_gates": (unreal_quest_gates(lib_bytes.get(engine_lib.rsplit("/", 1)[1], b""))
+                                   if engine_lib else []),
+            # UE4's Oculus input animates the thumb from near-touch, which the Frame never reports
+            # (frame.unreal_thumb_touch: True only where its exact code matches)
+            "unreal_thumb_touch": (unreal_thumb_touch(lib_bytes.get(engine_lib.rsplit("/", 1)[1], b""))
+                                   if engine_lib and engine_lib.startswith("lib/arm64-v8a/") else False),
+            # own-engine libraries whose GLSL declares OVR_multiview views (frame.gl_multiview_fbo, e.g. Doom3Quest)
+            "gl_multiview_libs": multiview_glsl_libs(lib_bytes) if engine == "Other" else [],
         },
     )
+
+
+# Quest-only branches in ILMxLAB's Unreal (IsRunningOnSantaCruz) that leave the game stuck on the Frame: the exported
+# function each frame.unreal_quest_* patch rewrites
+UNREAL_QUEST_GATES = {
+    "quest_precompile": "_ZN8UVRUtils31GetQuestShaderPrecompilePercentEv",
+    "rpoc_keymap": "_ZN27URPOCKeyMapManagerComponent14AddAxisMappingERK15FRPOCKeyMappingR16FRPOCInputMapSet",
+}
+
+
+# libraries that hold GLSL but aren't the game's renderer
+NOT_GL_ENGINE = ("libopenxr", "libOVR", "libovr", "libvrapi", "libfp", "libframe", "libglshim", "libVkLayer", "libc++")
+
+
+def multiview_glsl_libs(lib_bytes: dict[str, bytes]) -> list[str]:
+    """Own-engine libraries with OVR_multiview shaders (`layout(num_views=…) in;` + gl_ViewID_OVR): such an engine may
+    also draw them into ordinary framebuffers, which Mesa refuses (frame.gl_multiview_fbo, GitHub #77)."""
+    return sorted(n for n, d in lib_bytes.items() if not n.startswith(NOT_GL_ENGINE) and elf.is_elf(d)
+                  and b"num_views" in d and b"gl_ViewID_OVR" in d)
+
+
+UNREAL_THUMB_TOUCH = "_ZN11OculusInput12FOculusInput20SendControllerEventsEv"
+
+
+def unreal_thumb_touch(data: bytes) -> bool:
+    """UE4's OculusInput sets ThumbUp from near-touch in exactly the code frame.unreal_thumb_touch rewrites (or
+    already rewrote)."""
+    if b"\0" + UNREAL_THUMB_TOUCH.encode() + b"\0" not in data:
+        return False
+    from ..patches.frame.unreal_thumb_touch import thumb_site
+
+    try:
+        return thumb_site(data) is not None
+    except Exception:  # noqa: BLE001 - a malformed library: no suggestion
+        return False
+
+
+def unreal_quest_gates(data: bytes) -> list[str]:
+    """The gate functions an Unreal engine library exports (a search of the symbol names, no ELF parsing)."""
+    return sorted(k for k, sym in UNREAL_QUEST_GATES.items() if b"\0" + sym.encode() + b"\0" in data)
 
 
 def ovrp_lookups(data: bytes) -> list[str]:

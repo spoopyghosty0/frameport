@@ -21,6 +21,7 @@ TYPE_INT_HEX = 0x11
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 LAUNCHER = "android.intent.category.LAUNCHER"
 INFO = "android.intent.category.INFO"
+LEANBACK_LAUNCHER = "android.intent.category.LEANBACK_LAUNCHER"  # Android TV's launcher (apps made for a gamepad)
 MAIN = "android.intent.action.MAIN"
 DEFAULT = "android.intent.category.DEFAULT"
 VR_CATEGORY = "com.oculus.intent.category.VR"

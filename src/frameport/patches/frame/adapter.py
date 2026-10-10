@@ -56,6 +56,16 @@ class FrameBridgeAdapter(Patch):
             changed = True
         if needs_xrshim(ctx.recipe_patches) and ws.abi == "arm64-v8a":
             changed |= add_xrshim(ctx)
+        # The decoder now lives in the agent's shared, versioned codec store (frame.hw_video_decode selects it per
+        # game). Remove old embedded payloads without changing any game/video assets.
+        for name in ("libstagefrighthw.so", "media_codecs_frameport.xml", "podman.py", "manifest.json",
+                     "COPYING.FFmpeg"):
+            target = f"assets/frameport/hevc/{name}"
+            if ws.has(target):
+                ws.remove.add(target)
+                ws.add.pop(target, None)
+                ws.replace.pop(target, None)
+                changed = True
         return changed
 
     def validate(self, ctx: ApkContext):
@@ -69,7 +79,8 @@ def needs_xrshim(recipe_patches: dict) -> bool:
     from ..settings import adapter_settings
 
     s = adapter_settings(recipe_patches)
-    return bool(s.get("controller_models") or s.get("haptic_fix"))
+    # surface_native: Batman's native video renderer hooks Vulkan functions OVRPort's dispatcher doesn't know
+    return bool(s.get("controller_models") or s.get("haptic_fix") or s.get("surface_native"))
 
 
 def add_xrshim(ctx: ApkContext) -> bool:

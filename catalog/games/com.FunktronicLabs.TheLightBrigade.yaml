@@ -1,0 +1,21 @@
+package: com.FunktronicLabs.TheLightBrigade
+title: The Light Brigade
+status: issues
+notes: Judder in weapons
+tested_version: '746'
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-09'
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261007.6125817'
+  agent: 59
+  issue: 114
+source_hint: The Light Brigade

@@ -1,0 +1,20 @@
+package: com.ForwardXP.nuke
+title: Please Don't Touch Anything
+status: works
+notes: Seems functional
+tested_version: '2.2'
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+verified:
+  date: '2026-10-08'
+  known_good_sha256: 17460c8691b9ff82f6c7ca5597afd0aacf1a94aa30ebb6a6108802991b60f51b
+  app: 0.12.0
+  overport_cli: 1.2.5
+  frame_build: '20261006.6173745'
+  agent: 59
+  issue: 106
+source_hint: apks

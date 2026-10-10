@@ -1,0 +1,9 @@
+package: com.golfscope.proputt
+title: GOLF+
+status: unsupported
+notes: Black screen. The game's servers reject the login on this platform (Authentication not supported).
+engine: Unity
+xr: OpenXR
+verified:
+  date: '2026-10-10'
+  issue: 147
