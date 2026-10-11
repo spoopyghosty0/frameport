@@ -75,7 +75,7 @@ def patch_revive(src: Path, dest: Path) -> Path:
     for f in revive_tool.runtime_files(src):
         target = tmp / f.relative_to(src)
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(f, target)
+        shutil.copyfile(f, target)   # content only: a system Revive's files are read-only
     data = bytearray((tmp / "LibRevive64.dll").read_bytes())
     for off, old, new in REVIVE_PATCHES:
         o, n = bytes.fromhex(old), bytes.fromhex(new)
