@@ -1,0 +1,112 @@
+---
+// How it works for PC VR games (Windows VR games): on the Frame through Proton, on the PC through SteamVR (Revive for
+// Oculus Rift games), and two paths that only exist on experimental branches. Closed by default, like Compare's table.
+import Glyph from './Glyph.astro';
+import { REPO, url } from '../data/site';
+
+type Step = { glyph: Parameters<typeof Glyph>[0]['name']; side: 'pc' | 'frame'; name: string; text: string };
+const onFrame: Step[] = [
+  { glyph: 'pc', side: 'pc', name: 'scan', text: 'One folder per game. FramePort finds the program that starts it and asks when there are several.' },
+  { glyph: 'container', side: 'pc', name: 'analyze', text: 'Reads which VR interface the game uses (OpenXR, OpenVR or Oculus) from its files.' },
+  { glyph: 'sync', side: 'frame', name: 'upload', text: 'The game goes to the Frame unchanged. Proton, Valve’s layer for Windows games, is installed for you.' },
+  { glyph: 'patch', side: 'frame', name: 'patch', text: 'A small OpenXR layer lets the game talk to the Frame’s SteamVR. Unreal games start without their crash reporter.' },
+  { glyph: 'frame', side: 'frame', name: 'library', text: 'The game shows up in your Steam library and starts in the headset like any other.' },
+];
+const onPc: Step[] = [
+  { glyph: 'pc', side: 'pc', name: 'install', text: '“Install on this PC” adds the game to Steam on your PC, with its artwork.' },
+  { glyph: 'port', side: 'pc', name: 'revive', text: 'Oculus Rift games get Revive automatically: your installed Revive if you have one, else a private copy unpacked from Revive’s own installer. Your install is never replaced.' },
+  { glyph: 'live', side: 'pc', name: 'play', text: 'Play starts SteamVR. After a session, FramePort picks a refresh rate and motion smoothing that the game keeps up with.' },
+  { glyph: 'frame', side: 'frame', name: 'stream', text: 'Steam Link streams the game from your PC to the Frame.' },
+];
+---
+<details class="pcvr reveal">
+  <summary><span class="show">How PC VR games work</span><span class="hide">Hide PC VR</span><i aria-hidden="true">▾</i></summary>
+  <p class="lead muted">PC VR games are Windows VR games. FramePort runs them on the Frame itself or on your PC.</p>
+
+  <div class="panels">
+    <details class="panel">
+      <summary><Glyph name="frame" size={18} /><span>On the Frame</span><i aria-hidden="true">▾</i></summary>
+      <ol class="steps">
+        {onFrame.map((s) => (
+          <li class={s.side}><span class="g"><Glyph name={s.glyph} size={18} /></span><code class="n">{s.name}</code><p>{s.text}</p></li>
+        ))}
+      </ol>
+      <p class="note muted">Games that use OpenXR or OpenVR run directly. Oculus-only games run on your PC; running them on the Frame
+        is the experimental path below. <a href={url('docs/install/#pc-vr-games')}>PC VR in the docs</a></p>
+    </details>
+
+    <details class="panel">
+      <summary><Glyph name="pc" size={18} /><span>On your PC</span><i aria-hidden="true">▾</i></summary>
+      <ol class="steps">
+        {onPc.map((s) => (
+          <li class={s.side}><span class="g"><Glyph name={s.glyph} size={18} /></span><code class="n">{s.name}</code><p>{s.text}</p></li>
+        ))}
+      </ol>
+      <p class="note muted">Needs Windows with Steam and SteamVR. Games that check their license through Meta’s app need that
+        app on the PC too. <a href={url('docs/install/#pc-vr-games')}>PC VR in the docs</a></p>
+    </details>
+
+    <details class="panel">
+      <summary><Glyph name="pc" size={18} /><span>Quest games in PC VR</span>
+        <span class="tag" aria-label="Experimental, not in the app yet">Experimental · not in the app yet</span><i aria-hidden="true">▾</i></summary>
+      <p>Quest games run on your PC through <b>AXRB</b> (Android XR Bridge) and SteamVR, then stream to the Frame like any PC
+        VR game. FramePort downloads AXRB the first time you use it, like Revive. Some games already start; most don’t
+        show a usable picture yet.</p>
+      <p class="note muted">On an experimental branch, not in a release yet. <a href={`${REPO}/pull/136`}>Follow its progress</a></p>
+    </details>
+
+    <details class="panel">
+      <summary><Glyph name="frame" size={18} /><span>Rift games on the Frame alone</span>
+        <span class="tag" aria-label="Experimental, not in the app yet">Experimental · not in the app yet</span><i aria-hidden="true">▾</i></summary>
+      <p>Oculus Rift games run on the Frame itself, without a PC: Windows x86 emulation (FEX and Wine) runs the game,
+        Revive and Meta’s own PC runtime, and you sign in with your Meta account. The first Oculus game has run in the
+        headset; it isn’t smooth enough to ship yet.</p>
+      <p class="note muted">On an experimental branch, not in a release yet.</p>
+    </details>
+  </div>
+</details>
+
+<style>
+  .pcvr { margin-top: 28px; }
+  .pcvr > summary { list-style: none; display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); cursor: pointer; font-weight: 600; }
+  .pcvr summary::-webkit-details-marker { display: none; }
+  .pcvr summary:hover { background: rgba(58, 168, 255, .08); }
+  .pcvr summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .pcvr summary i { font-style: normal; transition: transform 300ms var(--ease-out); }
+  .pcvr[open] > summary i, .panel[open] > summary i { transform: rotate(180deg); }
+  .pcvr > summary .hide, .pcvr[open] > summary .show { display: none; }
+  .pcvr[open] > summary .hide { display: inline; }
+  .lead { margin: 16px 0 12px; }
+
+  .panels { display: grid; gap: 10px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .panel > summary { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 14px 18px;
+    cursor: pointer; font: 600 15px/1.3 var(--font-sans); }
+  .panel > summary .glyph { color: var(--accent); }
+  .panel > summary i { margin-left: auto; color: var(--text-2); }
+  .panel > :not(summary) { margin-inline: 18px; }
+  .panel > p { color: var(--text-2); line-height: 1.6; }
+  .panel > :last-child { margin-bottom: 16px; }
+
+  .tag { font: 600 11px/1 var(--font-mono); letter-spacing: .04em; padding: 4px 8px; border-radius: 999px;
+    color: var(--accent); background: rgba(255, 138, 31, .12); border: 1px solid rgba(255, 138, 31, .35); }
+
+  .steps { list-style: none; padding: 0; margin-top: 0; }
+  .steps li { display: grid; grid-template-columns: 32px 72px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; padding: 10px 0; }
+  .steps li + li { border-top: 1px solid rgba(42, 45, 55, 0.6); }
+  .steps .g { align-self: center; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; }
+  .steps .pc .g { color: var(--secondary); background: rgba(58, 168, 255, 0.12); }
+  .steps .frame .g { color: var(--accent); background: rgba(255, 138, 31, 0.12); }
+  .steps .n { font-size: 13px; font-weight: 600; }
+  .steps .pc .n { color: var(--secondary); }
+  .steps .frame .n { color: var(--accent); }
+  .steps p { margin: 0; color: var(--text-2); font-size: 15px; line-height: 1.55; }
+  .note { font-size: 14px; }
+
+  @media (max-width: 640px) {
+    .steps li { grid-template-columns: 32px minmax(0, 1fr); }
+    .steps .g { grid-row: span 2; align-self: start; }
+    .steps p { grid-column: 2; }
+  }
+</style>

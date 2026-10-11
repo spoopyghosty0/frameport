@@ -2,6 +2,7 @@
 // How it works, as the install log of one real catalog game: the stages on the PC in blue, the ones on the Frame in
 // orange, the portal between them.
 import Glyph from './Glyph.astro';
+import PcvrHow from './PcvrHow.astro';
 import { patchLabel, stageDetails, type LogGame } from '../scripts/logdetails';
 
 interface Props { example: LogGame; others: LogGame[] }
@@ -84,6 +85,7 @@ const frame: Stage[] = [
       <span class="foot-t"><span data-lg="foot">{example.title}</span>'s recipe from the catalog. Untested games get suggested patches.</span>
       <button type="button" class="btn btn-secondary btn-small again" data-again>↻ Try another game</button>
     </p>
+    <PcvrHow />
   </div>
 </section>
 

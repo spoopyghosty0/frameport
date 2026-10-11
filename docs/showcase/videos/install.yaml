@@ -24,7 +24,7 @@ title:
 end:
   heading: You're set
   line: Your game is in the Frame's Steam library. More help at frameport.app/docs/install/
-  footer: github.com/spoopyghosty0/frameport
+  footer: frameport.app
   seconds: 4.0
 
 scenes:
@@ -34,8 +34,8 @@ scenes:
       eyebrow: "Step 1 · On your PC"
       heading: Download FramePort
       steps:
-        - "Open **github.com/spoopyghosty0/frameport** → **Releases** → the latest one"
-        - "Download the file for your PC: **FramePort-windows-x64.zip**, **FramePort-macos-arm64.zip** or **FramePort-linux-x64.tar.gz**"
+        - "Open **frameport.app/download**"
+        - "Download the file for your PC (the page picks it): **FramePort-windows-x64.zip**, **FramePort-macos-arm64.zip** or **FramePort-linux-x64.tar.gz**"
         - "Unpack it anywhere. No installer or admin rights needed"
 
   - name: first-start
