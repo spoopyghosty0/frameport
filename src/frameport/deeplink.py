@@ -8,6 +8,10 @@ system's handler, its own `frameport://`, FramePort's `https://frameport.app/ins
 pasted into "Install from link…"), follows the same
 rules (https only, http only on this PC, no credentials, no LAN addresses, a URL that ends in a file name) and
 always asks before it downloads anything a web page sent. `urlhandler.py` registers the schemes.
+
+The homepage's example button points at one fixed demo manifest (DEMO_MANIFEST, also published on the site): every
+form of that link becomes a request flagged `demo`, which never touches the network (fetch_manifest answers with
+demo_manifest(), download refuses it) and the GUI answers with a placeholder dialog (ui/views/link_dialog.py).
 """
 from __future__ import annotations
 
@@ -32,6 +36,8 @@ MAX_DESCRIPTION = 2000
 MAX_ICON = 2 << 20
 LOOPBACK = ("localhost", "127.0.0.1", "[::1]", "::1")
 APK, LINUX, EXE, OBB = "apk", "linux", "exe", "obb"
+DEMO_MANIFEST = "https://frameport.app/demo/cool-game.json"  # the homepage's example button
+DEMO_NAME = "Cool Game"
 LINUX_EXTS = (".zip", ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tar", ".appimage")
 
 
@@ -44,6 +50,7 @@ class InstallRequest:
     manifest_url: str | None = None
     file_url: str | None = None
     local_manifest: str | None = None  # a .framedrop.json dropped on the window
+    demo: bool = False  # the homepage's example button (DEMO_MANIFEST): nothing is fetched or installed
 
     @property
     def source(self) -> str:
@@ -73,6 +80,7 @@ class Manifest:
     # FramePort-only extension (FrameDrop ignores it): "frameport": {"description": "…", "icon": "https://….png"}
     description: str = ""
     icon: str | None = None
+    demo: bool = False  # demo_manifest(): never downloaded
 
     @property
     def host(self) -> str:
@@ -145,6 +153,31 @@ def check_url(url: str, what: str = "link", resolve: bool = False) -> str:
     return url.strip()
 
 
+def is_demo(url: str | None) -> bool:
+    """Whether a manifest address is the homepage's demo manifest (https, frameport.app, that path, nothing else)."""
+    try:
+        parts = urlsplit((url or "").strip())
+        port = parts.port
+    except ValueError:
+        return False
+    host = (parts.hostname or "").lower()
+    return parts.scheme.lower() == "https" and host in ("frameport.app", "www.frameport.app") and port is None \
+        and not parts.username and not parts.password and parts.path == urlsplit(DEMO_MANIFEST).path \
+        and not parts.query and not parts.fragment
+
+
+def demo_request() -> InstallRequest:
+    return InstallRequest(manifest_url=DEMO_MANIFEST, demo=True)
+
+
+def demo_manifest() -> Manifest:
+    """What the demo link "installs": built here, never fetched (site/public/demo/cool-game.json says the same)."""
+    return Manifest(DEMO_NAME, [ManifestFile("https://frameport.app/demo/cool-game-arm64.apk")], DEMO_MANIFEST,
+                    description="A placeholder game for the example \"Install with FramePort\" button. FramePort "
+                    "recognises this link and shows a demo: nothing is downloaded or installed.",
+                    demo=True)
+
+
 def parse(text: str) -> InstallRequest:
     """framedrop://install?…, frameport://install?…, the https://framedropvr.com/install?… button link, a manifest
     URL (…json) or a direct file URL."""
@@ -156,12 +189,16 @@ def parse(text: str) -> InstallRequest:
     except ValueError:
         raise LinkError("That isn't a link FramePort understands.") from None
     scheme = parts.scheme.lower()
+    if is_demo(text):  # the demo manifest pasted on its own
+        return demo_request()
     if scheme in SCHEMES or (scheme == "https" and (parts.hostname or "").lower() in WEB_HOSTS):
         action = (parts.netloc or parts.path.strip("/")) if scheme in SCHEMES else parts.path.strip("/")
         if action.lower().split("/")[0] != "install":
             raise LinkError("FramePort only understands install links (…/install?manifest=… or ?url=…).")
         query = parse_qs(parts.query)
         manifest, file = (query.get("manifest") or [None])[0], (query.get("url") or [None])[0]
+        if manifest and is_demo(manifest):
+            return demo_request()
         if manifest:
             return InstallRequest(manifest_url=check_url(manifest, "manifest address"))
         if file:
@@ -240,7 +277,10 @@ def manifest_from_data(data, source: str = "") -> Manifest:
 
 
 def fetch_manifest(req: InstallRequest) -> Manifest:
-    """The manifest a request names (a direct file link becomes a one-file manifest titled after the file)."""
+    """The manifest a request names (a direct file link becomes a one-file manifest titled after the file; the demo
+    link's is built in, without a network request)."""
+    if req.demo or is_demo(req.manifest_url):
+        return demo_manifest()
     if req.file_url:
         name = filename_of(req.file_url)
         m = Manifest(title_from_filename(name), [ManifestFile(req.file_url)], req.file_url, direct=True)
@@ -365,6 +405,9 @@ def download(m: Manifest, reporter: Reporter | None = None) -> Path:
     """Download every file into a fresh staging folder and return the path to add: the APK (OBB files go into the
     `obb/` folder next to it, where the APK scan finds them), the Linux build or the Windows program."""
     import shutil
+
+    if m.demo or is_demo(m.source):
+        raise LinkError("This is FramePort's demo link: there's nothing to download.")
 
     folder = staging_dir(m)
     shutil.rmtree(folder, ignore_errors=True)

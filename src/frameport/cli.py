@@ -283,7 +283,12 @@ def open_link(link: str = typer.Argument(..., help="an \"Install with FrameDrop\
         typer.echo("handed to the FramePort window")
         return
     try:
-        m = deeplink.fetch_manifest(deeplink.parse(link))
+        req = deeplink.parse(link)
+        if req.demo:  # the homepage's example button: nothing to fetch or install
+            typer.echo("This is FramePort's demo link (the example button on frameport.app): FramePort receives it; "
+                       "nothing is downloaded or installed.")
+            return
+        m = deeplink.fetch_manifest(req)
     except deeplink.LinkError as exc:
         raise typer.BadParameter(str(exc)) from None
     typer.echo(f"{m.name}  (from {m.host or m.source})")

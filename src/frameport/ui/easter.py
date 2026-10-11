@@ -17,6 +17,9 @@ gets in the way:
   the window's corner and waves back.
 - The Frame reaching 100 % on the charger: its battery ring pulses.
 - Long uploads (over two and a half minutes): the cover riding the progress bar does a hop now and then.
+- The homepage's example "Install with FramePort" button (deeplink.DEMO_MANIFEST): its install question is a demo
+  for "Cool Game", and Install sends Cool Game's cover out of the logo's portal instead of installing anything
+  (link_dialog.show_demo; with easter eggs off it just says the link works).
 
 Off with library setting `ui.easter_eggs` = False (the docs screenshots and videos turn them off; there's no
 switch in Settings). Animations respect Reduce motion (the words stay, the motion goes). `FRAMEPORT_TODAY`
@@ -254,6 +257,38 @@ class Typed:
         return self.text.endswith(HELLO)
 
 
+def demo_finale(eggs: bool, reduce_motion: bool) -> str:
+    """What the demo install link's Install button does: "toss" (Cool Game's cover out of the portal, then a toast),
+    "words" (Reduce motion: only the toast) or "plain" (easter eggs off: a plain "it works")."""
+    if not eggs:
+        return "plain"
+    return "words" if reduce_motion else "toss"
+
+
+def demo_message(finale: str) -> str:
+    if finale == "plain":
+        return tr("Nice, it works! FramePort receives install links. (Demo: nothing was installed.)")
+    return tr("Cool Game went through the portal. It was only a demo: nothing was downloaded or installed.")
+
+
+def demo_install(app: FramePortApp, cover_src: str) -> None:
+    """The demo link's Install: the toast, after (motion and easter eggs allowed) the logo's portal tosses Cool
+    Game's cover across the window."""
+    finale = demo_finale(enabled(), app.reduce_motion)
+    logo = getattr(app, "logo_egg", None)
+    if finale != "toss" or logo is None or logo.busy:
+        app.toast(demo_message(finale))
+        return
+    logo.busy = True
+
+    async def run():
+        try:
+            await logo._toss(cover_src)
+        finally:
+            app.toast(demo_message(finale))
+    app.page.run_task(run)
+
+
 def says_hello(text: str | None) -> bool:
     return HELLO in (text or "").lower()
 
@@ -383,7 +418,7 @@ class Logo:
         self.busy = True
         self.app.page.run_task(self._toss)
 
-    async def _toss(self) -> None:
+    async def _toss(self, cover_url: str | None = None) -> None:
         """The wordmark's portal (between "Frame" and "Port") lights up: a blue-and-orange glow swells around it and
         two rings run out of it; then a game's cover comes out of it small, grows to full size and falls down across
         the window on a random arc, tumbling; the glow fades. Themes without the wordmark's portal use the logo's."""
@@ -392,7 +427,8 @@ class Logo:
         page = self.app.page
         mark = getattr(self.app, "_portal_mark", None)  # the wordmark's portal (dual themes)
         try:
-            cover_url = await asyncio.to_thread(_a_cover)  # (may make a thumbnail: not on the event loop)
+            if cover_url is None:  # a random game's (the demo install link brings its own)
+                cover_url = await asyncio.to_thread(_a_cover)  # (may make a thumbnail: not on the event loop)
             if cover_url is None:
                 return
             width = float(getattr(page, "width", None) or 1440)
@@ -425,7 +461,8 @@ class Logo:
             dt = 0.06
             cover = ft.Container(width=cw, height=ch, left=cx - cw / 2, top=cy - ch / 2, scale=0.08, opacity=0,
                                  rotate=0, border_radius=T.px(5), clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                                 image=ft.DecorationImage(src=cover_url, fit=ft.BoxFit.COVER),
+                                 # (an Image, not a DecorationImage: the demo's cover is an SVG)
+                                 content=ft.Image(src=cover_url, width=cw, height=ch, fit=ft.BoxFit.COVER),
                                  border=ft.Border.all(1, T.soft("#FFFFFF", 0.25)),
                                  shadow=ft.BoxShadow(blur_radius=14, spread_radius=1, color=T.soft("#000000", 0.55),
                                                      offset=ft.Offset(0, 4)),

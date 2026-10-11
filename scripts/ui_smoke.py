@@ -281,6 +281,8 @@ def main() -> int:
                                            a.library_view.open_menu(LINUX_APPIMAGE)))]
     if args.links:
         from frameport import deeplink
+        from frameport.ui import components as C
+        from frameport.ui import easter
         from frameport.ui.views import link_dialog
 
         fake = deeplink.Manifest("Example Game", [
@@ -305,6 +307,11 @@ def main() -> int:
         steps = [("library", lambda a: a.navigate(0)),
                  ("links-paste", lambda a: a.pick_link()),
                  ("links-confirm", lambda a: (a.page.pop_dialog(), link_dialog._confirm(a, fake, sizes, False, icon))),
+                 # the homepage's example button: the demo question (no network), then its Install's easter egg
+                 ("links-demo", lambda a: (a.page.pop_dialog(), a.open_install_link(
+                     deeplink.make_link(deeplink.DEMO_MANIFEST), from_web=True))),
+                 ("links-demo-install", lambda a: (a.page.pop_dialog(), easter.demo_install(
+                     a, C._asset_src(link_dialog.DEMO_COVER)), time.sleep(0.9))),
                  ("links-settings", lambda a: (a.page.pop_dialog(), a.go("settings")))]
         if game:
             steps.append(("links-display-mode", lambda a: a.open_game(game, advanced=True)))

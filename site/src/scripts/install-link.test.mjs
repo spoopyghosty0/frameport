@@ -1,7 +1,8 @@
 // node --test --experimental-strip-types src/scripts/ (npm test). Cases from tests/test_deeplink.py.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkUrl, parseInstallParams, readManifest, toFrameportLink } from './install-link.ts';
+import { readFileSync } from 'node:fs';
+import { DEMO_MANIFEST, checkUrl, isDemo, parseInstallParams, readManifest, toFrameportLink } from './install-link.ts';
 
 const MANIFEST = 'https://cdn.example.com/game.framedrop.json';
 
@@ -54,4 +55,24 @@ test('manifest preview', () => {
   assert.deepEqual(m, { name: 'Nice Game', description: 'A game.', icon: null, files: ['My Game-arm64.apk'] });
   assert.equal(readManifest({ schema: 'framedrop.install/v2', name: 'x', files: [{ url: 'https://a.com/x.apk' }] }), null);
   assert.equal(readManifest({ schema: 'framedrop.install/v1', files: [{ url: 'https://a.com/x.apk' }] }), null);
+});
+
+test('the homepage demo link is recognised (and only it)', () => {
+  const p = parseInstallParams(`?manifest=${encodeURIComponent(DEMO_MANIFEST)}`);
+  assert.deepEqual([p.ok, p.kind, p.demo], [true, 'manifest', true]);
+  assert.equal(p.link, `frameport://install?manifest=${encodeURIComponent(DEMO_MANIFEST)}`);
+  assert.equal(parseInstallParams(`?manifest=${encodeURIComponent(MANIFEST)}`).demo, false);
+  assert.equal(isDemo('https://www.frameport.app/demo/cool-game.json'), true);
+  for (const u of ['https://frameport.app/demo/cool-game.json?x=1', 'https://frameport.app.evil.com/demo/cool-game.json',
+    'http://frameport.app/demo/cool-game.json', 'https://frameport.app:8443/demo/cool-game.json']) {
+    assert.equal(isDemo(u), false, u);
+  }
+});
+
+test('the published demo manifest previews as Cool Game', () => {
+  const data = JSON.parse(readFileSync(new URL('../../public/demo/cool-game.json', import.meta.url), 'utf8'));
+  const m = readManifest(data);
+  assert.equal(m?.name, 'Cool Game');
+  assert.equal(m?.icon, 'https://frameport.app/demo/cool-game.svg');
+  assert.deepEqual(m?.files, ['cool-game-arm64.apk']);
 });

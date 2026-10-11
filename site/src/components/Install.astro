@@ -26,8 +26,8 @@ const snippet = `<a href="${pageUrl}?manifest=https%3A%2F%2Fexample.com%2Fmy-gam
         <h3>An "Install with FramePort" button</h3>
         <p class="muted">Put it on your download page. A click opens FramePort, which installs your game on the
           visitor's Frame.</p>
-        <div class="badge-row"><InstallBadge id="makers" href={url('install/?url=https%3A%2F%2Fexample.com%2Fgames%2Fcool-game-arm64.apk')}
-          label="Try it: what a visitor without FramePort sees" /><span class="try">← try it</span></div>
+        <div class="badge-row"><InstallBadge id="makers" href={url('install/?manifest=https%3A%2F%2Fframeport.app%2Fdemo%2Fcool-game.json')}
+          label="Try it: a demo install link (nothing is downloaded)" /><span class="try">← try it</span></div>
         <a class="small" href={url('docs/install-button/')}>How to add the button</a>
       </div>
       <div class="snippet">

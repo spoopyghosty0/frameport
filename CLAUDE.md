@@ -857,6 +857,10 @@ up to 4 s for the link file to be taken before trusting the heartbeat, the windo
 `gui.alive`, and the Windows command runs under `conhost.exe --headless` (plain `-WindowStyle Hidden` flashed a
 console). Screens: `scripts/ui_smoke.py --links --fake-frame --game <pkg>` (tall pages: `--viewport
 1280x7000`; Flutter's popup menu ignores Escape).
+Demo link: the homepage's example button = `deeplink.DEMO_MANIFEST` (https://frameport.app/demo/cool-game.json, published
+from site/public/demo/); every form (https button page, frameport://, framedrop://, pasted) → `InstallRequest.demo`,
+no network (fetch_manifest returns `demo_manifest()`, download refuses), `link_dialog.show_demo` (Install =
+`easter.demo_install`: Cool Game's cover out of the portal; eggs off → "Nice, it works!"), CLI just says so.
 
 ## Releases, CI, GitHub
 Maintainer-only notes (accounts, credentials, key locations) live in the git-ignored `CLAUDE.local.md`.

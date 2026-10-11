@@ -21,10 +21,12 @@ import { DOWNLOADS, downloadPage, url } from '../../data/site';
       <article class="item" data-item hidden>
         <div class="item-icon" data-icon aria-hidden="true"><Glyph name="frame" size={30} /></div>
         <div class="item-text">
-          <p class="item-kicker">This link installs</p>
+          <p class="item-kicker">This link installs <span class="demo-tag" data-demo hidden>Demo link</span></p>
           <h1 data-name>…</h1>
           <p class="item-desc" data-desc hidden></p>
           <p class="item-from"><span data-files></span> <span class="from">from <b data-host></b></span></p>
+          <p class="demo-note" data-demo hidden>This is the example button from frameport.app: use it to check that
+            FramePort receives install links. Real buttons install real games.</p>
         </div>
       </article>
 
@@ -107,6 +109,10 @@ import { DOWNLOADS, downloadPage, url } from '../../data/site';
     $('[data-files]').textContent = parsed.kind === 'url' ? '' : 'A manifest';
     $('[data-item]').hidden = false;
     document.title = `Install ${parsed.kind === 'url' ? fileName : 'with FramePort'}`;
+    if (parsed.demo) {
+      page.querySelectorAll<HTMLElement>('[data-demo]').forEach((el) => { el.hidden = false; });
+      $('[data-name]').textContent = 'Cool Game';
+    }
 
     // the manifest's own name and description, when its host allows reading it from a page (CORS)
     if (parsed.kind === 'manifest') {
@@ -173,6 +179,9 @@ import { DOWNLOADS, downloadPage, url } from '../../data/site';
   .item-desc { color: var(--text-2); white-space: pre-line; }
   .item-from { font: 400 13px/1.5 var(--font-mono); color: var(--text-2); overflow-wrap: anywhere; }
   .item-from b { color: var(--text); font-weight: 500; }
+  .demo-tag { margin-left: 8px; padding: 3px 8px; border-radius: 20px; letter-spacing: .08em; color: var(--secondary);
+    background: var(--secondary-soft); }
+  .demo-note { font-size: 14px; color: var(--text-2); }
 
   [data-when] { display: none; }
   .page[data-state="opening"] [data-when~="opening"],

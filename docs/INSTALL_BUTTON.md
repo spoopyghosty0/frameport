@@ -90,6 +90,18 @@ not clickable. Use the `https://frameport.app/install?…` link:
 
 Use the animated or still SVG: GitHub shows SVGs as images, so the hover version doesn't react there.
 
+## Testing your setup
+
+The example button on [frameport.app](https://frameport.app/#button) uses a demo link:
+
+```
+https://frameport.app/install/?manifest=https%3A%2F%2Fframeport.app%2Fdemo%2Fcool-game.json
+```
+
+Click it to check that FramePort receives install links on your PC. FramePort recognises this one address and shows
+a demo install question for a placeholder game, "Cool Game"; nothing is downloaded, added to the library or
+installed (`frameport open-link` says it's the demo link and stops). Real buttons install real games.
+
 ## If a visitor doesn't have FramePort
 
 The `https://frameport.app/install?…` link handles this: its page offers the download and a second try. A bare

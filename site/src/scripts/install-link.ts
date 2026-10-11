@@ -3,7 +3,20 @@
 // lookups here: the app checks where a name resolves right before it downloads.
 
 export type Kind = 'manifest' | 'url';
-export type Parsed = { ok: true; kind: Kind; target: string; link: string } | { ok: false; error: string };
+export type Parsed = { ok: true; kind: Kind; target: string; link: string; demo: boolean } | { ok: false; error: string };
+
+/** The homepage's example button installs this placeholder manifest (public/demo/cool-game.json); the app knows it
+ * (deeplink.DEMO_MANIFEST) and only shows a demo, nothing is downloaded. */
+export const DEMO_MANIFEST = 'https://frameport.app/demo/cool-game.json';
+
+/** Whether a manifest address is the demo one (deeplink.is_demo: https, frameport.app, that path, nothing else). */
+export function isDemo(text: string): boolean {
+  let url: URL;
+  try { url = new URL(text.trim()); } catch { return false; }
+  return url.protocol === 'https:' && (url.hostname === 'frameport.app' || url.hostname === 'www.frameport.app')
+    && !url.port && !url.username && !url.password && url.pathname === new URL(DEMO_MANIFEST).pathname
+    && !url.search && !url.hash;
+}
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 const APP_FILES = ['.apk', '.exe', '.zip', '.tar.gz', '.tgz', '.tar.xz', '.txz', '.tar.bz2', '.tar', '.appimage'];
@@ -66,7 +79,8 @@ export function parseInstallParams(search: string): Parsed {
   const file = q.get('url')?.trim();
   if (manifest) {
     const error = checkUrl(manifest, 'manifest address');
-    return error ? { ok: false, error } : { ok: true, kind: 'manifest', target: manifest, link: toFrameportLink('manifest', manifest) };
+    if (error) return { ok: false, error };
+    return { ok: true, kind: 'manifest', target: manifest, link: toFrameportLink('manifest', manifest), demo: isDemo(manifest) };
   }
   if (file) {
     const error = checkUrl(file, 'file address');
@@ -75,7 +89,7 @@ export function parseInstallParams(search: string): Parsed {
     if (!APP_FILES.some((ext) => name.endsWith(ext))) {
       return { ok: false, error: 'The file address must point to an APK, a Windows program (.exe) or a Linux app (zip, tar or AppImage).' };
     }
-    return { ok: true, kind: 'url', target: file, link: toFrameportLink('url', file) };
+    return { ok: true, kind: 'url', target: file, link: toFrameportLink('url', file), demo: false };
   }
   return { ok: false, error: "The link doesn't say what to install (no manifest= or url=)." };
 }

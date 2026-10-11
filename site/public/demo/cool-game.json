@@ -1,0 +1,11 @@
+{
+  "schema": "framedrop.install/v1",
+  "name": "Cool Game",
+  "frameport": {
+    "description": "A placeholder game for the example \"Install with FramePort\" button. FramePort recognises this link and shows a demo: nothing is downloaded or installed.",
+    "icon": "https://frameport.app/demo/cool-game.svg"
+  },
+  "files": [
+    { "url": "https://frameport.app/demo/cool-game-arm64.apk" }
+  ]
+}

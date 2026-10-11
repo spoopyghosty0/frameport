@@ -210,3 +210,17 @@ def test_charge_ring_empties_at_once_then_refills():
     steps = easter.ring_fill_steps(fill=0.4, dt=0.025)
     assert steps[0] == 0.0 and steps[-1] == 1.0  # empty at once (no draining), full at the end
     assert steps == sorted(steps) and len(steps) == 17  # then only filling, in 0.4 s
+
+
+@pytest.mark.parametrize("eggs, reduce, finale", [
+    (True, False, "toss"), (True, True, "words"), (False, False, "plain"), (False, True, "plain"),
+])
+def test_demo_link_finale(eggs, reduce, finale):
+    assert easter.demo_finale(eggs, reduce) == finale
+    assert "nothing" in easter.demo_message(finale)
+    assert ("Nice, it works" in easter.demo_message(finale)) == (finale == "plain")
+
+
+def test_demo_link_is_listed_in_the_docstring():
+    assert 'example "Install with FramePort"' in easter.__doc__
+    assert "show_demo" in easter.__doc__
