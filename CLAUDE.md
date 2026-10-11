@@ -470,6 +470,56 @@ maps a symlink to the already-loaded module) gets past it to **-3021 = ovrError_
 an Oculus-signed runtime. Next step (not done): make the runtime check pass without Detours, e.g. an injected helper
 that patches the game's import table (IAT) for LoadLibrary*/WinVerifyTrust, or a prefix-level override. This is
 runtime interop (what Revive does), not the Platform SDK licence check (which FramePort never touches).
+**Rift via x86_64 Wine under FEX (research, 2026-10-08, headless on the dev Frame, SteamOS 0.4.5; no product code):**
+why Revive failed is confirmed upstream: x64 Detours returns ERROR_NOT_SUPPORTED on ARM64EC targets (microsoft/Detours
+PR #388; only an ARM64EC build of Detours can hook them). A fully x86_64 Wine avoids it: GE-Proton11-7 **x86_64** runs
+under the FEX tool (`fex-compat-tool run -- <x86 binary>`; RootFS /usr/share/guestos/fex-mesa, no FreeType there)
+— prefix boot 35 s, kernelbase.dll is x86-64. Proton's script needs help without the x86_64 SLR (app 4183110, not
+installed): its Python runs natively (the RootFS has none), so `files/bin/wine{,server}` and the two direct
+`wine-preloader` argv calls must go through a FEX wrapper that also unsets `FEX_APP_CONFIG(_LOCATION)` (Proton sets
+them on aarch64 for its own ARM64EC FEX → "RootFS path set to ''"); GE's game drive needs STEAM_COMPAT_INSTALL_PATH
+unset. SteamVR now ships `bin/linux64/vrclient.so` + `bin/vrclient.so` (i386) + `vrclient_x64.dll` (Oct 6 build; not
+there on 09-30): Proton's x86_64 vrclient bridge reaches the arm64 vrserver. **Rick and Morty ran as the scene app**
+("OpenVR initialized!", controller tracking, 9176 presents / 6 dropped, CPU 11.6 / GPU 17.9 ms, target 72).
+**ReviveInjector: "Succesfully injected!"**, LibRevive64.dll loaded next to OVRPlugin.dll in Lies Beneath, which then
+died on 0xc06d007e = delay-loaded `libovrplatform64_1.dll` (Platform SDK) before connecting to SteamVR — so Revive's
+signature hook and Revive→SteamVR are still unproven. Every Rift game in the library except Rick and Morty uses the
+Platform SDK → the Meta (Link) app in the prefix, logged in with the user's own account, is the real blocker; the
+only public attempt (github.com/michauMiau/oculus-wine-linux, 2026-10) never got OculusSetup.exe (32-bit .NET)
+past its HTTPS config fetch. Scratch files on the Frame: `~/frameport-rifttest/` (scripts t1-t4.sh).
+Meta runtime in the same Wine (2026-10-09): Platform SDK games reach OVRServer's IPC on the Frame. The apparent
+intermittent handshake hang was **OVRLibrarian.exe** (.NET, Wine Mono): under FEX it finishes its work but never exits,
+its AppTracker entry stays, and the runtime then tracks no later client (Meta app, game), so the game waits forever
+for the reply event the runtime only sets after identifying it (found with wineserver `+server` traces PC vs Frame).
+Ending OVRLibrarian before the game → game tracked, "Missing entitlement" exactly as on the PC (needs a login).
+Logged in (2026-10-09, owner's own account, browser sign-in; the `oculus://` answer had to be forwarded into the Wine
+app's `\\.\pipe\oculus`), the runtime also needed a WinRT `Windows.Devices.WiFi.WiFiAdapter` stand-in (Air Link code
+fail-fasts without it), Wine's DeviceWatcher add/remove_Updated/Removed implemented, and the C: volume name
+(`\\?\Volume{...0043}`) linked in dosdevices. Copying the logged-in `sessions/` + CoreData to the Frame prefix kept the
+login. **Oculus First Contact then ran in VR on the Frame** (Revive in OpenVR mode; `/openxr` failed in wineopenxr):
+scene app at 72 Hz target, but 92 % of frames "timed out" (game CPU-bound under FEX) → stutter/flicker/lag.
+Performance (2026-10-10, headless with patched Revive visibility + SteamVR `pauseCompositorOnStandby=false`, numbers from
+`IVRCompositor::GetFrameTimings`): the frame loop waited on sync round trips through the FEX-run x86_64 wineserver.
+`native/fexwine/`: a **native aarch64 wineserver** built from GE's exact source (protocol 938) + **ntsync** (works once
+OVRLibrarian is ended) took hitches 17 → 0-4 per 20 s. The rest were Unreal's large-block allocator committing,
+filling (one `rep stos`) and freeing 514 MB every 1-8 s: ~130k 4 KB page faults each under FEX. `fp_mem.so`
+(`FP_BIGCACHE_MB=256`, guest preload via `FEX_ENV=LD_PRELOAD=…`: fex-compat-tool deletes LD_PRELOAD) keeps that block
+→ 0 hitches, steady 36 fps + motion smoothing, ~5.5 % timed out. 72 fps would need ~30 % less GPU (game ~55 % busy
+at 36 fps); THP (fragmentation), MSAA off, Turnip gmem don't help. Also needed: Unreal's
+`Slate.DeferWindowsMessageProcessing` = 0 (exe patch; the default deadlocks Wine's IME window ~1/3 of starts).
+Headset (owner, 2026-10-10): with motion smoothing off for the game (SteamVR per-app `motionSmoothingOverride=2`:
+smoothing cost ~15 % GPU) "much much better", 95 % of frames new at 72 Hz; MSAA off (DXVK `d3d11.disableMsaa`, -25 %
+GPU) helped but the owner misses smooth edges → the game's MSAA CVar is `r.MobileMSAA` (Oculus' clustered-forward
+branch; no r.MSAACount in the exe), 2x untested. Headless tests need the headset worn once per boot (else "IMU
+fallback" and the game waits at startup forever).
+**Experimental mode on branch `rift-on-frame` (the owner's single linkable branch for this work):** CLI only,
+`FRAMEPORT_EXPERIMENTAL_FEX=1 frameport fex setup | import-login <signed-in PC prefix> | install [oculus-first-contact]
+[--msaa N] | status` (hidden group). PC `src/frameport/fexrift.py` uploads `agent/fexrift.py` + `artifacts/fexrift`
+(sources native/fexwine) + Revive 3.2.0 with 6 byte patches (refused for other builds); the Frame helper downloads
+GE-Proton11-7 x86_64 (SHA-512), x86 GnuTLS (Arch archive), installs Meta's runtime (Meta's signature checks kept) and
+writes the game's launcher. Agent v77 `fex_prepare/status/setup/import_login/install`, kind `frame_fex` (uninstall
+keeps the shared prefix; launch tests refused). Everything under `~/.local/share/frameport/fexrift` (purge removes it,
+login tokens included). Not yet run end to end on the device; the login still comes from a PC prefix signed in by hand.
 Uninstall (Quest, saves kept) used to leave `deployment.json` → still "installed"; fixed (agent v16).
 
 **Discovery/network:** Developer-Mode SteamOS devices announce `_steamos-devkit._tcp` (TXT `login=steamos`) — use it;

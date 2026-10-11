@@ -1,0 +1,118 @@
+diff --git a/dlls/sechost/trace.c b/dlls/sechost/trace.c
+--- a/dlls/sechost/trace.c
++++ b/dlls/sechost/trace.c
+@@ -28,6 +28,7 @@
+ #include "evntrace.h"
+ 
+ #include "wine/debug.h"
++#include "wine/exception.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(eventlog);
+ 
+@@ -116,14 +117,63 @@
+     return ERROR_SUCCESS;
+ }
+ 
++/* A real-time consumer of a session.  No ETW providers exist under Wine, so the
++ * consumer never receives events: ProcessTrace() waits until CloseTrace(). */
++#define REALTIME_CONSUMER_MAGIC 0x52544345 /* "ECTR" */
++#ifndef PROCESS_TRACE_MODE_REAL_TIME
++#define PROCESS_TRACE_MODE_REAL_TIME 0x00000100 /* shares LogFileMode in Wine's header */
++#endif
++
++struct realtime_consumer
++{
++    DWORD  magic;
++    HANDLE closed;
++};
++
++static struct realtime_consumer *get_realtime_consumer( TRACEHANDLE handle )
++{
++    struct realtime_consumer *consumer = (struct realtime_consumer *)(ULONG_PTR)handle;
++
++    if (!handle || handle == INVALID_PROCESSTRACE_HANDLE) return NULL;
++    __TRY
++    {
++        if (consumer->magic != REALTIME_CONSUMER_MAGIC) consumer = NULL;
++    }
++    __EXCEPT_PAGE_FAULT
++    {
++        consumer = NULL;
++    }
++    __ENDTRY
++    return consumer;
++}
++
+ /******************************************************************************
+  *     OpenTraceW   (sechost.@)
+  */
+ TRACEHANDLE WINAPI OpenTraceW( EVENT_TRACE_LOGFILEW *logfile )
+ {
+     static int once;
++    struct realtime_consumer *consumer;
+ 
+-    if (!once++) FIXME("%p: stub\n", logfile);
++    /* a session name without a log file can only be consumed in real time */
++    if (logfile && logfile->LoggerName &&
++        ((logfile->LogFileMode & PROCESS_TRACE_MODE_REAL_TIME) || !logfile->LogFileName))
++    {
++        FIXME("%p (%s): real-time consumer without events\n", logfile, debugstr_w(logfile->LoggerName));
++        if (!(consumer = HeapAlloc( GetProcessHeap(), 0, sizeof(*consumer) )))
++        {
++            SetLastError(ERROR_NOT_ENOUGH_MEMORY);
++            return INVALID_PROCESSTRACE_HANDLE;
++        }
++        consumer->magic = REALTIME_CONSUMER_MAGIC;
++        consumer->closed = CreateEventW( NULL, TRUE, FALSE, NULL );
++        return (TRACEHANDLE)(ULONG_PTR)consumer;
++    }
++
++    if (!once++) FIXME("%p: stub (logfile %s, logger %s, mode %#lx)\n", logfile,
++                       logfile ? debugstr_w(logfile->LogFileName) : "-",
++                       logfile ? debugstr_w(logfile->LoggerName) : "-",
++                       logfile ? logfile->LogFileMode : 0);
+     SetLastError(ERROR_ACCESS_DENIED);
+     return INVALID_PROCESSTRACE_HANDLE;
+ }
+@@ -133,6 +183,25 @@
+  */
+ ULONG WINAPI ProcessTrace( TRACEHANDLE *handles, ULONG count, FILETIME *start_time, FILETIME *end_time )
+ {
++    HANDLE events[MAXIMUM_WAIT_OBJECTS];
++    ULONG i;
++
++    if (handles && count && count <= MAXIMUM_WAIT_OBJECTS)
++    {
++        for (i = 0; i < count; i++)
++        {
++            struct realtime_consumer *consumer = get_realtime_consumer( handles[i] );
++            if (!consumer) break;
++            events[i] = consumer->closed;
++        }
++        if (i == count)
++        {
++            TRACE("%p %lu: waiting for CloseTrace\n", handles, count);
++            WaitForMultipleObjects( count, events, TRUE, INFINITE );
++            return ERROR_SUCCESS;
++        }
++    }
++
+     FIXME("%p %lu %p %p: stub\n", handles, count, start_time, end_time);
+     return ERROR_CALL_NOT_IMPLEMENTED;
+ }
+@@ -142,6 +211,15 @@
+  */
+ ULONG WINAPI CloseTrace( TRACEHANDLE handle )
+ {
++    struct realtime_consumer *consumer = get_realtime_consumer( handle );
++
++    if (consumer)
++    {
++        /* the handle stays allocated: ProcessTrace() may still be waiting on it */
++        SetEvent( consumer->closed );
++        return ERROR_SUCCESS;
++    }
++
+     FIXME("%s: stub\n", wine_dbgstr_longlong(handle));
+     return ERROR_INVALID_HANDLE;
+ }
