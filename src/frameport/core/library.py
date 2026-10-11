@@ -348,7 +348,49 @@ def _migrate(data: dict) -> bool:
                 r.setdefault("reasons", {}).setdefault(
                     "frame.hw_video_decode", "Its cutscenes are 8K HEVC video: decode them on the Frame's hardware.")
                 r["reasons"].setdefault("adapter.surface_native", "Shows its cutscenes as stereo panoramas.")
-        done.append("batman_video_patches")
+    if "meta_spatial_permissions" not in done:
+        # Apps that use Meta scene/spatial permissions gain frame.meta_permissions by default
+        from ..patches import base
+
+        for g in (data.get("games") or {}).values():
+            a, r = g.get("analysis") or {}, g.get("recipe")
+            if not isinstance(r, dict) or (a.get("extra") or {}).get("kind") == "rift" or r.get("as_is"):
+                continue
+            try:
+                an = analysis_from_dict(a)
+            except Exception:  # noqa: BLE001
+                continue
+            s = base.get("frame.meta_permissions").detect(an)
+            if s and s.recommended:
+                r.setdefault("patches", {}).setdefault("frame.meta_permissions", {})
+                r.setdefault("reasons", {}).setdefault("frame.meta_permissions", s.reason)
+        done.append("meta_spatial_permissions")
+        changed = True
+    if "meta_depth_occlusion" not in done:
+        # Apps that use Meta depth occlusion gain frame.meta_depth_occlusion by default
+        from ..patches import base
+        from ..recommend import catalog
+
+        for pkg, g in (data.get("games") or {}).items():
+            a, r = g.get("analysis") or {}, g.get("recipe")
+            if not isinstance(r, dict) or (a.get("extra") or {}).get("kind") == "rift" or r.get("as_is"):
+                continue
+            entry = catalog.lookup(pkg)
+            if entry and "frame.meta_depth_occlusion" in entry.frame:
+                r.setdefault("patches", {}).setdefault("frame.meta_depth_occlusion", {})
+                r.setdefault("reasons", {}).setdefault(
+                    "frame.meta_depth_occlusion", "Disables missing Meta depth sensor occlusion."
+                )
+            else:
+                try:
+                    an = analysis_from_dict(a)
+                    s = base.get("frame.meta_depth_occlusion").detect(an)
+                    if s and s.recommended:
+                        r.setdefault("patches", {}).setdefault("frame.meta_depth_occlusion", {})
+                        r.setdefault("reasons", {}).setdefault("frame.meta_depth_occlusion", s.reason)
+                except Exception:  # noqa: BLE001
+                    pass
+        done.append("meta_depth_occlusion")
         changed = True
     if "a32_bridge_on" not in done:
         # 32-bit games get the 32-bit bridge, also recipes the user edited before it existed (without it they can't
@@ -404,7 +446,6 @@ def _a32_bridge_on(g: dict) -> bool:
         return False
     g["recipe"] = recipe_to_dict(rec)
     return True
-
 
 BATMAN = "com.camouflaj.manta"
 
