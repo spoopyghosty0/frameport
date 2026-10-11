@@ -44,7 +44,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 75
+AGENT_VERSION = 76
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -737,6 +737,12 @@ def ensure_host_fixes():
         overlays = []
     if overlays:
         changed.append(f"SteamVR overlay apps registered ({len(overlays)})")
+    try:
+        service = ensure_overlay_service()
+    except Exception:  # noqa: BLE001
+        service = None
+    if service:
+        changed.append(f"overlay autostart service {service}")
     return changed
 
 
@@ -2513,6 +2519,7 @@ def cmd_register_vr_overlay(args):
     out = register_overlay(pkg, bool(args.get("autostart")))
     dep["overlay"]["registered"] = out["registered"]
     write_deployment(pkg, dep)
+    out["service"] = overlay_service_quiet()
     return out
 
 
@@ -2523,6 +2530,7 @@ def cmd_unregister_vr_overlay(args):
     if dep and "overlay" in dep:
         dep.pop("overlay")
         write_deployment(pkg, dep)
+    overlay_service_quiet()
     return {"unregistered": True, "steamvr": reached}
 
 
@@ -2554,6 +2562,15 @@ def cmd_launch_vr_overlay(args):
     return {"started": not err, "pid": pid or None, "error": err}
 
 
+def overlay_service_quiet():
+    """ensure_overlay_service() after an overlay app's autostart flag changed; a systemd problem never fails the
+    command (ensure_host_fixes tries again at the next connection)."""
+    try:
+        return ensure_overlay_service()
+    except Exception as exc:  # noqa: BLE001
+        return f"error: {exc}"
+
+
 def overlay_registrations():
     """Register overlay apps whose registration is missing (SteamVR wasn't running at install, or forgot it)."""
     done = []
@@ -2579,6 +2596,259 @@ def overlay_registrations():
                 write_deployment(dep["package"], dep)
                 done.append(dep["package"])
     return done
+
+
+# ------------------------------------------------------------------------------------------ overlay autostart (v76)
+# SteamVR's own auto-launch flag (SetApplicationAutoLaunch) was accepted on the dev Frame but never written to
+# steamvr.vrsettings, and a registered watch didn't start by itself (2026-10-10). FramePort's deployment flag
+# (overlay.autostart) is the source of truth: a small user service (only while at least one installed overlay app has
+# autostart on) notices every new vrserver process (SteamVR start or restart, boot), waits until SteamVR answers,
+# gives SteamVR's own auto-launch a moment, then starts each autostart overlay app that isn't running yet, the same
+# way launch_vr_overlay does (LaunchApplication: SteamVR spawns it, in its own environment). Off for every app: the
+# flag file VR_OVERLAY_DISABLED or FRAMEPORT_NO_OVERLAY_AUTOSTART=1 (the service is then removed).
+VR_OVERLAY_UNIT = "frameport-vr-overlays"
+SYSTEMD_USER_DIR = os.path.join(HOME, ".config/systemd/user")
+VR_OVERLAY_UNIT_PATH = os.path.join(SYSTEMD_USER_DIR, VR_OVERLAY_UNIT + ".service")
+VR_OVERLAY_DISABLED = os.path.join(HOME, ".local/share/frameport/vr-overlays.disabled")
+VR_OVERLAY_LOG = os.path.join(HOME, ".local/share/frameport/vr-overlays.log")
+VR_OVERLAY_STATE = os.path.join(HOME, ".cache/frameport-vr-overlays.json")
+VR_OVERLAY_LOG_MAX = 128 * 1024
+VR_OVERLAY_POLL = 5  # s between /proc scans (nothing else happens while SteamVR keeps running)
+VR_OVERLAY_READY_WAIT = 180  # s for a new SteamVR to answer IVRApplications
+VR_OVERLAY_GRACE = 15  # s after SteamVR answers: its own auto-launch may start the app first
+
+
+def overlay_autostart_disabled():
+    return os.environ.get("FRAMEPORT_NO_OVERLAY_AUTOSTART", "0") not in ("", "0") or \
+        os.path.exists(VR_OVERLAY_DISABLED)
+
+
+def autostart_overlays():
+    """Installed overlay apps whose deployment has autostart on: [(package, deployment)]."""
+    found = []
+    for dep_path in sorted(glob.glob(os.path.join(ANCHORS, "*/deployment.json"))):
+        try:
+            dep = json.load(open(dep_path))
+        except (OSError, ValueError):
+            continue
+        if isinstance(dep, dict) and dep.get("package") and (dep.get("overlay") or {}).get("autostart"):
+            dep.setdefault("base", os.path.dirname(dep_path))
+            found.append((dep["package"], dep))
+    return found
+
+
+def systemd_quote(arg):
+    """One ExecStart= word (systemd's own quoting: double quotes, % and $ doubled)."""
+    arg = arg.replace("%", "%%").replace("$", "$$")
+    if re.fullmatch(r"[A-Za-z0-9_./+:=@-]+", arg):
+        return arg
+    return '"' + arg.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def vr_overlay_unit():
+    """The user service's unit text (the agent's path and Python are written in: the agent lives in AGENT_HOME)."""
+    agent = os.path.abspath(__file__)
+    return ("[Unit]\n"
+            "Description=FramePort: start SteamVR overlay apps with SteamVR\n"
+            "\n[Service]\n"
+            "Type=simple\n"
+            f"ExecStart={systemd_quote(sys.executable or '/usr/bin/python3')} {systemd_quote(agent)} "
+            "_vr_overlay_watch\n"
+            "Restart=always\n"
+            "RestartSec=10\n"
+            "Nice=10\n"
+            "\n[Install]\n"
+            "WantedBy=default.target\n")
+
+
+def user_systemctl(*args):
+    return run(["systemctl", "--user", *args])
+
+
+def ensure_overlay_service():
+    """Install (or update) the overlay autostart service when an installed overlay app has autostart on, remove it
+    when none has (or the kill switch is set). Returns "installed", "updated", "removed" or None (no change)."""
+    want = bool(autostart_overlays()) and not overlay_autostart_disabled()
+    text = vr_overlay_unit()
+    try:
+        current = open(VR_OVERLAY_UNIT_PATH).read()
+    except OSError:
+        current = None
+    if not want:
+        if current is None:
+            return None
+        user_systemctl("disable", "--now", VR_OVERLAY_UNIT + ".service")
+        try:
+            os.remove(VR_OVERLAY_UNIT_PATH)
+        except OSError:
+            pass
+        user_systemctl("daemon-reload")
+        user_systemctl("reset-failed", VR_OVERLAY_UNIT + ".service")
+        return "removed"
+    if current == text:
+        if user_systemctl("is-active", "--quiet", VR_OVERLAY_UNIT + ".service").returncode == 0:
+            return None
+        user_systemctl("enable", "--now", VR_OVERLAY_UNIT + ".service")
+        return "started"
+    os.makedirs(SYSTEMD_USER_DIR, exist_ok=True)
+    tmp = VR_OVERLAY_UNIT_PATH + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.replace(tmp, VR_OVERLAY_UNIT_PATH)
+    user_systemctl("daemon-reload")
+    user_systemctl("enable", VR_OVERLAY_UNIT + ".service")
+    user_systemctl("restart", VR_OVERLAY_UNIT + ".service")
+    return "installed" if current is None else "updated"
+
+
+def overlay_log(msg):
+    try:
+        os.makedirs(os.path.dirname(VR_OVERLAY_LOG), exist_ok=True)
+        if os.path.exists(VR_OVERLAY_LOG) and os.path.getsize(VR_OVERLAY_LOG) > VR_OVERLAY_LOG_MAX:
+            os.replace(VR_OVERLAY_LOG, VR_OVERLAY_LOG + ".1")
+        with open(VR_OVERLAY_LOG, "a") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except OSError:
+        pass
+
+
+def vrserver_ident(pid):
+    """"<pid>:<start ticks>" when process `pid` is a vrserver (the start time tells a reused pid apart), else None."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            stat = f.read()
+    except OSError:
+        return None
+    if stat[stat.find("(") + 1:stat.rfind(")")] != "vrserver":
+        return None
+    return f"{pid}:{stat[stat.rfind(')') + 2:].split()[19]}"
+
+
+def vrserver_process(known=None):
+    """The running vrserver's vrserver_ident, None if none. `known` (the last one seen) is checked first: while
+    SteamVR keeps running a poll reads one file instead of scanning /proc."""
+    if known and vrserver_ident(known.split(":")[0]) == known:
+        return known
+    for d in os.listdir("/proc"):
+        if d.isdigit():
+            found = vrserver_ident(d)
+            if found:
+                return found
+    return None
+
+
+def overlay_running(pkg, dep, apps=None):
+    """The overlay app runs already: a process of its install folder or launcher (also when Steam or SteamVR started
+    it), or SteamVR knows its process (GetApplicationProcessId)."""
+    if pcvr_pids(dep.get("base") or os.path.join(ANCHORS, pkg)) or pcvr_pids(os.path.join(ANCHORS, pkg)):
+        return True
+    if apps is not None:
+        try:
+            return bool(apps.pid(dep_overlay_key(pkg, dep)))
+        except Exception:  # noqa: BLE001
+            return False
+    return False
+
+
+def overlay_autostart_round():
+    """One new SteamVR: wait until it answers, give its own auto-launch a moment, then start each autostart overlay
+    app that isn't running. Returns {package: "started" | "running" | error text}; {} without SteamVR."""
+    deadline = time.time() + VR_OVERLAY_READY_WAIT
+    apps = SteamVRApps.open()
+    while apps is None and time.time() < deadline:
+        time.sleep(3)
+        apps = SteamVRApps.open()
+    if apps is None:
+        overlay_log("SteamVR didn't answer: nothing started")
+        return {}
+    try:
+        time.sleep(VR_OVERLAY_GRACE)
+        todo = [(pkg, dep) for pkg, dep in autostart_overlays() if not overlay_running(pkg, dep, apps)]
+        result = {pkg: "running" for pkg, _ in autostart_overlays() if pkg not in dict(todo)}
+    finally:
+        apps.close()
+    for pkg, _ in todo:
+        try:
+            r = cmd_launch_vr_overlay({"package": pkg})
+            result[pkg] = "started" if r.get("started") else (r.get("error") or "not started")
+        except Exception as exc:  # noqa: BLE001
+            result[pkg] = str(exc) or type(exc).__name__
+    return result
+
+
+def overlay_watch_tick(state):
+    """One poll of the watcher: a vrserver not handled before (state["vrserver"]) gets one autostart round. Returns
+    the round's result, or None when there was nothing to do."""
+    if overlay_autostart_disabled():
+        return None
+    proc = vrserver_process(state.get("vrserver"))
+    if not proc or proc == state.get("vrserver"):
+        return None
+    state["vrserver"] = proc
+    overlay_save_state(state)  # a restarted watcher (agent update) doesn't start apps the user closed again
+    if not autostart_overlays():
+        return None
+    overlay_log(f"new SteamVR (vrserver {proc.split(':')[0]})")
+    result = run_overlay_round()
+    for pkg, what in result.items():
+        overlay_log(f"{pkg}: {what}" if what in ("started", "running") else f"{pkg}: couldn't start it: {what}")
+    state["last"] = {"time": time.time(), "result": result}
+    overlay_save_state(state)
+    return result
+
+
+def run_overlay_round():
+    """overlay_autostart_round() in a child process (_vr_overlay_round): OpenVR is loaded only there, and a SteamVR
+    that never answers can't hang the watcher (timeout)."""
+    try:
+        p = subprocess.run([sys.executable, os.path.abspath(__file__), "_vr_overlay_round"], capture_output=True,
+                           text=True, errors="replace", timeout=VR_OVERLAY_READY_WAIT + VR_OVERLAY_GRACE + 120)
+    except subprocess.TimeoutExpired:
+        return {"*": "timed out"}
+    try:
+        out = json.loads(p.stdout.strip().splitlines()[-1])
+        return out if isinstance(out, dict) else {}
+    except (ValueError, IndexError):
+        return {"*": (p.stderr.strip().splitlines() or [f"exit {p.returncode}"])[-1]}
+
+
+def overlay_save_state(state):
+    try:
+        os.makedirs(os.path.dirname(VR_OVERLAY_STATE), exist_ok=True)
+        with open(VR_OVERLAY_STATE + ".tmp", "w") as f:
+            json.dump(state, f)
+        os.replace(VR_OVERLAY_STATE + ".tmp", VR_OVERLAY_STATE)
+    except OSError:
+        pass
+
+
+def vr_overlay_watch():
+    """The service's loop (_vr_overlay_watch): a /proc scan every VR_OVERLAY_POLL s. Exits when its own file changes
+    (an agent update: systemd starts the new one)."""
+    me = os.path.abspath(__file__)
+    try:
+        mine = os.path.getmtime(me)
+    except OSError:
+        mine = None
+    try:
+        state = json.load(open(VR_OVERLAY_STATE))
+        state = state if isinstance(state, dict) else {}
+    except (OSError, ValueError):
+        state = {}
+    overlay_log(f"watching (agent v{AGENT_VERSION}, overlay apps with autostart: "
+                f"{', '.join(p for p, _ in autostart_overlays()) or 'none'})")
+    while True:
+        try:
+            if os.path.getmtime(me) != mine:
+                overlay_log("agent updated: restarting")
+                return
+        except OSError:
+            return
+        try:
+            overlay_watch_tick(state)
+        except Exception as exc:  # noqa: BLE001 (keep watching)
+            overlay_log(f"error: {exc}")
+        time.sleep(VR_OVERLAY_POLL)
 
 
 def cmd_prepare(args):
@@ -4607,6 +4877,8 @@ def cmd_uninstall(args):
         for name in ("deployment.json", "launch.sh", "artwork", "launch.log", "launch-test.log", "session.log"):
             p = os.path.join(anchor, name)
             remove_tree(p)
+    if is_overlay(dep):
+        overlay_service_quiet()  # the last autostart overlay app gone: the service goes too
     return {"removed": True, "kept_saves": keep_data, "shortcut_removed": removed_sc}
 
 
@@ -5560,6 +5832,14 @@ def purge_worker(payload):
                     result["removed"].append(f"SteamVR overlay: {d.get('title')}")
                 except Exception as exc:  # noqa: BLE001
                     result["errors"].append(f"{d.get('title')}: {exc}")
+        try:  # the overlay autostart service runs this agent: it goes before AGENT_HOME does
+            if os.path.exists(VR_OVERLAY_UNIT_PATH):
+                user_systemctl("disable", "--now", VR_OVERLAY_UNIT + ".service")
+                os.remove(VR_OVERLAY_UNIT_PATH)
+                user_systemctl("daemon-reload")
+                result["removed"].append(VR_OVERLAY_UNIT_PATH)
+        except Exception as exc:  # noqa: BLE001
+            result["errors"].append(f"overlay autostart service: {exc}")
         try:
             service = stop_steam()
         except AgentError as exc:
@@ -6794,6 +7074,12 @@ COMMANDS = {n[4:]: f for n, f in globals().items() if n.startswith("cmd_")}
 def main():
     if len(sys.argv) >= 2 and sys.argv[1] == "_keyboard":
         return keyboard_session(sys.stdin, sys.stdout)
+    if len(sys.argv) >= 2 and sys.argv[1] == "_vr_overlay_watch":
+        vr_overlay_watch()
+        return
+    if len(sys.argv) >= 2 and sys.argv[1] == "_vr_overlay_round":
+        print(json.dumps(overlay_autostart_round()), flush=True)
+        return
     if len(sys.argv) >= 2 and sys.argv[1] == "_monitor":
         return monitor_session(sys.stdin, sys.stdout)
     if len(sys.argv) >= 3 and sys.argv[1] == "_shortcuts_worker":
