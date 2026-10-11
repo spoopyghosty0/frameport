@@ -135,6 +135,18 @@ def test_login_archive_members_are_checked(fx, tmp_path):
         list(fx.safe_members(tar_with("sessions/link", "sym")))
 
 
+def test_fixes_reg_has_meta_library_and_root(fx):
+    der = (ROOT / "artifacts" / "fexrift" / "digicert-assured-id-root-ca.der").read_bytes()
+    reg = fx.fixes_reg(der)
+    assert "\r\n" in reg and fx.DIGICERT_ROOT_SHA1 in reg
+    # Meta's default library exactly as Meta's app writes it in user.reg (lab prefix, where imported games run)
+    assert f'"DefaultLibrary"="{fx.LIBRARY_GUID}"' in reg
+    assert '"OriginalPath"="C:\\\\Program Files\\\\Meta Horizon\\\\Software"' in reg
+    assert ('"Path"="\\\\\\\\?\\\\Volume{00000000-0000-0000-0000-000000000043}\\\\Program Files\\\\Meta Horizon'
+            '\\\\Software"') in reg
+    assert "Windows.Devices.WiFi.WiFiAdapter" in reg and "[HKEY_LOCAL_MACHINE\\Software\\Revive]" in reg
+
+
 def test_status_without_setup(fx):
     st = fx.cmd_status({})
     assert st["proton"] is False and st["prefix"] is False and st["login"] is False and st["apps"] == []

@@ -345,6 +345,7 @@ def step_meta():
 
 
 DIGICERT_ROOT_SHA1 = "0563B8630D62D75ABBC8AB1E4BDFB5A899B24D43"   # DigiCert Assured ID Root CA (public)
+LIBRARY_GUID = "4f1d6a2e-8c3b-4e57-9a61-f7a0e5d2c814"            # FramePort's id for Meta's default library
 
 
 def step_fixes():
@@ -352,6 +353,24 @@ def step_fixes():
     der = open(os.path.join(HERE, "digicert-assured-id-root-ca.der"), "rb").read()
     if hashlib.sha1(der).hexdigest().upper() != DIGICERT_ROOT_SHA1:
         raise FexError("root certificate file damaged")
+    path = os.path.join(PFX, "drive_c", "frameport-fixes.reg")
+    with open(path, "w", encoding="utf-16") as f:
+        f.write(fixes_reg(der))
+    wine("regedit", "/S", r"C:\frameport-fixes.reg")
+    shutil.copyfile(os.path.join(HERE, "windows.devices.wifi.dll"),
+                    os.path.join(PFX, "drive_c", "windows", "system32", "windows.devices.wifi.dll"))
+    # the runtime tests its download folder through Wine's C: volume name
+    link = os.path.join(PFX, "dosdevices", "volume{00000000-0000-0000-0000-000000000043}")
+    if not os.path.lexists(link):
+        os.symlink("../drive_c", link)
+    os.makedirs(os.path.join(META_DIR, "Software", "Software"), exist_ok=True)
+    os.makedirs(os.path.join(META_DIR, "Software", "Manifests"), exist_ok=True)
+    wineserver_kill()
+    return "ok"
+
+
+def fixes_reg(der):
+    """The .reg text of step_fixes (regedit format, CRLF)."""
     blob = struct.pack("<III", 0x20, 1, len(der)) + der            # serialized store element: CERT_CERT_PROP_ID
     hexblob = ",".join(f"{b:02x}" for b in blob)
     revive_win = winpath(REVIVE).replace("\\", "\\\\")
@@ -366,25 +385,20 @@ def step_fixes():
         # Revive's action manifest is found through this key (else SteamVR legacy input: focus losses)
         r"[HKEY_LOCAL_MACHINE\Software\Revive]", f'@="{revive_win}"', "",
         r"[HKEY_LOCAL_MACHINE\Software\WOW6432Node\Revive]", f'@="{revive_win}"', "",
+        # Meta's default library (games Meta's app installs: Software\Software\<app> + Software\Manifests). Without
+        # it the runtime lists an imported game as "install_available" and the game waits forever at startup.
+        # Meta's app writes the path with the volume name of C: (Wine's mountmgr: Volume{...0043})
+        r"[HKEY_CURRENT_USER\Software\Oculus VR, LLC\Oculus\Libraries]", f'"DefaultLibrary"="{LIBRARY_GUID}"', "",
+        rf"[HKEY_CURRENT_USER\Software\Oculus VR, LLC\Oculus\Libraries\{LIBRARY_GUID}]",
+        '"OriginalPath"="C:\\\\Program Files\\\\Meta Horizon\\\\Software"',
+        '"Path"="\\\\\\\\?\\\\Volume{00000000-0000-0000-0000-000000000043}\\\\Program Files\\\\Meta Horizon\\\\Software"',
+        "",
         # Air Link code in the runtime needs a Windows.Devices.WiFi.WiFiAdapter class (FramePort's stand-in)
         r"[HKEY_LOCAL_MACHINE\Software\Microsoft\WindowsRuntime\ActivatableClassId\Windows.Devices.WiFi.WiFiAdapter]",
         '"DllPath"="C:\\\\windows\\\\system32\\\\windows.devices.wifi.dll"', '"ActivationType"=dword:00000000',
         '"Threading"=dword:00000000', "",
     ]) + "\r\n"
-    path = os.path.join(PFX, "drive_c", "frameport-fixes.reg")
-    with open(path, "w", encoding="utf-16") as f:
-        f.write(reg)
-    wine("regedit", "/S", r"C:\frameport-fixes.reg")
-    shutil.copyfile(os.path.join(HERE, "windows.devices.wifi.dll"),
-                    os.path.join(PFX, "drive_c", "windows", "system32", "windows.devices.wifi.dll"))
-    # the runtime tests its download folder through Wine's C: volume name
-    link = os.path.join(PFX, "dosdevices", "volume{00000000-0000-0000-0000-000000000043}")
-    if not os.path.lexists(link):
-        os.symlink("../drive_c", link)
-    os.makedirs(os.path.join(META_DIR, "Software", "Software"), exist_ok=True)
-    os.makedirs(os.path.join(META_DIR, "Software", "Manifests"), exist_ok=True)
-    wineserver_kill()
-    return "ok"
+    return reg
 
 
 STEPS = [("proton", step_proton), ("fex", step_fex_copy), ("dlls", step_dlls), ("tls", step_tls),
