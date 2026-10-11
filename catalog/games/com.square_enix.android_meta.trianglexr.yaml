@@ -1,0 +1,18 @@
+package: com.square_enix.android_meta.trianglexr
+title: TRIANGLE STRATEGY
+status: works
+notes: Works in XR, with and without Arcturus Vision color (switched while playing).
+tested_version: '1.0'
+engine: Unreal
+xr: OpenXR
+alt_overport:
+- patch_remove_unreal_force_quit
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-10'
+  known_good_sha256: 86e8297adeb4056eecfbc175438ef25387df67dd0a15ae79afbe6f2e67319a0c
+  app: 0.12.0
+  overport_cli: 1.2.5
+  issue: 171
+source_hint: com.square_enix.android_meta.trianglexr
