@@ -293,6 +293,19 @@ signatures:
     diagnosis: The game's Vivox voice-chat SDK calls Android 12 audio-routing methods (AudioManager communication devices) without checking the Android version; Lepton runs Android 11, so the app crashes (for example Green Hell VR). The patch makes Vivox's audio-route check return early (voice chat keeps the default route).
     suggest: [frame.vivox_audio_route]
     supersedes: [java-crash]
+  - id: unreal-obb-check-stuck
+    pattern: 'Displayed \S+/\S*DownloaderActivity\b'
+    # the downloader returned (the engine's main init resumed, OpenXR started) or the game crashed (its own finding)
+    unless: 'xrCreateInstance|xrCreateSession|FrameBridge: pacing:|Resuming main init|Fatal signal \d+|FATAL EXCEPTION'
+    severity: fatal
+    diagnosis: >-
+      The game stays on Unreal's OBB check screen (DownloaderActivity), which the Frame doesn't show, and never
+      starts VR (for example Contractors, GitHub #159). Unreal checks that the data file (.obb) has the name and size
+      this APK expects, and with bVerifyOBBOnStartUp it also reads the whole file to check it; a failed check waits
+      on an error screen. "Unreal - start without the OBB check" skips the content check. If the game still stops
+      here, the OBB doesn't match this APK version - copy the APK and the OBB from the same install, add the game
+      again and reinstall.
+    suggest: [frame.unreal_skip_obb_check]
   - id: native-crash
     pattern: 'Fatal signal (\d+) \(SIG[A-Z]+\)'
     severity: fatal

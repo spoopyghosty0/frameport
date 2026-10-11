@@ -789,6 +789,7 @@ with an index naming modules, `shader_dumps` sends every module of the index's *
 index lines; no index (fp_spirv) = the old newest-by-mtime 4 MB. One JSON line (~40 MB base64) over the SSH channel
 is read whole by `Frame.agent` (fine at that size); `_Writer.fit` drops the least recently used modules last, after
 cutting logs, to stay under the 24 MB zip limit.
+**Unreal OBB check (GitHub #159, 2026-10-10):** Epic's DownloaderActivity checks OBB name+size (OBBData), then with `bVerifyOBBOnStartUp=true` CRCs the whole OBB; its screens are invisible in Lepton (stuck at `Displayed …/.DownloaderActivity`, triage `unreal-obb-check-stuck`) → `frame.unreal_skip_obb_check` (analysis `unreal_verify_obb`, ANALYSIS_VERSION 11) flips the manifest boolean (`axml.set_meta_data_bool`); skips only the CRC pass. Host-tested only.
 **Vivox API 31 (GitHub #101, 2026-10-09):** newer Vivox builds (Green Hell VR) call Android 12 AudioManager
 communication-device methods from `com.vivox.sdk.AudioChangeListener` with no SDK check → NoSuchMethodError on Lepton's
 Android 11. `frame.vivox_audio_route` (analysis `vivox_api31`, ANALYSIS_VERSION 4) makes every such method return at

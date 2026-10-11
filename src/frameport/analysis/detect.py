@@ -31,7 +31,8 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 # 9: gamepad (the manifest declares gamepad support: android.hardware.gamepad / Android TV's LEANBACK_LAUNCHER:
 #    device.steam_gamepad) (2026-10)
 # 10: godot_clipboard (Godot 4.2-4.4's non-null ClipboardManager cast: frame.godot_clipboard) (2026-10)
-ANALYSIS_VERSION = 10
+# 11: unreal_verify_obb (Unreal's bVerifyOBBOnStartUp: frame.unreal_skip_obb_check, GitHub #159) (2026-10)
+ANALYSIS_VERSION = 11
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
@@ -61,6 +62,15 @@ UE_OBB_KEY = ".GameActivity.bHasOBBFiles"  # com.epicgames.ue4.… (UE4) / com.e
 def expects_obb(meta: dict) -> bool:
     """Unreal packaged the game's content as an OBB (expansion file) and opens it at start."""
     return any(k.endswith(UE_OBB_KEY) and v in (True, "true", "True") for k, v in meta.items())
+
+
+UE_VERIFY_OBB_KEY = ".GameActivity.bVerifyOBBOnStartUp"
+
+
+def unreal_verify_obb(meta: dict) -> bool:
+    """Unreal's DownloaderActivity checks every OBB entry's CRC at the first start (a full read; on a mismatch it waits
+    on an error screen). Only a real boolean counts: GameActivity reads it with Bundle.getBoolean."""
+    return any(k.endswith(UE_VERIFY_OBB_KEY) and v is True for k, v in meta.items())
 
 
 def _read_manifest_info(path: Path):
@@ -319,6 +329,8 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             # scene in one: without it the game hangs at start (GitHub #85, #92)
             "expects_obb": expects_obb(meta) or unity_split,
             "unity_split": unity_split,
+            # Unreal CRC-checks the OBB before the game starts (frame.unreal_skip_obb_check, GitHub #159)
+            "unreal_verify_obb": unreal_verify_obb(meta),
             # Unreal's Oculus module needs every OVRPlugin function it looks up (frame.unreal_ovrp_entrypoints)
             "unreal_ovrp_lookups": (ovrp_lookups(lib_bytes.get(engine_lib.rsplit("/", 1)[1], b""))
                                     if engine_lib and "libOVRPlugin.so" in libset else []),

@@ -75,6 +75,9 @@ def game_lines(log: str, package: str | None = None) -> list[str]:
             pids.add(m[1])
     if not pids:
         return lines
+    # system_server's lines about the game's activities (which one was started / shown), e.g. Unreal's
+    # DownloaderActivity (unreal-obb-check-stuck)
+    own_activity = re.compile(r"(Displayed |START u0 .*cmp=)" + re.escape(package) + "/")
     out = []
     for ln in lines:
         f = ln.split()
@@ -82,7 +85,8 @@ def game_lines(log: str, package: str | None = None) -> list[str]:
         # "Boot complete!", which the container-not-started signature checks for: it used to be dropped here)
         if not (len(f) > 3 and LOGCAT_LINE.match(ln) and f[2].isdigit()):
             out.append(ln)
-        elif f[2] in pids or "lepton" in ln.lower() or "APP_ACTIVITY" in ln or " FramePortVideo" in ln:
+        elif (f[2] in pids or "lepton" in ln.lower() or "APP_ACTIVITY" in ln or " FramePortVideo" in ln
+              or own_activity.search(ln)):
             # FramePortVideo: the hardware codec plugin logs from Android's media service, not the game's process
             out.append(ln)
     return out

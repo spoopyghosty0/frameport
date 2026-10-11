@@ -260,6 +260,24 @@ def meta_data(manifest: bytes) -> dict[str, str | int | bool | None]:
     return out
 
 
+def set_meta_data_bool(manifest: bytes, name_suffix: str, value: bool) -> bytes | None:
+    """Set the boolean android:value of every <meta-data> whose android:name ends with `name_suffix` (one 4-byte
+    value per element, nothing else moves). None when no such boolean entry differs from `value`. A string value
+    ("true") is left alone: Android's Bundle.getBoolean reads only real booleans."""
+    x = Axml(manifest)
+    names = x.strings()
+    hits = 0
+    for el in x.elements():
+        if el.name != "meta-data" or not (x.attr_str(el, "name") or "").endswith(name_suffix):
+            continue
+        for a in el.attrs:
+            if (a.name < len(names) and names[a.name] == "value" and a.dtype == TYPE_INT_BOOLEAN
+                    and (a.value != 0) != value):
+                struct.pack_into("<I", x.data, a.offset + 16, 0xFFFFFFFF if value else 0)
+                hits += 1
+    return x.bytes() if hits else None
+
+
 def categories(manifest: bytes) -> set[str]:
     x = Axml(manifest)
     return {v for el in x.elements() if el.name == "category" for v in [x.attr_str(el, "name")] if v}
