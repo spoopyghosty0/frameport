@@ -5,6 +5,7 @@ Errors are one line on stderr; FRAMEPORT_DEBUG=1 shows the traceback.
     frameport tools install                      # portable Java + OVRPort + apksigner
     frameport scan "<folder with game dumps>"    # analyze + suggest recipes
     frameport list | show <pkg> | patches
+    frameport rename <pkg> "<new name>"         # the name in the library and in Steam (--reset: automatic)
     frameport recipe <pkg> --enable frame.nodebug --set scale=1.2
     frameport build <pkg>|--all
     frameport frame discover | pair | info --frame steamos@frame.local
@@ -351,6 +352,45 @@ def show(package: str, as_json: bool = typer.Option(False, "--json", help=JSON_H
     if r.get("alt_patches"):
         which = "alt" if r["use_alt"] else "primary"
         typer.echo(f"  alternate build adds: {', '.join(r['alt_patches'])}  (installed: {which})")
+
+
+@app.command()
+def rename(package: str = typer.Argument(..., help="the game (package or part of its title)"),
+           title: Optional[str] = typer.Argument(None, help="the new name"),
+           reset: bool = typer.Option(False, "--reset", help="back to FramePort's own name (store or APK name)"),
+           sync: bool = typer.Option(True, "--sync/--no-sync",
+                                     help="also rename it in Steam where it's installed (Steam restarts once)"),
+           frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Rename a game in the library and in Steam. The name is kept from then on (scans and store lookups don't
+    change it); its Steam entry keeps its id, so Play, artwork and saves stay."""
+    [pkg] = _pkgs(package, False)
+    if reset == bool(title):
+        raise typer.BadParameter("give a new name or --reset")
+    if not reset and not pipeline.clean_title(title):
+        raise typer.BadParameter("the new name is empty")
+    before = library.game(pkg).get("title")
+    g = pipeline.rename_game(pkg, None if reset else title)
+    typer.echo(f"{pkg}: {before} -> {g['title']}" + ("" if g.get("title_locked") else " (automatic name)"))
+    if g["title"] == before or not sync:
+        if g.get("steam_name_stale"):
+            typer.echo("The Frame's Steam library keeps the old name until `frameport rename` runs with --sync or "
+                       "the game is installed again.")
+        return
+    from .targets.base import PC_LABEL
+
+    rep = printing_reporter(verbose=False)
+    installs = g.get("installs") or {}
+    if any(w != PC_LABEL for w in installs):
+        try:
+            pipeline.sync_title(pkg, _target(frame), rep)
+        except Exception as exc:  # noqa: BLE001 - the library name is saved either way
+            typer.echo(f"Steam on the Frame wasn't renamed ({exc}); run this again when the Frame is reachable.",
+                       err=True)
+    if g.get("kind") == "rift":
+        from .targets.pc_revive import local_installs
+
+        if pkg in local_installs():
+            pipeline.sync_title(pkg, _target(None, to="pc"), rep)
 
 
 @app.command()

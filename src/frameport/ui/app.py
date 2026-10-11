@@ -1100,6 +1100,7 @@ class FramePortApp:
             "settings": lambda e: self.settings_dialog(pkg),
             "screenshots": lambda e: self.go("screenshots", pkg),
             "files": lambda e: self.go("files", pkg),
+            "rename": lambda e: self.rename_game(pkg),
             "find_art": lambda e: self.find_artwork(pkg),
             "custom_art": lambda e: self.custom_artwork(pkg),
             "steam_art": lambda e: self.update_steam_art(pkg),
@@ -1576,8 +1577,7 @@ class FramePortApp:
     def update_steam_art(self, pkg: str) -> Job:
         """Send the game's current artwork to its Steam entry on the Frame (Steam restarts once)."""
         def run(job: Job):
-            self._target_for("frame").update_steam_art(pkg, job.reporter)
-            library.update_game(pkg, lambda e: e.pop("steam_art_stale", None))
+            pipeline.sync_title(pkg, self._target_for("frame"), job.reporter)  # the art, and a new name if any
             return tr("{title}: Steam artwork updated on the Frame").format(title=self._title(pkg))
         return self.submit(tr("Update Steam art: {title}").format(title=self._title(pkg)), run, pkg, "art")
 
@@ -1709,6 +1709,72 @@ class FramePortApp:
         C.confirm(self.page, tr("Remove {title} from the library?").format(title=title),
                   tr("Removes FramePort's entry. Anything installed on the Frame stays."), tr("Remove"), remove,
                   danger=True, extra=extra)
+
+    def rename_game(self, pkg: str) -> None:
+        """Rename…: a new name for the game in the library and in Steam (GitHub feature request: Quest games are
+        often named like their APK). The name is kept from then on; the automatic name brings the old behaviour."""
+        g = library.game(pkg)
+        if not g:
+            return
+        page = self.page
+        current = g.get("title") or pkg
+        field = C.field(label=tr("Name"), value=current, autofocus=True, width=T.DIALOG_S,
+                        max_length=pipeline.TITLE_MAX)
+        done = []
+
+        def save(e=None, value=None):
+            if done:  # Enter and the button at once: act once
+                return
+            done.append(True)
+            page.pop_dialog()
+            self._apply_rename(pkg, field.value if value is None else value)
+
+        def use(name):
+            return lambda e: save(value=name)
+
+        field.on_submit = save
+        rows: list[ft.Control] = [field]
+        suggestions = pipeline.title_suggestions(g)
+        if suggestions:
+            rows.append(C.meta(tr("Or use:")))
+            rows += [C.ghost(name, ft.Icons.HISTORY_ROUNDED, use(name),
+                             tooltip=tr("The store's name") if name == pipeline.store_title(g) else
+                             tr("FramePort's own name for it")) for name in suggestions]
+        page.show_dialog(C.dialog(tr("Rename {title}").format(title=current),
+                                  ft.Column(rows, spacing=T.S2, tight=True),
+                                  [C.ghost(tr("Cancel"), on_click=lambda e: page.pop_dialog()),
+                                   C.primary(tr("Save"), on_click=save)], size="s"))
+
+    def _apply_rename(self, pkg: str, value: str) -> None:
+        """Store the new name, then update the game's Steam entry where it's installed and reachable now (the Frame:
+        same shortcut, Steam restarts once; this PC's Steam for PC VR games). A Frame that isn't connected gets it
+        with the game page's "Update name on Frame" or the next install."""
+        before = (library.game(pkg) or {}).get("title")
+        try:
+            g = pipeline.rename_game(pkg, value)
+        except ValueError as exc:
+            self.toast(str(exc), error=True)
+            return
+        title = self._title(pkg)
+        if g.get("title") == before:
+            return
+        on_frame = self.frame_state == "connected" and \
+            C.install_state(g, self.frame_info) in ("installed", "outdated")
+        on_pc = g.get("kind") == "rift" and pkg in self.pc_installs()
+        if on_frame:
+            self.sync_title(pkg, "frame")
+        if on_pc:
+            self.sync_title(pkg, "pc")
+        self.toast(tr("Renamed to {title}. Steam restarts once to show it.").format(title=title)
+                   if on_frame or on_pc else tr("Renamed to {title}").format(title=title))
+        self.refresh_view()
+
+    def sync_title(self, pkg: str, to: str = "frame") -> Job:
+        """A job that gives the installed game its library name in Steam (pipeline.sync_title)."""
+        def run(job: Job):
+            pipeline.sync_title(pkg, self._target_for(to), job.reporter)
+            return tr("{title}: name updated in Steam").format(title=self._title(pkg))
+        return self.submit(tr("Rename in Steam: {title}").format(title=self._title(pkg)), run, pkg, "art", to=to)
 
     def _target_for(self, to: str):
         if to == "pc":

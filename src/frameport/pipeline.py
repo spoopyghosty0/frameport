@@ -25,7 +25,7 @@ from .core.paths import output_dir
 from .patches import upstream
 from .recommend import engine
 from .sources import quest_dump, rift_dump
-from .targets.base import Target
+from .targets.base import PC_LABEL, Target
 
 
 def add_path(path: Path, reporter: Reporter | None = None, on_added=None, force_rift: bool = False,
@@ -177,6 +177,8 @@ def add_rift_game(folder: Path, reporter: Reporter | None = None, tree=None, exe
         fields.update(recipe=library.recipe_to_dict(recipe), status=recipe.status)
     if not old or not (old.get("title_locked") or old.get("art_source") in ("oculusdb", "meta", "steam")):
         fields["title"] = recipe.title or a.label  # (store-matched titles are kept)
+    elif old.get("title_locked") and old.get("art_source") not in ("oculusdb", "meta", "steam"):
+        fields["auto_title"] = recipe.title or a.label  # the user's name stays; a reset brings this one
     stored = library.upsert_game(package, **fields)
     if art and not _has_art(package):
         _rift_art(stored, reporter)
@@ -208,8 +210,8 @@ def _rift_art(entry: dict, reporter: Reporter | None = None) -> dict:
         update["quest_package"] = found["quest_package"]
     if found.get("oculus_app_id"):
         update["oculus_app_id"] = found["oculus_app_id"]
-    if found.get("title") and not entry.get("title_locked"):
-        update["title"] = found["title"]
+    if found.get("title"):  # a name the user chose stays (a reset of it brings the store's)
+        update["auto_title" if entry.get("title_locked") else "title"] = found["title"]
     library.upsert_game(pkg, **update)
     try:
         thumbs.prewarm(pkg)
@@ -275,6 +277,92 @@ def steam_title(entry: dict) -> str:
     from .core.titles import display_title, twins
 
     return display_title(entry, twins(library.games()))
+
+
+TITLE_MAX = 128  # (the agent cuts Steam shortcut names to the same length)
+
+
+def clean_title(title: str | None) -> str:
+    """A name as the user typed it, made one line: no control characters, spaces collapsed, at most TITLE_MAX."""
+    text = " ".join("".join(c if c.isprintable() else " " for c in str(title or "")).split())
+    return text[:TITLE_MAX]
+
+
+def store_title(entry: dict) -> str | None:
+    """The store's name for a game when FramePort fetched one (Meta store art comes with it), else None."""
+    from .artwork.fetch import artwork_dir
+
+    try:
+        f = artwork_dir(entry["package"]) / "title.txt"
+        return clean_title(f.read_text(encoding="utf-8")) or None if f.is_file() else None
+    except OSError:
+        return None
+
+
+def automatic_title(entry: dict) -> str:
+    """The name FramePort gives a game by itself (what Rename… → reset brings back): the current title unless the user
+    (or an install link) chose one; then the automatic name remembered at that moment, else the store's name or the
+    APK's label."""
+    if not entry.get("title_locked"):
+        return entry.get("title") or entry["package"]
+    return entry.get("auto_title") or store_title(entry) or (entry.get("analysis") or {}).get("label") or \
+        entry["package"]
+
+
+def title_suggestions(entry: dict) -> list[str]:
+    """Other names the Rename dialog offers: the automatic name and the store's name (when they differ from the
+    current title)."""
+    current = entry.get("title") or entry["package"]
+    out = []
+    for t in (automatic_title(entry), store_title(entry)):
+        if t and t != current and t not in out:
+            out.append(t)
+    return out
+
+
+def rename_game(package: str, title: str | None) -> dict:
+    """Rename a game in the library. The new title is locked (scans, artwork and store lookups and catalog updates
+    keep it); an empty title or the automatic name unlocks it again. Returns the entry. Installed copies keep their
+    old Steam name until sync_title (or the next install) updates them."""
+    if library.game(package) is None:
+        raise ValueError(f"{package} is not in the library")
+    title = clean_title(title)
+    old: dict = {}
+
+    def change(g: dict) -> None:
+        old.update(title=g.get("title"))
+        auto = automatic_title(g)
+        if not title or title == auto:
+            g["title"] = auto
+            g.pop("title_locked", None)
+            g.pop("auto_title", None)
+        else:
+            g.setdefault("auto_title", auto)
+            g["title"] = title
+            g["title_locked"] = True
+        if g["title"] != old["title"] and any(w != PC_LABEL for w in g.get("installs") or {}):
+            g["steam_name_stale"] = True  # the Frame's Steam library shows the old name until sync_title
+    entry = library.update_game(package, change)
+    if entry.get("title") != old.get("title"):
+        try:  # FramePort's own cover/banner (no store art) are coloured by the name: make them again
+            from .artwork.steam import ensure_cover
+
+            ensure_cover(package)
+        except Exception:  # noqa: BLE001 - artwork is optional
+            pass
+    return entry
+
+
+def sync_title(package: str, target: Target, reporter: Reporter) -> dict:
+    """Give an installed game its library name in Steam (after Rename…): the Frame (agent v77 `rename`, same shortcut
+    appid, Steam restarts once) or this PC's Steam (PC VR games)."""
+    entry = library.game(package)
+    title = steam_title(entry)
+    if target.kind == "pc":
+        return target.rename(package, title, reporter)
+    result = target.update_steam_art(package, reporter, title=title)
+    library.update_game(package, lambda g: (g.pop("steam_name_stale", None), g.pop("steam_art_stale", None)))
+    return result
 
 
 def is_rift(entry: dict) -> bool:
@@ -432,6 +520,8 @@ def add_from_link(manifest, path: Path, reporter: Reporter | None = None, icon: 
     fields = {"link": {"source": manifest.source, "name": manifest.name, "time": time.time()}}
     if not manifest.direct:  # a manifest (not a bare file link) names it
         fields.update(title=manifest.name, title_locked=True)
+        if not entry.get("title_locked"):  # what Rename… → reset brings back
+            fields["auto_title"] = entry.get("title") or pkg
     # FramePort's manifest extension: a description where no store has one, the icon unless the user picked one
     details = dict(library.game(pkg).get("details") or {})
     if manifest.description and not details.get("description"):
@@ -509,8 +599,11 @@ def add_game(src: SourceGame, reporter: Reporter | None = None) -> dict:
     a.extra["lang_packs"] = langpacks.find_tags(_data_folder(src))
     a.extra["asset_files"] = langpacks.find_content_files(_data_folder(src))
     recipe = engine.suggest(a)
+    old = library.game(a.package) or {}
+    # a name the user chose (Rename…, an install link) stays when the game is scanned again
+    names = {"auto_title": recipe.title or a.label} if old.get("title_locked") else {"title": recipe.title or a.label}
     return library.upsert_game(
-        a.package, title=recipe.title or a.label, name=src.name, apk=str(src.apk),
+        a.package, **names, name=src.name, apk=str(src.apk),
         data_dir=str(src.data_dir) if src.data_dir else None, data_files=src.data_files, data_bytes=src.data_bytes(),
         origin=str(src.origin),
         analysis=a.to_dict(), recipe=library.recipe_to_dict(recipe), suggested=library.recipe_to_dict(recipe),
@@ -930,7 +1023,11 @@ def remove_converted_copies(package: str) -> int:
 
 def _record_install(package: str, where: str, record: dict) -> None:
     """Merge into the game's current install records (the entry read before a long install may be stale)."""
-    library.update_game(package, lambda g: g.setdefault("installs", {}).__setitem__(where, record))
+    def change(g: dict) -> None:
+        g.setdefault("installs", {})[where] = record
+        if where != PC_LABEL:  # the install gave the Frame's shortcut the current name
+            g.pop("steam_name_stale", None)
+    library.update_game(package, change)
 
 
 def install_rift(package: str, target: Target, reporter: Reporter, add_to_library: bool = True) -> dict:

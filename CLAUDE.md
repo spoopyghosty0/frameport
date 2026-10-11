@@ -212,6 +212,11 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
     (older installs, stale ones removed), uninstall/purge remove them. Per app: library entry field `desktop_entry`
     (default on; patches don't apply to Linux apps) → game page switch → agent `desktop_entry`. Untested on device.
   - Quest/Rift twins stay separate entries, shown and named in Steam "Title (Quest)"/"(Rift)" (`core/titles.py`).
+  - Rename… (game menu "Name and artwork", Library right-click; CLI `frameport rename <pkg> "<name>"|--reset`):
+    `pipeline.rename_game` sets `title` + `title_locked` (+ `auto_title` = the automatic name for reset; rescans, Rift
+    store matches and links then only update `auto_title`; a locked name gets no twin suffix); `sync_title` → Frame
+    agent v77 `rename` (deployment.json title, same shortcut appid: upsert matches by Exe) + art + one Steam restart, PC
+    `PcReviveTarget.rename`; an unreachable Frame → `steam_name_stale` (game page "Update name on Frame", next install).
   - `Recipe.as_is` = install unchanged (pre-patched libraries): `pipeline.prepare_as_is`; auto for APKs that already
     contain FrameBridge (`frame_patched`). For Rift it changes nothing (the dump is never modified; the Frame copy
     still gets launch fixes like the crash-reporter rename — `-nocrashreports` alone doesn't stop UE 4.23) — it does

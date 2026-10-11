@@ -1652,3 +1652,43 @@ def test_launch_test_window_starts_when_the_app_starts(monkeypatch, tmp_path):
     monkeypatch.setattr(a, "run", lambda *x, **k: type("R", (), {"returncode": 0, "stderr": ""})())
     res = a.cmd_launch_test({"package": "com.x.y", "seconds": 45})
     assert res["state"] == "RUNNING" and res["elapsed"] >= 90 + 45
+
+
+def test_rename_keeps_the_shortcut_appid(monkeypatch, tmp_path):
+    """Renaming an installed game (agent v77) changes deployment.json's title and the shortcut's name; the shortcut
+    keeps its appid (Play, grid art and the game's container depend on it)."""
+    a = load_agent(monkeypatch, tmp_path)
+    anchor = tmp_path / "Applications/quest-frame/com.x.y"
+    anchor.mkdir(parents=True)
+    exe = f'"{anchor}/launch.sh"'
+    appid = a.shortcut_appid(exe, "com.x.y")
+    (anchor / "deployment.json").write_text(json.dumps(
+        {"package": "com.x.y", "appid": appid, "base": str(anchor), "title": "com.x.y", "kind": "quest"}))
+    cfg = tmp_path / ".local/share/Steam/userdata/42/config"
+    cfg.mkdir(parents=True)
+    vdf = cfg / "shortcuts.vdf"
+    assert a.upsert_shortcut(str(vdf), exe, "com.x.y", str(anchor)) == appid
+    started = []
+    monkeypatch.setattr(a, "cmd_shortcuts", lambda args: (started.append(args), {"started": True})[1])
+    with pytest.raises(a.AgentError, match="empty"):
+        a.cmd_rename({"package": "com.x.y", "title": " \n\t "})
+    with pytest.raises(a.AgentError, match="not installed"):
+        a.cmd_rename({"package": "com.other", "title": "X"})
+    r = a.cmd_rename({"package": "com.x.y", "title": "  Vader Immortal:\nEpisode II  "})
+    assert r["renamed"] and r["title"] == "Vader Immortal: Episode II" and r["appid"] == appid
+    assert started == [{"packages": ["com.x.y"], "restart": True}]
+    dep = json.loads((anchor / "deployment.json").read_text())
+    assert dep["title"] == "Vader Immortal: Episode II" and dep["appid"] == appid
+    # what the shortcuts worker then does with Steam closed: same appid, new name, one entry
+    monkeypatch.setattr(a, "devkit_gameid", lambda pkg: None)
+    result = {"added": [], "errors": []}
+    a.update_library("42", ["com.x.y"], result)
+    assert not result["errors"] and result["added"][0]["appid"] == appid
+    entries = list(a.vdf_decode(vdf.read_bytes())["shortcuts"].values())
+    assert len(entries) == 1 and entries[0]["appname"] == "Vader Immortal: Episode II"
+    assert entries[0]["appid"] & 0xFFFFFFFF == appid
+    # the same name again: nothing to do, no Steam restart
+    started.clear()
+    r = a.cmd_rename({"package": "com.x.y", "title": "Vader Immortal: Episode II"})
+    assert not r["renamed"] and not started
+    assert len(a.cmd_rename({"package": "com.x.y", "title": "x" * 300, "shortcuts": False})["title"]) == a.TITLE_MAX

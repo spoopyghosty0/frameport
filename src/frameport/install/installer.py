@@ -490,9 +490,11 @@ def apply_app_icon(frame: Frame, package: str, anchor: str | None, result: dict,
     reporter.check("App icon", True, "the app's own icon is used for the library")
 
 
-def update_steam_art(frame: Frame, package: str, reporter: Reporter) -> dict:
+def update_steam_art(frame: Frame, package: str, reporter: Reporter, title: str | None = None) -> dict:
     """Replace an installed game's Steam library art with the current artwork (after the user picked new art):
-    the art set goes to the game's anchor, then the shortcut is rewritten (Steam restarts once)."""
+    the art set goes to the game's anchor, then the shortcut is rewritten (Steam restarts once). `title`: the game's
+    name in the library; a different name on the Frame is renamed first (agent v77 `rename`: the shortcut keeps its
+    appid, so Play, grid art and saves stay). Placeholder art shows the name, so it's sent again too."""
     from ..artwork.steam import steam_set_for
 
     dep = next((d for d in frame.agent("list_installed")["games"] if d.get("package") == package), None)
@@ -500,8 +502,16 @@ def update_steam_art(frame: Frame, package: str, reporter: Reporter) -> dict:
         raise RuntimeError(f"{package} isn't installed on the Frame")
     if not dep.get("anchor"):
         raise RuntimeError("the Frame's FramePort agent is too old; reinstall the game to update its art")
+    renamed = False
+    if title and dep.get("title") != title:
+        reporter.stage("Name in the Steam library")
+        res = frame.agent("rename", package=package, title=title, shortcuts=False)
+        renamed = bool(res.get("renamed"))
+        reporter.check("Name", True, f"{dep.get('title')} -> {res.get('title')} (shortcut {res.get('appid')} kept)")
     art = steam_set_for(package)
     if not art:
+        if renamed:
+            return add_to_steam(frame, [package], reporter)
         raise RuntimeError("no artwork to send")
     reporter.stage("Artwork for the Steam library")
     remote = posixpath.join(dep["anchor"], "artwork")

@@ -8,6 +8,8 @@ from pathlib import Path
 from ..core.events import Reporter
 from ..core.models import Recipe
 
+PC_LABEL = "This PC"  # PcReviveTarget.label: the key of PC installs in a library entry's "installs"
+
 
 class Target(ABC):
     kind: str = ""

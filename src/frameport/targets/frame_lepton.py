@@ -48,8 +48,8 @@ class FrameLeptonTarget(Target):
     def add_to_library(self, packages, reporter):
         return installer.add_to_steam(self.connect().frame, packages, reporter)
 
-    def update_steam_art(self, package, reporter):
-        return installer.update_steam_art(self.connect().frame, package, reporter)
+    def update_steam_art(self, package, reporter, title=None):
+        return installer.update_steam_art(self.connect().frame, package, reporter, title=title)
 
     def launch_test(self, package, reporter, seconds=45):
         return device.launch_test(self.connect().frame, package, reporter, seconds)

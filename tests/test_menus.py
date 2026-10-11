@@ -80,6 +80,7 @@ def test_library_menu_is_short():
         if st.installs:
             assert st.installs[0][0] in labels
         assert ("Game settings…" in labels) == st.settings
+        assert "Rename…" in labels and labels.index("Rename…") < labels.index("More actions…")
         assert ("Uninstall from Frame…" in labels) == st.on_frame
         assert ("Uninstall from this PC…" in labels) == st.on_pc
 
@@ -98,6 +99,7 @@ def test_page_menu_is_the_full_one_without_its_buttons():
             if isinstance(e, Header):
                 assert i + 1 < len(entries) and entries[i + 1] is not None and not isinstance(entries[i + 1], Header)
         assert all(e[1] for e in _items(entries)), name
+        assert "Rename…" in labels, name  # every kind of game (Quest, PC VR, Linux), also while a job runs
 
 
 def test_sections_and_conditions():
@@ -105,9 +107,10 @@ def test_sections_and_conditions():
     st.quick = False
     entries = menu_sections(g, st, _key)
     heads = [e.label for e in entries if isinstance(e, Header)]
-    assert heads == ["Artwork", "Recipe", "Troubleshoot"]
+    assert heads == ["Name and artwork", "Recipe", "Troubleshoot"]
     assert _section_of(entries, "Analyze again") == "Troubleshoot"
-    assert _section_of(entries, "Update art on Frame") == "Artwork"
+    assert _section_of(entries, "Update art on Frame") == "Name and artwork"
+    assert _section_of(entries, "Rename…") == "Name and artwork"
     assert _section_of(entries, "Share working recipe…") == "Recipe"
     linux_st = _states()[3][2]
     linux_st.quick = False

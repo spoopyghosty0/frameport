@@ -384,7 +384,13 @@ class GameView:
                           "settings."), T.TEXT, expand=True),
                 C.secondary(tr("Use the new recipe"), ft.Icons.AUTO_FIX_HIGH_ROUNDED, take_update)],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER), "info", ft.Icons.NEW_RELEASES_OUTLINED))
-        if g.get("steam_art_stale") and installed:
+        if g.get("steam_name_stale") and installed:
+            out.append(C.callout(ft.Row([
+                C.body(tr("The Frame's Steam library still shows the old name."), T.TEXT, expand=True),
+                C.secondary(tr("Update name on Frame"), ft.Icons.DRIVE_FILE_RENAME_OUTLINE_OUTLINED,
+                            lambda e: self.app.update_steam_art(pkg))]), "info",
+                ft.Icons.DRIVE_FILE_RENAME_OUTLINE_OUTLINED))
+        elif g.get("steam_art_stale") and installed:
             out.append(C.callout(ft.Row([
                 C.body(tr("The Frame's Steam library still shows the old artwork."), T.TEXT, expand=True),
                 C.secondary(tr("Update art on Frame"), ft.Icons.IMAGE_OUTLINED,
