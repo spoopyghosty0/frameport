@@ -234,7 +234,8 @@ def test_autostart_service_follows_the_overlay_flags(monkeypatch, tmp_path):
     _, res = linux_install(a, tmp_path, overlay=overlay_arg(autostart=True))
     assert res["overlay"]["service"] == "installed"
     text = unit.read_text()
-    assert f'"{os.path.abspath(a.__file__)}" _vr_overlay_watch' in text  # systemd quoting (a path with spaces)
+    # systemd quoting: only a path with spaces (or %) gets quotes (this repo's path has spaces, CI's doesn't)
+    assert f'{a.systemd_quote(os.path.abspath(a.__file__))} _vr_overlay_watch' in text
     assert a.systemd_quote("/usr/bin/python3") == "/usr/bin/python3" and a.systemd_quote("a%b c") == '"a%%b c"'
     assert "Restart=always" in text and "WantedBy=default.target" in text
     assert ("enable", "frameport-vr-overlays.service") in calls and calls.active
