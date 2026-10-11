@@ -866,6 +866,21 @@ def build_game(package: str, reporter: Reporter, outdir: Path | None = None) -> 
     return build_info
 
 
+def _find_late_data(entry: dict, reporter: Reporter | None = None) -> dict:
+    """A game added without data files: look for them again next to its APK (the user may have copied the OBBs in
+    afterwards, or added the APK alone). Found → stored, like a fresh scan would."""
+    src_apk = Path(entry["apk"])
+    if not src_apk.is_file():
+        return entry
+    src = quest_dump.from_path(src_apk)
+    if not src or not src.data_dir:
+        return entry
+    if reporter:
+        reporter.log(f"found the game's data files: {src.data_dir}")
+    return library.upsert_game(entry["package"], data_dir=str(src.data_dir), data_files=src.data_files,
+                               data_bytes=src.data_bytes())
+
+
 def install_game(package: str, target: Target, reporter: Reporter, apk_only: bool = False,
                  add_to_library: bool = True, apk: Path | None = None) -> dict:
     """Install the game's last build (or `apk`, e.g. a test build of the same package signed with the same key)."""
@@ -886,6 +901,8 @@ def install_game(package: str, target: Target, reporter: Reporter, apk_only: boo
         return install_game(package, target, reporter, apk_only, add_to_library)
     if not test_build and b.get("superseded"):  # workarounds this build left out (upstream fixed): not in settings.conf
         recipe = dataclasses.replace(recipe, patches=upstream.without_superseded(recipe.patches, b["superseded"]))
+    if not entry.get("data_dir") and entry.get("apk") and not apk_only:
+        entry = _find_late_data(entry, reporter)  # OBBs copied next to the APK after it was added (GitHub #156)
     data_dir = Path(entry["data_dir"]) if entry.get("data_dir") else None
     title = steam_title(entry)
     result = target.install(package, title, apk, data_dir, recipe, reporter, apk_only,

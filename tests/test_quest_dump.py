@@ -398,3 +398,19 @@ def test_rescan_replaces_an_entry_made_from_axrbs_patched_copy(tmp_path, monkeyp
     monkeypatch.setattr(pipeline.rift_dump, "scan", lambda *a, **k: [])
     pipeline.add_path(root, only_new=True)
     assert [s.apk.name for s in added] == ["base.apk"] and added[0].data_files == ["main.5.com.x.game.obb"]
+
+
+def test_install_looks_for_data_copied_in_after_the_apk_was_added(tmp_path, monkeypatch):
+    """GitHub #156: the APK was added alone; the OBB was copied next to it later. Installing finds and sends it."""
+    from frameport import pipeline
+    from frameport.core import library
+
+    a = apk(tmp_path / "BnS" / "BladeAndSorcery.apk")
+    IDS[a.name] = ("com.Warpfrog.BladeAndSorcery", 260730005)
+    obb(tmp_path / "BnS", "main.260730005.com.Warpfrog.BladeAndSorcery.obb")
+    stored = {}
+    monkeypatch.setattr(library, "upsert_game", lambda pkg, **kw: stored.update(kw) or {"package": pkg, **kw})
+    out = pipeline._find_late_data({"package": "com.Warpfrog.BladeAndSorcery", "apk": str(a), "data_dir": None})
+    assert out["data_dir"] == str(tmp_path / "BnS") and stored["data_files"] == [
+        "main.260730005.com.Warpfrog.BladeAndSorcery.obb"]
+    assert pipeline._find_late_data({"package": "x", "apk": str(tmp_path / "gone.apk")})["apk"].endswith("gone.apk")
