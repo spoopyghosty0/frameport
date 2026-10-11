@@ -154,6 +154,11 @@ signatures:
     severity: fatal
     diagnosis: The app crashed at start because the Frame's Android has no clipboard. SDL apps (SDL2 / LÖVE) need Android's clipboard service, which Lepton lacks.
     suggest: [frame.sdl_clipboard]
+  - id: godot-no-clipboard
+    pattern: 'non-null type android\.content\.ClipboardManager(?:.*\n){1,4}?.*at org\.godotengine\.godot\.Godot\b'
+    severity: fatal
+    diagnosis: The app crashed at start because the Frame's Android has no clipboard. Godot 4 apps (Godot 4.2 to 4.4) expect Android's clipboard service, which Lepton lacks.
+    suggest: [frame.godot_clipboard]
   - id: controller-profile-rejected
     pattern: 'PATH_UNSUPPORTED.*xrSuggestInteractionProfileBindings|xrSuggestInteractionProfileBindings.*(-48|PATH_UNSUPPORTED)'
     severity: info

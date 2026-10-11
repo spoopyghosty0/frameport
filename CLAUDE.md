@@ -622,7 +622,10 @@ shortcuts.vdf and writes once more if Steam put its old copy back (`shortcuts_lo
 auto-repair (`_add_then_play`) crashed (its job got a Job, not a reporter). Uploads resume on a transient OSError.
 Lepton's Android 11 has no clipboard service (134 services; checked with `podman exec … service check clipboard`):
 SDL/LÖVE apps crashed at start → `frame.sdl_clipboard` (`apk/dex.py`: in-place dex edit, nops one invoke, fixes
-the header checksum/signature; verified with LÖVE for Android 11.5, GitHub #24 Dramatic Shape). 2D apps (vr_kind none)
+the header checksum/signature; verified with LÖVE for Android 11.5, GitHub #24 Dramatic Shape). Godot 4.2-4.4 (Kotlin `as ClipboardManager`,
+GitHub #134 EndoparasiticVR) → `frame.godot_clipboard` (nops the `Intrinsics.checkNotNull` before that check-cast; Godot's
+clipboard methods return at once; analysis `godot_clipboard`, ANALYSIS_VERSION 10; checked on real godot-lib/templates
+4.2.2-4.4.1, not on the device; 4.1 and 4.5+ don't throw). 2D apps (vr_kind none)
 keep every suggested patch that isn't about VR (`needs_vr = False`), not a fixed list. FramePort on the Frame:
 `frame/local.py` (127.0.0.1, own key authorized; "This Frame (experimental)"; app data in
 ~/.local/share/frameport-app because ~/.local/share/frameport is the agent's) and Steam library changes wait while

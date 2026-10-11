@@ -30,7 +30,8 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 # 8: media_codec (plays video through Android's decoders: MediaCodec/ExoPlayer/Media3 or VLC: frame.hw_video_decode)
 # 9: gamepad (the manifest declares gamepad support: android.hardware.gamepad / Android TV's LEANBACK_LAUNCHER:
 #    device.steam_gamepad) (2026-10)
-ANALYSIS_VERSION = 9
+# 10: godot_clipboard (Godot 4.2-4.4's non-null ClipboardManager cast: frame.godot_clipboard) (2026-10)
+ANALYSIS_VERSION = 10
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
@@ -152,6 +153,9 @@ def vr_kind(libs: set[str], manifest_strings: list[str]) -> str:
     return "none"
 
 
+# Kotlin's message for a failed non-null cast to ClipboardManager (Godot 4.2-4.4; 4.1 is Java, 4.5+ uses `as?`)
+GODOT_CLIPBOARD_CAST = b"null cannot be cast to non-null type android.content.ClipboardManager"
+
 # dex type names of Android's video decoding APIs (frame.hw_video_decode)
 MEDIA_CODEC_MARKERS = (b"Landroid/media/MediaCodec;", b"Landroidx/media3/exoplayer", b"Lcom/google/android/exoplayer2/")
 
@@ -171,6 +175,8 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
         # SDL's Java side (SDL2 / LÖVE apps): crashes in Lepton without a clipboard service (frame.sdl_clipboard)
         dexes = [z.read(n) for n in names if n.startswith("classes") and n.endswith(".dex")]
         sdl_java = any(b"Lorg/libsdl/app/SDLClipboardHandler;" in d for d in dexes)
+        # Godot 4.2-4.4's Kotlin `as ClipboardManager` (non-null cast): the same crash (frame.godot_clipboard)
+        godot_clipboard = any(b"Lorg/godotengine/godot/Godot;" in d and GODOT_CLIPBOARD_CAST in d for d in dexes)
         # Vivox voice chat calling Android 12 audio-routing methods: crashes in Lepton (Android 11)
         vivox_api31 = any(b"Lcom/vivox/sdk/AudioChangeListener;" in d and b"CommunicationDevice" in d for d in dexes)
         # video through Android's decoders (frame.hw_video_decode): Java MediaCodec, ExoPlayer/Media3, or libVLC
@@ -294,6 +300,7 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             # Meta's OVRManager raises MSAA at runtime (frame.unity_runtime_msaa_off); Oculus XR Plugin (multiview)
             "ovr_runtime_msaa": bool(il2cpp_meta) and b"\0useRecommendedMSAALevel\0" in il2cpp_meta,
             "sdl_java": sdl_java,
+            "godot_clipboard": godot_clipboard,
             "vivox_api31": vivox_api31,
             "media_codec": media_codec,
             # declares gamepad support (SDL's manifest template has both): device.steam_gamepad

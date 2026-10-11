@@ -11,6 +11,7 @@ INVOKE_VIRTUAL, INVOKE_VIRTUAL_RANGE = 0x6E, 0x74  # 35c / 3rc: 3 code units, me
 INVOKES = frozenset(range(0x6E, 0x73)) | frozenset(range(0x74, 0x79))  # invoke-virtual..interface(/range)
 RETURN_VOID = 0x0E
 CONST4_V0_0, RETURN_V0 = 0x0012, 0x000F  # const/4 v0, #0 ; return v0
+CONST_STRING_V0, RETURN_OBJECT_V0 = 0x001A, 0x0011  # const-string v0, string@BBBB ; return-object v0
 
 
 def _widths() -> list[int]:
@@ -77,6 +78,11 @@ class Dex:
     def code_items(self, cls: str, name: str) -> list[int]:
         """Offsets of the code items of the methods `name` in class `cls` (direct and virtual)."""
         return [code for _idx, code in self.class_methods(cls) if self.method(_idx)[1] == name]
+
+    def class_names(self) -> list[str]:
+        """Type names of the classes defined in this dex."""
+        return [self.type_name(struct.unpack_from("<I", self.data, self.classes_off + 32 * c)[0])
+                for c in range(self.classes_n)]
 
     def class_methods(self, cls: str) -> list[tuple[int, int]]:
         """(method index, code item offset) of every method of class `cls` that has code."""
@@ -147,16 +153,18 @@ class Dex:
         return self.return_early(code_off, "V")
 
     def return_early(self, code_off: int, ret: str) -> bool:
-        """Make a method return at once: its first instruction(s) become `return-void` (ret "V") or `const/4 v0, 0;
-        return v0` (ret Z/B/S/C/I: false / 0), padded with nops to the next instruction boundary. The rest of the code
-        stays as it was (unreachable). False if the method already starts that way, the return type isn't supported
-        (wide, objects) or its first instructions can't be decoded."""
+        """Make a method return at once: its first instruction(s) become `return-void` (ret "V"), `const/4 v0, 0;
+        return v0` (ret Z/B/S/C/I: false / 0) or `const-string v0, ""; return-object v0` (ret Ljava/lang/String;: the
+        empty string, only when the dex has it), padded with nops to the next instruction boundary. The rest of the
+        code stays as it was (unreachable). False if the method already starts that way, the return type isn't
+        supported (wide, other objects) or its first instructions can't be decoded."""
+        regs = struct.unpack_from("<H", self.data, code_off)[0]  # registers_size: v0 must exist for a value
         if ret == "V":
             new = [RETURN_VOID]
-        elif ret in ("Z", "B", "S", "C", "I"):
-            if not struct.unpack_from("<H", self.data, code_off)[0]:  # registers_size: v0 must exist
-                return False
+        elif ret in ("Z", "B", "S", "C", "I") and regs:
             new = [CONST4_V0_0, RETURN_V0]
+        elif ret == "Ljava/lang/String;" and regs and self.strings_n and self.string(0) == "":
+            new = [CONST_STRING_V0, 0, RETURN_OBJECT_V0]  # string ids are sorted: "" is always the first
         else:
             return False
         start = code_off + 16

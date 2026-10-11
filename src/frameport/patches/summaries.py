@@ -69,6 +69,7 @@ SUMMARIES = {
     "frame.unity_runtime_msaa_off": "Keeps a smoothing setting off that the game turns on itself and that can freeze "
                                     "the Frame.",
     "frame.sdl_clipboard": "Lets SDL and LÖVE games start on the Frame (they'd crash looking for a clipboard).",
+    "frame.godot_clipboard": "Lets Godot games start on the Frame (they'd crash looking for a clipboard).",
     "frame.vivox_audio_route": "Lets games with Vivox voice chat start on the Frame (they'd crash on an Android 12 "
                                "audio call).",
     "frame.unity_oculus_check": "Lets older Unity games start VR without Meta's system apps (they'd stay on a 2D "
