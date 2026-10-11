@@ -1,9 +1,9 @@
 package: com.Armature.VR4
 title: VR4
 status: works
-notes: Installs the no-ForceQuit build and fixes a campaign shader that hung the GPU after the opening cutscene.
-details: Entering the campaign gave a black screen, slowing audio and a crash (Mercenaries loaded). One fragment shader
-  reads a loop counter before setting it, which hangs the GPU; the Vulkan shim zeroes it (vk_shader_fix). The
+notes: Installs the no-ForceQuit build and fixes two campaign shaders that hung the GPU at cutscenes.
+details: Entering the campaign gave a black screen, slowing audio and a crash (Mercenaries loaded). Two permutations of one fragment shader
+  read a loop counter before setting it, which hangs the GPU; the Vulkan shim zeroes it (vk_shader_fix). The
   no-ForceQuit build is kept. Diagnosed and confirmed on a Frame by the reporter of GitHub issue 10.
 tested_version: '2.3'
 engine: Unreal
@@ -14,8 +14,8 @@ use_alt: true
 adapter:
   # one campaign shader reads an uninitialized loop counter and hangs the GPU (black screen, slowing audio, crash);
   # the Vulkan shim inserts two OpStores that zero it and its accumulator (from the reporter's capture, GitHub
-  # issue 10)
-  vk_shader_fix: 6488:5dcd842db8d21e3fdd13ec916d2e34dd0cfdf12a92fffaf8a27115072ef55c59:2624:0x0003003e,138,18,0x0003003e,150,42
+  # issue 10); a second permutation of the same shader (6604 bytes) hung the GPU at a later cutscene (GitHub #140)
+  vk_shader_fix: 6488:5dcd842db8d21e3fdd13ec916d2e34dd0cfdf12a92fffaf8a27115072ef55c59:2624:0x0003003e,138,18,0x0003003e,150,42;6604:a0e6edd8a8e969acbefe1a193f0bc535d8c0c18d004def4c361840a9f2601f13:2956:0x0003003e,122,18,0x0003003e,135,42
 verified:
   date: '2026-10-02'
   known_good_sha256: 40ff74e37264b28ae8826923b69d0731d9620094c76462be34159643d6ae91b3
@@ -24,5 +24,5 @@ verified:
   frame_build: '20260930.6234839'
   agent: 26
   issue: 1
-updated: '2026-10-04'
+updated: '2026-10-11'
 source_hint: Resident Evil 4
