@@ -96,7 +96,8 @@ class FrameLeptonTarget(Target):
         return self.connect().frame.agent("desktop_entry", package=package, enabled=enabled)
 
     def set_vr_overlay(self, package: str, autostart: bool) -> dict:
-        """An installed SteamVR overlay app's auto-start with SteamVR (agent >= 75)."""
+        """An installed SteamVR overlay app's auto-start with SteamVR (agent >= 75; >= 76: FramePort's own
+        frameport-vr-overlays service starts it at every SteamVR start, kept by the agent from this flag)."""
         return self.connect().frame.agent("register_vr_overlay", package=package, autostart=autostart)
 
     def proton_status(self, tool: str | None = None) -> dict:
