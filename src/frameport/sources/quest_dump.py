@@ -48,7 +48,22 @@ def _package_of(apk: Path) -> str | None:
     return _apk_ids(apk)[0]
 
 
+def _axrb_patched(path: Path) -> bool:
+    """AXRB's own PC builds (OVRPort-converted for its Windows runtime, without the game's OBBs): <name>-axrb.apk,
+    AXRB/patched/<package>/ or an axrb-patched folder. The original download next to them is the game."""
+    parts = [p.lower() for p in path.parts]
+    return path.stem.lower().endswith("-axrb") or "axrb-patched" in parts or any(
+        a == "axrb" and b == "patched" for a, b in zip(parts, parts[1:], strict=False))
+
+
+def _axrb_download(folder: Path, apk: Path) -> bool:
+    """AXRB's launcher download: <app id>/<binary id>/base.apk (both folder names numbers)."""
+    return apk.name.lower() == "base.apk" and folder.name.isdigit() and folder.parent.name.isdigit()
+
+
 def _is_apk(path: Path) -> bool:
+    if _axrb_patched(path):
+        return False
     try:
         with zipfile.ZipFile(path) as z:
             return "AndroidManifest.xml" in z.namelist()
@@ -176,7 +191,9 @@ def _obb_folders(apk_dir: Path, pkg: str, depth: int = 3) -> list[tuple[Path, li
 
     def below(d: Path, level: int, skip: Path | None = None) -> None:
         for sub in _subdirs(d):
-            if sub == skip or _has_apks(sub):
+            # a folder with APKs is another game, except an obb folder holding this package's files (SideQuest's VR4
+            # backup has Unreal's VR4-Android-Shipping-arm64.apk next to its OBBs)
+            if sub == skip or (_has_apks(sub) and not (sub.name.lower() in OBB_FOLDERS and _named_obbs(sub, pkg))):
                 continue
             visit(sub)
             if level > 1:
@@ -227,6 +244,8 @@ def find_data_dir(apk_dir: Path, pkg: str | None, version_code: int | None = Non
 
 # a folder that only holds the APK inside a game folder (<game>/apk/x.apk + <game>/obb/…): the game is the parent
 APK_FOLDERS = ("apk", "apks")
+# SideQuest's backup folder names: 2026-10-08T12-08-41-153Z (also with ':' / '.' separators)
+BACKUP_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}[-:.]\d{2}[-:.]\d{2}([-:.]\d+)?Z?$")
 
 
 def from_path(path: Path) -> SourceGame | None:
@@ -245,7 +264,15 @@ def from_path(path: Path) -> SourceGame | None:
     pkg, vc = _apk_ids(apk)
     data, files = find_data(path, pkg, vc)
     game_dir = path.parent if path.name.lower() in APK_FOLDERS else path
-    return SourceGame(display_name(game_dir.name), apk, data, game_dir, [a for a in apks if a != apk], files)
+    # SideQuest backups: <package>/<backup time>/apk/x.apk; the game is named after the package folder, not the time.
+    # AXRB downloads: <app id>/<binary id>/base.apk: numbers, so the package names it (the store title comes later)
+    name = game_dir.parent.name if BACKUP_TIME.match(game_dir.name) else game_dir.name
+    if name.isdigit() and pkg:
+        name = pkg
+    if _axrb_download(path, apk) and data == path and files is not None:
+        # AXRB puts the game's other store files (DLC, extra assets) next to its OBBs: they belong in Android/obb too
+        files = sorted(f.name for f, is_dir in _list(path) if not is_dir and f.suffix.lower() != ".apk")
+    return SourceGame(display_name(name), apk, data, game_dir, [a for a in apks if a != apk], files)
 
 
 def _no_quest_games_below(d: Path) -> bool:
@@ -304,4 +331,7 @@ def scan(root: Path, depth: int = 5) -> list[SourceGame]:
         walk(root, 0)
     finally:
         _LISTINGS.reset(token)
-    return found
+    # an APK inside another game's data folder is part of that game's data, not a game (SideQuest's VR4 backup keeps
+    # Unreal's VR4-Android-Shipping-arm64.apk next to its OBBs)
+    data = [(g, g.data_dir.resolve()) for g in found if g.data_dir and g.data_dir.resolve() != g.apk.resolve().parent]
+    return [g for g in found if not any(h is not g and d in g.apk.resolve().parents for h, d in data)]

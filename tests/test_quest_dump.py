@@ -320,3 +320,81 @@ def test_missing_obb_is_flagged_before_install_and_in_launch_tests():
     assert [f.id for f in r.findings] == ["missing-obb"] and r.verdict == "fail"
     running = TriageResult("RUNNING", "Submitting frames", fps=72.0)  # an OBB from an earlier install is there
     assert not add_missing_obb(running).findings and running.verdict == "pass"
+
+
+@pytest.mark.parametrize("stray_pkg", ["com.Armature.VR4", "com.epicgames.ue4"])
+def test_sidequest_desktop_backups_folder(tmp_path, stray_pkg):
+    """SideQuest's "SideQuest Backups" folder, scanned whole: <package>/<timestamp>/apk/<package>.apk +
+    obb/(main|patch).N.<package>.obb + data/ (the app's private files) + icon.png + manifest.json. VR4's backup also
+    holds a second APK in its obb folder (Unreal's VR4-Android-Shipping-arm64.apk), which must not become the game
+    or a second game (reddit, 2026-10-11)."""
+    root = tmp_path / "SideQuest Backups"
+    cabin = root / "com.pixeltoys.cabin" / "2026-10-08T12-08-41-153Z"
+    apk(cabin / "apk" / "com.pixeltoys.cabin.apk")
+    IDS["com.pixeltoys.cabin.apk"] = ("com.pixeltoys.cabin", 11479)
+    obb(cabin / "obb", "main.11479.com.pixeltoys.cabin.obb")
+    for d in ("cloud", "il2cpp", "Unity"):
+        (cabin / "data" / d).mkdir(parents=True)
+    (cabin / "icon.png").write_bytes(b"p")
+    (cabin / "manifest.json").write_text("{}")
+    vr4 = root / "com.Armature.VR4" / "2026-10-07T02-10-19-171Z"
+    apk(vr4 / "apk" / "com.Armature.VR4.apk")
+    IDS["com.Armature.VR4.apk"] = ("com.Armature.VR4", 203)
+    obb(vr4 / "obb", "main.203.com.Armature.VR4.obb")
+    obb(vr4 / "obb", "patch.203.com.Armature.VR4.obb")
+    apk(vr4 / "obb" / "VR4-Android-Shipping-arm64.apk")
+    IDS["VR4-Android-Shipping-arm64.apk"] = (stray_pkg, 1)
+    dungeon = root / "de.erthu.ancientdungeonfull" / "2026-10-06T22-31-00-000Z"
+    apk(dungeon / "apk" / "de.erthu.ancientdungeonfull.apk")  # no obb folder at all
+    found = {g.apk.name: g for g in quest_dump.scan(root)}
+    assert set(found) == {"com.pixeltoys.cabin.apk", "com.Armature.VR4.apk", "de.erthu.ancientdungeonfull.apk"}
+    assert found["com.pixeltoys.cabin.apk"].data_dir == cabin / "obb"
+    assert found["com.pixeltoys.cabin.apk"].name == "com.pixeltoys.cabin"  # not the backup's time stamp
+    v = found["com.Armature.VR4.apk"]
+    assert v.data_dir == vr4 / "obb"
+    assert sorted(v.data_files or [p.name for p in (vr4 / "obb").glob("*.obb")]) == [
+        "main.203.com.Armature.VR4.obb", "patch.203.com.Armature.VR4.obb"]
+    assert found["de.erthu.ancientdungeonfull.apk"].data_dir is None
+
+
+def test_axrb_download_folder(tmp_path):
+    """AXRB's launcher downloads to <Downloads>/AXRB/<app id>/<binary id>/: base.apk + the OBBs by their store names
+    (+ other asset files); its own patched builds go to AXRB/patched/<package>/<name>-axrb.apk (reddit, 2026-10-11)."""
+    root = tmp_path / "AXRB"
+    d = root / "1234567890" / "987654321"
+    a = apk(d / "base.apk")
+    IDS["base.apk"] = ("com.Armature.VR4", 203)
+    obb(d, "main.203.com.Armature.VR4.obb")
+    obb(d, "patch.203.com.Armature.VR4.obb")
+    (d / "extra_asset.dat").write_bytes(b"a")
+    p = apk(root / "patched" / "com.Armature.VR4" / "base-axrb.apk")
+    IDS["base-axrb.apk"] = ("com.Armature.VR4", 203)
+    found = quest_dump.scan(root)
+    games = {g.apk: g for g in found}
+    # the OBBs and AXRB's other store files (DLC, assets) go to Android/obb/<package>; the APK stays
+    assert games[a].data_dir == d and games[a].data_files == ["extra_asset.dat", "main.203.com.Armature.VR4.obb",
+                                                              "patch.203.com.Armature.VR4.obb"]
+    assert p not in games and len(games) == 1  # AXRB's PC-patched copy isn't a second game
+    assert games[a].name == "com.Armature.VR4"  # not the binary id
+
+
+def test_rescan_replaces_an_entry_made_from_axrbs_patched_copy(tmp_path, monkeypatch):
+    """Older FramePort scanned AXRB/patched/<package>/*-axrb.apk (no OBBs) over the original download; a rescan of
+    new games only must still add the original for that package."""
+    from frameport import pipeline
+    from frameport.core import library
+
+    root = tmp_path / "AXRB"
+    d = root / "1" / "2"
+    apk(d / "base.apk")
+    IDS["base.apk"] = ("com.x.game", 5)
+    obb(d, "main.5.com.x.game.obb")
+    old = tmp_path / "AXRB" / "patched" / "com.x.game" / "base-axrb.apk"
+    games = [{"package": "com.x.game", "apk": str(old)}, {"package": "com.y.other", "apk": str(tmp_path / "y.apk")}]
+    monkeypatch.setattr(library, "games", lambda: games)
+    monkeypatch.setattr(quest_dump, "_package_of", lambda a: quest_dump._apk_ids(a)[0])
+    added = []
+    monkeypatch.setattr(pipeline, "add_game", lambda src, rep=None: added.append(src) or {"package": "com.x.game"})
+    monkeypatch.setattr(pipeline.rift_dump, "scan", lambda *a, **k: [])
+    pipeline.add_path(root, only_new=True)
+    assert [s.apk.name for s in added] == ["base.apk"] and added[0].data_files == ["main.5.com.x.game.obb"]

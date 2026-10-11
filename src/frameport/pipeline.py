@@ -38,7 +38,9 @@ def add_path(path: Path, reporter: Reporter | None = None, on_added=None, force_
     path = Path(path)
     added = []
     known_apks = {str(Path(g["apk"]).resolve()) for g in library.games() if g.get("apk")} if only_new else set()
-    known_packages = {g["package"] for g in library.games()} if only_new else set()
+    # entries made from AXRB's PC-patched copies (no OBBs; older FramePort scanned them) get the original download
+    known_packages = {g["package"] for g in library.games()
+                      if not (g.get("apk") and quest_dump._axrb_patched(Path(g["apk"])))} if only_new else set()
 
     def done(entry):
         if only_new and entry["package"] in known_packages:  # already in the library (e.g. an unchanged Rift folder)

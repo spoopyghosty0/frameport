@@ -211,6 +211,8 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
     `FRAMEPORT_DESKTOP=1` skips the Steam-parent watchdog and Steam's display; ensure_host_fixes refreshes entries
     (older installs, stale ones removed), uninstall/purge remove them. Per app: library entry field `desktop_entry`
     (default on; patches don't apply to Linux apps) → game page switch → agent `desktop_entry`. Untested on device.
+  - Scanning: SideQuest backups (`<package>/<time>/apk|obb|data`) and AXRB downloads (`AXRB/<app id>/<binary id>/base.apk`
+    + OBBs/assets; its `patched/`/`*-axrb.apk` PC builds are skipped) are recognised (`sources/quest_dump.py`, FAQ).
   - Quest/Rift twins stay separate entries, shown and named in Steam "Title (Quest)"/"(Rift)" (`core/titles.py`).
   - `Recipe.as_is` = install unchanged (pre-patched libraries): `pipeline.prepare_as_is`; auto for APKs that already
     contain FrameBridge (`frame_patched`). For Rift it changes nothing (the dump is never modified; the Frame copy
