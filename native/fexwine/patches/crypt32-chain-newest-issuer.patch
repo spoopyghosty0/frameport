@@ -1,0 +1,54 @@
+diff --git a/dlls/crypt32/chain.c b/dlls/crypt32/chain.c
+--- a/dlls/crypt32/chain.c
++++ b/dlls/crypt32/chain.c
+@@ -2578,6 +2578,36 @@
+     return quality;
+ }
+ 
++/* Between two chains of equal quality, Windows prefers the one whose issuer is
++ * the most recent certificate (latest NotBefore) where the chains first
++ * differ, e.g. a cross-signed root shipped with a signature (2022) over an
++ * older self-signed copy of the same root (2013).  Returns TRUE if alternate
++ * should be preferred over chain.
++ */
++static BOOL CRYPT_AlternateHasNewerIssuer(const CertificateChain *chain,
++ const CertificateChain *alternate)
++{
++    DWORD i, j;
++
++    for (i = 0; i < chain->context.cChain && i < alternate->context.cChain; i++)
++    {
++        const CERT_SIMPLE_CHAIN *a = chain->context.rgpChain[i];
++        const CERT_SIMPLE_CHAIN *b = alternate->context.rgpChain[i];
++
++        for (j = 0; j < a->cElement && j < b->cElement; j++)
++        {
++            PCCERT_CONTEXT ca = a->rgpElement[j]->pCertContext;
++            PCCERT_CONTEXT cb = b->rgpElement[j]->pCertContext;
++
++            if (!CertCompareCertificate(X509_ASN_ENCODING, ca->pCertInfo,
++             cb->pCertInfo))
++                return CompareFileTime(&cb->pCertInfo->NotBefore,
++                 &ca->pCertInfo->NotBefore) > 0;
++        }
++    }
++    return FALSE;
++}
++
+ /* Chooses the highest quality chain among chain and its "lower quality"
+  * alternate chains.  Returns the highest quality chain, with all other
+  * chains as lower quality chains of it.
+@@ -2598,7 +2628,12 @@
+         CertificateChain *alternate =
+          (CertificateChain*)chain->context.rgpLowerQualityChainContext[i];
+ 
+-        if (CRYPT_ChainQuality(alternate) > CRYPT_ChainQuality(chain))
++        DWORD alternateQuality = CRYPT_ChainQuality(alternate);
++        DWORD chainQuality = CRYPT_ChainQuality(chain);
++
++        if (alternateQuality > chainQuality ||
++         (alternateQuality == chainQuality &&
++          CRYPT_AlternateHasNewerIssuer(chain, alternate)))
+         {
+             alternate->context.cLowerQualityChainContext =
+              chain->context.cLowerQualityChainContext;

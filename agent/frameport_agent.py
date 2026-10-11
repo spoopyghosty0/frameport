@@ -44,7 +44,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 76
+AGENT_VERSION = 77
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -1094,7 +1094,7 @@ def shortcut_args(pkg):
     icon = app_icon_for(dep, anchor, steam=True)[0]  # a Linux app's own icon unless the user chose one
     flat = dep.get("vr") is False
     kind = dep.get("kind")
-    tag = ("Windows game on Frame" if flat else "PC VR on Frame") if kind == "pcvr" else \
+    tag = ("Windows game on Frame" if flat else "PC VR on Frame") if kind in ("pcvr", "frame_fex") else \
         "Linux app on Frame" if kind == "linux" else "Quest on Frame"
     return f'"{anchor}/launch.sh"', dep["title"], anchor, icon, tag, dep.get("tags") or [], not flat
 
@@ -1823,7 +1823,7 @@ def app_media_dirs(ext):
 
 def lepton_external(pkg):
     dep = deployment(pkg)
-    if not dep or dep.get("kind") == "pcvr":
+    if not dep or dep.get("kind") in ("pcvr", "frame_fex"):
         raise AgentError(f"{pkg} is not an installed Quest (Lepton) game")
     return os.path.join(dep["base"], "lepton-data", "external")
 
@@ -4842,8 +4842,11 @@ def cmd_uninstall(args):
     base = dep["base"]
     pcvr = dep.get("kind") == "pcvr"
     linux = dep.get("kind") == "linux"
-    if (pcvr_pids(base) if pcvr or linux else container_running(dep["appid"])):
+    fex = dep.get("kind") == "frame_fex"
+    if (pcvr_pids(base) if pcvr or linux or fex else container_running(dep["appid"])):
         raise AgentError("the game is running")
+    if fex:   # the game lives in the shared Meta runtime prefix (with the user's login): only the launcher goes
+        return fex_uninstall(pkg, dep, args)
     if is_overlay(dep) or os.path.exists(os.path.join(ANCHORS, pkg, OVERLAY_MANIFEST)):
         unregister_overlay(pkg)  # SteamVR forgets the overlay app (before its manifest's folder goes)
     keep_data = args.get("keep_data", True)
@@ -5193,6 +5196,8 @@ def cmd_stop(args):
         run(["systemctl", "--user", "stop", f"frameport-test-{dep['appid']}"])
         if dep.get("kind") == "pcvr":
             stop_pcvr(dep)
+        elif dep.get("kind") == "frame_fex":   # the launcher's EXIT trap stops Wine (wineserver -k)
+            run(["pkill", "-TERM", "-f", re.escape(os.path.join(ANCHORS, dep["package"], "launch.sh"))])
         elif dep.get("kind") == "linux":
             for pid in pcvr_pids(dep["base"]):
                 run(["kill", "-TERM", pid])
@@ -5305,6 +5310,8 @@ def cmd_launch_test(args):
     if is_overlay(dep):  # nothing to see without a game; register_vr_overlay's SteamVR check is the test
         return {"state": "SKIPPED", "skipped": "overlay app", "elapsed": 0, "log": None, "log_size": 0,
                 "crash_log": None, "kind": dep.get("kind")}
+    if dep.get("kind") == "frame_fex":
+        raise AgentError("launch tests aren't available for Rift games with Meta's runtime (experimental) yet")
     if dep.get("kind") == "pcvr":
         return launch_test_pcvr(dep, anchor, log, seconds)
     if dep.get("kind") == "linux":
@@ -7066,6 +7073,110 @@ def monitor_session(stdin, stdout, monitor=None, sleep=time.sleep, max_ticks=Non
     except (OSError, ValueError, BrokenPipeError):
         pass
     return 0
+
+
+# ------------------------------------------------------------------------------------------ Rift via FEX (experimental)
+# Oculus Rift games that need Meta's PC runtime, on the Frame alone: x86_64 GE-Proton under FEX + Meta's runtime +
+# Revive in one shared Wine prefix. The work is done by fexrift.py (uploaded with its binaries by the PC, see
+# src/frameport/fexrift.py and native/fexwine/README.md); these commands only start it and track games (kind
+# "frame_fex"; the game's files stay inside the prefix where Meta's app put them).
+FEX_ROOT = os.path.join(HOME, ".local/share/frameport/fexrift")
+FEX_ARTIFACTS = os.path.join(FEX_ROOT, "artifacts")
+FEX_HELPER = os.path.join(FEX_ARTIFACTS, "fexrift.py")
+
+
+def fex_helper(command, args=None, timeout=900):
+    if not os.path.isfile(FEX_HELPER):
+        raise AgentError("the files for Rift games on the Frame aren't here yet (run the setup first)")
+    p = run([sys.executable, "-I", FEX_HELPER, command, json.dumps(args or {})], timeout=timeout)
+    try:
+        out = json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise AgentError(f"fexrift {command} failed: {(p.stderr or p.stdout)[-400:]}")
+    if not out.get("ok"):
+        raise AgentError(out.get("error") or f"fexrift {command} failed")
+    return out["result"]
+
+
+def cmd_fex_prepare(args):
+    """Where the PC uploads fexrift.py + its binaries (artifacts/) and the login archive (incoming/), and what's
+    already there (unchanged files aren't re-sent)."""
+    incoming = os.path.join(FEX_ROOT, "incoming")
+    for d in (FEX_ARTIFACTS, incoming):
+        os.makedirs(d, exist_ok=True)
+    os.chmod(incoming, 0o700)
+    st = os.statvfs(FEX_ROOT)
+    return {"root": FEX_ROOT, "artifacts": FEX_ARTIFACTS, "incoming": incoming,
+            "existing": tree_manifest(FEX_ARTIFACTS), "free_bytes": st.f_bavail * st.f_frsize,
+            "fex": os.path.isdir(os.path.join(STEAM, "steamapps/common/FEX-Emu"))}
+
+
+def cmd_fex_status(args):
+    if not os.path.isfile(FEX_HELPER):
+        return {"helper": False}
+    res = fex_helper("status", timeout=60)
+    res["helper"] = True
+    return res
+
+
+def cmd_fex_setup(args):
+    """Start the setup (GE-Proton download, Meta's runtime from Meta's CDN, the prefix): ~10-20 min, detached;
+    progress via fex_status (setup.state / step / error)."""
+    if not os.path.isfile(FEX_HELPER):
+        raise AgentError("upload the files first (fex_prepare)")
+    steps = [s for s in args.get("steps") or [] if re.fullmatch(r"[a-z]+", str(s))]
+    unit = f"frameport-fexsetup-{int(time.time())}"
+    p = run(["systemd-run", "--user", "--collect", "--quiet", f"--unit={unit}", "--setenv=HOME=" + HOME,
+             sys.executable, "-I", FEX_HELPER, "setup", json.dumps({"steps": steps})])
+    if p.returncode != 0:
+        raise AgentError(f"couldn't start the setup: {p.stderr.strip()[-300:]}")
+    return {"started": True, "unit": unit}
+
+
+def cmd_fex_import_login(args):
+    """The login archive the PC uploaded to incoming/login.tar (fexrift.py deletes it afterwards)."""
+    return fex_helper("import_login", {"tar": os.path.join(FEX_ROOT, "incoming", "login.tar")})
+
+
+def cmd_fex_install(args):
+    """A game Meta's app downloaded (now in the prefix) as a Steam game: per-game fixes + launch.sh +
+    deployment.json (kind frame_fex). The Steam shortcut is added like for other games (shortcuts)."""
+    pkg = check_pkg(args["package"])
+    app = str(args.get("app") or "")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]+", app):
+        raise AgentError(f"bad app name {app!r}")
+    anchor = os.path.join(ANCHORS, pkg)
+    dep = deployment(pkg)
+    if dep and dep.get("kind") != "frame_fex":
+        raise AgentError(f"{pkg} is already installed in another way")
+    msaa = args.get("msaa")
+    res = fex_helper("install", {"app": app, "anchor": anchor, "msaa": msaa if msaa in (1, 2, 4) else None})
+    title = str(args.get("title") or res.get("title") or pkg).replace("\n", " ")
+    appid = dep["appid"] if dep else shortcut_appid(f'"{anchor}/launch.sh"', title)
+    dep = {"package": pkg, "kind": "frame_fex", "app": app, "appid": int(appid), "title": title,
+           "base": res["game_dir"], "exe": res["exe"], "tags": args.get("tags") or [], "vr": True,
+           "fixes": {k: res.get(k) for k in ("ime_patch", "msaa")},
+           "agent_version": AGENT_VERSION, "installed": int(time.time())}
+    path = os.path.join(anchor, "deployment.json")
+    with open(path + ".tmp", "w") as f:
+        json.dump(dep, f, indent=1)
+    os.replace(path + ".tmp", path)
+    return {"package": pkg, "appid": dep["appid"], "title": title, "launcher": res["launcher"], "fixes": dep["fixes"]}
+
+
+def fex_uninstall(pkg, dep, args):
+    """Only the launcher, artwork and shortcut go: the game stays in the shared prefix (Meta's app owns it)."""
+    anchor = os.path.join(ANCHORS, pkg)
+    removed_sc = False
+    if args.get("remove_shortcut") and steam_users():
+        removed_sc = cmd_shortcuts({"remove": [{"exe": f'"{anchor}/launch.sh"', "appid": dep.get("appid")}]})["started"]
+    if args.get("remove_shortcut"):
+        try:
+            devkit_unregister(pkg, steam_running=run(["pgrep", "-x", "steam"]).returncode == 0)
+        except Exception:  # noqa: BLE001 (the files go anyway at the next purge)
+            pass
+    remove_tree(anchor)
+    return {"removed": True, "kept_saves": True, "shortcut_removed": removed_sc}
 
 
 COMMANDS = {n[4:]: f for n, f in globals().items() if n.startswith("cmd_")}

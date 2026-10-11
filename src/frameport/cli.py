@@ -53,6 +53,9 @@ app.add_typer(tools_app, name="tools")
 app.add_typer(frame_app, name="frame")
 app.add_typer(pc_app, name="pc")
 app.add_typer(diag_app, name="diag")
+fex_app = typer.Typer(help="Experimental (FRAMEPORT_EXPERIMENTAL_FEX=1): Oculus Rift games with Meta's PC runtime on "
+                           "the Frame alone (x86_64 GE-Proton under FEX). Verified game: Oculus First Contact.")
+app.add_typer(fex_app, name="fex", hidden=True)
 
 
 def _show_version(value: bool):
@@ -900,6 +903,64 @@ def _describe(exc: BaseException) -> str:
     from .errors import explain
 
     return explain(exc)
+
+
+def _fex_target(frame: Optional[str]):
+    from . import fexrift
+
+    try:
+        fexrift.require_enabled()
+    except RuntimeError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2)
+    return _target(frame)
+
+
+@fex_app.command("status")
+def fex_status(frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """What's set up on the Frame: GE-Proton, Meta's runtime, the login, the games in the prefix."""
+    t = _fex_target(frame)
+    typer.echo(json.dumps(t.frame.agent("fex_status", timeout=90), indent=1))
+
+
+@fex_app.command("setup")
+def fex_setup(frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Upload FramePort's files, then the Frame downloads GE-Proton (x86_64) and Meta's runtime and builds the prefix
+    (10-20 minutes, about 12 GiB)."""
+    from . import fexrift
+
+    t = _fex_target(frame)
+    fexrift.setup(t.frame, printing_reporter(False))
+    typer.echo("setup done")
+
+
+@fex_app.command("import-login")
+def fex_import_login(prefix: str = typer.Argument(..., help="a Wine prefix on this PC where you signed in to Meta's "
+                                                            "app (and downloaded the game with it)"),
+                     frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Copy your Meta login and the games Meta's app downloaded into the Frame's prefix (sign-in tokens: sent over
+    SSH, deleted on both sides afterwards)."""
+    from pathlib import Path
+
+    from . import fexrift
+
+    t = _fex_target(frame)
+    res = fexrift.import_login(t.frame, Path(prefix).expanduser(), printing_reporter(False))
+    typer.echo(json.dumps(res.get("imported"), indent=1))
+
+
+@fex_app.command("install")
+def fex_install(app_name: str = typer.Argument("oculus-first-contact", metavar="APP",
+                                               help="Meta's name for the game (verified: oculus-first-contact)"),
+                msaa: Optional[int] = typer.Option(None, help="MSAA samples for the game (1, 2 or 4; game default 4)"),
+                no_steam: bool = typer.Option(False, "--no-steam", help="don't add it to the Steam library"),
+                frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Make a game from the prefix playable from the Steam library (fixes, launcher, shortcut)."""
+    from . import fexrift
+
+    t = _fex_target(frame)
+    res = fexrift.install(t.frame, printing_reporter(False), app_name, msaa=msaa, add_to_steam=not no_steam)
+    typer.echo(json.dumps(res, indent=1))
 
 
 if __name__ == "__main__":  # pragma: no cover

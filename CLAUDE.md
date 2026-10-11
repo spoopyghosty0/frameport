@@ -500,6 +500,19 @@ filling (one `rep stos`) and freeing 514 MB every 1-8 s: ~130k 4 KB page faults 
 → 0 hitches, steady 36 fps + motion smoothing, ~5.5 % timed out. 72 fps would need ~30 % less GPU (game ~55 % busy
 at 36 fps); THP (fragmentation), MSAA off, Turnip gmem don't help. Also needed: Unreal's
 `Slate.DeferWindowsMessageProcessing` = 0 (exe patch; the default deadlocks Wine's IME window ~1/3 of starts).
+Headset (owner, 2026-10-10): with motion smoothing off for the game (SteamVR per-app `motionSmoothingOverride=2`:
+smoothing cost ~15 % GPU) "much much better", 95 % of frames new at 72 Hz; MSAA off (DXVK `d3d11.disableMsaa`, -25 %
+GPU) helped but the owner misses smooth edges → the game's MSAA CVar is `r.MobileMSAA` (Oculus' clustered-forward
+branch; no r.MSAACount in the exe), 2x untested. Headless tests need the headset worn once per boot (else "IMU
+fallback" and the game waits at startup forever).
+**Experimental mode on branch `rift-on-frame` (the owner's single linkable branch for this work):** CLI only,
+`FRAMEPORT_EXPERIMENTAL_FEX=1 frameport fex setup | import-login <signed-in PC prefix> | install [oculus-first-contact]
+[--msaa N] | status` (hidden group). PC `src/frameport/fexrift.py` uploads `agent/fexrift.py` + `artifacts/fexrift`
+(sources native/fexwine) + Revive 3.2.0 with 6 byte patches (refused for other builds); the Frame helper downloads
+GE-Proton11-7 x86_64 (SHA-512), x86 GnuTLS (Arch archive), installs Meta's runtime (Meta's signature checks kept) and
+writes the game's launcher. Agent v77 `fex_prepare/status/setup/import_login/install`, kind `frame_fex` (uninstall
+keeps the shared prefix; launch tests refused). Everything under `~/.local/share/frameport/fexrift` (purge removes it,
+login tokens included). Not yet run end to end on the device; the login still comes from a PC prefix signed in by hand.
 Uninstall (Quest, saves kept) used to leave `deployment.json` → still "installed"; fixed (agent v16).
 
 **Discovery/network:** Developer-Mode SteamOS devices announce `_steamos-devkit._tcp` (TXT `login=steamos`) — use it;
