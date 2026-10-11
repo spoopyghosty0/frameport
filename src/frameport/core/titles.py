@@ -32,9 +32,9 @@ def twins(games: list[dict]) -> set[str]:
 
 def display_title(game: dict, twin_set: set[str] | None = None) -> str:
     """The title shown everywhere (cards, pages, jobs, Steam shortcut): "<Title> (Quest)" / "(Rift)" while both
-    versions of a game are in the library."""
+    versions of a game are in the library. A name the user chose (Rename…, title_locked) is shown as it is."""
     title = game.get("title") or game["package"]
-    if twin_set is not None and game["package"] in twin_set:
+    if twin_set is not None and game["package"] in twin_set and not game.get("title_locked"):
         return f"{title} ({'Rift' if game.get('kind') == 'rift' else 'Quest'})"
     return title
 

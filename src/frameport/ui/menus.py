@@ -53,7 +53,8 @@ def menu_sections(g: dict, st: MenuState, act: Callable[[str], Callable]) -> lis
     if st.movable and st.on_frame and not job:
         top.append((tr("Move to…"), ft.Icons.DRIVE_FILE_MOVE_ROUNDED, act("move")))
 
-    artwork = [(tr("Find artwork…"), ft.Icons.IMAGE_SEARCH_ROUNDED, act("find_art")),
+    artwork = [(tr("Rename…"), ft.Icons.DRIVE_FILE_RENAME_OUTLINE_OUTLINED, act("rename")),
+               (tr("Find artwork…"), ft.Icons.IMAGE_SEARCH_ROUNDED, act("find_art")),
                (tr("Use your own artwork…"), ft.Icons.UPLOAD_FILE_OUTLINED, act("custom_art"))]
     if not job and st.on_frame:
         artwork.append((tr("Update art on Frame"), ft.Icons.WALLPAPER_ROUNDED, act("steam_art")))
@@ -77,7 +78,7 @@ def menu_sections(g: dict, st: MenuState, act: Callable[[str], Callable]) -> lis
     danger = [(tr("Remove from library…"), ft.Icons.REMOVE_CIRCLE_OUTLINE_ROUNDED, act("remove"))]
 
     out: list = list(top)
-    for head, items in ((tr("Artwork"), artwork), (tr("Recipe"), recipe), (tr("Troubleshoot"), trouble)):
+    for head, items in ((tr("Name and artwork"), artwork), (tr("Recipe"), recipe), (tr("Troubleshoot"), trouble)):
         if items:
             out += [None, Header(head), *items]
     return out + [None, *danger]
@@ -96,6 +97,7 @@ def quick_menu(st: MenuState, act: Callable[[str], Callable]) -> list:
     out += st.installs[:1]
     if st.settings:
         out.append((tr("Game settings…"), ft.Icons.TUNE_ROUNDED, act("settings")))
+    out.append((tr("Rename…"), ft.Icons.DRIVE_FILE_RENAME_OUTLINE_OUTLINED, act("rename")))
     out += [None, (tr("More actions…"), ft.Icons.MORE_HORIZ_ROUNDED, act("more")), None]
     if st.on_frame:
         out.append((tr("Uninstall from Frame…"), ft.Icons.DELETE_OUTLINE_ROUNDED, act("uninstall_frame")))

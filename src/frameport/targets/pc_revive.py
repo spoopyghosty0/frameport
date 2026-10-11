@@ -19,7 +19,7 @@ from ..core.models import Recipe
 from ..core.paths import agent_file, user_data_dir
 from ..patches.pcvr import game_args
 from ..validate.triage import triage
-from .base import Target
+from .base import PC_LABEL, Target
 
 TAG = "FramePort PC VR"  # marks the Steam shortcuts FramePort made (for updates and cleanup)
 OLD_TAGS = ("Rift via Revive",)  # earlier name of the same tag
@@ -86,7 +86,7 @@ def local_installs() -> dict[str, dict]:
 
 class PcReviveTarget(Target):
     kind = "pc"
-    label = "This PC"
+    label = PC_LABEL
 
     def __init__(self):
         if not winhost.available():
@@ -125,6 +125,24 @@ class PcReviveTarget(Target):
             return json.loads((pc_dir() / package / "deployment.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             raise RuntimeError(f"{package} is not installed on this PC") from None
+
+    @staticmethod
+    def _save_dep(package: str, dep: dict) -> None:
+        path = pc_dir() / package / "deployment.json"
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(dep, indent=2), encoding="utf-8")
+        tmp.replace(path)
+
+    def rename(self, package: str, title: str, reporter: Reporter) -> dict:
+        """A new name for an installed game's Steam shortcut on this PC (after Rename…): the shortcut is matched by
+        its Exe, so it keeps its appid (Play, grid art); Steam restarts once if it runs."""
+        dep = self._dep(package)
+        if dep.get("title") == title:
+            reporter.check("Steam library (PC)", True, f"already named {title}")
+            return {"state": "done", "added": [], "errors": [], "unchanged": True}
+        dep["title"] = title
+        self._save_dep(package, dep)
+        return self.add_to_library([package], reporter)
 
     def collect_diag(self, package=None):
         files = {}
@@ -175,8 +193,13 @@ class PcReviveTarget(Target):
                "sha256": extra.get("exe_sha256"), "art_lookup": extra.get("art_lookup"),
                "recipe": {"patches": sorted(recipe.patches), "source": recipe.source}, "time": time.time()}
         exe_field, _, _ = shortcut_fields(dep)
-        dep["appid"] = _vdf().shortcut_appid(exe_field, title)
         d = pc_dir() / package
+        try:  # a reinstall keeps the shortcut's appid: Steam's entry is matched by its Exe, whatever its name now
+            old = json.loads((d / "deployment.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            old = {}
+        same_exe = bool(old.get("appid") and old.get("exe_win") and shortcut_fields(old)[0] == exe_field)
+        dep["appid"] = old["appid"] if same_exe else _vdf().shortcut_appid(exe_field, title)
         d.mkdir(parents=True, exist_ok=True)
         (d / "deployment.json").write_text(json.dumps(dep, indent=2), encoding="utf-8")
         reporter.log(f"ready to run from {dep['exe_win']}" + (" through Revive" if rdir else ""))
@@ -214,7 +237,7 @@ class PcReviveTarget(Target):
                         for old in grid_files(grid, stale):
                             old.unlink(missing_ok=True)
                         reporter.log(f"removed the old Steam entry for {dep['title']} (its launch command changed)")
-                    ident = vdf_mod.shortcut_appid(exe, dep["title"])
+                    ident = dep.get("appid") or vdf_mod.shortcut_appid(exe, dep["title"])
                     icon = dep["exe_win"]
                     if "icon" in art:  # Steam wants a local path for the shortcut icon
                         icon_path = grid / f"{ident}_icon.png"
@@ -229,6 +252,9 @@ class PcReviveTarget(Target):
                         for old in grid.glob(f"{got}{suffix}.*"):
                             old.unlink()
                         shutil.copy(f, grid / f"{got}{suffix}{f.suffix}")
+                    if got != dep.get("appid"):  # Play starts the shortcut by this id (a renamed game keeps its own)
+                        dep["appid"] = got
+                        self._save_dep(pkg, dep)
                     added.append({"package": pkg, "appid": got})
                     reporter.check(f"Steam library (PC): {dep['title']}", True, f"shortcut {got}")
                 except Exception as exc:  # noqa: BLE001

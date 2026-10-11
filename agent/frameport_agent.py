@@ -44,7 +44,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 76
+AGENT_VERSION = 77
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -4832,6 +4832,42 @@ def cmd_set_settings(args):
         f.write(text)
     models = install_controller_models(files_dir, current.get("controller_models", "0") not in ("0", "0.0"))
     return {"settings": current, "controller_models": models}
+
+
+TITLE_MAX = 128
+
+
+def clean_title(title):
+    """A game's name for its Steam shortcut: one line, no control characters, at most TITLE_MAX characters."""
+    text = " ".join("".join(c if c.isprintable() else " " for c in str(title or "")).split())
+    if not text:
+        raise AgentError("the new name is empty")
+    return text[:TITLE_MAX]
+
+
+def cmd_rename(args):
+    """Rename an installed game (agent v77): deployment.json's title is what its Steam shortcut shows. The shortcut
+    keeps its appid (upsert_shortcut matches by Exe, deployment.json keeps the appid), so Play, its grid art, launch
+    tests and the game's container stay the same. shortcuts (default on) rewrites the library entry like an install
+    does (Steam restarts once, after a running game or Desktop Mode). A devkit entry is named by its id: unchanged."""
+    pkg = check_pkg(args["package"])
+    title = clean_title(args.get("title"))
+    dep = deployment(pkg)
+    if not dep or not dep.get("appid"):
+        raise AgentError(f"{pkg} is not installed")
+    old = dep.get("title") or pkg
+    out = {"package": pkg, "title": title, "old": old, "appid": dep["appid"], "renamed": old != title}
+    if out["renamed"]:
+        dep["title"] = title
+        write_deployment(pkg, dep)
+        if (dep.get("overlay") or {}).get("registered"):  # its SteamVR manifest shows the name too
+            try:
+                register_overlay(pkg, bool(dep["overlay"].get("autostart")))
+            except Exception as exc:  # noqa: BLE001 - the shortcut matters more
+                out["overlay_error"] = str(exc)
+    out["shortcuts"] = cmd_shortcuts({"packages": [pkg], "restart": True}) \
+        if args.get("shortcuts", True) and out["renamed"] else {"started": False}
+    return out
 
 
 def cmd_uninstall(args):

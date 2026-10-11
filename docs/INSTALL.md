@@ -104,6 +104,9 @@ refresh rate, controllers, menus, 360° video and mixed reality. Changes are use
 
 ![Game settings](images/game-settings.png)
 
+**Rename…** (in the game's menu) changes the name in the Library and in Steam; FramePort keeps it from then on. An
+installed game keeps its Steam entry, artwork and saves (Steam restarts once).
+
 ### microSD cards and other drives
 
 - The **Steam Frame** page's **Storage** section sets where new games go (**Install new games to**).
