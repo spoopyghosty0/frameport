@@ -206,8 +206,9 @@ over Quest games.
 - **Registration** (what SteamVR honours on the Frame): `IVRApplications::AddApplicationManifest(path, false)` from
   a utility client, live; the path is kept in `~/.config/openvr/config/appconfig.json` `manifest_paths`.
   `SetApplicationAutoLaunch` is accepted (GetApplicationAutoLaunch → true; vrserver has
-  `CAppInfoManager::StartAutolaunchOverlays`) but wasn't written to `steamvr.vrsettings` right away; whether it
-  starts the app at the next SteamVR start is **not yet verified**. The linuxarm64 vrserver only reads
+  `CAppInfoManager::StartAutolaunchOverlays`) but on the dev Frame it never reached `steamvr.vrsettings` (no
+  autolaunch entry for `temporalreality.overlay` there, appconfig.json holds only manifest_paths) and the owner's
+  watch didn't start by itself, so FramePort doesn't rely on it (see "Autostart" below). The linuxarm64 vrserver only reads
   **`binary_path_linux_arm`**: a manifest with `binary_path_linux` alone is skipped ("must specify binary_path for
   launch_type binary. Skipping"; Steam's own steamapps.vrmanifest entries are skipped the same way), so an app's
   own Linux manifest/`--install` that only writes binary_path_linux can't be launched by SteamVR on the Frame.
@@ -219,6 +220,22 @@ over Quest games.
   absolute paths) and registers it; `unregister_vr_overlay`, uninstall and purge remove it; `ensure_host_fixes`
   registers ones SteamVR missed (it wasn't running). Overlay apps skip launch tests, the Linux launcher's
   Steam-parent watchdog (`FRAMEPORT_OVERLAY=1`) and don't count as a running game.
+- **Autostart (agent v76)**: the deployment's `overlay.autostart` is the source of truth (SetApplicationAutoLaunch
+  is still set for SteamVR builds that honour it). While at least one installed overlay app has it on,
+  `ensure_host_fixes` keeps the user service `frameport-vr-overlays.service` (`~/.config/systemd/user`, enabled for
+  default.target, Restart=always) = `frameport_agent.py _vr_overlay_watch`: every 5 s it checks the vrserver it knows
+  (`/proc/<pid>/stat`: name + start time; a full /proc scan only when that one is gone); a new vrserver (boot,
+  SteamVR restart, or the first look after the service starts) gets one round in a child process
+  (`_vr_overlay_round`, timeout): wait ≤180 s until IVRApplications answers, 15 s for SteamVR's own auto-launch,
+  then `launch_vr_overlay` for each autostart app that isn't running (a process with its install folder/anchor in
+  the command line, or GetApplicationProcessId ≠ 0: never a second copy). The handled vrserver is kept in
+  `~/.cache/frameport-vr-overlays.json`, so an agent update (the watcher exits when its file changes, systemd starts
+  the new one) doesn't restart an app the user closed. Log: `~/.local/share/frameport/vr-overlays.log` (128 KB, one
+  `.1`). Removed when no overlay app has autostart (game page switch, uninstall), by purge, and by the kill switch
+  `~/.local/share/frameport/vr-overlays.disabled` (or `FRAMEPORT_NO_OVERLAY_AUTOSTART=1` in the agent's environment).
+  Cost: one idle python3 (~30-40 MB RSS, no CPU between polls). Dev Frame 2026-10-10 (vrserver up since boot,
+  Temporal Reality already started from its Steam shortcut): `new SteamVR (vrserver 2297)` →
+  `linux.temporalreality: running` (not started again). Start after a real SteamVR start/boot: not yet seen.
 
 ## Video of the headset view (surveyed 2026-10-05; used by the Live view tab)
 - `steamvr-v4l2cam.service` (user unit, part of gamescope-session.target, `Restart=always`) runs SteamVR's
