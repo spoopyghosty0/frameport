@@ -19,10 +19,12 @@ def _uleb(n: int) -> bytes:
             return bytes(out)
 
 
-def build_dex(methods: list[tuple[str, str, str, list[int] | None]]) -> bytes:
+def build_dex(methods: list[tuple[str, str, str, list[int] | None]], strings_first: tuple[str, ...] = (),
+              types_first: tuple[str, ...] = ()) -> bytes:
     """A minimal dex: methods = (class, name, return type, code units or None for a referenced-only method). Every
-    method with code belongs to one class_def per class (virtual methods)."""
-    strings: list[str] = []
+    method with code belongs to one class_def per class (virtual methods). strings_first / types_first get the first
+    string / type indices, in that order (for const-string / check-cast operands)."""
+    strings: list[str] = list(strings_first)
 
     def s(x: str) -> int:
         if x not in strings:
@@ -36,6 +38,9 @@ def build_dex(methods: list[tuple[str, str, str, list[int] | None]]) -> bytes:
         if i not in types:
             types.append(i)
         return types.index(i)
+
+    for x in types_first:
+        t(x)
 
     protos: list[tuple[int, int]] = []
 
