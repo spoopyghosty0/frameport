@@ -1692,3 +1692,21 @@ def test_rename_keeps_the_shortcut_appid(monkeypatch, tmp_path):
     r = a.cmd_rename({"package": "com.x.y", "title": "Vader Immortal: Episode II"})
     assert not r["renamed"] and not started
     assert len(a.cmd_rename({"package": "com.x.y", "title": "x" * 300, "shortcuts": False})["title"]) == a.TITLE_MAX
+
+
+def test_two_revive_games_keep_their_own_shortcuts(monkeypatch, tmp_path):
+    """Every Revive game on a PC starts ReviveInjector.exe: shortcuts are told apart by the game in the launch
+    options (one overwrote the other before); a changed injector flag still updates the same shortcut."""
+    a = load_agent(monkeypatch, tmp_path)
+    vdf = tmp_path / "shortcuts.vdf"
+    exe = '"C:\\\\Revive\\\\ReviveInjector.exe"'
+    one = a.upsert_shortcut(str(vdf), exe, "Game One", '"D:\\\\G1\\\\"', "", "Rift via Revive",
+                            launch_options='/openxr "D:\\\\G1\\\\One.exe"')
+    two = a.upsert_shortcut(str(vdf), exe, "Game Two", '"D:\\\\G2\\\\"', "", "Rift via Revive",
+                            launch_options='"D:\\\\G2\\\\Two.exe"')
+    assert one != two
+    again = a.upsert_shortcut(str(vdf), exe, "Game One", '"D:\\\\G1\\\\"', "", "Rift via Revive",
+                              launch_options='"D:\\\\G1\\\\One.exe"')
+    assert again == one
+    names = sorted(v["appname"] for v in a.vdf_decode(vdf.read_bytes())["shortcuts"].values())
+    assert names == ["Game One", "Game Two"]

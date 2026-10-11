@@ -950,7 +950,15 @@ def upsert_shortcut(vdf_path, exe, title, start_dir, icon="", tag="Quest on Fram
     data = open(vdf_path, "rb").read() if os.path.exists(vdf_path) else b""
     root = vdf_decode(data) if data else {"shortcuts": {}}
     shortcuts = root.setdefault("shortcuts", {})
-    entry = next((v for v in shortcuts.values() if isinstance(v, dict) and v.get("Exe") == exe), None)
+    # matched by Exe; a launcher many games share (Revive's injector on a PC) also by the game in its launch options,
+    # or two Revive games overwrote each other's shortcut
+    shared = "reviveinjector" in exe.lower()
+
+    def game_of(options):  # the game's program in the injector's arguments (its flags may change)
+        found = re.findall(r'"([^"]+\.exe)"|(\S+\.exe)', options or "", re.IGNORECASE)
+        return (found[-1][0] or found[-1][1]).lower() if found else (options or "")
+    entry = next((v for v in shortcuts.values() if isinstance(v, dict) and v.get("Exe") == exe
+                  and (not shared or game_of(v.get("LaunchOptions", "")) == game_of(launch_options))), None)
     ident = entry["appid"] if entry else shortcut_appid(exe, title)
     if entry is None:
         entry = {"appid": ident, "LastPlayTime": 0, "tags": {"0": tag}}
