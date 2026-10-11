@@ -3,7 +3,7 @@
 
 output: docs/media/frameport-tour.mp4
 teaser: docs/images/tour-teaser.webp
-budget_mb: 12
+budget_mb: 20
 start:
   profile: demo           # the library in use: games installed on the pretend Frame, BONELAB running
   frame: connected

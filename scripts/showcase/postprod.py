@@ -139,21 +139,21 @@ def join(clips: list[Path], durations: list[float], out: Path, transition: float
 
 
 def encode_within(clips: list[Path], durations: list[float], out: Path, budget_mb: float, transition: float = 0.5,
-                  crf: int = 22, max_crf: int = 32) -> int:
+                  crf: int = 17, max_crf: int = 30) -> int:
     """The final MP4 at the best quality (lowest CRF) that fits `budget_mb`. Returns the CRF used."""
     while True:
         join(clips, durations, out, transition, crf)
         if out.stat().st_size <= budget_mb * 1e6 or crf >= max_crf:
             return crf
-        crf += 2
+        crf += 1
 
 
 def poster(video: Path, at: float, out: Path) -> None:
     run(["-ss", f"{at:.2f}", "-i", video, "-frames:v", "1", "-q:v", "2", out])
 
 
-def teaser_webp(clips: list[Path], durations: list[float], out: Path, width: int = 960, fps: int = 15,
-                budget_mb: float = 4.0, transition: float = 0.35) -> int:
+def teaser_webp(clips: list[Path], durations: list[float], out: Path, width: int = 1280, fps: int = 20,
+                budget_mb: float = 8.0, transition: float = 0.35) -> int:
     """A looping animated WebP of the highlight clips (README: plays inline where an MP4 wouldn't). Lowers the
     quality until it fits `budget_mb`. Returns the quality used."""
     graph, label = xfade_graph(durations, transition)
@@ -161,13 +161,15 @@ def teaser_webp(clips: list[Path], durations: list[float], out: Path, width: int
     args = []
     for c in clips:
         args += ["-i", c]
-    quality = 72
+    # UI footage: the "drawing" preset keeps text and edges crisp; start near-lossless (quality 72 at 960 px showed
+    # blocky text on GitHub) and only step down when the file would be too big for a README
+    quality = 95
     while True:
         run([*args, "-filter_complex", graph, "-map", label, "-an", "-c:v", "libwebp_anim", "-lossless", "0",
-             "-quality", quality, "-compression_level", "6", "-loop", "0", out])
-        if out.stat().st_size <= budget_mb * 1e6 or quality <= 30:
+             "-preset", "drawing", "-quality", quality, "-compression_level", "6", "-loop", "0", out])
+        if out.stat().st_size <= budget_mb * 1e6 or quality <= 50:
             return quality
-        quality -= 8
+        quality -= 5
 
 
 # ------------------------------------------------------------------ cards and captions

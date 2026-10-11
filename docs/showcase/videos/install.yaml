@@ -5,7 +5,7 @@
 # docs/SHOWCASE.md ("Videos").
 
 output: docs/media/frameport-install.mp4
-budget_mb: 12
+budget_mb: 20
 poster_at: 9
 start:
   profile: fresh           # FramePort's first start

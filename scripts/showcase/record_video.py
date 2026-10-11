@@ -39,7 +39,7 @@ START_KEYS = {"profile", "frame", "stream", "route"}
 SCENE_KEYS = {"name", "caption", "teaser", "hold", "steps", "card", "seconds"}
 CARD_KEYS = {"eyebrow", "heading", "line", "steps", "code", "note"}
 VIEWPORT = (1440, 810)  # the layout size; filmed at 4/3 device pixels = 1920x1080
-TEASER_MB = 4.0
+TEASER_MB = 8.0
 
 
 def video_names() -> list[str]:
