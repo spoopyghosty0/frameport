@@ -65,6 +65,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Gravity Lab | Quest | ✅ Works |  |
 | Gunjack | Quest | ✅ Works |  |
 | H.U.N.T | Quest | ✅ Works |  |
+| Hitstream | Quest | ✅ Works |  |
 | I Am Cat | Quest | ✅ Works |  |
 | I Am Monkey | Quest | ✅ Works |  |
 | I Expect You To Die 2 | Quest | ✅ Works |  |
@@ -107,6 +108,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Pistol Whip | PC VR | ✅ Works |  |
 | Please Don't Touch Anything | Quest | ✅ Works |  |
 | PowerWash Simulator VR | Quest | ✅ Works |  |
+| Punch Fit | Quest | ✅ Works |  |
 | QuestCraft | Quest | ✅ Works |  |
 | Racket: Nx | Quest | ✅ Works |  |
 | RacketPinball | Quest | ✅ Works |  |

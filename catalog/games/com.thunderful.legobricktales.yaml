@@ -5,9 +5,8 @@ source_hint: LEGO Bricktales
 engine: Unity
 xr: OpenXR
 status: works
-notes: Use VR mode.
+notes: VR and MR modes work.
   frame.unity_text_input and device.text_input_window added from detection (not headset-verified).
-details: Has VR and MR modes; use VR mode (passthrough not forced).
 frame:
 - frame.unity_text_input
 device:

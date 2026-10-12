@@ -1,0 +1,19 @@
+package: jp.strippers.punchfit
+title: Punch Fit
+status: works
+tested_version: 1.7.2
+engine: Unity
+xr: OpenXR
+frame:
+- frame.meta_permissions
+- frame.unity_text_input
+adapter:
+  haptic_fix: 1
+  pose_time_fix: 1
+  scene_emul: 1
+  passthrough_emul: 1
+notes: Mixed reality workout arena; composition layer trimming prevents 21+ layer overflow.
+verified:
+  date: '2026-10-12'
+  known_good_sha256: 1a0050272526360542d62e7e6d1fc2daecb765c34378a6fe4ad51568ec550c0d
+source_hint: Punch Fit

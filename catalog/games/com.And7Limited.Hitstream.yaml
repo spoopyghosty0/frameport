@@ -1,0 +1,16 @@
+package: com.And7Limited.Hitstream
+title: Hitstream
+status: works
+tested_version: 2.06bQuest
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+adapter:
+  controller_models: 1
+  haptic_fix: 1
+notes: Fitness rhythm game; uses controller models and haptics fix.
+verified:
+  date: '2026-10-12'
+  known_good_sha256: ecc9e2eee79073ae97ad5d3f70c21e8f049f899f21b51dfd541430bb7dd04cac
+source_hint: Hitstream
