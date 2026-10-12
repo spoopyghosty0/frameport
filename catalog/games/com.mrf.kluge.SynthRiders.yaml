@@ -1,0 +1,15 @@
+package: com.mrf.kluge.SynthRiders
+title: SynthRiders
+engine: Unity
+xr: OpenXR
+status: works
+notes: Mixed reality requires passthrough emulation (passthrough_emul=1) and room/scene emulation (scene_emul=1).
+details: Freestyle dancing and rhythm fitness game with custom songs and Mixed Reality mode.
+adapter:
+  controller_fix: 1
+  controller_models: 1
+  haptic_fix: 1
+  passthrough_emul: 1
+  scene_emul: 1
+frame:
+- frame.meta_permissions
