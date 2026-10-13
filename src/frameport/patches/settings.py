@@ -532,6 +532,9 @@ class AdapterSetting(Patch):
     def detect(self, a):
         from .applicability import needs_scene, uses_equirect_layers, uses_render_models, uses_room_model
 
+        if self.key == "controller_fix" and a.extra.get("hand_tracking_only"):
+            return Suggestion(True, "Hand tracking is required by the game: pass hands through instead of reporting "
+                                    "Touch controllers (for example Silhouette).", {"value": 0})
         if self.key == "controller_models" and uses_render_models(a):
             return Suggestion(True, "The game asks the headset for its controller models: show Steam Frame controllers "
                                     "instead of Quest Touch controllers.", {"value": 1})

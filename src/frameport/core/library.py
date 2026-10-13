@@ -348,6 +348,8 @@ def _migrate(data: dict) -> bool:
                 r.setdefault("reasons", {}).setdefault(
                     "frame.hw_video_decode", "Its cutscenes are 8K HEVC video: decode them on the Frame's hardware.")
                 r["reasons"].setdefault("adapter.surface_native", "Shows its cutscenes as stereo panoramas.")
+        done.append("batman_video_patches")
+        changed = True
     if "meta_spatial_permissions" not in done:
         # Apps that use Meta scene/spatial permissions gain frame.meta_permissions by default
         from ..patches import base

@@ -24,10 +24,9 @@ def test_mixed_reality_without_scene():
     assert "patch_force_passthrough" in r.patches and "adapter.scene_emul" not in r.patches
 
 
-def test_hand_tracking_retains_controllers_by_default():
-    """Games with hand tracking keep controllers enabled by default; heuristics do not force controller_fix=0."""
+def test_hand_tracking_only():
     _, r = suggest(extra={"hand_tracking_only": True, "size": 1})
-    assert "adapter.controller_fix" not in r.patches or r.params("adapter.controller_fix").get("value") != 0
+    assert r.params("adapter.controller_fix") == {"value": 0}
 
 
 def test_heavy_ovrplugin_game_disables_space_warp():

@@ -79,3 +79,9 @@ def test_patch_laser_dance_assets():
     assert struct.unpack("<f", new_split80[0xeb40 + 432 : 0xeb40 + 436])[0] == 0.0
     assert "LineLod" in note80
 
+
+def test_analysis_version_bumped():
+    from frameport.analysis.detect import ANALYSIS_VERSION
+
+    assert ANALYSIS_VERSION >= 14
+
