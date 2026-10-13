@@ -156,6 +156,11 @@ SETTINGS = [
      "the hands from it show a thumb that never moves (for example Vader Immortal; found by Klownicle, GitHub #49). "
      "Binds the game's proximity actions to the capacitive touch inputs instead: 1 = thumb (thumbstick, face buttons "
      "or thumb rest touched), 2 = also the index finger (trigger touched). Only when the runtime lacks the extension."),
+    ("hide_hand_profiles", "int", 0, "Controllers instead of hand input",
+     "The Frame's runtime offers hand interaction (XR_EXT_hand_interaction) from hands it synthesizes from the "
+     "controllers. A game that also binds its actions to that profile got it for both hands, and its grip, trigger "
+     "and buttons (bound for Touch) did nothing (for example Gorilla Tag). Its hand-interaction bindings are never "
+     "given to the runtime, so the controllers get the Touch bindings."),
     ("pose_debug", "int", 0, "Pose time diagnostics (log)",
      "Every 5 s, logs per located space how far the requested times are from the frame's predicted display time, and "
      "the runtime clock's offset from the monotonic clock. No effect on the game."),
@@ -286,6 +291,10 @@ UI: dict[str, dict] = {
                            help="For games whose hands' thumbs never move when you touch the buttons or thumbstick "
                                 "(for example Vader Immortal).",
                            control=("choice", [(0, "Off"), (1, "Thumbs"), (2, "Thumbs and index fingers")])),
+    "hide_hand_profiles": dict(group="controllers", level="advanced", label="Use controllers, not hand input",
+                               help="For games whose hands don't react to grip, trigger or buttons (for example "
+                                    "Gorilla Tag).",
+                               control=("switch",)),
     "haptic_fix": dict(group="controllers", level="advanced", label="Fix freezes when controllers vibrate",
                        help="For games that freeze the Frame when a controller vibrates (for example Lucky's Tale). "
                             "Needs a rebuild.",

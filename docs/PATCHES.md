@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 163 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 164 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -12,7 +12,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 
 - [Patches from OVRPort](#group-overport) (25)
 - [Steam Frame patches](#group-frame) (51)
-- [Game settings](#group-adapter) (66)
+- [Game settings](#group-adapter) (67)
 - [Files and settings on the Frame](#group-device) (8)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
 
@@ -61,7 +61,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Declare Meta-only permissions](#frame-meta_permissions) | `frame.meta_permissions` | Steam Frame patches | 1 |
 | [Meta XR Audio: skip Quest telemetry class](#frame-metaxr_telemetry) | `frame.metaxr_telemetry` | Steam Frame patches | default |
 | [Clear android:debuggable](#frame-nodebug) | `frame.nodebug` | Steam Frame patches | 3 |
-| [Oculus OS telemetry class stubs](#frame-oculusos) | `frame.oculusos` | Steam Frame patches | 15 |
+| [Oculus OS telemetry class stubs](#frame-oculusos) | `frame.oculusos` | Steam Frame patches | 16 |
 | [Fix crash when the game prepares the microphone](#frame-ovr_microphone) | `frame.ovr_microphone` | Steam Frame patches |  |
 | [Keep the same Meta user between starts](#frame-ovr_stable_user) | `frame.ovr_stable_user` | Steam Frame patches | default |
 | [Trace Meta platform requests (diagnostics)](#frame-ovr_trace) | `frame.ovr_trace` | Steam Frame patches |  |
@@ -79,7 +79,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Unity: skip OVROverlay layers (fades, splash screens)](#frame-unity_no_overlay_copy) | `frame.unity_no_overlay_copy` | Steam Frame patches | 2 |
 | [Unity: start VR without Meta's system apps](#frame-unity_oculus_check) | `frame.unity_oculus_check` | Steam Frame patches | 9 |
 | [Unity: keep MSAA off at runtime (OVRManager)](#frame-unity_runtime_msaa_off) | `frame.unity_runtime_msaa_off` | Steam Frame patches | 22 |
-| [Make Unity text fields work](#frame-unity_text_input) | `frame.unity_text_input` | Steam Frame patches | 69 |
+| [Make Unity text fields work](#frame-unity_text_input) | `frame.unity_text_input` | Steam Frame patches | 70 |
 | [Unity: share thread keys (games that run out of them)](#frame-unity_tls_key_pool) | `frame.unity_tls_key_pool` | Steam Frame patches | 1 |
 | [Unity: headset always counts as worn](#frame-unity_user_presence) | `frame.unity_user_presence` | Steam Frame patches | 1 |
 | [GL shim for Unreal (no multisampled render-to-texture)](#frame-unreal_gl_shim) | `frame.unreal_gl_shim` | Steam Frame patches | 1 |
@@ -121,8 +121,9 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [GL shim: high-precision vertex shaders](#adapter-gl_highp_markers) | `adapter.gl_highp_markers` | Game settings | 1 |
 | [GL shim: integer vertex inputs](#adapter-gl_int_attribs) | `adapter.gl_int_attribs` | Game settings | 1 |
 | [Flat panel diagnostics (log)](#adapter-gl_mv_debug) | `adapter.gl_mv_debug` | Game settings |  |
-| [Fix freezes when controllers vibrate](#adapter-haptic_fix) | `adapter.haptic_fix` | Game settings | 60 |
+| [Fix freezes when controllers vibrate](#adapter-haptic_fix) | `adapter.haptic_fix` | Game settings | 61 |
 | [Vibration strength](#adapter-haptic_scale) | `adapter.haptic_scale` | Game settings |  |
+| [Use controllers, not hand input](#adapter-hide_hand_profiles) | `adapter.hide_hand_profiles` | Game settings | 1 |
 | [Turn off space warp](#adapter-hide_space_warp) | `adapter.hide_space_warp` | Game settings | 4 |
 | [Controller input diagnostics (log)](#adapter-input_diag) | `adapter.input_diag` | Game settings |  |
 | [Extra diagnostics (log)](#adapter-layer_debug) | `adapter.layer_debug` | Game settings |  |
@@ -133,7 +134,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [See your room](#adapter-passthrough_emul) | `adapter.passthrough_emul` | Game settings |  |
 | [Steadier head tracking](#adapter-pose_consistency) | `adapter.pose_consistency` | Game settings | 1 |
 | [Pose timing diagnostics (log)](#adapter-pose_debug) | `adapter.pose_debug` | Game settings |  |
-| [Fix hands lagging behind controllers](#adapter-pose_time_fix) | `adapter.pose_time_fix` | Game settings | 11 |
+| [Fix hands lagging behind controllers](#adapter-pose_time_fix) | `adapter.pose_time_fix` | Game settings | 12 |
 | [Treat newer Quest controllers as Touch](#adapter-profile_remap) | `adapter.profile_remap` | Game settings |  |
 | [Animate fingers from touch](#adapter-proximity_emul) | `adapter.proximity_emul` | Game settings |  |
 | [Keep pictures in bounds](#adapter-rect_clamp) | `adapter.rect_clamp` | Game settings |  |
@@ -169,7 +170,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Hide Android's navigation bar](#device-hide_navbar) | `device.hide_navbar` | Files and settings on the Frame |  |
 | [Extra Lepton settings](#device-lepton_env) | `device.lepton_env` | Files and settings on the Frame | 3 |
 | [Controllers as a gamepad (Steam Input)](#device-steam_gamepad) | `device.steam_gamepad` | Files and settings on the Frame |  |
-| [Show the app's Android window (for typing)](#device-text_input_window) | `device.text_input_window` | Files and settings on the Frame | 69 |
+| [Show the app's Android window (for typing)](#device-text_input_window) | `device.text_input_window` | Files and settings on the Frame | 70 |
 | [Launch options (SteamVR or OpenXR)](#pcvr-launch_args) | `pcvr.launch_args` | PC VR (Proton and Revive) | 2 |
 | [Provide the Oculus runtime from Revive (Frame)](#pcvr-libovr_redirect) | `pcvr.libovr_redirect` | PC VR (Proton and Revive) |  |
 | [No Unreal crash reporter](#pcvr-no_crash_reporter) | `pcvr.no_crash_reporter` | PC VR (Proton and Revive) |  |
@@ -701,7 +702,7 @@ Provides stand-ins for Quest system calls some games make at start.
 - **Suggested (on):** The Unreal build of Meta XR Audio looks up com.oculus.os.AnalyticsEvent and aborts without it (for example NOPE Challenge).
 - **Suggested (on):** Several Meta SDK libraries look up com.oculus.os.AnalyticsEvent (…); games like this abort without the stub (for example Nano).
 - **Offered (off):** … references com.oculus.os.AnalyticsEvent; usually harmless (for example Batman: Arkham Shadow and LEGO Bricktales run without it). Enable if the game aborts with ClassNotFoundException.
-- **Catalog games (15):** AgeOfJoy, AllInOneSports, Caves, Deep Cuts, Does it Stack?, Nano, NOPE CHALLENGE, RC Pilot Trainer and 7 more.
+- **Catalog games (16):** AgeOfJoy, AllInOneSports, Caves, Deep Cuts, Does it Stack?, Gorilla Tag, Nano, NOPE CHALLENGE and 8 more.
 - **Suggested by launch-test signatures:**
   - `oculus-os-class` (fatal): The game looks up a Quest-only system class and aborts.
 - **Source:** [patches/frame/telemetry.py](../src/frameport/patches/frame/telemetry.py)
@@ -941,7 +942,7 @@ Lets you type into this app's text fields on the Frame (they'd close at once).
 - `frame.unity_text_input` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Unity app with text fields (…): they close at once on the Frame because it has no system keyboard.
-- **Catalog games (69):** AgeOfJoy, AllInOneSports, Ancient_Dungeon, Audica, BattleSisters, Beat Saber, Beat Saber (co-existence build), Blade & Sorcery: Nomad and 61 more.
+- **Catalog games (70):** AgeOfJoy, AllInOneSports, Ancient_Dungeon, Audica, BattleSisters, Beat Saber, Beat Saber (co-existence build), Blade & Sorcery: Nomad and 62 more.
 - **Source:** [patches/frame/unity_text_input.py](../src/frameport/patches/frame/unity_text_input.py)
 
 > Unity's TMP_InputField / InputField wait for Android's on-screen keyboard and close themselves a frame later when there is none (Lepton has no on-screen keyboard; Meta's system keyboard does this on a Quest), so a selected text field only flashes a caret. Rewrites TouchScreenKeyboardShouldBeUsed -&gt; false and isKeyboardUsingEvents (TMP) / InPlaceEditing (uGUI) -&gt; true in libil2cpp.so, found per game with Cpp2IL (downloaded on first use), so fields stay selected and take key presses: Steam's keyboard (with "Show the app window") or Type on Frame from the PC.
@@ -1540,7 +1541,7 @@ For games that freeze the Frame when a controller vibrates (for example Lucky's 
 - **Options:**
   - Value: int, default `0`.
   - Game settings → Controllers → "Fix freezes when controllers vibrate" (advanced).
-- **Catalog games (60):** AgeOfJoy, Ancient_Dungeon, Audica, BattleSisters, Beat Saber, Caves, Clockwork, Cosmodread and 52 more.
+- **Catalog games (61):** AgeOfJoy, Ancient_Dungeon, Audica, BattleSisters, Beat Saber, Caves, Clockwork, Cosmodread and 53 more.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Routes OVRPlugin through FramePort's extension shim, which turns Meta's amplitude-envelope vibrations into plain ones: OVRPort's loader reads their nanosecond duration as seconds and allocates gigabytes, freezing the Frame when the game vibrates a controller (for example Lucky's Tale's save slots, GitHub #9). Needs a rebuild.
@@ -1558,6 +1559,21 @@ Turn it down if controller vibrations are too strong.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Scales every controller vibration the game asks for (0-1): plain vibrations, Meta's amplitude envelopes and PCM buffers. For games whose vibrations feel much stronger than on a Quest.
+
+### <a id="adapter-hide_hand_profiles"></a>Use controllers, not hand input
+
+For games whose hands don't react to grip, trigger or buttons (for example Gorilla Tag).
+
+- `adapter.hide_hand_profiles`
+- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:**
+  - Value: int, default `0`.
+  - Game settings → Controllers → "Use controllers, not hand input" (advanced).
+- **Catalog games (1):** Gorilla Tag.
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> The Frame's runtime offers hand interaction (XR_EXT_hand_interaction) from hands it synthesizes from the controllers. A game that also binds its actions to that profile got it for both hands, and its grip, trigger and buttons (bound for Touch) did nothing (for example Gorilla Tag). Its hand-interaction bindings are never given to the runtime, so the controllers get the Touch bindings.
 
 ### <a id="adapter-hide_space_warp"></a>Turn off space warp
 
@@ -1718,7 +1734,7 @@ For games whose hands trail the controllers when you move them (for example Batt
 - **Options:**
   - Value: int, default `0`.
   - Game settings → Controllers → "Fix hands lagging behind controllers" (advanced).
-- **Catalog games (11):** BattleSisters, Beat Saber, Dance Central, Dungeons of Eternity, Phantom: Covert Ops, Robo Recall, Star Wars: Tales from the Galaxy's Edge, Time Stall and 3 more.
+- **Catalog games (12):** BattleSisters, Beat Saber, Dance Central, Dungeons of Eternity, Gorilla Tag, Phantom: Covert Ops, Robo Recall, Star Wars: Tales from the Galaxy's Edge and 4 more.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Poses a game asks for at a CLOCK_MONOTONIC time, or more than 0.5 s before the frame's display time, are located at the same moment in the runtime's time (or now). Meta's OVRPlugin passes the monotonic clock on as the OpenXR time, which on the Frame runs seconds behind the runtime's clock, so its "now" poses (Unity's physics step, controller poses) came from the past: hands trailing the controllers (for example BattleSisters, Sniper Elite VR).
@@ -2241,7 +2257,7 @@ Lets typing reach this app from Steam's on-screen keyboard or your PC's keyboard
 - `device.text_input_window`
 - **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
 - **Suggested (on):** App with text fields: key presses only reach a shown Android window.
-- **Catalog games (69):** AgeOfJoy, AllInOneSports, Ancient_Dungeon, Audica, Beat Saber, Beat Saber (co-existence build), Blade & Sorcery: Nomad, BodyCombat and 61 more.
+- **Catalog games (70):** AgeOfJoy, AllInOneSports, Ancient_Dungeon, Audica, Beat Saber, Beat Saber (co-existence build), Blade & Sorcery: Nomad, BodyCombat and 62 more.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Lepton runs VR apps headless: their Android window is never shown, so it never gets keyboard focus and no key press (Steam's on-screen keyboard, a USB/Bluetooth keyboard, Type on Frame) reaches the app's text fields. With Lepton's lepton-show-flatscreen marker the window is shown (behind the VR view, which keeps working) and Steam's keyboard opens for a selected text field. Steam lists the shown window as "Gamescope" (the Frame's compositor). Pairs with "Make Unity text fields work without a system keyboard".

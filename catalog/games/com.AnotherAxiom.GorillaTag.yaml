@@ -1,0 +1,24 @@
+package: com.AnotherAxiom.GorillaTag
+title: Gorilla Tag
+status: works
+details: Unity 6 OpenXR with Meta's OVRPlugin. The game binds its actions for Touch and also for hand interaction
+  (XR_EXT_hand_interaction, which the Frame's runtime offers from hands it synthesizes from the controllers); once
+  focused the runtime gave both hands ext/hand_interaction_ext and the controllers did nothing. hide_hand_profiles
+  keeps the hand-interaction bindings from the runtime, so both hands get oculus/touch_controller (input_diag,
+  2026-10-13). Its 31-binding Touch and Frame-controller sets are still rejected (squeeze/click isn't on Touch; X/Y and
+  menu on the left hand aren't on the Frame controller); the accepted Touch set covers the controllers.
+tested_version: 1.1.146
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+- frame.oculusos
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+  pose_time_fix: 1
+  hide_hand_profiles: 1
+verified:
+  date: '2026-10-13'
+source_hint: Gorilla Tag

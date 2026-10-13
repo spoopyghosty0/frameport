@@ -46,6 +46,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Fruit Ninja | Quest | ✅ Works |  |
 | Fruit Salon | Quest | ✅ Works |  |
 | Genotype | Quest | ✅ Works |  |
+| Gorilla Tag | Quest | ✅ Works |  |
 | GORN2 | Quest | ✅ Works |  |
 | Gravity Lab | Quest | ✅ Works |  |
 | H.U.N.T | Quest | ✅ Works |  |

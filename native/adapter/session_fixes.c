@@ -287,6 +287,11 @@ static const char *const NEWER_TOUCH[] = {"/interaction_profiles/meta/touch_cont
                                           "/interaction_profiles/meta/touch_controller_quest_1_rift_s",
                                           "/interaction_profiles/meta/touch_controller_quest_2"};
 static const char *const TOUCH_PROFILE = "/interaction_profiles/oculus/touch_controller";
+// Hand-interaction profiles (hide_hand_profiles). The Frame's runtime offers XR_EXT_hand_interaction from hands it
+// synthesizes from the controllers; an app that suggests bindings for it next to Touch got ext/hand_interaction_ext
+// for both hands once focused, and its grip/trigger/button actions (bound for Touch) never changed (Gorilla Tag).
+static const char *const HAND_PROFILES[] = {"/interaction_profiles/ext/hand_interaction_ext",
+                                            "/interaction_profiles/microsoft/hand_interaction"};
 // oculus/touch_controller components (OpenXR spec), after /user/hand/<left|right>/
 static const char *const TOUCH_COMMON[] = {"input/squeeze/value", "input/trigger/value", "input/trigger/touch",
     "input/thumbstick", "input/thumbstick/x", "input/thumbstick/y", "input/thumbstick/click",
@@ -446,6 +451,10 @@ static XRAPI_ATTR XrResult XRAPI_CALL hook_xrSuggestInteractionProfileBindings(X
     uint32_t size = 0;
     int known = suggested && to_string &&
                 XR_SUCCEEDED(to_string(instance, suggested->interactionProfile, sizeof(profile), &size, profile));
+    if (hide_hand_profiles && known && IN(profile, HAND_PROFILES)) {  // never given to the runtime: no hand binding
+        LOG("hide_hand_profiles: %s bindings ignored (%u)", profile + 22, suggested->countSuggestedBindings);
+        return XR_SUCCESS;
+    }
     XrResult r = known && !strcmp(profile, TOUCH_PROFILE) ? suggest_touch(instance, fn, to_string, suggested)
                                                          : fn(instance, suggested);
     input_diag_suggested(instance, suggested, r, to_string);  // the runtime's answer to the game's own suggestion

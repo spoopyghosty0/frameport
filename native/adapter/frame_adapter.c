@@ -144,6 +144,7 @@ static int sync_guard;       // xrSyncActions one at a time with xrPollEvent, pa
 static int profile_remap = 1; // Meta's newer controller profiles (rejected by the Frame) -> oculus/touch_controller
 static int proximity_emul;   // finger proximity from capacitive touch: 1 thumb, 2 thumb + index (session_fixes.c)
 static int runtime_has_proximity;  // the runtime has XR_FB_touch_controller_proximity itself
+static int hide_hand_profiles; // ignore the app's hand-interaction bindings, so the runtime binds the controllers
 static int layer_debug;      // diagnostics: layers, swapchains, session states, spaces, aim/grip, refresh rates
 static int input_diag;       // diagnostics: controller profiles, bindings, missing functions, failing input calls
 static int stable_local;     // keep every LOCAL space the app creates on the session-start origin
@@ -205,6 +206,7 @@ static void read_settings(const char *path) {
         if (sscanf(line, "release_wait=%f", &value) == 1) release_wait = (int)value;
         if (sscanf(line, "profile_remap=%f", &value) == 1) profile_remap = value != 0;
         if (sscanf(line, "proximity_emul=%f", &value) == 1 && value >= 0 && value <= 2) proximity_emul = (int)value;
+        if (sscanf(line, "hide_hand_profiles=%f", &value) == 1) hide_hand_profiles = value != 0;
         if (sscanf(line, "sync_guard=%f", &value) == 1) sync_guard = value != 0;
         if (sscanf(line, "stable_local=%f", &value) == 1) stable_local = value != 0;
         if (sscanf(line, "focus_hold=%f", &value) == 1) focus_hold = value != 0;
@@ -267,6 +269,7 @@ static void initialize(void) {
     if (input_diag) LOG("per-game: input_diag=1 (controller-input diagnostics)");
     if (proximity_emul) LOG("per-game: proximity_emul=%d (finger proximity from capacitive touch: %s)", proximity_emul,
                             proximity_emul > 1 ? "thumb + index" : "thumb");
+    if (hide_hand_profiles) LOG("per-game: hide_hand_profiles=1 (hand-interaction bindings ignored: controllers)");
     if (hide_space_warp) LOG("per-game: hide_space_warp=1 (XR_FB_space_warp hidden, space warp info removed)");
     if (strip_color_bias) LOG("per-game: strip_color_bias=%d (layer color scale/bias removed)", strip_color_bias);
     if (fade_quad) LOG("per-game: fade_quad=%d (colour-scale fades drawn as a black quad%s)", fade_quad,
@@ -2143,7 +2146,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance instance, const 
     }
     if (sync_guard || layer_debug || input_diag) HOOK_AS(xrSyncActions, hook_xrSyncActions)
     if (layer_debug) HOOK_AS(xrGetActionStateBoolean, hook_xrGetActionStateBoolean)
-    if (layer_debug || aim_correction_on() || profile_remap || input_diag || proximity_emul)
+    if (layer_debug || aim_correction_on() || profile_remap || input_diag || proximity_emul || hide_hand_profiles)
         HOOK_AS(xrSuggestInteractionProfileBindings, hook_xrSuggestInteractionProfileBindings)
     if (proximity_emul) HOOK_AS(xrCreateAction, hook_xrCreateAction)
     if (layer_debug || aim_correction_on()) {
