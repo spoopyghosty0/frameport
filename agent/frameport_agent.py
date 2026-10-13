@@ -44,7 +44,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 85
+AGENT_VERSION = 86
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -1230,7 +1230,7 @@ def _shortcuts_worker(payload):
         if service or args.get("restart", True):
             start_steam(service)
             lost = shortcuts_lost(users, args["packages"])
-            if lost:  # Steam wrote its old copy back over ours (it was still saving): once more, then report
+            if lost:  # Steam wrote its old copy back over ours (it was still saving): once more, then the devkit entry
                 result["retried"] = lost
                 service = stop_steam()
                 for user in users:
@@ -1238,7 +1238,7 @@ def _shortcuts_worker(payload):
                 start_steam(service)
                 for pkg in shortcuts_lost(users, lost):
                     result["added"] = [a for a in result["added"] if a["package"] != pkg]
-                    result["errors"].append(f"{pkg}: Steam removed the new library entry again after restarting")
+                    add_devkit_entry(pkg, result)
     except Exception as exc:  # noqa: BLE001
         result["state"] = "failed"
         result["errors"].append(str(exc))
@@ -1246,6 +1246,19 @@ def _shortcuts_worker(payload):
     result["finished"] = time.time()
     with open(STATUS_FILE, "w") as f:
         json.dump(result, f)
+
+
+def add_devkit_entry(pkg, result):
+    """Steam dropped the game's shortcuts.vdf entry twice: this Frame's Steam ignores FramePort's entries (GitHub #41),
+    so add it the way Valve's devkit tool does (Steam is running again). That entry is the one Steam keeps."""
+    try:
+        appid = devkit_register(pkg)
+    except Exception as exc:  # noqa: BLE001
+        result["errors"].append(f"{pkg}: Steam removed the new library entry again after restarting, and the devkit "
+                                f"entry failed too: {exc}")
+        return
+    result["added"].append({"package": pkg, "appid": appid, "expected": (deployment(pkg) or {}).get("appid"),
+                            "via": "devkit"})
 
 
 def remove_from_library(user, remove, result):

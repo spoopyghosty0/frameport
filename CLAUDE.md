@@ -643,7 +643,9 @@ reaches its OVRInput cleanly (probe: both Touch connected 0x63, individual butto
 "outside of frame bounds" warnings stay (~2/frame) and are harmless.
 Steam library (GitHub #4/#21/#27, agent v38): shortcuts go to every Steam account (signed-in first; MostRecent isn't
 always the account on the Frame); stop_steam also waits for Steam's helpers; after the restart the agent re-reads
-shortcuts.vdf and writes once more if Steam put its old copy back (`shortcuts_lost`), else reports it. 0.6.3's Play
+shortcuts.vdf and writes once more if Steam put its old copy back (`shortcuts_lost`); lost again (agent v86): Steam
+ignores FramePort's entries on that Frame, so `add_devkit_entry` adds the devkit entry instead (`added` gets `via:
+devkit`) and only reports an error if that fails too. 0.6.3's Play
 auto-repair (`_add_then_play`) crashed (its job got a Job, not a reporter). Uploads resume on a transient OSError.
 Lepton's Android 11 has no clipboard service (134 services; checked with `podman exec … service check clipboard`):
 SDL/LÖVE apps crashed at start → `frame.sdl_clipboard` (`apk/dex.py`: in-place dex edit, nops one invoke, fixes

@@ -994,6 +994,35 @@ def test_launch_re_adds_a_forgotten_devkit_entry_live(monkeypatch, tmp_path):
     got = a.cmd_launch({"package": "com.x.y"})  # no NOT_IN_LIBRARY (whose repair restarts Steam)
     assert got["via"] == "devkit" and got["steam"]["appid"] == 333
 
+def test_library_falls_back_to_a_devkit_entry_when_steam_drops_the_shortcut(monkeypatch, tmp_path):
+    # this Frame's Steam drops every shortcuts.vdf entry on restart (GitHub #41): "Add to Steam library" failed every
+    # time with "Steam removed the new library entry again"; the devkit entry is the one Steam keeps
+    a = load_agent(monkeypatch, tmp_path)
+    anchor = tmp_path / "Applications/quest-frame/com.x.y"
+    anchor.mkdir(parents=True)
+    (anchor / "deployment.json").write_text(json.dumps({"package": "com.x.y", "appid": 1, "title": "X", "base": "b"}))
+    (tmp_path / ".local/share/Steam/userdata/42/config").mkdir(parents=True)
+    monkeypatch.setattr(a, "library_users", lambda: ["42"])
+    monkeypatch.setattr(a, "game_running", lambda: False)
+    monkeypatch.setattr(a, "desktop_mode", lambda: False)
+    monkeypatch.setattr(a, "stop_steam", lambda: True)
+    monkeypatch.setattr(a, "start_steam", lambda s: None)
+    monkeypatch.setattr(a, "shortcuts_lost", lambda users, pkgs, wait=25: list(pkgs))
+    registered = []
+    monkeypatch.setattr(a, "devkit_register", lambda pkg: registered.append(pkg) or 333)
+    a.shortcuts_worker(json.dumps({"packages": ["com.x.y"], "remove": []}))
+    status = json.load(open(a.STATUS_FILE))
+    assert registered == ["com.x.y"] and status["state"] == "done" and not status["errors"]
+    assert status["added"] == [{"package": "com.x.y", "appid": 333, "expected": 1, "via": "devkit"}]
+
+    monkeypatch.setattr(a, "devkit_register", lambda pkg: (_ for _ in ()).throw(a.AgentError("no answer")))
+    (tmp_path / ".local/share/Steam/userdata/42/config/shortcuts.vdf").unlink()  # Steam dropped it, as above
+    a.shortcuts_worker(json.dumps({"packages": ["com.x.y"], "remove": []}))
+    status = json.load(open(a.STATUS_FILE))
+    assert not status["added"] and "Steam removed the new library entry" in status["errors"][0]
+    assert "no answer" in status["errors"][0]
+
+
 def test_shortcuts_lost_after_steam_restart(monkeypatch, tmp_path):
     a = load_agent(monkeypatch, tmp_path)
     anchor = tmp_path / "Applications/quest-frame/com.x.y"
