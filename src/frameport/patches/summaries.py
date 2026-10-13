@@ -59,7 +59,12 @@ SUMMARIES = {
                                      "canvas is drawn in the scene instead of as a layer in front).",
     "frame.nodebug": "Stops strict debugging checks that make some games quit.",
     "frame.meta_permissions": "Declares Meta's permissions some mixed-reality games ask for, so they don't stop.",
+    "frame.meta_depth_occlusion": "Prevents virtual objects from vanishing when approached by disabling missing "
+                                  "Meta depth sensor occlusion.",
+    "frame.unity_scene_active_rooms": "Fixes mixed reality games getting stuck asking to capture your room by "
+                                      "bypassing Meta's room boundary check.",
     "frame.ovrplatformcompat": "Adds a small piece of Meta's platform library that some games need to start.",
+
     "frame.ovrstubs": "Provides stand-ins for Meta store functions the game expects, so it doesn't crash at start.",
     "frame.langpacks": "Lets the game use language files already in its data instead of waiting for a download that "
                        "never comes.",

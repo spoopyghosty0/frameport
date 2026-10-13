@@ -102,7 +102,7 @@ EXPORT XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance instance,
         }
         return r;
     }
-    if (name && function && instance != XR_NULL_HANDLE) {
+    if (name && function) {
         PFN_xrVoidFunction emulated = adapter_proc(name);
         if (emulated) {
             __android_log_print(ANDROID_LOG_INFO, TAG, "extension shim: %s -> FrameBridge", name);

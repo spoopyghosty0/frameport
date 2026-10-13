@@ -1,0 +1,20 @@
+package: jp.mrf.co.hit_point.vneko
+title: Neko Atsume
+status: works
+tested_version: 2.3.0
+engine: Unity
+xr: OpenXR
+frame:
+- frame.meta_permissions
+- frame.unity_text_input
+- frame.oculusos
+adapter:
+  controller_models: 1
+  haptic_fix: 1
+  scene_emul: 1
+  passthrough_emul: 1
+notes: Mixed reality cat yard; cats and toys spawn in your room using scene and passthrough emulation.
+verified:
+  date: '2026-10-12'
+  known_good_sha256: 3bede8ff7792345a0d16f901c92948237335f2f685f75be3d2bd108c93f42ed9
+source_hint: Neko Atsume

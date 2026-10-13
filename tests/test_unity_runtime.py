@@ -5,6 +5,7 @@ from test_patches import _analysis
 
 from frameport.analysis import il2cpp
 from frameport.patches import base
+from frameport.patches.frame import meta_depth_occlusion as D
 from frameport.patches.frame import unity_runtime as R
 from frameport.patches.frame import unity_text_input as U
 from frameport.validate.triage import triage
@@ -16,9 +17,10 @@ def _lib() -> bytes:
 
 def test_all_il2cpp_patches_share_one_cpp2il_lookup():
     base.load_all()
-    for p in (U.UnityTextInput, R.UnityRuntimeMsaa, R.UnityMultiPass):
+    for p in (U.UnityTextInput, R.UnityRuntimeMsaa, R.UnityMultiPass, R.UnitySceneActiveRooms, D.MetaDepthOcclusion):
         for cls, methods in p.targets.items():
             assert set(methods) <= set(U.ALL_TARGETS[cls])
+
     # keyed by the build's metadata: an earlier patch's bytes in libil2cpp.so don't force another Cpp2IL run
     assert il2cpp._cache_file(b"a" * 10, b"meta") == il2cpp._cache_file(b"b" * 10, b"meta")
     assert il2cpp._cache_file(b"a" * 10, b"meta") != il2cpp._cache_file(b"a" * 10, b"other")
@@ -34,6 +36,24 @@ def test_runtime_patches_write_zero_returns():
     assert msaa[a:a + 8] == R.RET_ZERO and msaa[b:b + 8] == lib[b:b + 8] and "OVRDisplay" in notes[0]
     multi, _ = U.patch_methods(lib, found, R.UnityMultiPass.targets)
     assert multi[b:b + 8] == R.RET_ZERO and multi[a:a + 8] == lib[a:a + 8]
+
+
+def test_unity_scene_active_rooms_patch_and_detection():
+    base.load_all()
+    lib = _lib()
+    lo, _hi = U._executable(lib)[0]
+    a = (lo + 0x40) & ~3
+    found = {"Oculus.VR/OVRSceneManager.cs": {"IsUserInRoom": (a, 0x20)}}
+    patched, notes = U.patch_methods(lib, found, R.UnitySceneActiveRooms.targets)
+    assert patched[a:a + 8] == U.RET_TRUE and "OVRSceneManager" in notes[0]
+
+    p = base.get("frame.unity_scene_active_rooms")
+    mr = _analysis(engine="Unity", libs=["libil2cpp.so", "libunity.so"],
+                   meta_permissions=["com.oculus.permission.USE_SCENE"])
+    assert p.detect(mr).recommended
+    plain = _analysis(engine="Unity", libs=["libil2cpp.so", "libunity.so"])
+    assert p.detect(plain) is None and p.applies(plain)
+
 
 
 def test_runtime_msaa_suggested_for_gles_ovr_games_only():
@@ -272,7 +292,7 @@ def test_scan_finds_games_in_download_manager_layouts(tmp_path, monkeypatch):
     apk(root / "Manager/data/downloads/Game B v2/com.b.game.apk")  # 4 levels down
     (root / "PC Game/Binaries").mkdir(parents=True)
     (root / "PC Game/game.exe").write_bytes(b"MZ")
-    apk(root / "PC Game/Binaries/never.apk")  # PC program folders aren't searched
+    (root / "PC Game/Binaries/never.dll").write_bytes(b"MZ")  # PC program folders aren't searched
     found = {g.apk.name: g for g in quest_dump.scan(root)}
     assert set(found) == {"stray.app.apk", "com.a.game.apk", "com.b.game.apk"}
     assert found["com.a.game.apk"].data_dir == root / "Manager/Game A v1/com.a.game"
@@ -408,3 +428,39 @@ def test_vermillion_canvas_stays_in_the_scene():
     game = _analysis(package=V.PACKAGE, libs=["libil2cpp.so", "libunity.so"])
     assert p.applies(game) and p.detect(game) is None
     assert not p.applies(_analysis(package="com.other.game", libs=["libil2cpp.so"]))
+
+
+def test_meta_depth_occlusion_patch_neutralises_keywords(tmp_path):
+    import zipfile
+
+    from frameport.apk.workspace import ApkWorkspace
+    from frameport.core.events import Reporter
+    from frameport.patches.frame.meta_depth_occlusion import MetaDepthOcclusion
+
+    apk_path = tmp_path / "test.apk"
+    with zipfile.ZipFile(apk_path, "w") as z:
+        z.writestr("AndroidManifest.xml", b"<manifest/>")
+        z.writestr("assets/bin/Data/sharedassets0.assets.split56", b"foo HARD_OCCLUSION bar SOFT_OCCLUSION baz")
+        z.writestr(
+            "assets/bin/Data/Managed/Metadata/global-metadata.dat",
+            b"prefix HARD_OCCLUSION middle SOFT_OCCLUSION end",
+        )
+        z.writestr("assets/bin/Data/other.txt", b"HARD_OCCLUSION")
+
+    p = MetaDepthOcclusion()
+    with ApkWorkspace(apk_path) as ws:
+        ctx = base.ApkContext(ws, _analysis(engine="Unity"), {}, Reporter(), {})
+        ok = p.apply(ctx)
+        assert ok
+        split_data = ws.read("assets/bin/Data/sharedassets0.assets.split56")
+        meta_data = ws.read("assets/bin/Data/Managed/Metadata/global-metadata.dat")
+        other_data = ws.read("assets/bin/Data/other.txt")
+        assert b"HARD_OCCLUSION" not in split_data
+        assert b"SOFT_OCCLUSION" not in split_data
+        assert b"NO_OCCLUSION_X" in split_data
+        assert b"NO_OCCLUSION_Y" in split_data
+        assert b"HARD_OCCLUSION" not in meta_data
+        assert b"SOFT_OCCLUSION" not in meta_data
+        assert b"NO_OCCLUSION_X" in meta_data
+        assert b"NO_OCCLUSION_Y" in meta_data
+        assert other_data == b"HARD_OCCLUSION"  # non-asset/metadata left alone

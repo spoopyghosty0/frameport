@@ -12,9 +12,10 @@ frame.unity_text_input).
 from __future__ import annotations
 
 from ..base import Suggestion, register
-from .unity_text_input import RET_FALSE, Il2cppReturnPatch
+from .unity_text_input import RET_FALSE, RET_TRUE, Il2cppReturnPatch
 
 RET_ZERO = RET_FALSE  # mov w0, #0 ; ret
+
 
 
 class UnityRuntimeMsaa(Il2cppReturnPatch):
@@ -93,6 +94,34 @@ class UnityNoOverlayCopy(Il2cppReturnPatch):
         return None  # only for a game that shows the crash (catalog recipe or the user's choice)
 
 
+class UnitySceneActiveRooms(Il2cppReturnPatch):
+    id = "frame.unity_scene_active_rooms"
+    title = "Unity: bypass Meta room active check"
+    description = ("Meta's OVRSceneManager filters out rooms when ActiveRoomsOnly is enabled and the user's tracking "
+                   "position is evaluated as outside the floor boundary (IsUserInRoom). On the Steam Frame, synthetic "
+                   "guardian boundary checks can fail, causing room loading to abort with 'No scene model found'. "
+                   "Rewrites OVRSceneManager.IsUserInRoom and PointInPolygon2D -> true in libil2cpp.so "
+                   "(found with Cpp2IL), "
+                   "so the synthetic room and wall anchors load immediately.")
+    order = 50
+    targets = {"Oculus.VR/OVRSceneManager.cs": {"IsUserInRoom": RET_TRUE, "PointInPolygon2D": RET_TRUE},
+               "Assembly-CSharp/OVRSceneManager.cs": {"IsUserInRoom": RET_TRUE, "PointInPolygon2D": RET_TRUE}}
+    check_name = "Unity active room"
+
+    def applies(self, a):
+        return a.engine == "Unity" and "libil2cpp.so" in a.libs and not a.only_32bit
+
+    def detect(self, a):
+        if self.applies(a) and ("com.oculus.permission.USE_SCENE" in (a.meta_permissions or [])
+                                or "com.oculus.permission.USE_SCENE" in (a.extra or {}).get("meta_permissions_used", [])
+                                or "libmrutilitykitshared.so" in a.libs):
+            return Suggestion(True, "Unity mixed reality game using Meta Scene: bypasses active room "
+                                    "player-inside check on Steam Frame.")
+        return None
+
+
 register(UnityRuntimeMsaa)
 register(UnityMultiPass)
 register(UnityNoOverlayCopy)
+register(UnitySceneActiveRooms)
+

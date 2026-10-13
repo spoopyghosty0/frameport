@@ -1,0 +1,17 @@
+package: com.mrf.PotamWorks.SmashDrums
+title: Smash Drums
+status: works
+tested_version: 5.2.1.4
+engine: Unity
+xr: OpenXR
+frame:
+- frame.meta_permissions
+- frame.unity_text_input
+adapter:
+  haptic_fix: 1
+  scene_emul: 1
+notes: Mixed reality drum mode uses scene emulation to break room walls.
+verified:
+  date: '2026-10-12'
+  known_good_sha256: 0d8261c46b498c873b0fc5c8201b27158c83a6c9d01fc8e9885f12c448fcf2b4
+source_hint: Smash Drums

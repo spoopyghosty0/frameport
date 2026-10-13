@@ -80,7 +80,7 @@ def needs_xrshim(recipe_patches: dict) -> bool:
 
     s = adapter_settings(recipe_patches)
     # surface_native: Batman's native video renderer hooks Vulkan functions OVRPort's dispatcher doesn't know
-    return bool(s.get("controller_models") or s.get("haptic_fix") or s.get("surface_native"))
+    return bool(s.get("controller_models") or s.get("haptic_fix") or s.get("surface_native") or s.get("scene_emul"))
 
 
 def add_xrshim(ctx: ApkContext) -> bool:

@@ -5,8 +5,7 @@ source_hint: LEGO Bricktales
 engine: Unity
 xr: OpenXR
 status: works
-notes: Use VR mode.
-details: Has VR and MR modes; use VR mode (passthrough not forced).
+notes: VR and MR modes work.
 verified:
   date: '2026-09-28'
   overport_cli: 1.2.3

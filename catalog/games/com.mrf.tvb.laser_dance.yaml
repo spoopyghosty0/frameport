@@ -1,0 +1,17 @@
+package: com.mrf.tvb.laser_dance
+title: Laser Dance
+engine: Unity
+xr: OpenXR
+status: works
+notes: Mixed reality laser obstacle course; requires spatial data and room layout emulation (scene_emul=1).
+details: Mixed reality game that projects lasers across your room; needs Meta scene emulation and spatial data permission.
+adapter:
+  controller_fix: 1
+  haptic_fix: 1
+  scene_emul: 1
+  passthrough_emul: 1
+frame:
+- frame.meta_permissions
+- frame.meta_depth_occlusion
+- frame.unity_scene_active_rooms
+- frame.unity_text_input

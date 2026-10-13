@@ -113,3 +113,29 @@ def test_pose_time_fix_suggested_for_unreal4_oculus_input():
     s = p.detect(_analysis(engine="Unreal", libs=["libUE4.so", "libOVRPlugin.so"], extra={"unreal_thumb_touch": True}))
     assert s and s.recommended and s.params == {"value": 1}
     assert p.detect(_analysis(engine="Unreal", libs=["libUnreal.so", "libOVRPlugin.so"], extra={})) is None
+
+
+def test_meta_permissions_suggested_for_spatial_data():
+    """Games declaring Meta scene/anchor/spatial permissions get frame.meta_permissions by default."""
+    from frameport.patches import base
+
+    p = base.get("frame.meta_permissions")
+    for perm in ("com.oculus.permission.USE_SCENE", "com.oculus.permission.USE_ANCHOR_API",
+                 "com.oculus.permission.BOUNDARY_VISIBILITY"):
+        a = _analysis(meta_permissions=[perm], extra={"mr_only": False})
+        s = p.detect(a)
+        assert s and s.recommended
+
+
+def test_meta_depth_occlusion_suggested():
+    """Games referencing Meta Depth API keywords get frame.meta_depth_occlusion by default."""
+    from frameport.patches import base
+
+    p = base.get("frame.meta_depth_occlusion")
+    a = _analysis(engine="Unity", extra={"meta_depth_occlusion": True})
+    s = p.detect(a)
+    assert s and s.recommended
+    assert p.detect(_analysis(engine="Unity", extra={"meta_depth_occlusion": False})) is None
+    assert p.detect(_analysis(engine="Unreal", extra={"meta_depth_occlusion": True})) is None
+
+

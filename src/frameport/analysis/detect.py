@@ -36,7 +36,8 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 # 12: eos_keychain (Epic Online Services' Java keychain: frame.eos_keychain_loop, GitHub #214); CryEngine also from
 #     libAndroidLauncher.so + a .cryproject (Climb 1 has no libCrySystem.so, GitHub #238) (2026-10)
 # 13: validate monolithic CryEngine projects/config, OBB filename formats and foveation cvar (The Climb, GitHub #238)
-ANALYSIS_VERSION = 13
+# 14: meta_depth_occlusion (Meta Depth API hard/soft occlusion keywords: frame.meta_depth_occlusion) (2026-10)
+ANALYSIS_VERSION = 14
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
@@ -337,6 +338,9 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             # declares gamepad support (SDL's manifest template has both): device.steam_gamepad
             "gamepad": "android.hardware.gamepad" in features or axml.LEANBACK_LAUNCHER in cats,
             "oculus_xr_plugin": bool(il2cpp_meta) and b"\0m_StereoRenderingModeAndroid\0" in il2cpp_meta,
+            "meta_depth_occlusion": (
+                bool(il2cpp_meta) and (b"HARD_OCCLUSION" in il2cpp_meta or b"SOFT_OCCLUSION" in il2cpp_meta)
+            ),
             # Unity's built-in Oculus support checks for Meta's system apps before VR (frame.unity_oculus_check)
             "unity_oculus_check": b"\0com.oculus.systemactivities\0" in lib_bytes.get("libunity.so", b""),
             # a 2D launcher activity that starts a separate VR activity (frame.start_activity)
