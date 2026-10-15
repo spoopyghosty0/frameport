@@ -331,7 +331,7 @@ def test_install_builds_a_game_that_was_never_built(tmp_path, monkeypatch):
     out = tmp_path / "built.apk"
     out.write_bytes(b"PK")
 
-    def build(package, reporter):
+    def build(package, reporter, pc=False):
         library.upsert_game(package, build={"apk": str(out)})
     monkeypatch.setattr(pipeline, "build_game", build)
     monkeypatch.setattr(pipeline, "remove_converted_copies", lambda package: 0)

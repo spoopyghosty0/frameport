@@ -122,9 +122,10 @@ def grid_files(grid: Path, appid) -> list[Path]:
 
 
 def remove_pc_shortcuts(reporter: Reporter) -> None:
-    """All PC VR shortcuts FramePort added to Windows Steam, with one Steam restart."""
+    """All PC shortcuts (PC VR and Quest games) FramePort added to Windows Steam, with one Steam restart. AXRB and
+    the games inside its Android stay: AXRB is the user's program (uninstall it from Windows' app list)."""
     from .core import winhost
-    from .targets.pc_revive import _vdf, local_installs, shortcut_fields
+    from .targets.pc_revive import _vdf, local_installs, options_key, shortcut_fields
 
     deps = local_installs()
     if not deps or not winhost.available():
@@ -140,7 +141,7 @@ def remove_pc_shortcuts(reporter: Reporter) -> None:
     try:
         for pkg, dep in deps.items():
             exe = shortcut_fields(dep)[0]
-            removed = vdf_mod.remove_shortcut(str(cfg / "shortcuts.vdf"), exe)
+            removed = vdf_mod.remove_shortcut(str(cfg / "shortcuts.vdf"), exe, options_key(dep))
             for art in grid_files(cfg / "grid", dep.get("appid")):
                 art.unlink(missing_ok=True)
             reporter.check(f"Steam shortcut: {dep.get('title') or pkg}", True if removed else None,

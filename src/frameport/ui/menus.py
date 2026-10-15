@@ -25,7 +25,7 @@ class MenuState:
     quick: bool = True             # True: Library right-click (quick_menu); False: the game page's full "…" menu
     connected: bool = False        # a Frame is connected
     on_frame: bool = False         # installed on the Frame (current or outdated)
-    on_pc: bool = False            # a PC VR game installed on this PC
+    on_pc: bool = False            # installed on this PC (a PC VR game, or a Quest game through AXRB)
     job: bool = False              # a job runs (or waits) for this game
     plays: list = field(default_factory=list)     # where it can be started now [(label, icon, handler)]
     installs: list = field(default_factory=list)  # install/update/reinstall options [(label, icon, handler)]

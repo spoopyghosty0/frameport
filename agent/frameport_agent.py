@@ -44,7 +44,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 91
+AGENT_VERSION = 92  # v92: upsert/remove_shortcut options_key (the PC's Quest games share powershell.exe as Exe)
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -982,8 +982,14 @@ def vdf_encode(obj):
     return bytes(out) + bytes([TYPE_END])
 
 
+def _shortcut_matches(v, exe, options_key=None):
+    """A shortcut is the game's when its Exe matches; with options_key (games sharing one Exe, e.g. Quest games on a
+    PC all start powershell.exe) its LaunchOptions must also contain that key."""
+    return isinstance(v, dict) and v.get("Exe") == exe and (not options_key or options_key in v.get("LaunchOptions", ""))
+
+
 def upsert_shortcut(vdf_path, exe, title, start_dir, icon="", tag="Quest on Frame", launch_options="", tags=None,
-                    openvr=True, write=True):
+                    openvr=True, write=True, options_key=None):
     """Add/update a non-Steam shortcut (matched by Exe, so its appid never changes). `tags` (genres, the user's tags)
     are merged with tags already on the shortcut, so ones set in Steam are kept. write=False: change nothing, return
     (appid, whether shortcuts.vdf would change)."""
@@ -997,7 +1003,7 @@ def upsert_shortcut(vdf_path, exe, title, start_dir, icon="", tag="Quest on Fram
     def game_of(options):  # the game's program in the injector's arguments (its flags may change)
         found = re.findall(r'"([^"]+\.exe)"|(\S+\.exe)', options or "", re.IGNORECASE)
         return (found[-1][0] or found[-1][1]).lower() if found else (options or "")
-    entry = next((v for v in shortcuts.values() if isinstance(v, dict) and v.get("Exe") == exe
+    entry = next((v for v in shortcuts.values() if _shortcut_matches(v, exe, options_key)
                   and (not shared or game_of(v.get("LaunchOptions", "")) == game_of(launch_options))), None)
     ident = entry["appid"] if entry else shortcut_appid(exe, title)
     if entry is None:
@@ -1092,12 +1098,12 @@ def grid_files(grid, appid):
         return []
 
 
-def remove_shortcut(vdf_path, exe):
+def remove_shortcut(vdf_path, exe, options_key=None):
     if not os.path.exists(vdf_path):
         return False
     root = vdf_decode(open(vdf_path, "rb").read())
     sc = root.get("shortcuts", {})
-    keep = [v for v in sc.values() if not (isinstance(v, dict) and v.get("Exe") == exe)]
+    keep = [v for v in sc.values() if not _shortcut_matches(v, exe, options_key)]
     if len(keep) == len(sc):
         return False
     root["shortcuts"] = {str(i): v for i, v in enumerate(keep)}

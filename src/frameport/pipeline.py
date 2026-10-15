@@ -376,6 +376,16 @@ def is_linux(entry: dict) -> bool:
     return entry.get("kind") == "linux"
 
 
+def pc_installable(entry: dict) -> bool:
+    """Can go on this PC: Rift games (Revive) and Android OpenXR games (Quest / Khronos loader; AXRB, experimental);
+    not Linux/Windows/2D apps."""
+    if entry.get("kind") == "rift":
+        return True
+    if entry.get("kind"):
+        return False
+    return (((entry.get("analysis") or {}).get("extra") or {}).get("vr_kind") or "quest") in ("quest", "openxr")
+
+
 def analysis_warnings(entry: dict) -> list[str]:
     """Blockers read from a Quest/Android game's APK, for the CLI (the game page shows them as callouts)."""
     if is_rift(entry) or is_linux(entry) or not entry.get("analysis"):
@@ -966,6 +976,19 @@ def _build_record(entry: dict, apk: Path | None = None, superseded=None) -> dict
             "overport_stat": converter_stat}
 
 
+def pc_recipe_fingerprint(recipe: dict, package: str = "") -> str:
+    """Fingerprint of what the build for this PC contains (Frame-only patch changes don't make it outdated)."""
+    from .patches.base import pc_selection
+
+    return recipe_fingerprint(dict(recipe, patches=pc_selection(recipe.get("patches") or {})), package)
+
+
+def build_key(entry: dict, pc: bool) -> str:
+    """Where a Quest game's build is recorded: "build" (Steam Frame), "build_pc" (this PC, AXRB). Installed-as-is
+    games have one build for both."""
+    return "build_pc" if pc and not library.recipe_from_dict(entry["recipe"]).as_is else "build"
+
+
 def _build_inputs_changed(entry: dict) -> bool:
     build = entry.get("build") or {}
     if not build.get("build_inputs") or build["build_inputs"] != _build_inputs(entry):
@@ -979,7 +1002,8 @@ def _build_inputs_changed(entry: dict) -> bool:
     return False
 
 
-def build_game(package: str, reporter: Reporter, outdir: Path | None = None) -> dict:
+def build_game(package: str, reporter: Reporter, outdir: Path | None = None, pc: bool = False) -> dict:
+    """pc: the build for this PC (Quest games through AXRB): OVRPort's patches without the Steam Frame fixes."""
     entry = library.game(package)
     if not is_linux(entry) and not is_rift(entry):
         check_source(entry)  # fail before reanalysis or tool setup when the original files have gone
@@ -997,16 +1021,18 @@ def build_game(package: str, reporter: Reporter, outdir: Path | None = None) -> 
     recipe = library.recipe_from_dict(entry["recipe"])
     if engine.a32_recipe(a, recipe, newly=False):  # saved before the bridge switched OVRPort & co. off itself
         set_recipe(package, recipe)
-    out = outdir or (output_dir() / quest_dump.display_name(entry.get("name") or package))
+    name = quest_dump.display_name(entry.get("name") or package)
+    out = outdir or (output_dir() / (f"{name} (PC)" if pc else name))
     with _build_lock(package):  # one build per game at a time: builds share the game's work folder
-        res = builder.build(src, a, recipe, out, reporter)
+        res = builder.build(src, a, recipe, out, reporter, **({"pc": True} if pc else {}))
     art, store_title = artwork.fetch(package, res.apk)
     build_info = {"apk": str(res.apk), "alt_apk": str(res.alt_apk) if res.alt_apk else None, "sha256": res.sha256,
                   "alt_sha256": res.alt_sha256, "applied": res.applied, "checks": res.checks, "ok": res.ok,
-                  "overport": res.meta.get("overport"), "recipe_fp": recipe_fingerprint(entry["recipe"], package),
+                  "overport": res.meta.get("overport"),
+                  "recipe_fp": (pc_recipe_fingerprint if pc else recipe_fingerprint)(entry["recipe"], package),
                   "superseded": res.meta.get("superseded") or {}, "source_version": _source_version(entry),
                   **_build_record(entry, res.apk, res.meta.get("superseded"))}
-    library.upsert_game(package, build=build_info, title=entry.get("title") or store_title,
+    library.upsert_game(package, **{build_key(entry, pc): build_info}, title=entry.get("title") or store_title,
                         source_sha256=build_info["source_sha256"])
     return build_info
 
@@ -1090,14 +1116,15 @@ def install_game(package: str, target: Target, reporter: Reporter, apk_only: boo
             result["stage_seconds"] = reporter.stage_timings()
             _record_install(package, target.label, {"result": result, "time": time.time()})
             return result
-    b = entry.get("build") or {}
+    pc = getattr(target, "kind", "") == "pc"  # Quest games on this PC (AXRB): their own build, no Frame fixes
+    b = entry.get(build_key(entry, pc)) or {}
     recipe = library.recipe_from_dict(entry["recipe"])
-    if not test_build and not b.get("apk"):
-        build_game(package, reporter)
+    if not test_build and not b.get("apk"):  # never built yet (e.g. `frameport install` right after a scan)
+        build_game(package, reporter, pc=pc)
         return install_game(package, target, reporter, apk_only, add_to_library)
     apk = Path(apk) if apk else Path(b["alt_apk"] if recipe.use_alt and b.get("alt_apk") else b["apk"])
-    if not test_build and not apk.is_file():
-        build_game(package, reporter)
+    if not test_build and not apk.exists():  # the converted copy was removed after an earlier install: make it again
+        build_game(package, reporter, pc=pc)
         return install_game(package, target, reporter, apk_only, add_to_library)
     if optimized and not update.rebuild:
         expected_sha = b.get("alt_sha256") if recipe.use_alt else b.get("sha256")
@@ -1241,15 +1268,16 @@ def remove_converted_copies(package: str) -> int:
     game files the user added. Returns the bytes freed."""
     if library.setting("build.keep_copies", False):
         return 0
-    b = (library.game(package) or {}).get("build") or {}
+    g = library.game(package) or {}
     out, freed = output_dir().resolve(), 0
-    for key in ("apk", "alt_apk"):
-        p = Path(b[key]) if b.get(key) else None
-        if p and p.exists() and out in p.resolve().parents:
-            freed += p.stat().st_size
-            p.unlink()
-            if not any(p.parent.iterdir()):
-                p.parent.rmdir()
+    for b in (g.get("build") or {}, g.get("build_pc") or {}):
+        for key in ("apk", "alt_apk"):
+            p = Path(b[key]) if b.get(key) else None
+            if p and p.exists() and out in p.resolve().parents:
+                freed += p.stat().st_size
+                p.unlink()
+                if not any(p.parent.iterdir()):
+                    p.parent.rmdir()
     return freed
 
 

@@ -78,6 +78,7 @@ class Patch:
     needs_vr: bool = True  # only matters for VR apps (hidden for Android apps without VR)
     # works on a 32-bit game through the a32 bridge (frame.a32_bridge); None = by category (works_on_a32)
     a32: bool | None = None
+    on_pc: bool = False  # also in the build for this PC (AXRB): a fix of the APK itself, not of the Frame/Lepton
     revision: int = 1  # bump when apply() writes something different: installed builds then show "Update on Frame"
     package_revisions: dict[str, int] = {}  # narrower updates to otherwise shared patches
 
@@ -150,6 +151,14 @@ def works_on_a32(patch: Patch) -> bool:
     if patch.a32 is not None:
         return patch.a32
     return patch.category not in ("overport", "frame")
+
+
+def pc_selection(patches: dict) -> dict:
+    """The part of a Quest recipe that goes into the build for this PC (AXRB): OVRPort's patches and the APK fixes
+    marked on_pc. Steam Frame fixes (FrameBridge, Lepton workarounds) stay out; AXRB has its own OpenXR runtime."""
+    load_all()
+    return {pid: params for pid, params in patches.items()
+            if pid in REGISTRY and (REGISTRY[pid].category == "overport" or REGISTRY[pid].on_pc)}
 
 
 def all_patches() -> list[Patch]:
