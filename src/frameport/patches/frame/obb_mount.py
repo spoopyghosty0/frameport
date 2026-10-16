@@ -24,6 +24,10 @@ game passes no key. FAT is case-insensitive, the Frame's file systems are not: u
 """
 from __future__ import annotations
 
+import hashlib
+from dataclasses import dataclass
+
+from ...analysis import elf
 from ...apk.dex import Dex
 from ..base import ApkContext, Patch, Suggestion, register
 
@@ -33,6 +37,48 @@ MOUNTED = 1  # android.os.storage.OnObbStateChangeListener.MOUNTED
 HANDLERS = {
     "Landroidutils/OBBHandler;": ("mountOBB", "getMountedOBBFullPath", "onMountOBBStateChanged", "getOBBFullPath"),
 }
+
+
+@dataclass(frozen=True)
+class NativeFix:
+    """Instruction words to replace in one known build of a library: the window [start, start + len) must hash to
+    `sha256` (as shipped), else nothing is changed."""
+    lib: str
+    start: int  # virtual address of the checked window
+    length: int
+    sha256: str
+    edits: tuple[tuple[int, bytes, bytes], ...]  # (vaddr, old word, new word)
+
+
+# GRID Legends 1.0.0.41 (libgrid.so BuildId 88834f67…): getOBBMountPoints() frees the std::string that
+# libandroid_utils' AndroidUtils::getMountedOBBFullPath() returns with libgrid's own operator delete, although
+# libandroid_utils (loaded first, by Java) allocated it with libc++'s operator new. On a Quest the mounted path is
+# short ("/mnt/obb/…", kept inside the string object: nothing is freed); the OBB's own path is longer, so the game
+# crashed in that delete (SIGSEGV at getOBBMountPoints+420, fault address = the path's text). The two branches into
+# the delete are taken out: 17 short strings are leaked once at start.
+NATIVE_FIXES = (
+    NativeFix("libgrid.so", 0x14B7638, 0x100, "8ec37aeaa7fdd5b22200d183965dc4917a7875fd8aff0afe0ad75907d419e3f5",
+              ((0x14B769C, bytes.fromhex("d5040034"), bytes.fromhex("26000014")),   # cbz w21, +0x98 -> b +0x98
+               (0x14B7730, bytes.fromhex("95fbff35"), bytes.fromhex("1f2003d5")))),  # cbnz w21, free -> nop
+)
+
+
+def native_fix(data: bytes, fix: NativeFix) -> bytes | None:
+    """The library with `fix` applied, or None when it isn't that build (or is already fixed)."""
+    try:
+        segments = elf.load_segments(data)
+    except Exception:  # noqa: BLE001 (not an ELF file)
+        return None
+    off = elf.vaddr_to_offset(segments, fix.start)
+    if off is None or hashlib.sha256(data[off:off + fix.length]).hexdigest() != fix.sha256:
+        return None
+    out = bytearray(data)
+    for va, old, new in fix.edits:
+        pos = elf.vaddr_to_offset(segments, va)
+        if pos is None or out[pos:pos + 4] != old:
+            return None
+        out[pos:pos + 4] = new
+    return bytes(out)
 
 
 def handler_classes(data: bytes) -> list[str]:
@@ -99,6 +145,13 @@ class ObbMountEmulation(Patch):
                 ctx.ws.put(name, dex.finish())
                 ctx.notes.append(f"{name}: OBB mounting replaced by unpacked folders in {', '.join(sorted(done))}")
                 changed = True
+        if changed and ctx.ws.abi == "arm64-v8a":
+            for fix in NATIVE_FIXES:
+                if ctx.ws.has(ctx.ws.lib(fix.lib)):
+                    new = native_fix(ctx.ws.read_lib(fix.lib), fix)
+                    if new is not None:
+                        ctx.ws.put(ctx.ws.lib(fix.lib), new)
+                        ctx.notes.append(f"{fix.lib}: the mounted OBB path is no longer freed with the game's allocator")
         return changed
 
 

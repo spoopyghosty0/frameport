@@ -340,3 +340,23 @@ def test_interrupted_unpack_is_finished_or_dropped(monkeypatch, tmp_path):
     a.finish_obb_unpacks(str(obb))
     assert sorted(os.listdir(obb)) == ["DataSet1.obb"]
     assert a.obb_manifest(str(obb)) == {"DataSet1.obb": 5}
+
+
+def test_native_fix_only_touches_the_known_build():
+    import hashlib
+
+    from frameport.analysis import elf
+    from frameport.patches.frame.obb_mount import NATIVE_FIXES, NativeFix, native_fix
+
+    assert NATIVE_FIXES[0].lib == "libgrid.so"
+    data = (Path(__file__).resolve().parents[1] / "artifacts" / "arm64-v8a" / "libframe_xrshim.so").read_bytes()
+    va, off, _size = elf.load_segments(data)[0]
+    start = va + 0x40
+    word = data[off + 0x48:off + 0x4C]
+    fix = NativeFix("x.so", start, 0x20, hashlib.sha256(data[off + 0x40:off + 0x60]).hexdigest(),
+                    ((start + 8, word, bytes.fromhex("1f2003d5")),))
+    out = native_fix(data, fix)
+    assert out is not None and len(out) == len(data) and out[off + 0x48:off + 0x4C] == bytes.fromhex("1f2003d5")
+    assert out[:off + 0x48] == data[:off + 0x48] and out[off + 0x4C:] == data[off + 0x4C:]
+    assert native_fix(out, fix) is None  # already fixed / another build: left alone
+    assert native_fix(b"not an elf", fix) is None
