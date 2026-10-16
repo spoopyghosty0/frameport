@@ -464,7 +464,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_request_scene_capture(XrSession sessio
     XrEventDataSceneCaptureCompleteFB e = {XR_TYPE_EVENT_DATA_SCENE_CAPTURE_COMPLETE_FB, NULL, *request, XR_SUCCESS};
     push_event(&e, sizeof(e));
     pthread_mutex_unlock(&scene_lock);
-    LOG("scene: capture requested -> using guardian room");
+    LOG("scene: capture requested -> %s", room_from_file ? "scanned room" : "guardian box");
     return XR_SUCCESS;
 }
 
