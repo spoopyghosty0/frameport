@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Included by frame_adapter.c. Emulates Meta's scene / spatial-entity extensions (XR_FB_spatial_entity,
 // _query, _storage, _container, XR_FB_scene, XR_FB_scene_capture) for mixed-reality apps on runtimes that
-// lack them (Steam Frame). The "room" is a box built from the runtime's STAGE bounds (the guardian /
-// chaperone rectangle): floor, ceiling and four walls, reported as one room anchor with a layout.
+// lack them (Steam Frame). Room files use STAGE coordinates; absent/invalid files retain the guardian box.
 // Entity spaces are fake handles; every function that consumes a space is intercepted for them.
 
 static float scene_min_size = 1.5f;  // smallest room edge if the guardian is tiny or unavailable
@@ -42,20 +41,28 @@ static XrPosef pose_inv(XrPosef a) {
 
 // ---------------------------------------------------------------- entities
 enum { ENT_ROOM, ENT_FLOOR, ENT_CEILING, ENT_WALL0, ENT_WALL1, ENT_WALL2, ENT_WALL3, ENT_FIXED_COUNT };
-#define MAX_ENTITIES 64
+#define MAX_ENTITIES 2048
+#define MAX_OUTLINE 1024
 
 typedef struct {
     XrSpace handle;       // fake handle given to the app
     XrUuidEXT uuid;
     XrPosef pose_in_stage;
-    const char *label;    // semantic label, NULL if none
+    char label[256];      // comma-separated Meta semantic labels
     XrRect2Df bounds;     // 2D bounds in the entity's local XY plane
-    int has_bounds, is_room, is_anchor;
+    XrRect3DfFB bounds3;
+    XrVector2f *boundary;
+    uint32_t boundary_count;
+    XrVector3f *vertices;
+    uint32_t *indices, vertex_count, index_count;
+    int has_bounds, has_bounds3, is_room, is_anchor, is_wall, erased, saved;
 } scene_entity;
 
 static pthread_mutex_t scene_lock = PTHREAD_MUTEX_INITIALIZER;
 static scene_entity entities[MAX_ENTITIES];
-static int entity_count;
+static int entity_count, room_entity_count, wall_count, room_from_file;
+static char room_source[32];
+static uint64_t room_universe;
 static XrSpace scene_stage = XR_NULL_HANDLE;  // real STAGE space used to anchor everything
 static XrSession scene_session = XR_NULL_HANDLE;
 static uint64_t next_request = 0x5ce0000001ull;
@@ -65,7 +72,7 @@ static int fake_space_index(XrSpace space) {
     uint64_t v = (uint64_t)(uintptr_t)space;
     if ((v & 0xfff0000000000000ull) != FAKE_SPACE_TAG) return -1;
     int i = (int)(v & 0xffff);
-    return i < entity_count ? i : -1;
+    return i < entity_count && !entities[i].erased ? i : -1;
 }
 static XrSpace fake_space(int index) { return (XrSpace)(uintptr_t)(FAKE_SPACE_TAG | (uint64_t)index); }
 
@@ -86,7 +93,7 @@ static int add_entity(XrPosef pose, const char *label, float w, float h, int is_
     e->handle = fake_space(i);
     e->uuid = make_uuid(i);
     e->pose_in_stage = pose;
-    e->label = label;
+    if (label) snprintf(e->label, sizeof(e->label), "%s", label);
     e->has_bounds = w > 0 && h > 0;
     e->bounds = (XrRect2Df){{-w / 2, -h / 2}, {w, h}};
     e->is_room = is_room;
@@ -94,9 +101,23 @@ static int add_entity(XrPosef pose, const char *label, float w, float h, int is_
     return i;
 }
 
+static void reset_room(void) {
+    for (int i = 0; i < entity_count; ++i) {
+        free(entities[i].boundary);
+        free(entities[i].vertices);
+        free(entities[i].indices);
+    }
+    memset(entities, 0, sizeof(entities));
+    entity_count = room_entity_count = wall_count = room_from_file = 0;
+    room_universe = 0;
+}
+
+#include "scene_room.c"
+
 // Build the room once the session exists: guardian rectangle -> floor/ceiling/walls.
 static void build_room(void) {
     if (entity_count) return;
+    if (load_room_file()) return;
     float width = 0, depth = 0;
     PFN_xrGetReferenceSpaceBoundsRect bounds_fn =
         (PFN_xrGetReferenceSpaceBoundsRect)lookup(active_instance, "xrGetReferenceSpaceBoundsRect");
@@ -121,6 +142,9 @@ static void build_room(void) {
     add_entity((XrPosef){{0, 1, 0, 0}, {0, h / 2, depth / 2}}, "WALL_FACE", width, h, 0, 0);  // faces -Z
     add_entity((XrPosef){{0, s, 0, s}, {-width / 2, h / 2, 0}}, "WALL_FACE", depth, h, 0, 0); // faces +X
     add_entity((XrPosef){{0, -s, 0, s}, {width / 2, h / 2, 0}}, "WALL_FACE", depth, h, 0, 0); // faces -X
+    wall_count = 4;
+    room_entity_count = entity_count;
+    for (int i = ENT_WALL0; i < entity_count; ++i) entities[i].is_wall = 1;
 }
 
 // Supported components per entity.
@@ -329,7 +353,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_container(XrSession session, XrSpa
     int i = fake_space_index(space);
     if (i < 0 || !container) return XR_ERROR_HANDLE_INVALID;
     if (!entities[i].is_room) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
-    uint32_t n = ENT_FIXED_COUNT - 1;  // everything except the room itself
+    uint32_t n = room_entity_count - 1;  // everything except the room itself
     container->uuidCountOutput = n;
     if (!container->uuidCapacityInput) return XR_SUCCESS;
     if (container->uuidCapacityInput < n) return XR_ERROR_SIZE_INSUFFICIENT;
@@ -344,10 +368,10 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_room_layout(XrSession session, XrS
     if (!entities[i].is_room) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
     layout->floorUuid = entities[ENT_FLOOR].uuid;
     layout->ceilingUuid = entities[ENT_CEILING].uuid;
-    layout->wallUuidCountOutput = 4;
+    layout->wallUuidCountOutput = (uint32_t)wall_count;
     if (!layout->wallUuidCapacityInput) return XR_SUCCESS;
-    if (layout->wallUuidCapacityInput < 4) return XR_ERROR_SIZE_INSUFFICIENT;
-    for (int k = 0; k < 4; ++k) layout->wallUuids[k] = entities[ENT_WALL0 + k].uuid;
+    if (layout->wallUuidCapacityInput < (uint32_t)wall_count) return XR_ERROR_SIZE_INSUFFICIENT;
+    for (int k = 0; k < wall_count; ++k) layout->wallUuids[k] = entities[ENT_WALL0 + k].uuid;
     return XR_SUCCESS;
 }
 
@@ -385,7 +409,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_semantic_labels(XrSession session,
     (void)session;
     int i = fake_space_index(space);
     if (i < 0 || !labels) return XR_ERROR_HANDLE_INVALID;
-    if (!entities[i].label) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
+    if (!entities[i].label[0]) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
     uint32_t n = (uint32_t)strlen(entities[i].label) + 1;
     labels->bufferCountOutput = n;
     if (!labels->bufferCapacityInput) return XR_SUCCESS;
@@ -485,6 +509,13 @@ static void scene_on_create_session(XrSession session) {
     PFN_xrCreateReferenceSpace create = (PFN_xrCreateReferenceSpace)lookup(active_instance, "xrCreateReferenceSpace");
     XrReferenceSpaceCreateInfo ci = {XR_TYPE_REFERENCE_SPACE_CREATE_INFO, NULL, XR_REFERENCE_SPACE_TYPE_STAGE,
                                      {{0, 0, 0, 1}, {0, 0, 0}}};
+    pthread_mutex_lock(&scene_lock);
+    reset_room();
+    event_head = event_tail = 0;
+    memset(filters, 0, sizeof(filters));
     scene_session = session;
+    scene_stage = XR_NULL_HANDLE;
     if (create && XR_SUCCEEDED(create(session, &ci, &scene_stage))) LOG("scene: emulation active (anchored to STAGE)");
+    build_room();
+    pthread_mutex_unlock(&scene_lock);
 }
