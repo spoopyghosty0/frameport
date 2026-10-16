@@ -5,8 +5,10 @@ source_hint: NOPE CHALLENGE
 engine: Unreal
 xr: OpenXR
 status: works
-notes: Meta XR Audio telemetry patch + nodebug. MR "Reality Breach" mode unavailable.
-details: The MR 'Reality Breach' mode needs passthrough; standard VR mode used.
+notes: "Meta XR Audio telemetry patch + nodebug. MR mode: needs a scanned room."
+details: The MR 'Reality Breach' mode needs passthrough and a room; standard VR mode was verified.
+adapter:
+  scene_emul: 1
 alt_overport:
 - patch_remove_unreal_force_quit
 frame:

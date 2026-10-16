@@ -148,7 +148,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Re-create play space](#adapter-respace_kick) | `adapter.respace_kick` | Game settings |  |
 | [Sharpness](#adapter-scale) | `adapter.scale` | Game settings | 4 |
 | [Room depth](#adapter-scene_depth) | `adapter.scene_depth` | Game settings |  |
-| [Pretend room layout](#adapter-scene_emul) | `adapter.scene_emul` | Game settings | 11 |
+| [Use room layout](#adapter-scene_emul) | `adapter.scene_emul` | Game settings | 13 |
 | [Room height](#adapter-scene_height) | `adapter.scene_height` | Game settings |  |
 | [Room width](#adapter-scene_width) | `adapter.scene_width` | Game settings |  |
 | [Eye-image snapshots (diagnostics)](#adapter-snapshot) | `adapter.snapshot` | Game settings |  |
@@ -1930,23 +1930,22 @@ Higher looks sharper but needs more power; lower runs smoother. 1.0× is the gam
 
 > Override the guardian depth (0 = use guardian, min 1.5 m).
 
-### <a id="adapter-scene_emul"></a>Pretend room layout
+### <a id="adapter-scene_emul"></a>Use room layout
 
-Mixed-reality games that build their level from your room get a simple room with walls.
+Scene games get your saved room. Without one, they get a simple room from the play area.
 
 - `adapter.scene_emul`
 - **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
-- **Suggested (on), value `1`:** Mixed-reality game that builds its level from the room model: emulate a guardian-sized room (for example Demeter).
-- **Suggested (on), value `1`:** The game asks Meta's system for your room layout (scene), which the Frame doesn't have: emulate a room from the play area (for example VR HOT's room setup).
+- **Suggested (on), value `1`:** The game uses Meta's scene or spatial anchor APIs: serve the saved room on the Frame, or a simple play-area room until one is scanned.
 - **Options:**
   - Value: int, default `0`.
-  - Game settings → Mixed reality → "Pretend room layout".
-- **Catalog games (11):** Arkio, AugmentedEmpire, Battlemarked, Demeo, Demeter, Ghostbusters: Rise of the Ghost Lord, Neko Atsume Purrfect, Ocean Rift and 3 more.
+  - Game settings → Mixed reality → "Use room layout".
+- **Catalog games (13):** Arkio, AugmentedEmpire, Battlemarked, Demeo, Demeter, Ghostbusters: Rise of the Ghost Lord, Neko Atsume Purrfect, NOPE CHALLENGE and 5 more.
 - **Suggested by launch-test signatures:**
   - `scene-missing` (warning): The game wants Meta's room data (scene API), which the Frame lacks.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
-> Fake XR_FB_scene/spatial entities: a guardian-sized room with floor, ceiling and four walls, for mixed-reality games that build their level from the room (for example Demeter).
+> Serve Meta scene and spatial entity APIs from the saved room (walls, furniture and mesh). Without a saved room, use a simple play-area box (for example Demeter).
 
 ### <a id="adapter-scene_height"></a>Room height
 

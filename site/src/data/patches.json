@@ -241,7 +241,7 @@
  },
  "adapter.scene_emul": {
   "anchor": "adapter-scene_emul",
-  "title": "Pretend room layout",
+  "title": "Use room layout",
   "group": "Game settings"
  },
  "adapter.scene_height": {

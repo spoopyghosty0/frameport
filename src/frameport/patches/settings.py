@@ -135,8 +135,8 @@ SETTINGS = [
      "that hand over images early (an eye flickers or jitters). Costs some frame time. 2 = only after the first 60 s "
      "(compare both in one session)."),
     ("scene_emul", "int", 0, "Emulate Meta scene (room)",
-     "Fake XR_FB_scene/spatial entities: a guardian-sized room with floor, ceiling and four walls, for mixed-reality "
-     "games that build their level from the room (for example Demeter)."),
+     "Serve Meta scene and spatial entity APIs from the saved room (walls, furniture and mesh). Without a saved "
+     "room, use a simple play-area box (for example Demeter)."),
     ("controller_models", "int", 0, "Steam Frame controller models",
      "Games that ask the headset for its controller models (Meta's runtime controller models, XR_FB_render_model) get "
      "the Steam Frame controllers instead of Quest Touch controllers. The models come from the Frame's own SteamVR and "
@@ -341,8 +341,8 @@ UI: dict[str, dict] = {
     "passthrough_emul": dict(group="room", level="common", label="See your room",
                              help="Shows the Frame's cameras where the game expects passthrough.",
                              control=("switch",)),
-    "scene_emul": dict(group="room", level="common", label="Pretend room layout",
-                       help="Mixed-reality games that build their level from your room get a simple room with walls.",
+    "scene_emul": dict(group="room", level="common", label="Use room layout",
+                       help="Scene games get your saved room. Without one, they get a simple room from the play area.",
                        control=("switch",)),
     "scene_height": dict(group="room", level="advanced", label="Room height", depends="scene_emul",
                          help="Ceiling height of the pretend room.", control=("slider", 2.0, 4.0, 0.1, "{:.1f} m")),
@@ -472,7 +472,7 @@ class AdapterSetting(Patch):
         return UI.get(self.key, {}).get("help") or super().summary
 
     def detect(self, a):
-        from .applicability import needs_scene, uses_equirect_layers, uses_render_models, uses_room_model
+        from .applicability import uses_scene, uses_equirect_layers, uses_render_models
 
         if self.key == "controller_fix" and a.extra.get("hand_tracking_only"):
             return Suggestion(True, "Hand tracking is required by the game: pass hands through instead of reporting "
@@ -508,15 +508,9 @@ class AdapterSetting(Patch):
             # OVRPort's patch_disable_space_warp doesn't reach UE5). Off until confirmed in more games.
             return Suggestion(False, "Unreal Engine 5 game with Meta's space warp: turn on if the picture flickers or "
                                      "smears (for example Into The Radius 2).", {"value": 1})
-        if self.key == "scene_emul" and needs_scene(a):
-            return Suggestion(True, "Mixed-reality game that builds its level from the room model: emulate a "
-                                    "guardian-sized room (for example Demeter).", {"value": 1})
-        if self.key == "scene_emul" and uses_room_model(a):
-            # also VR games that only ask for the room (VR HOT's room setup retried forever without it)
-            return Suggestion(True, "The game asks Meta's system for your room layout (scene), which the Frame "
-                                    "doesn't have: emulate a room from the play area (for example VR HOT's room "
-                                    "setup).",
-                              {"value": 1})
+        if self.key == "scene_emul" and uses_scene(a):
+            return Suggestion(True, "The game uses Meta's scene or spatial anchor APIs: serve the saved room on "
+                                    "the Frame, or a simple play-area room until one is scanned.", {"value": 1})
         return None
 
     def applies(self, a):

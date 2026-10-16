@@ -18,10 +18,10 @@ def test_mixed_reality_only_scene_game():
     assert "frame.meta_permissions" in r.patches
 
 
-def test_mixed_reality_without_scene():
+def test_mixed_reality_with_anchors():
     _, r = suggest(extra={"mr_only": True, "meta_permissions_used": ["com.oculus.permission.USE_ANCHOR_API"],
                           "size": 1})
-    assert "patch_force_passthrough" in r.patches and "adapter.scene_emul" not in r.patches
+    assert "patch_force_passthrough" in r.patches and "adapter.scene_emul" in r.patches
 
 
 def test_hand_tracking_only():
@@ -102,7 +102,8 @@ def test_scene_emul_suggested_for_games_that_ask_for_the_room():
     a = _analysis(extra={"meta_permissions_used": ["com.oculus.permission.USE_SCENE"], "mr_only": False})
     s = p.detect(a)
     assert s and s.recommended and s.params == {"value": 1}
-    assert p.detect(_analysis(extra={"meta_permissions_used": ["com.oculus.permission.USE_ANCHOR_API"]})) is None
+    assert p.detect(_analysis(extra={"meta_permissions_used": ["com.oculus.permission.USE_ANCHOR_API"]})).recommended
+    assert p.detect(_analysis()) is None
 
 
 def test_pose_time_fix_suggested_for_unreal4_oculus_input():

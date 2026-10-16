@@ -34,6 +34,7 @@ def meta_audio_libs(a: Analysis) -> list[str]:
 
 
 def uses_scene(a: Analysis) -> bool:
+    """Scene layouts and spatial anchors both need the Meta scene API on the Frame."""
     perms = a.extra.get("meta_permissions_used") or a.meta_permissions
     return any(p.endswith(("USE_SCENE", "USE_ANCHOR_API")) for p in perms)
 

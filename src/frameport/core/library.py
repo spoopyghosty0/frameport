@@ -307,6 +307,21 @@ def _migrate(data: dict) -> bool:
                     r.setdefault("reasons", {}).setdefault(pid, s.reason)
         done.append("quest_binary_fixes_v2")
         changed = True
+    if "scene_emul_all" not in done:
+        # Optional MR modes and anchor-only games need scene APIs too. Keep explicitly edited recipes intact.
+        from ..patches.applicability import uses_scene
+
+        for g in (data.get("games") or {}).values():
+            a, r = g.get("analysis"), g.get("recipe")
+            if (not isinstance(a, dict) or not isinstance(r, dict) or r.get("source") == "user"
+                    or g.get("kind") in ("linux", "rift")):
+                continue
+            if uses_scene(analysis_from_dict(a)):
+                r.setdefault("patches", {})["adapter.scene_emul"] = {"value": 1}
+                r.setdefault("reasons", {})["adapter.scene_emul"] = (
+                    "Scene and spatial anchor APIs use the saved room on the Frame.")
+        done.append("scene_emul_all")
+        changed = True
     if "flat_hide_navbar" not in done:
         # Android apps without VR gain the default-on "Hide Android's navigation bar" patch
         for g in (data.get("games") or {}).values():

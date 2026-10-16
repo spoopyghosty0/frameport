@@ -1,13 +1,14 @@
 package: com.zenstudios.PFXVRQuest
 title: Pinball FX VR
 status: issues
-notes: Plays; mixed reality mode not working yet. Space warp off (fewer stutters).
+notes: "Plays; space warp off (fewer stutters). MR mode: needs a scanned room."
 tested_version: '1.9'
 engine: Unreal
 xr: OpenXR
 alt_overport:
 - patch_remove_unreal_force_quit
 adapter:
+  scene_emul: 1
   equirect_emul: 1
   hide_space_warp: 1
 verified:
