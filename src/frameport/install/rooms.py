@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tempfile
+import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -24,11 +25,62 @@ def from_boundary(frame, height: float = 2.5) -> dict:
     return frame.agent("room_from_boundary", height=height)
 
 
-def capture(frame, seconds: float = 30) -> dict:
-    result = frame.agent("room_capture", seconds=seconds)
+def capture(frame, seconds: float = 90, wait: float = 180) -> dict:
+    """Start a scan in the headset (the agent records the passthrough mesh, then builds the room)."""
+    ensure_scanner(frame)
+    ensure_prompts(frame)
+    result = frame.agent("room_capture", seconds=seconds, wait=wait)
     if result.get("error"):
         raise RuntimeError(result["error"])
     return result
+
+
+def capture_status(frame) -> dict:
+    return frame.agent("room_capture_status")
+
+
+SCAN_DONE = ("done", "failed", "none")
+
+
+def scan(frame, seconds: float = 90, wait: float = 180, progress=None, poll: float = 2.0,
+         sleep=time.sleep) -> dict:
+    """capture() and wait for the result. progress(status) gets every status the agent reports (state waiting ->
+    recording -> building -> done|failed; directions seen, looked_up). Returns the final status; raises on failure."""
+    capture(frame, seconds, wait)
+    deadline = time.monotonic() + wait + seconds + 600  # + building time
+    while True:
+        st = capture_status(frame)
+        if progress:
+            progress(st)
+        if st.get("state") in SCAN_DONE:
+            break
+        if time.monotonic() > deadline:
+            raise RuntimeError("The room scan didn't finish")
+        sleep(poll)
+    if st.get("state") != "done":
+        raise RuntimeError(st.get("error") or "The room scan didn't finish")
+    return st
+
+
+def ensure_prompts(frame) -> str:
+    """The in-headset scan prompts (artifacts/roomscan/*.png) next to the scanner, synced by digest in one go."""
+    import hashlib
+
+    local = artifacts_dir() / "roomscan"
+    remote = f"{frame.home}/.local/share/frameport/bin/roomscan-prompts"
+    files = sorted(local.glob("*.png"))
+    if not files:
+        return remote
+    want = {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in files}
+    _, out, _ = frame.run(f"mkdir -p {sh_quote(remote)} && cd {sh_quote(remote)} && sha256sum -- *.png 2>/dev/null")
+    have = {}
+    for line in out.splitlines():
+        digest, _, name = line.partition("  ")
+        have[name.strip()] = digest
+    for f in files:
+        if have.get(f.name) != want[f.name]:
+            frame.put(f, f"{remote}/{f.name}", resume=False)
+    return remote
 
 
 @contextmanager

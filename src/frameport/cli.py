@@ -768,6 +768,20 @@ def room_build(dump: Path = typer.Argument(..., exists=True, dir_okay=False),
     typer.echo(json.dumps(rooms.build(_target(frame).frame, dump, universe), indent=2))
 
 
+@room_app.command("scan")
+def room_scan(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
+              seconds: float = typer.Option(90, help="how long to record once passthrough is on"),
+              wait: float = typer.Option(180, help="how long to wait for the player to turn passthrough on")):
+    """Scan the room in the headset: put it on, turn on passthrough and follow the prompts."""
+    from .install import rooms
+
+    def progress(st):
+        typer.echo(f"{st.get('state')}: {st.get('directions', 0)}/12 directions, "
+                   f"ceiling {'seen' if st.get('looked_up', 0) >= 5 else 'not yet'}", err=True)
+
+    typer.echo(json.dumps(rooms.scan(_target(frame).frame, seconds, wait, progress=progress), indent=2))
+
+
 @room_app.command("show")
 def room_show(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
               output: Optional[Path] = typer.Option(None, help="SVG preview path")):

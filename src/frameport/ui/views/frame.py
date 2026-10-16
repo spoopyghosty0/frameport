@@ -240,6 +240,15 @@ class FrameView:
                         tr("Scanner installed"), tr("Ready") if status.get("scanner_installed")
                         else tr("Installed when you build a recorded scan"), "mr_scanner")]
         contents = [C.checklist(rows)]
+        scan = cached.get("scan")
+        if scan:
+            line = {"waiting": tr("Put on the headset and turn on passthrough. The scan starts by itself."),
+                    "recording": tr("Scanning: {directions} of 12 directions seen{up}").format(
+                        directions=scan.get("directions", 0),
+                        up=tr(", ceiling seen") if scan.get("looked_up", 0) >= 5 else ""),
+                    "building": tr("Building the room…")}.get(scan.get("state"), "")
+            if line:
+                contents.append(C.callout(line, "info"))
         if cached.get("error"):
             contents.append(C.callout(tr("Couldn't check room data: {error}").format(error=cached["error"]), "warn"))
         if cached.get("preview"):
@@ -260,18 +269,24 @@ class FrameView:
             cached["working"] = True
             app.refresh_view()
             target = app.target
+            def scan_progress(st):  # every agent status while the player scans in the headset
+                cached["scan"] = st
+                if app.target is target:
+                    app.refresh_view()
+
             def work():
                 from ...install import rooms
                 try:
-                    handler = {"boundary": rooms.from_boundary,
-                               "delete": rooms.delete, "capture": rooms.capture}[action]
-                    handler(target.frame)
+                    if action == "capture":
+                        rooms.scan(target.frame, progress=scan_progress)
+                        app.toast(tr("Room scanned"))
+                    else:
+                        {"boundary": rooms.from_boundary, "delete": rooms.delete}[action](target.frame)
                 except Exception as exc:  # noqa: BLE001
-                    message = (tr("Room scanning in the headset isn't available yet. You can use your play area now.")
-                               if "not implemented yet" in str(exc) else explain(exc))
-                    app.toast(message, error=True)
+                    app.toast(explain(exc), error=True)
                 finally:
                     cached["working"] = False
+                    cached["scan"] = None
                 if app.target is target:
                     room_state(app, force=True)
                     app.refresh_view()

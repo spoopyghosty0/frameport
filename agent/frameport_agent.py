@@ -26,6 +26,7 @@ import base64
 import glob
 import hashlib
 import json
+import math
 import os
 import re
 import shlex
@@ -44,7 +45,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 91
+AGENT_VERSION = 92
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -4295,16 +4296,379 @@ def cmd_room_build(args):
     return {"report": report, **cmd_room_status({})}
 
 
-def capture_roomview(seconds, out_path):
-    """Device-spike hook: attach to IVRBlockQueue_005 /xrservice/roomview3d/meshData + /meshLayout,
-    read their recorded 3D meshes for `seconds`, transform poses to STAGE, and write a v1 FPRS dump at out_path.
-    The maintainer implements this after verifying Valve's queue ABI on the Frame. No synthetic capture here.
-    """
-    raise AgentError("not implemented yet")
+# --- RoomView 3D capture (docs/mr/PHASE0.md) -------------------------------------------------------------------
+# Valve's passthrough computes a head-centred depth mesh (~30/s) and publishes it in two OpenVR block queues;
+# FramePort records it into a .fprs scan dump (docs/mr/ROOM_FORMAT.md) for fp_roomscan. Background app only: reading
+# never starts SteamVR or changes it. Poses are kept in SteamVR's raw space while recording and converted to STAGE
+# with the raw->standing transform at the END: Valve's floor estimate moves that transform during a session.
+ROOMVIEW_DATA = b"/xrservice/roomview3d/meshData"
+ROOMVIEW_LAYOUT = b"/xrservice/roomview3d/meshLayout"
+FPRS_FRAME = "<d7fII"           # time, pose (px py pz qx qy qz qw), vertex count, index count
+FPRS_POSE_OFFSET = 8            # the pose's byte offset inside a frame header (rewritten at the end)
+ROOMVIEW_MAX_DEPTH = 4.0        # metres; beyond this Valve's depth is inpainted (only reported here)
+VR_APP_OVERLAY = 2              # EVRApplicationType VRApplication_Overlay
+
+
+def _m34_mul(a, b):
+    """Row-major 3x4 affine a * b."""
+    out = []
+    for r in range(3):
+        for c in range(4):
+            v = sum(a[r * 4 + k] * b[k * 4 + c] for k in range(3))
+            out.append(v + (a[r * 4 + 3] if c == 3 else 0.0))
+    return out
+
+
+def _m34_quat(m):
+    """Rotation of a row-major 3x4 as (x, y, z, w)."""
+    r00, r01, r02, r10, r11, r12, r20, r21, r22 = m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]
+    tr = r00 + r11 + r22
+    if tr > 0:
+        s = math.sqrt(tr + 1.0) * 2
+        return ((r21 - r12) / s, (r02 - r20) / s, (r10 - r01) / s, 0.25 * s)
+    if r00 > r11 and r00 > r22:
+        s = math.sqrt(1.0 + r00 - r11 - r22) * 2
+        return (0.25 * s, (r01 + r10) / s, (r02 + r20) / s, (r21 - r12) / s)
+    if r11 > r22:
+        s = math.sqrt(1.0 + r11 - r00 - r22) * 2
+        return ((r01 + r10) / s, 0.25 * s, (r12 + r21) / s, (r02 - r20) / s)
+    s = math.sqrt(1.0 + r22 - r00 - r11) * 2
+    return ((r02 + r20) / s, (r12 + r21) / s, 0.25 * s, (r10 - r01) / s)
+
+
+def _view_coverage(m, yaw_bins, pitch):
+    """Note where the camera looked (+Z of the mesh = forward): yaw in 30 deg bins, how many frames looked up."""
+    fx, fy, fz = m[2], m[6], m[10]
+    yaw_bins.add(int((math.degrees(math.atan2(fx, fz)) % 360) // 30))
+    if fy > 0.6:
+        pitch["up"] += 1
+    elif fy < -0.6:
+        pitch["down"] += 1
+
+
+class _RoomViewReader:
+    """The two RoomView queues + their path properties through libopenvr_api.so (ctypes)."""
+
+    def __init__(self, app_type=None):
+        import ctypes
+
+        self.ct = ctypes
+        lib = next((p for p in OPENVR_LIBS if os.path.isfile(p)), None)
+        if lib is None:
+            raise RuntimeError("SteamVR isn't installed")
+        vr = self.vr = ctypes.CDLL(lib)
+        vr.VR_InitInternal2.restype = ctypes.c_uint32
+        vr.VR_InitInternal2.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_char_p]
+        vr.VR_GetGenericInterface.restype = ctypes.c_void_p
+        vr.VR_GetGenericInterface.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int)]
+        vr.VR_ShutdownInternal.restype = None
+        err = ctypes.c_int(0)
+        # an Overlay app may create the prompt overlay; Background (no prompts) can't start SteamVR by accident
+        vr.VR_InitInternal2(ctypes.byref(err), VR_APP_BACKGROUND if app_type is None else app_type, None)
+        if err.value:
+            raise RuntimeError("SteamVR isn't running")
+        H, E, VP = ctypes.c_uint64, ctypes.c_int, ctypes.c_void_p
+        self.H, self.VP = H, VP
+
+        class BQ(ctypes.Structure):  # openvr_capi.h VR_IVRBlockQueue_FnTable (IVRBlockQueue_005)
+            _fields_ = [("Create", VP), ("Connect", ctypes.CFUNCTYPE(E, ctypes.POINTER(H), ctypes.c_char_p)),
+                        ("Destroy", VP), ("AcquireWriteOnlyBlock", VP), ("ReleaseWriteOnlyBlock", VP),
+                        ("WaitAndAcquireReadOnlyBlock", ctypes.CFUNCTYPE(E, H, ctypes.POINTER(H), ctypes.POINTER(VP),
+                                                                         ctypes.c_int, ctypes.c_uint32)),
+                        ("AcquireReadOnlyBlock", VP), ("ReleaseReadOnlyBlock", ctypes.CFUNCTYPE(E, H, H)),
+                        ("QueueHasReader", VP)]
+
+        class PathRead(ctypes.Structure):  # openvr_driver.h PathRead_t
+            _fields_ = [("ulPath", ctypes.c_uint64), ("pvBuffer", VP), ("unBufferSize", ctypes.c_uint32),
+                        ("unTag", ctypes.c_uint32), ("unRequiredBufferSize", ctypes.c_uint32), ("eError", ctypes.c_int),
+                        ("pszPath", ctypes.c_char_p)]
+
+        class M34(ctypes.Structure):
+            _fields_ = [("m", ctypes.c_float * 12)]
+
+        self.PathRead, self.M34 = PathRead, M34
+        e = ctypes.c_int(0)
+        ptr = vr.VR_GetGenericInterface(b"FnTable:IVRBlockQueue_005", ctypes.byref(e))
+        paths = vr.VR_GetGenericInterface(b"IVRPaths_002", ctypes.byref(e))
+        system = next((s for s in (vr.VR_GetGenericInterface(n, ctypes.byref(e))
+                                   for n in (b"IVRSystem_023", b"IVRSystem_022")) if s), None)
+        if not ptr or not paths or not system:
+            self.close()
+            raise RuntimeError("this SteamVR has no RoomView mesh interfaces")
+        self.bq = ctypes.cast(ptr, ctypes.POINTER(BQ)).contents
+        self.paths = paths
+        pvt = ctypes.cast(ctypes.cast(paths, ctypes.POINTER(VP))[0], ctypes.POINTER(VP))
+        self._read = ctypes.CFUNCTYPE(E, VP, ctypes.c_uint64, ctypes.POINTER(PathRead), ctypes.c_uint32)(pvt[0])
+        self._handle = ctypes.CFUNCTYPE(E, VP, ctypes.POINTER(ctypes.c_uint64), ctypes.c_char_p)(pvt[2])
+        self.system = system
+        svt = ctypes.cast(ctypes.cast(system, ctypes.POINTER(VP))[0], ctypes.POINTER(VP))
+        self._raw_to_standing = ctypes.CFUNCTYPE(M34, VP)(svt[13])  # GetRawZeroPoseToStandingAbsoluteTrackingPose
+        self.handles = {}
+        self.data, self.layout = self._connect(ROOMVIEW_DATA), self._connect(ROOMVIEW_LAYOUT)
+        if self.data is None or self.layout is None:
+            self.close()
+            raise RuntimeError("SteamVR has no RoomView mesh (passthrough never started since SteamVR started?)")
+
+    def _connect(self, path):
+        h = self.H(0)
+        return h if self.bq.Connect(self.ct.byref(h), path) == 0 else None
+
+    def prop(self, root, path, fmt):
+        ct = self.ct
+        if path not in self.handles:
+            h = ct.c_uint64(0)
+            self._handle(self.paths, ct.byref(h), path.encode())
+            self.handles[path] = h.value
+        buf = (ct.c_ubyte * 64)()
+        pr = self.PathRead(self.handles[path], ct.cast(buf, self.VP), 64, 0, 0, 0, None)
+        self._read(self.paths, root, ct.byref(pr), 1)
+        if pr.eError or pr.unRequiredBufferSize < struct.calcsize(fmt):
+            return None
+        vals = struct.unpack_from(fmt, bytes(buf))
+        return vals if len(vals) > 1 else vals[0]
+
+    def up_to_date(self):
+        return bool(self.prop(self.data.value, "/meshData/meshIsUpToDate", "<?"))
+
+    def acquire(self, queue, read_type, timeout_ms):
+        blk, buf = self.H(0), self.VP(0)
+        if self.bq.WaitAndAcquireReadOnlyBlock(queue, self.ct.byref(blk), self.ct.byref(buf), read_type, timeout_ms):
+            return None, None
+        return blk, buf.value
+
+    def release(self, queue, blk):
+        self.bq.ReleaseReadOnlyBlock(queue, blk)
+
+    def raw_to_standing(self):
+        return list(self._raw_to_standing(self.system).m)
+
+    def close(self):
+        try:
+            self.vr.VR_ShutdownInternal()
+        except Exception:  # noqa: BLE001 - shutting down a half-initialised client
+            pass
+
+
+class _ScanPrompt:
+    """A head-locked SteamVR overlay showing FramePort's pre-rendered scan prompts (artifacts/roomscan/*.png,
+    uploaded next to fp_roomscan): IVROverlay_028 through its C function table. Failing to show it never stops a
+    scan (the PC app shows the same state)."""
+    SLOTS = {"Create": 1, "Destroy": 3, "SortOrder": 20, "Width": 22, "DeviceRelative": 35, "Show": 43, "Hide": 44,
+             "FromFile": 63}
+
+    def __init__(self, rv, image_dir):
+        ct = self.ct = rv.ct
+        self.dir, self.shown, self.handle = image_dir, None, None
+        e = ct.c_int(0)
+        table = rv.vr.VR_GetGenericInterface(b"FnTable:IVROverlay_028", ct.byref(e))
+        if not table or not os.path.isdir(image_dir):
+            return
+        fn = ct.cast(table, ct.POINTER(ct.c_void_p))
+        U64, E = ct.c_uint64, ct.c_int
+        self.create = ct.CFUNCTYPE(E, ct.c_char_p, ct.c_char_p, ct.POINTER(U64))(fn[self.SLOTS["Create"]])
+        self.destroy = ct.CFUNCTYPE(E, U64)(fn[self.SLOTS["Destroy"]])
+        self.sort = ct.CFUNCTYPE(E, U64, ct.c_uint32)(fn[self.SLOTS["SortOrder"]])
+        self.width = ct.CFUNCTYPE(E, U64, ct.c_float)(fn[self.SLOTS["Width"]])
+        self.relative = ct.CFUNCTYPE(E, U64, ct.c_uint32, ct.POINTER(rv.M34))(fn[self.SLOTS["DeviceRelative"]])
+        self.show_fn = ct.CFUNCTYPE(E, U64)(fn[self.SLOTS["Show"]])
+        self.from_file = ct.CFUNCTYPE(E, U64, ct.c_char_p)(fn[self.SLOTS["FromFile"]])
+        h = U64(0)
+        if self.create(b"frameport.roomscan", b"FramePort room scan", ct.byref(h)):
+            return
+        self.handle = h
+        m = rv.M34()
+        for i, v in enumerate((1, 0, 0, 0, 0, 1, 0, -0.25, 0, 0, 1, -1.2)):  # 1.2 m ahead, a bit below eye level
+            m.m[i] = v
+        self.width(h, 0.8)
+        self.sort(h, 10)
+        self.relative(h, 0, ct.byref(m))  # k_unTrackedDeviceIndex_Hmd
+
+    def show(self, name):
+        if self.handle is None or name == self.shown:
+            return
+        path = os.path.join(self.dir, name + ".png")
+        if os.path.isfile(path) and self.from_file(self.handle, path.encode()) == 0:
+            self.show_fn(self.handle)
+            self.shown = name
+
+    def close(self, final=None, linger=4.0):
+        if self.handle is None:
+            return
+        if final:
+            self.show(final)
+            time.sleep(linger)
+        self.destroy(self.handle)
+        self.handle = None
+
+
+def _prompt_for(started, yaw_bins, pitch, live):
+    if not live and started is None:
+        return "start"
+    if len(yaw_bins) >= 10 and pitch["up"] < 5:
+        return "ceiling"
+    return f"look_{min(12, len(yaw_bins)):02d}"
+
+
+def capture_roomview(seconds, out_path, wait=0.0, max_hz=3.0, progress=None, prompts=None):
+    """Record RoomView 3D meshes into a .fprs dump: `seconds` of fresh meshes (after waiting up to `wait` s for the
+    first one), at most `max_hz` frames per second. progress(dict) is called about once a second. Returns a summary:
+    frames, duration, yaw coverage (30 deg bins seen), frames looking up/down, warnings."""
+    rv = _RoomViewReader(VR_APP_OVERLAY if prompts else None)
+    ct = rv.ct
+    prompt = _ScanPrompt(rv, prompts) if prompts else None
+    tmp = out_path + ".part"
+    offsets, raw_poses = [], []
+    yaw_bins, pitch = set(), {"up": 0, "down": 0}
+    indices, layout_id, last_mesh, last_write = None, None, None, 0.0
+    last_new = 0.0  # when a new mesh id last arrived: meshIsUpToDate stays true after the headset comes off
+    seen_mesh = None
+    started = None
+    t_end = time.time() + (wait or seconds)
+    next_progress = time.time()
+    try:
+        with open(tmp, "wb") as f:
+            f.write(b"FPRS" + struct.pack("<I", 1))
+            while time.time() < t_end:
+                now = time.time()
+                if now >= next_progress:
+                    live = now - last_new < 2.0
+                    if prompt:
+                        prompt.show(_prompt_for(started, yaw_bins, pitch, live))
+                    if progress:
+                        progress({"recording": started is not None, "frames": len(offsets),
+                                  "seconds": round(now - started, 1) if started else 0,
+                                  "directions": len(yaw_bins), "looked_up": pitch["up"], "live": live})
+                    next_progress = now + 1
+                blk, buf = rv.acquire(rv.data, 1, 200)  # EBlockQueueReadType_New
+                if blk is None:
+                    continue
+                try:
+                    mesh_id = rv.prop(blk.value, "/meshData/meshId", "<Q")
+                    if mesh_id != seen_mesh:
+                        seen_mesh, last_new = mesh_id, now
+                    if not rv.up_to_date() or now - last_write < 1.0 / max_hz:
+                        continue
+                    lid = rv.prop(blk.value, "/meshData/layoutId", "<Q")
+                    count = rv.prop(blk.value, "/meshData/elementCount", "<i") or 0
+                    pose = rv.prop(blk.value, "/meshData/rawFromMeshPose", "<12f")
+                    if mesh_id == last_mesh or pose is None or count < 9 or not all(map(math.isfinite, pose)):
+                        continue
+                    if lid != layout_id:  # the index layout only changes with the mesh resolution
+                        lb, lbuf = rv.acquire(rv.layout, 0, 500)
+                        if lb is not None:
+                            n = rv.prop(lb.value, "/meshLayout/indexCount", "<i") or 0
+                            indices = ct.string_at(lbuf, n * 4)
+                            layout_id = rv.prop(lb.value, "/meshLayout/layoutId", "<Q")
+                            rv.release(rv.layout, lb)
+                    if indices is None or layout_id != lid:
+                        continue
+                    verts = ct.string_at(buf, count * 4)
+                finally:
+                    rv.release(rv.data, blk)
+                if started is None:
+                    started = now
+                    t_end = now + seconds
+                offsets.append(f.tell())
+                raw_poses.append(list(pose))
+                _view_coverage(pose, yaw_bins, pitch)
+                f.write(struct.pack(FPRS_FRAME, now, 0, 0, 0, 0, 0, 0, 1, count // 3, len(indices) // 4))
+                f.write(verts)
+                f.write(indices)
+                last_mesh, last_write = mesh_id, now
+        r2s = rv.raw_to_standing()
+    finally:
+        if prompt:
+            prompt.close("done" if offsets else "failed")
+        rv.close()
+    with open(tmp, "r+b") as f:  # raw -> STAGE with the final floor/universe transform
+        for off, raw in zip(offsets, raw_poses, strict=True):
+            m = _m34_mul(r2s, raw)
+            f.seek(off + FPRS_POSE_OFFSET)
+            f.write(struct.pack("<7f", m[3], m[7], m[11], *_m34_quat(m)))
+    warnings = []
+    if not offsets:
+        warnings.append("no passthrough mesh: turn on passthrough in the headset")
+    if len(yaw_bins) < 9:
+        warnings.append("not all directions seen: look around the whole room")
+    if pitch["up"] < 5:
+        warnings.append("ceiling not seen: look up")
+    os.replace(tmp, out_path)
+    return {"frames": len(offsets), "seconds": round(last_write - started, 1) if started else 0,
+            "directions": len(yaw_bins), "looked_up": pitch["up"], "looked_down": pitch["down"],
+            "bytes": os.path.getsize(out_path), "warnings": warnings}
+
+
+ROOM_SCAN_STATUS = os.path.join(ROOMS_DIR, "scan-status.json")
+ROOM_SCAN_DUMPS = os.path.join(ROOMS_DIR, "scans")
+ROOM_SCAN_PROMPTS = os.path.join(HOME, ".local/share/frameport/bin/roomscan-prompts")
+ROOM_SCAN_UNIT = "frameport-room-scan"
+ROOM_SCAN_KEEP = 2  # newest dumps kept for diagnostics (each ~100-600 MB)
 
 
 def cmd_room_capture(args):
-    return {"error": "not implemented yet"}
+    """Start a room scan in the headset: a detached job records the passthrough mesh (with prompts in the headset),
+    then builds and stores the room. Progress: room_capture_status."""
+    seconds = float(args.get("seconds", 90))
+    wait = float(args.get("wait", 180))
+    if not (10 <= seconds <= 900 and 0 <= wait <= 1800):
+        raise AgentError("scan length out of range")
+    if not os.access(ROOM_SCANNER, os.X_OK):
+        raise AgentError("Room scanner is not installed")
+    state = cmd_room_capture_status({})
+    if state.get("state") in ("waiting", "recording", "building") and _unit_active(ROOM_SCAN_UNIT):
+        raise AgentError("A room scan is already running")
+    os.makedirs(ROOMS_DIR, exist_ok=True)
+    _write_json(ROOM_SCAN_STATUS, {"state": "waiting", "started": time.time(), "seconds": seconds})
+    p = run(["systemd-run", "--user", "--collect", "--quiet", f"--unit={ROOM_SCAN_UNIT}-{int(time.time())}",
+             "--setenv=HOME=" + HOME, sys.executable, os.path.abspath(__file__), "_room_capture",
+             json.dumps({"seconds": seconds, "wait": wait})])
+    if p.returncode != 0:
+        _write_json(ROOM_SCAN_STATUS, {"state": "failed", "error": p.stderr.strip()[-300:]})
+        raise AgentError(f"couldn't start the room scan: {p.stderr.strip()[-300:]}")
+    return {"started": True, "status": ROOM_SCAN_STATUS}
+
+
+def _unit_active(prefix):
+    p = run(["systemctl", "--user", "list-units", "--no-legend", "--plain", f"{prefix}-*"])
+    return any(line.split()[2:3] == ["active"] for line in (p.stdout or "").splitlines() if line.strip())
+
+
+def cmd_room_capture_status(args):
+    try:
+        with open(ROOM_SCAN_STATUS) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {"state": "none"}
+
+
+def room_capture_worker(payload):
+    job = json.loads(payload)
+    status = {"state": "waiting", "started": time.time(), "seconds": job["seconds"]}
+    os.makedirs(ROOM_SCAN_DUMPS, exist_ok=True)
+    dump = os.path.join(ROOM_SCAN_DUMPS, time.strftime("scan-%Y%m%d-%H%M%S.fprs"))
+
+    def progress(p):
+        status.update(p, state="recording" if p.get("recording") else "waiting")
+        _write_json(ROOM_SCAN_STATUS, status)
+
+    try:
+        summary = capture_roomview(job["seconds"], dump, wait=job["wait"], progress=progress,
+                                   prompts=ROOM_SCAN_PROMPTS if os.path.isdir(ROOM_SCAN_PROMPTS) else None)
+        status.update(capture=summary, state="building")
+        _write_json(ROOM_SCAN_STATUS, status)
+        if not summary["frames"]:
+            raise AgentError("No passthrough view arrived: turn on passthrough in the headset and scan again")
+        built = cmd_room_build({"dump": dump})
+        status.update(state="done", report=built.get("report"), room=built.get("room"), finished=time.time())
+    except Exception as exc:  # noqa: BLE001 - every failure ends in the status file the PC polls
+        status.update(state="failed", error=str(exc)[-500:], finished=time.time())
+    finally:
+        _write_json(ROOM_SCAN_STATUS, status)
+        for old in sorted(glob.glob(os.path.join(ROOM_SCAN_DUMPS, "scan-*.fprs")))[:-ROOM_SCAN_KEEP]:
+            try:
+                os.remove(old)
+            except OSError:
+                pass
 
 
 def wants_scene_room(anchor):
@@ -8399,6 +8763,9 @@ def main():
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "_purge_worker":
         purge_worker(sys.argv[2])
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] == "_room_capture":
+        room_capture_worker(sys.argv[2])
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "_move_worker":
         move_worker(sys.argv[2])

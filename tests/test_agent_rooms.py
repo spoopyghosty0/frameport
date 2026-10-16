@@ -45,7 +45,8 @@ def test_boundary_circle_and_status(monkeypatch, tmp_path):
     assert not a.cmd_room_status({})["aligned"]
     assert not a.cmd_room_status({})["scanner_installed"]
     assert not a.cmd_room_delete({})["rooms"]
-    assert a.cmd_room_capture({}) == {"error": "not implemented yet"}
+    with pytest.raises(a.AgentError, match="scanner is not installed"):  # capture needs fp_roomscan to build
+        a.cmd_room_capture({})
 
 
 def test_store_mesh_validation_and_fallback(monkeypatch, tmp_path):

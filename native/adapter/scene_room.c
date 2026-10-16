@@ -97,13 +97,13 @@ static int room_set_uuid(int i, XrUuidEXT uuid) {
     entities[i].uuid = uuid;
     return 1;
 }
-static int room_wall(XrUuidEXT uuid, const float *v) {
+static int room_wall(XrUuidEXT uuid, const float *v, const char *label) {
     float dx = v[2] - v[0], dz = v[3] - v[1], length = hypotf(dx, dz);
     if (length < 0.001f || v[5] <= v[4]) return 0;
     float angle = atan2f(-dz, dx) / 2;
     int i = add_entity((XrPosef){{0, sinf(angle), 0, cosf(angle)},
                        {(v[0] + v[2]) / 2, (v[4] + v[5]) / 2, (v[1] + v[3]) / 2}},
-                       "WALL_FACE", length, v[5] - v[4], 0, 0);
+                       label, length, v[5] - v[4], 0, 0);
     if (i < 0) return 0;
     if (!room_set_uuid(i, uuid)) { --entity_count; return 0; }
     entities[i].is_wall = 1;
@@ -176,7 +176,10 @@ static int load_room_file(void) {
             for (uint64_t k = 0; ok && k < a; ++k) ok = room_float(t[2 + k * 2], &parsed[k].x) && room_float(t[3 + k * 2], &parsed[k].y);
             if (ok) { memcpy(outline, parsed, (size_t)a * sizeof(*outline)); outline_n = (int)a; }
         } else if (!strcmp(t[0], "wall")) {
-            ok = n == 8 && room_uuid(t[1], &uuid) && room_values(t, 2, 6, v) && room_wall(uuid, v);
+            // optional 8th field: WALL_FACE (default) or INVISIBLE_WALL_FACE for an edge the scanner closed itself
+            const char *label = n == 9 ? t[8] : "WALL_FACE";
+            ok = (n == 8 || (n == 9 && (!strcmp(label, "WALL_FACE") || !strcmp(label, "INVISIBLE_WALL_FACE")))) &&
+                 room_uuid(t[1], &uuid) && room_values(t, 2, 6, v) && room_wall(uuid, v, label);
         } else if (!strcmp(t[0], "volume") || !strcmp(t[0], "plane")) {
             int volume = !strcmp(t[0], "volume");
             ok = n == (volume ? 10 : 12) && room_uuid(t[1], &uuid) && strlen(t[2]) < sizeof(entities[0].label) && room_values(t, 3, volume ? 7 : 9, v);
@@ -245,7 +248,7 @@ static int load_room_file(void) {
     if (!wall_count) for (int i = 0; i < outline_n; ++i) {
         XrVector2f a = outline[i], b = outline[(i+1)%outline_n];
         float v[] = {a.x,a.y,b.x,b.y,entities[ENT_FLOOR].pose_in_stage.position.y,entities[ENT_CEILING].pose_in_stage.position.y};
-        if (!room_wall(make_uuid(entity_count), v)) { reset_room(); return 0; }
+        if (!room_wall(make_uuid(entity_count), v, "WALL_FACE")) { reset_room(); return 0; }
         ++wall_count;
     }
     // Move generated walls ahead of furniture as well.

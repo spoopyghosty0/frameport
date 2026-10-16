@@ -21,11 +21,13 @@ room <uuid>                         # the room anchor
 floor <uuid> <y>                    # floor height (normally 0)
 ceiling <uuid> <y>                  # ceiling height
 outline <n> x0 z0 x1 z1 ... x(n-1) z(n-1)
-                                    # floor polygon, n >= 3, counter-clockwise seen from above (+Y), not closed
+                                    # floor polygon, n >= 3, not closed, POSITIVE signed area:
+                                    # sum(x[i]*z[i+1] - x[i+1]*z[i]) > 0 (turning from +X towards +Z; seen from
+                                    # above with -Z forward that is clockwise). Readers reverse a negative outline.
 wall <uuid> x0 z0 x1 z1 <y0> <y1> [LABEL]
                                     # one wall face from (x0,z0) to (x1,z1), bottom y0, top y1.
-                                    # Its normal points INTO the room: walls follow the outline counter-clockwise,
-                                    # so inward = left of the direction (x0,z0) -> (x1,z1) seen from above.
+                                    # Its normal points INTO the room: walls follow the outline's order, and the
+                                    # inward normal is (-dz, dx)/|d| for d = (x1-x0, z1-z0).
                                     # LABEL (optional, default WALL_FACE): INVISIBLE_WALL_FACE for an edge the
                                     # scanner closed without seeing a wall (open side of a room, doorway gap).
 volume <uuid> <LABEL> cx cz top_y yaw_deg w d h

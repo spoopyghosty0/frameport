@@ -67,6 +67,18 @@ def test_room_geometry_components_queries_and_mesh(harness, tmp_path):
     assert "scene: capture requested -> scanned room" in log
 
 
+def test_wall_label_field(harness, tmp_path):
+    # optional 8th field: INVISIBLE_WALL_FACE for edges the scanner closed itself; other labels are refused
+    room(tmp_path)
+    text = (tmp_path / "room.txt").read_text()
+    last = f"wall {uuid(14)} 0 3 0 0 0 2.5"
+    assert last in text
+    (tmp_path / "room.txt").write_text(text.replace(last, last + " INVISIBLE_WALL_FACE")
+                                       + f"wall {uuid(70)} 0 0 1 0 0 2 TABLE\n")
+    log = run(harness, tmp_path, "room", 5, 1)
+    assert "scene: room from scan file (5 walls" in log and log.count("bad room line") == 1
+
+
 def test_walls_derived_from_outline(harness, tmp_path):
     room(tmp_path, generated_walls=True)
     run(harness, tmp_path, "room", 5, 1)
