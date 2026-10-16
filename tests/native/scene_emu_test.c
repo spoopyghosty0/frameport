@@ -165,12 +165,26 @@ static int check_room(int expect_walls, int mesh_ok) {
     XrVector3f axis=quat_rotate(entities[volume].pose_in_stage.orientation,(XrVector3f){1,0,0});
     CHECK(NEAR(axis.x,0) && NEAR(axis.z,-1));
     CHECK(NEAR(entities[plane].pose_in_stage.position.x,1) && NEAR(entities[plane].bounds.extent.height,1.2f));
-    XrSemanticLabelsFB labels={.type=XR_TYPE_SEMANTIC_LABELS_FB};
+    // a current SDK names what it knows and accepts TABLE / invisible walls: labels as stored
+    XrSemanticLabelsSupportInfoFB support={XR_TYPE_SEMANTIC_LABELS_SUPPORT_INFO_FB,NULL,
+        XR_SEMANTIC_LABELS_SUPPORT_ACCEPT_DESK_TO_TABLE_MIGRATION_BIT_FB|
+        XR_SEMANTIC_LABELS_SUPPORT_ACCEPT_INVISIBLE_WALL_FACE_BIT_FB,
+        "TABLE,OTHER,FLOOR,CEILING,WALL_FACE,INVISIBLE_WALL_FACE,WINDOW_FRAME"};
+    XrSemanticLabelsFB labels={.type=XR_TYPE_SEMANTIC_LABELS_FB,.next=&support};
     CHECK(emu_get_semantic_labels(SESSION,entities[volume].handle,&labels)==XR_SUCCESS && labels.bufferCountOutput==12);
     char text[256]; labels.buffer=text; labels.bufferCapacityInput=2;
     CHECK(emu_get_semantic_labels(SESSION,entities[volume].handle,&labels)==XR_ERROR_SIZE_INSUFFICIENT);
     labels.bufferCapacityInput=sizeof(text);
     CHECK(emu_get_semantic_labels(SESSION,entities[volume].handle,&labels)==XR_SUCCESS && !strcmp(text,"TABLE,OTHER"));
+    // an SDK without the migration bit gets DESK; one that doesn't know a label gets OTHER (deduplicated)
+    support.flags=0;
+    CHECK(emu_get_semantic_labels(SESSION,entities[volume].handle,&labels)==XR_SUCCESS && !strcmp(text,"OTHER"));
+    support.recognizedLabels="DESK,OTHER";
+    CHECK(emu_get_semantic_labels(SESSION,entities[volume].handle,&labels)==XR_SUCCESS && !strcmp(text,"DESK,OTHER"));
+    // no support info at all (first XR_FB_scene apps): the first label set only
+    labels.next=NULL;
+    CHECK(emu_get_semantic_labels(SESSION,entities[volume].handle,&labels)==XR_SUCCESS && !strcmp(text,"DESK,OTHER"));
+    labels.next=&support;
     uint32_t n; XrSpaceComponentTypeFB types[8];
     CHECK(emu_enumerate_components(entities[volume].handle,0,&n,NULL)==XR_SUCCESS && n==5);
     CHECK(emu_enumerate_components(entities[volume].handle,1,&n,types)==XR_ERROR_SIZE_INSUFFICIENT);
@@ -273,6 +287,7 @@ int main(int argc,char **argv) {
     const char *mode=argv[1];
     if(!strcmp(mode,"override")) { scene_width=3; scene_depth=4; scene_height=2.7f; }
     emulate_scene=1;
+    scene_app_mesh=!getenv("SCENE_NO_MESH_EXT");  // the app enabled XR_META_spatial_entity_mesh (the usual case)
     scene_on_create_session(SESSION);
     CHECK(is_scene_extension("XR_META_spatial_entity_discovery") && is_scene_extension("XR_META_spatial_entity_persistence") && is_scene_extension("XR_META_spatial_entity_mesh"));
     CHECK(scene_emulation("xrDiscoverSpacesMETA") && scene_emulation("xrGetSpaceTriangleMeshMETA") && !scene_emulation("garbage"));

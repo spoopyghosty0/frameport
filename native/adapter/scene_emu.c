@@ -6,6 +6,8 @@
 
 static float scene_min_size = 1.5f;  // smallest room edge if the guardian is tiny or unavailable
 static int emulate_scene;            // app requested the scene extensions and the runtime lacks them
+static int scene_app_mesh;           // app enabled XR_META_spatial_entity_mesh: only then is the global mesh an entity
+                                     // (an older SDK's scene loader fails on an anchor it can't place)
 
 static const char *const scene_extensions[] = {
     "XR_FB_spatial_entity", "XR_FB_spatial_entity_query", "XR_FB_spatial_entity_storage",
@@ -453,17 +455,58 @@ static XRAPI_ATTR XrResult XRAPI_CALL scene_get_triangle_mesh(XrSpace space, con
     return XR_SUCCESS;
 }
 
+// Labels as Meta's runtime hands them to an app (XR_FB_scene): an app that sends no XrSemanticLabelsSupportInfoFB
+// knows only the first label set; one that does gets "OTHER" for labels missing from its recognizedLabels, WALL_FACE
+// for invisible walls unless it accepts them, and DESK for TABLE unless it accepts that migration. Older Meta SDKs
+// (Demeter, 2026-10-16) rejected a whole scanned room over one INVISIBLE_WALL_FACE and kept asking for Space Setup.
+static const char *const scene_legacy_labels = "DESK,COUCH,FLOOR,CEILING,WALL_FACE,DOOR_FRAME,WINDOW_FRAME,OTHER";
+
+static int label_listed(const char *list, const char *label, size_t len) {
+    for (const char *p = list; p && *p;) {
+        const char *end = strchr(p, ',');
+        size_t n = end ? (size_t)(end - p) : strlen(p);
+        if (n == len && !strncmp(p, label, len)) return 1;
+        p = end ? end + 1 : NULL;
+    }
+    return 0;
+}
+
+static void scene_app_labels(const char *label, const XrSemanticLabelsFB *labels, char *out, size_t size) {
+    const XrSemanticLabelsSupportInfoFB *support = NULL;
+    for (const XrBaseInStructure *n = labels->next; n; n = n->next)
+        if (n->type == XR_TYPE_SEMANTIC_LABELS_SUPPORT_INFO_FB) support = (const XrSemanticLabelsSupportInfoFB *)n;
+    const char *known = support ? support->recognizedLabels : scene_legacy_labels;
+    XrSemanticLabelsSupportFlagsFB flags = support ? support->flags : 0;
+    out[0] = 0;
+    for (const char *p = label; *p;) {
+        const char *end = strchr(p, ',');
+        size_t len = end ? (size_t)(end - p) : strlen(p);
+        char one[64];
+        snprintf(one, sizeof(one), "%.*s", (int)len, p);
+        if (!strcmp(one, "INVISIBLE_WALL_FACE") && !(flags & XR_SEMANTIC_LABELS_SUPPORT_ACCEPT_INVISIBLE_WALL_FACE_BIT_FB))
+            snprintf(one, sizeof(one), "WALL_FACE");
+        if (!strcmp(one, "TABLE") && !(flags & XR_SEMANTIC_LABELS_SUPPORT_ACCEPT_DESK_TO_TABLE_MIGRATION_BIT_FB))
+            snprintf(one, sizeof(one), "DESK");
+        if (known && *known && !label_listed(known, one, strlen(one))) snprintf(one, sizeof(one), "OTHER");
+        if (!label_listed(out, one, strlen(one)))
+            snprintf(out + strlen(out), size - strlen(out), "%s%s", out[0] ? "," : "", one);
+        p = end ? end + 1 : p + len;
+    }
+}
+
 static XRAPI_ATTR XrResult XRAPI_CALL scene_get_semantic_labels(XrSession session, XrSpace space, XrSemanticLabelsFB *labels) {
     (void)session;
     int i = fake_space_index(space);
     if (i < 0 || !labels) return XR_ERROR_HANDLE_INVALID;
     if (!entities[i].label[0]) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
-    uint32_t n = (uint32_t)strlen(entities[i].label) + 1;
+    char text[sizeof(entities[0].label)];
+    scene_app_labels(entities[i].label, labels, text, sizeof(text));
+    uint32_t n = (uint32_t)strlen(text) + 1;
     labels->bufferCountOutput = n;
     if (!labels->bufferCapacityInput) return XR_SUCCESS;
     if (labels->bufferCapacityInput < n) return XR_ERROR_SIZE_INSUFFICIENT;
     if (!labels->buffer) return XR_ERROR_VALIDATION_FAILURE;
-    memcpy(labels->buffer, entities[i].label, n);
+    memcpy(labels->buffer, text, n);
     return XR_SUCCESS;
 }
 

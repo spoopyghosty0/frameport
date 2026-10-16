@@ -369,9 +369,12 @@ def test_depth_discontinuity_is_rejected_below_absolute_edge_limit(scanner, dump
 
 
 def test_small_ceiling_patch_does_not_override_default(scanner, dumps, tmp_path):
+    # A lone down-facing patch at shelf height (1.8 m, below a 2 m ceiling) is no ceiling. A patch at ceiling height
+    # is accepted on purpose: the owner's real ceiling (2026-10-16) was only ~0.1 m^2 of fused cells after looking
+    # up, less evidence than a 0.7 m patch seen ten times, so area or a share of the floor can't tell them apart.
     data = dumps["down"].read_bytes()
     width = 15
-    vertices = [(x * .05 - .35, 1.0, z * .05 - .35) for z in range(width) for x in range(width)]
+    vertices = [(x * .05 - .35, .3, z * .05 - .35) for z in range(width) for x in range(width)]
     indices = []
     for z in range(width - 1):
         for x in range(width - 1):

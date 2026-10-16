@@ -36,7 +36,15 @@
 #define RELATIVE_WALL_AREA .20f
 #define DOMINANT_WALL_TOLERANCE 12.f
 #define ORTHOGONAL_SUPPORT_FRACTION .65f
-#define CEILING_SUPPORT_RATIO .15f
+#define CEILING_MIN_AREA .08f    /* m^2 of fused down-facing cells at one height (fused surfaces are sparse: the
+                                  * owner's floor was 0.7 m^2 of cells, the ceiling 0.11 m^2 after a 2 s look up) */
+#define CEILING_MIN_HEIGHT 2.0f  /* m above the floor: lower ones are shelves, door frames, table undersides */
+#define CEILING_MAX_HEIGHT 4.0f
+#define BOX_AXIS_COS .96f        /* walls within ~16 deg of the two room axes (smeared depth tilted a real
+                                  * wall 12 deg in the owner's scan) */
+#define BOX_SNAP .5f             /* m: a rectangle side snaps to a detected wall this close */
+#define BOX_LOW_SHARE .02f       /* surfaces beyond the 2nd/98th percentile along an axis are outliers */
+#define WALL_BAND_TOP 2.4f       /* m above the floor: walls are fitted below this (and below the ceiling) */
 #define MIN_FURNITURE_TOP .25f
 #define WALL_FURNITURE_CLEARANCE .15f
 #define MIN_TOP_DENSITY .30f
@@ -102,8 +110,13 @@ static float plane_height(Scan *s, int ceiling, int *found)
         if (ceiling ? c->n.y > -s->opt.horizontal : c->n.y < s->opt.horizontal) continue;
         total++; sum+=c->p.y;
     }
-    *found=score* s->opt.voxel*s->opt.voxel >= s->opt.min_plane_area && total>0;
-    if(ceiling && total<upward*CEILING_SUPPORT_RATIO) *found=0;
+    *found=(ceiling || score* s->opt.voxel*s->opt.voxel >= s->opt.min_plane_area) && total>0;
+    /* A ceiling is judged on its own area and height, not against the floor: players glance up for a second and look
+     * at the floor all the time, so a share-of-upward-surfaces rule rejected every real ceiling (owner's scans,
+     * 2026-10-16: down-facing surfaces at ~2.9 m in both recordings, "ceiling not seen"). */
+    (void)upward;
+    if(ceiling && (total*s->opt.voxel*s->opt.voxel<CEILING_MIN_AREA || y-s->floor<CEILING_MIN_HEIGHT ||
+                   y-s->floor>CEILING_MAX_HEIGHT)) *found=0;
     return *found ? sum/total : (ceiling ? s->floor+s->opt.ceiling_default : 0);
 }
 static int on_plane(Scan *s, Cell *c, Plane *p)
@@ -147,9 +160,12 @@ static void refine(Scan *s, int *ids, int n, Plane *p)
 }
 static void walls(Scan *s, int *ids, int n)
 {
+    /* Walls are fitted in a fixed band above the floor whatever the ceiling: Valve's smoothed depth bends where wall
+     * meets ceiling, and with a detected 2.9 m ceiling that band confused the fit (owner's scan, 2026-10-16). */
+    float top=mn(s->ceiling,s->floor+WALL_BAND_TOP)-FURNITURE_MARGIN;
     for (int i=0;i<n;i++) {
         Cell *c=&s->cells[ids[i]];
-        c->mark=ab(c->n.y)>VERTICAL_NORMAL_Y || c->p.y<s->floor+FURNITURE_MARGIN || c->p.y>s->ceiling-FURNITURE_MARGIN;
+        c->mark=ab(c->n.y)>VERTICAL_NORMAL_Y || c->p.y<s->floor+FURNITURE_MARGIN || c->p.y>top;
     }
     for (int attempt=0;attempt<MAX_PLANES*2 && s->nplanes<MAX_PLANES;attempt++) {
         Plane best={0}; int best_count=0;
@@ -291,8 +307,68 @@ static int convex_fallback(Scan *s)
     if(!valid_polygon(s)) { s->noutline=0;return 0; }
     warn(s,"wall endpoints uncertain; using plane intersections");return 1;
 }
+/* Value below which `share` of the projections fall (2 cm bins over +-8 m around the data). */
+static float projection_percentile(Scan *s, int *ids, int n, Pt axis, float share)
+{
+    static u32 hist[800];
+    memset(hist,0,sizeof(hist));
+    for (int i=0;i<n;i++) {
+        Vec p=s->cells[ids[i]].p;
+        int b=(int)((p.x*axis.x+p.z*axis.z+8)/.02f);
+        if (b>=0 && b<800) hist[b]++;
+    }
+    u64 total=0,run=0;
+    for (int b=0;b<800;b++) total+=hist[b];
+    for (int b=0;b<800;b++) { run+=hist[b]; if (run>=share*total) return b*.02f-8+.01f; }
+    return 8;
+}
+/* Most rooms are rectangles. When every detected wall runs along one of two perpendicular axes (2-4 walls), the
+ * outline is that rectangle: its sides at the 2nd/98th percentile of the surfaces along each axis, each snapped to a
+ * detected wall when one lies within BOX_SNAP. Directed wall chaining made a skewed quadrilateral of the owner's
+ * room from three smeared walls (2026-10-16). L-shaped rooms have more walls and keep the chaining below. */
+static int orthogonal_box(Scan *s, int *ids, int n)
+{
+    if (s->nplanes<2 || s->nplanes>4) return 0;
+    Vec u=s->planes[0].n; float len=root(u.x*u.x+u.z*u.z);
+    if (len<.5f) return 0;
+    Pt axis[2]={{u.x/len,u.z/len},{-u.z/len,u.x/len}};
+    float side[2][2]; int wall[2][2]={{0,0},{0,0}}, snapped=0;
+    for (int k=0;k<2;k++) {
+        side[k][0]=projection_percentile(s,ids,n,axis[k],BOX_LOW_SHARE);
+        side[k][1]=projection_percentile(s,ids,n,axis[k],1-BOX_LOW_SHARE);
+    }
+    for (int i=0;i<s->nplanes;i++) {
+        Plane *p=&s->planes[i];
+        float c0=p->n.x*axis[0].x+p->n.z*axis[0].z, c1=p->n.x*axis[1].x+p->n.z*axis[1].z;
+        int k=ab(c0)>=BOX_AXIS_COS ? 0 : ab(c1)>=BOX_AXIS_COS ? 1 : -1;
+        if (k<0) return 0;  // a wall off both axes: not a rectangle
+        float offset=p->d*(k ? c1 : c0)/ab(k ? c1 : c0);
+        int end=ab(offset-side[k][0])<ab(offset-side[k][1]) ? 0 : 1;
+        if (ab(offset-side[k][end])<BOX_SNAP) { side[k][end]=offset; snapped+=!wall[k][end]; wall[k][end]=1; }
+    }
+    if (snapped<2 || side[0][1]-side[0][0]<MIN_OUTLINE_EXTENT || side[1][1]-side[1][0]<MIN_OUTLINE_EXTENT) return 0;
+    /* corners (s,t) -> world x = a0.x s + a1.x t, z = a0.z s + a1.z t; edge flags = whether its side is a wall */
+    int order[4][2]={{0,0},{1,0},{1,1},{0,1}}, edge[4][2]={{1,0},{0,1},{1,1},{0,0}};  // edge k lies on side[a][e]
+    float twice=0;
+    Pt c[4];
+    for (int j=0;j<4;j++) {
+        float a=side[0][order[j][0]], b=side[1][order[j][1]];
+        c[j]=(Pt){axis[0].x*a+axis[1].x*b, axis[0].z*a+axis[1].z*b};
+    }
+    for (int j=0;j<4;j++) twice+=c[j].x*c[(j+1)%4].z-c[(j+1)%4].x*c[j].z;
+    s->noutline=0;
+    if (twice>0) for (int j=0;j<4;j++) push_outline(s,c[j],!wall[edge[j][0]][edge[j][1]]);
+    else for (int j=0;j<4;j++) {  // reversed: corner 0,3,2,1; edge from corner k to k-1 is the old edge k-1
+        int k=(4-j)%4, e=(k+3)%4;
+        push_outline(s,c[k],!wall[edge[e][0]][edge[e][1]]);
+    }
+    if (!valid_polygon(s)) { s->noutline=0; return 0; }
+    if (snapped<4) warn(s,"gaps closed with invisible walls");
+    return 1;
+}
 static void outline(Scan *s, int *ids, int n)
 {
+    if (orthogonal_box(s,ids,n)) return;
     if (s->nplanes<3) { rectangle(s,ids,n); return; }
     int order[MAX_PLANES]={0};
     s->planes[0].used=1;

@@ -204,6 +204,7 @@ static int load_room_file(void) {
                 ++volumes;
             } else if (ok) ++planes;
         } else if (!strcmp(t[0], "mesh")) {
+            if (!scene_app_mesh) continue;  // the app didn't enable XR_META_spatial_entity_mesh
             ok = n == 5 && room_uuid(t[1], &uuid) && room_uint(t[3], &a) && room_uint(t[4], &b) && !triangles;
             int i = ok ? add_entity((XrPosef){{0,0,0,1},{0,0,0}}, "GLOBAL_MESH", 0, 0, 0, 0) : -1;
             ok = i >= 0 && room_set_uuid(i, uuid) && room_mesh(&entities[i], t[2], a, b);

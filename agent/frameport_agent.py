@@ -4506,7 +4506,7 @@ class _ScanPrompt:
 
 
 ROOM_SCAN_LOOK_FRAMES = 5   # recorded frames looking up / down (~1.7 s at 3/s) that count as "ceiling/floor seen"
-ROOM_SCAN_MIN_SECONDS = 30  # a complete scan still records this long (more views of every wall)
+ROOM_SCAN_MIN_SECONDS = 60  # a complete scan still records this long: a 32 s one found 2 of 7 furniture boxes
 
 
 ROOMVIEW_STREAM_MESHES = 3     # new meshes within ROOMVIEW_STREAM_WINDOW s = passthrough is on (Valve: ~30/s)

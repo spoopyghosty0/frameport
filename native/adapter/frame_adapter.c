@@ -350,6 +350,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(const XrInstanceCreateInfo *info
         else if (scene_emul && is_scene_extension(ext)) {
             if (!emulate_scene) LOG("emulating Meta scene/spatial-entity extensions from room file or guardian bounds");
             emulate_scene = 1;
+            if (!strcmp(ext, "XR_META_spatial_entity_mesh")) scene_app_mesh = 1;
         } else if (controller_models && render_models_available && !strcmp(ext, XR_FB_RENDER_MODEL_EXTENSION_NAME)) {
             emulate_render_model = 1;
             LOG("emulating XR_FB_render_model with Steam Frame controller models");

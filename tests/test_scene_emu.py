@@ -67,6 +67,15 @@ def test_room_geometry_components_queries_and_mesh(harness, tmp_path):
     assert "scene: capture requested -> scanned room" in log
 
 
+def test_no_global_mesh_without_the_mesh_extension(harness, tmp_path, monkeypatch):
+    # an app that didn't enable XR_META_spatial_entity_mesh can't place a GLOBAL_MESH anchor (older SDKs then failed
+    # the whole scene load): the room comes without it
+    room(tmp_path)
+    monkeypatch.setenv("SCENE_NO_MESH_EXT", "1")
+    log = run(harness, tmp_path, "room", 5, 0)
+    assert "scene: room from scan file (5 walls, 1 volumes, 1 planes, 0 mesh triangles, universe 1234)" in log
+
+
 def test_wall_label_field(harness, tmp_path):
     # optional 8th field: INVISIBLE_WALL_FACE for edges the scanner closed itself; other labels are refused
     room(tmp_path)
