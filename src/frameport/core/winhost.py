@@ -289,6 +289,40 @@ def oculus_platform_dir() -> Path | None:
     return None
 
 
+def meta_libraries() -> list[Path]:
+    """This PC's Meta Horizon / Oculus app libraries (folders holding Software/ and Manifests/): the default one under
+    Program Files and the extra ones the app registered (HKCU\\Software\\Oculus VR, LLC\\Oculus\\Libraries\\{id}
+    OriginalPath)."""
+    if not available():
+        return []
+    out: list[Path] = []
+    roots = [env_path("ProgramFiles"), env_path("ProgramW6432")] + ([Path("/mnt/c/Program Files")] if is_wsl() else [])
+    for root in [r for r in roots if r]:
+        for sub in ("Meta Horizon/Software", "Oculus/Software"):
+            out.append(root / sub)
+    key = r"HKCU\Software\Oculus VR, LLC\Oculus\Libraries"
+    try:
+        if is_windows():
+            import winreg
+
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key.partition("\\")[2]) as k:
+                for i in range(winreg.QueryInfoKey(k)[0]):
+                    with winreg.OpenKey(k, winreg.EnumKey(k, i)) as sub:
+                        out.append(Path(str(winreg.QueryValueEx(sub, "OriginalPath")[0])))
+        else:
+            r = run_win([system32("reg.exe"), "query", key, "/s", "/v", "OriginalPath"])
+            for m in re.finditer(r"^\s*OriginalPath\s+REG_\w+\s+(.+?)\s*$", r.stdout, re.M):
+                out.append(to_local(m[1]))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    seen, result = set(), []
+    for p in out:
+        if p not in seen and (p / "Manifests").is_dir():
+            seen.add(p)
+            result.append(p)
+    return result
+
+
 # ------------------------------------------------------------------------------------------ firewall (pairing)
 WSL_VM_CREATOR = "{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}"  # Hyper-V firewall id of WSL's VM
 

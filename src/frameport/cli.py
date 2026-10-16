@@ -54,6 +54,9 @@ app.add_typer(tools_app, name="tools")
 app.add_typer(frame_app, name="frame")
 app.add_typer(pc_app, name="pc")
 app.add_typer(diag_app, name="diag")
+fex_app = typer.Typer(help="Experimental (FRAMEPORT_EXPERIMENTAL_FEX=1): Oculus Rift games with Meta's PC runtime on "
+                           "the Frame alone (x86_64 GE-Proton under FEX). Verified game: Oculus First Contact.")
+app.add_typer(fex_app, name="fex", hidden=True)
 
 
 def _show_version(value: bool):
@@ -1079,6 +1082,135 @@ def _describe(exc: BaseException) -> str:
     from .errors import explain
 
     return explain(exc)
+
+
+def _fex_target(frame: Optional[str]):
+    from . import fexrift
+
+    try:
+        fexrift.require_enabled()
+    except RuntimeError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from None
+    return _target(frame)
+
+
+@fex_app.command("status")
+def fex_status(frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """What's set up on the Frame: GE-Proton, Meta's runtime, the login, the games in the prefix."""
+    t = _fex_target(frame)
+    typer.echo(json.dumps(t.frame.agent("fex_status", timeout=90), indent=1))
+
+
+@fex_app.command("setup")
+def fex_setup(frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Upload FramePort's files, then the Frame downloads GE-Proton (x86_64) and Meta's runtime and builds the prefix
+    (10-20 minutes, about 12 GiB)."""
+    from . import fexrift
+
+    t = _fex_target(frame)
+    fexrift.setup(t.frame, printing_reporter(False))
+    typer.echo("setup done")
+
+
+@fex_app.command("import-login")
+def fex_import_login(prefix: str = typer.Argument(..., help="a Wine prefix on this PC where you signed in to Meta's "
+                                                            "app (and downloaded the game with it)"),
+                     app: Optional[list[str]] = typer.Option(None, "--app", help="Meta's name of a game to copy "
+                                                             "(repeatable; default: the verified games)"),
+                     frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Copy your Meta login and the games Meta's app downloaded into the Frame's prefix (sign-in tokens: sent over
+    SSH, deleted on both sides afterwards)."""
+    from pathlib import Path
+
+    from . import fexrift
+
+    t = _fex_target(frame)
+    res = fexrift.import_login(t.frame, Path(prefix).expanduser(), printing_reporter(False), apps=app or None)
+    typer.echo(json.dumps(res.get("imported"), indent=1))
+
+
+@fex_app.command("login")
+def fex_login(start_now: bool = typer.Option(False, "--start-now", help="start Meta's app now instead of using Steam"),
+              timeout: int = typer.Option(900, min=1, max=86400, help="seconds to wait for sign-in"),
+              via_pc: bool = typer.Option(False, "--via-pc", help="use the PC browser and a temporary Oculus handler"),
+              stop: bool = typer.Option(False, "--stop", help="end sign-in and restore link handlers; keep the login"),
+              frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Sign in with your Meta account in the Frame's shared Wine prefix."""
+    from . import fexlogin
+
+    t = _fex_target(frame)
+    fexlogin.login(t.frame, start_now=start_now, timeout=timeout, via_pc=via_pc, stop=stop, emit=typer.echo)
+
+
+@fex_app.command("install")
+def fex_install(app_name: Optional[str] = typer.Argument(None, metavar="APP",
+                                               help="Meta's name for the game (verified: oculus-first-contact)"),
+                from_library: Optional[str] = typer.Option(None, "--from-library", help="Rift library ID: rift.<slug>"),
+                folder: Optional[Path] = typer.Option(None, "--folder", help="upload an existing game folder unchanged"),
+                title: Optional[str] = typer.Option(None, "--title", help="title for a local game copy"),
+                app_id: Optional[str] = typer.Option(None, "--app-id", help="Meta app ID if no config/cached ID exists"),
+                dest: Optional[str] = typer.Option(None, "--dest", help="external drive mount point on the Frame"),
+                runtime_check: bool = typer.Option(False, "--runtime-check", help="probe Meta's library state (<=120 s)"),
+                msaa: Optional[int] = typer.Option(None, help="MSAA samples for a verified game that allows it (1, 2 "
+                                                         "or 4; game default 4). UNVERIFIED: with 2 the game never "
+                                                         "rendered in two launches"),
+                no_steam: bool = typer.Option(False, "--no-steam", help="don't add it to the Steam library"),
+                force_unverified: bool = typer.Option(False, "--force-unverified",
+                                                      help="install a game that isn't verified with this mode "
+                                                           "(only the generic fixes; may not start)"),
+                frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Install a prefix game or upload a local Rift copy (fixes, launcher, shortcut). Without
+    --force-unverified an unverified game is refused with what the Frame's static checks found."""
+    from . import fexrift
+
+    t = _fex_target(frame)
+    if from_library or folder:
+        from . import fexinstall
+        res = fexinstall.install(t.frame, printing_reporter(False), from_library=from_library, folder=folder,
+                                 title=title, app=app_name, app_id=app_id, dest=dest, runtime_check=runtime_check,
+                                 msaa=msaa, add_to_steam=not no_steam, force_unverified=force_unverified)
+    else:
+        if title or app_id or dest:
+            raise typer.BadParameter("--title, --app-id and --dest require --from-library or --folder")
+        res = fexrift.install(t.frame, printing_reporter(False), app_name or "oculus-first-contact", msaa=msaa,
+                              add_to_steam=not no_steam, force_unverified=force_unverified)
+        if runtime_check:
+            res["checks"] = dict(res.get("checks") or {}, **t.frame.agent(
+                "fex_runtime_state", app=app_name or "oculus-first-contact", timeout=125))
+    typer.echo(json.dumps(res, indent=1))
+
+
+# ---------------------------------------------------------------------- FEX launch-time settings / bounded bench
+@fex_app.command("settings")
+def fex_settings(app_name: str = typer.Argument(..., metavar="APP"),
+                 values: Optional[list[str]] = typer.Argument(None, metavar="KEY=VALUE"),
+                 frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Read per-game performance settings, or override them for the next launch (JSON values; null resets a key)."""
+    updates = {}
+    for item in values or []:
+        key, sep, raw = item.partition("=")
+        if not sep or not key:
+            raise typer.BadParameter("use key=value (true/false, numbers, null, or JSON for fex)")
+        try:
+            updates[key] = raw if key == "cores" and raw != "null" else json.loads(raw)
+        except ValueError:
+            updates[key] = raw  # taskset's CPU list, e.g. cores=4-7
+    t = _fex_target(frame)
+    args = {"app": app_name}
+    if values:
+        args["values"] = updates
+    typer.echo(json.dumps(t.frame.agent("fex_settings", **args), indent=1))
+
+
+@fex_app.command("bench")
+def fex_bench(app_name: str = typer.Argument("oculus-first-contact", metavar="APP"),
+              seconds: int = typer.Option(120, min=1, max=120, help="total launch and sampling window (seconds)"),
+              frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """One bounded headless performance run on an idle Frame; stops the game and restores display power settings."""
+    t = _fex_target(frame)
+    typer.echo(json.dumps(t.frame.agent("fex_bench", app=app_name, seconds=seconds, timeout=seconds + 250),
+                          separators=(",", ":")))
 
 
 if __name__ == "__main__":  # pragma: no cover

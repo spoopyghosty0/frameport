@@ -270,3 +270,19 @@ Scan a folder with Rift game dumps (Windows game folders) like Quest dumps; they
 | Proton game hangs at start in a headless/SSH launch; log `no driver could be loaded` / `explorer process failed to start` | no display session (DISPLAY/GAMESCOPE_WAYLAND_DISPLAY) | the Proton launch.sh takes them from the running Steam (built in) |
 | Unreal game starts (window created) then `CrashReportClient` runs | the game crashed under Proton; often no VR runtime reached it (Revive off) | keep `pcvr.revive` on (repacks' bundled LibRevive64.dll isn't loaded by itself); read the game log + crash summary in the launch log |
 | `VK_ERROR_DEVICE_LOST` under DXVK | freedreno GPU hang | `pcvr.proton_log` to capture; PC mode |
+
+## Experimental Rift through FEX
+
+These signatures apply to PC VR logs (`kind: pcvr`). Compatibility profiles describe static evidence until a
+headset test verifies them. Meta's entitlement and runtime signature checks remain intact.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Meta runtime says `Missing entitlement` | The signed-in Meta account does not own the game | Informational, not a FramePort bug; use an account that owns it. No bypass or patch is offered (`fex-missing-entitlement`) |
+| `OVRServer` reports `install_available` | The matching app is not registered as installed | Reinstall/register through the FEX install flow with the matching Meta manifest (`fex-registration-missing`) |
+| `Rejecting new committed universe since IMU fallback is active` | SteamVR has not acquired headset tracking since boot | Wear the headset once and wait for tracking before retrying (`fex-imu-fallback`) |
+| `Service invocation completed`, followed by confirmation `OVRLibrarian still running` | Wine Mono's OVRLibrarian never exits under FEX and blocks later clients | End only OVRLibrarian.exe after completion; check that the FEX launcher's cleanup runs. Completion alone is healthy (`fex-librarian-stuck`) |
+| `vkd3d` fails to create/initialize a device | D3D12 renderer initialization failed | Check GE's bundled vkd3d-proton, clear inherited wined3d/no-D3D12 flags, verify FEX Vulkan thunk to Turnip (`fex-vkd3d-init`) |
+| `wined3d` fails to initialize OpenGL | No working guest GL/display route; the Vulkan thunk does not provide a GL thunk | Inspect guest Mesa renderer and display access; prefer the game's D3D9/11 route if available (`fex-wined3d-init`) |
+| `ReviveInjector` reports failure to start/inject | Wrong exe, missing x64 Revive files or injection failure | Check executable and shared GE prefix; use OpenVR mode, without `/openxr`. OpenVR-only games can run directly (`fex-revive-injector`) |
+| Robo Recall has no IME CVar in ApplicationCore or Slate | Older modular Unreal keeps FWindowsApplication in Core | Search `*-Core-Win64-Shipping.dll` with the same anchored CVar finder; this surveyed build has the constructor default at RVA `0x15ffe5`. Never patch an unanchored boolean based on an assumed member offset |

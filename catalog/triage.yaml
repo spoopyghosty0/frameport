@@ -6,6 +6,50 @@
 # with diagnostics. Launch tests and real play sessions (agent session_log, `frameport session`) are both matched.
 # Sources: every failure we hit porting 34 games to the Steam Frame (see docs/PLAYBOOK.md).
 signatures:
+  # FEX Rift compatibility (stream C): PC runtime/renderer failures; never suggest entitlement workarounds.
+  - id: fex-missing-entitlement
+    kind: pcvr
+    pattern: '(?i:Missing entitlement)'
+    severity: info
+    diagnosis: Meta reports that the signed-in account does not own this game. This is not a FramePort bug. Use an account that owns it; entitlement and Platform SDK checks remain intact.
+    suggest: []
+  - id: fex-registration-missing
+    kind: pcvr
+    pattern: '(?i:OVRServer[^\r\n]*install_available|install_available[^\r\n]*OVRServer)'
+    severity: error
+    diagnosis: Meta's runtime sees the app as available to install rather than registered as installed. Reinstall or register the game through the FEX install flow with its matching Meta manifest, then retry.
+    suggest: []
+  - id: fex-imu-fallback
+    kind: pcvr
+    pattern: 'Rejecting new committed universe since IMU fallback is active'
+    severity: warning
+    diagnosis: SteamVR has not acquired headset tracking since boot. Put the headset on once, wait for tracking, then retry the FEX game. A headless launch before that can wait forever.
+    suggest: []
+  - id: fex-librarian-stuck
+    kind: pcvr
+    pattern: '(?s)\A(?=.*(?i:Service invocation completed))(?=.*OVRLibrarian[^\r\n]*(?i:still running|did not exit))'
+    severity: warning
+    diagnosis: OVRLibrarian completed its work but remains alive under FEX and blocks later client registration. End only OVRLibrarian.exe after completion, then retry; the FEX launcher normally performs this cleanup.
+    suggest: []
+  - id: fex-vkd3d-init
+    kind: pcvr
+    pattern: '(?i:vkd3d[^\r\n]*(?:failed to (?:create|initialize)|could not (?:create|initialize)|no (?:suitable|compatible).*(?:device|adapter)))'
+    severity: error
+    diagnosis: The D3D12 route could not initialize vkd3d-proton or a Vulkan device. Check GE's shipped vkd3d-proton DLLs, clear PROTON_NO_D3D12 and PROTON_USE_WINED3D, and verify the FEX Vulkan thunk reaches Turnip. This route still needs a device test.
+    suggest: []
+  - id: fex-wined3d-init
+    kind: pcvr
+    pattern: '(?i:wined3d[^\r\n]*(?:failed to (?:create|initialize|find)|could not (?:create|initialize)|OpenGL support is disabled))'
+    severity: error
+    diagnosis: Wine's OpenGL renderer could not initialize. The FEX route has no configured GL thunk; verify the guest rootfs GL driver and display access. A Vulkan thunk alone does not provide host OpenGL. Prefer the game's D3D9 or D3D11 route when available.
+    suggest: []
+  - id: fex-revive-injector
+    kind: pcvr
+    pattern: '(?i:ReviveInjector[^\r\n]*(?:failed|unable|error (?:code|inject)))'
+    severity: error
+    diagnosis: ReviveInjector could not start or inject the game. Check the game executable and x86_64 Revive files in the shared GE-Proton prefix, and use OpenVR mode (without /openxr). An OpenVR-only game can launch directly. Do not change entitlement or Platform SDK checks.
+    suggest: []
+  # End FEX Rift compatibility (stream C).
   - id: meta-asset-status-error
     pattern: 'Asset status error\s+\(code 100\)'
     severity: error

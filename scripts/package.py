@@ -42,6 +42,8 @@ def stage_data():
         shutil.copytree(ROOT / name, DATA / name)
     # the Frame agent is uploaded as source; `flet build` turns every .py into .pyc (issue #2): keep a non-.py copy
     shutil.copy2(ROOT / "agent/frameport_agent.py", DATA / "agent/frameport_agent.py.txt")
+    for helper in (ROOT / "agent").glob("fexrift*.py"):   # experimental Rift-on-Frame helper + its extensions
+        shutil.copy2(helper, DATA / "agent" / f"{helper.name}.txt")
     print(f"staged data in {DATA}")
 
 

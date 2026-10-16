@@ -1,0 +1,4 @@
+LIBRARY windows.devices.wifi.dll
+EXPORTS
+  DllGetActivationFactory
+  DllCanUnloadNow PRIVATE

@@ -1,0 +1,282 @@
+diff --git a/dlls/dnsapi/dnsapi.spec b/dlls/dnsapi/dnsapi.spec
+--- a/dlls/dnsapi/dnsapi.spec
++++ b/dlls/dnsapi/dnsapi.spec
+@@ -104,12 +104,20 @@
+ @ stdcall DnsReplaceRecordSetW(ptr long ptr ptr ptr)
+ @ stub DnsReplaceRecordSet_W
+ @ stdcall DnsServiceBrowse(ptr ptr)
++@ stdcall DnsServiceBrowseCancel(ptr)
++@ stdcall DnsServiceConstructInstance(wstr wstr ptr ptr long long long long ptr ptr)
++@ stdcall DnsServiceDeRegister(ptr ptr)
++@ stdcall DnsServiceFreeInstance(ptr)
+ @ stub DnsServiceNotificationDeregister_A
+ @ stub DnsServiceNotificationDeregister_UTF8
+ @ stub DnsServiceNotificationDeregister_W
+ @ stub DnsServiceNotificationRegister_A
+ @ stub DnsServiceNotificationRegister_UTF8
+ @ stub DnsServiceNotificationRegister_W
++@ stdcall DnsServiceRegister(ptr ptr)
++@ stdcall DnsServiceRegisterCancel(ptr)
++@ stdcall DnsServiceResolve(ptr ptr)
++@ stdcall DnsServiceResolveCancel(ptr)
+ @ stub DnsSetMaxNumberOfAddressesToRegister
+ @ stub DnsStatusString
+ @ stub DnsStringCopyAllocateEx
+diff --git a/dlls/dnsapi/main.c b/dlls/dnsapi/main.c
+--- a/dlls/dnsapi/main.c
++++ b/dlls/dnsapi/main.c
+@@ -243,3 +243,135 @@
+     FIXME( "(%p, %p) stub\n", request, cancel );
+     return ERROR_SUCCESS;
+ }
++
++/******************************************************************************
++ * DnsServiceConstructInstance              [DNSAPI.@]
++ *
++ */
++DNS_SERVICE_INSTANCE * WINAPI DnsServiceConstructInstance( const WCHAR *name, const WCHAR *host,
++        IP4_ADDRESS *ip4, IP6_ADDRESS *ip6, WORD port, WORD priority, WORD weight,
++        DWORD count, const WCHAR **keys, const WCHAR **values )
++{
++    DNS_SERVICE_INSTANCE *instance;
++    DWORD i;
++
++    TRACE( "(%s, %s, %p, %p, %u, %u, %u, %lu, %p, %p)\n", debugstr_w(name), debugstr_w(host),
++           ip4, ip6, port, priority, weight, count, keys, values );
++
++    if (!(instance = calloc( 1, sizeof(*instance) ))) return NULL;
++
++    if (name) instance->pszInstanceName = wcsdup( name );
++    if (host) instance->pszHostName = wcsdup( host );
++    if (ip4 && (instance->ip4Address = malloc( sizeof(*ip4) ))) *instance->ip4Address = *ip4;
++    if (ip6 && (instance->ip6Address = malloc( sizeof(*ip6) ))) *instance->ip6Address = *ip6;
++    instance->wPort = port;
++    instance->wPriority = priority;
++    instance->wWeight = weight;
++    instance->dwPropertyCount = count;
++
++    if (count && (instance->keys = calloc( count, sizeof(*keys) )))
++        for (i = 0; i < count; i++) instance->keys[i] = wcsdup( keys[i] );
++    if (count && (instance->values = calloc( count, sizeof(*values) )))
++        for (i = 0; i < count; i++) instance->values[i] = wcsdup( values[i] );
++
++    return instance;
++}
++
++/******************************************************************************
++ * DnsServiceFreeInstance                   [DNSAPI.@]
++ *
++ */
++void WINAPI DnsServiceFreeInstance( DNS_SERVICE_INSTANCE *instance )
++{
++    DWORD i;
++
++    TRACE( "(%p)\n", instance );
++
++    if (!instance) return;
++
++    free( instance->pszInstanceName );
++    free( instance->pszHostName );
++    free( instance->ip4Address );
++    free( instance->ip6Address );
++    for (i = 0; i < instance->dwPropertyCount; i++)
++    {
++        if (instance->keys) free( instance->keys[i] );
++        if (instance->values) free( instance->values[i] );
++    }
++    free( instance->keys );
++    free( instance->values );
++    free( instance );
++}
++
++/******************************************************************************
++ * DnsServiceRegister                       [DNSAPI.@]
++ *
++ */
++DNS_STATUS WINAPI DnsServiceRegister( DNS_SERVICE_REGISTER_REQUEST *request, DNS_SERVICE_CANCEL *cancel )
++{
++    FIXME( "(%p, %p) stub\n", request, cancel );
++
++    if (!request) return ERROR_INVALID_PARAMETER;
++
++    /* Registration needs mDNS support, which is not implemented. Fail
++     * synchronously: the completion callback must only run when this returns
++     * DNS_REQUEST_PENDING, and calling it inline would re-enter the caller
++     * while it still believes the operation is outstanding. */
++    return ERROR_CALL_NOT_IMPLEMENTED;
++}
++
++/******************************************************************************
++ * DnsServiceDeRegister                     [DNSAPI.@]
++ *
++ */
++DNS_STATUS WINAPI DnsServiceDeRegister( DNS_SERVICE_REGISTER_REQUEST *request, DNS_SERVICE_CANCEL *cancel )
++{
++    FIXME( "(%p, %p) stub\n", request, cancel );
++
++    if (!request) return ERROR_INVALID_PARAMETER;
++
++    return ERROR_CALL_NOT_IMPLEMENTED;
++}
++
++/******************************************************************************
++ * DnsServiceRegisterCancel                 [DNSAPI.@]
++ *
++ */
++DNS_STATUS WINAPI DnsServiceRegisterCancel( DNS_SERVICE_CANCEL *cancel )
++{
++    FIXME( "(%p) stub\n", cancel );
++    return ERROR_CALL_NOT_IMPLEMENTED;
++}
++
++/******************************************************************************
++ * DnsServiceResolve                        [DNSAPI.@]
++ *
++ */
++DNS_STATUS WINAPI DnsServiceResolve( DNS_SERVICE_RESOLVE_REQUEST *request, DNS_SERVICE_CANCEL *cancel )
++{
++    FIXME( "(%p, %p) stub\n", request, cancel );
++
++    if (!request) return ERROR_INVALID_PARAMETER;
++
++    return ERROR_CALL_NOT_IMPLEMENTED;
++}
++
++/******************************************************************************
++ * DnsServiceResolveCancel                  [DNSAPI.@]
++ *
++ */
++DNS_STATUS WINAPI DnsServiceResolveCancel( DNS_SERVICE_CANCEL *cancel )
++{
++    FIXME( "(%p) stub\n", cancel );
++    return ERROR_CALL_NOT_IMPLEMENTED;
++}
++
++/******************************************************************************
++ * DnsServiceBrowseCancel                   [DNSAPI.@]
++ *
++ */
++DNS_STATUS WINAPI DnsServiceBrowseCancel( DNS_SERVICE_CANCEL *cancel )
++{
++    FIXME( "(%p) stub\n", cancel );
++    return ERROR_CALL_NOT_IMPLEMENTED;
++}
+diff --git a/include/windns.h b/include/windns.h
+--- a/include/windns.h
++++ b/include/windns.h
+@@ -106,7 +106,8 @@
+ #define DNS_QUERY_APPEND_MULTILABEL         0x00800000
+ #define DNS_QUERY_DNSSEC_OK                 0x01000000
+ #define DNS_QUERY_DNSSEC_CHECKING_DISABLED  0x02000000
+-#define DNS_QUERY_RESERVED                  0xff000000
++#define DNS_QUERY_DNSSEC_REQUIRED           0x04000000
++#define DNS_QUERY_RESERVED                  0xf0000000
+ 
+ #define INLINE_WORD_FLIP(out, in) { WORD _in = (in); (out) = (_in << 8) | (_in >> 8); }
+ #define INLINE_HTONS(out, in) INLINE_WORD_FLIP(out, in)
+@@ -781,6 +782,73 @@
+     void *reserved;
+ } DNS_SERVICE_CANCEL, *PDNS_SERVICE_CANCEL;
+ 
++typedef struct _DNS_SERVICE_INSTANCE
++{
++    LPWSTR pszInstanceName;
++    LPWSTR pszHostName;
++    IP4_ADDRESS *ip4Address;
++    IP6_ADDRESS *ip6Address;
++    WORD wPort;
++    WORD wPriority;
++    WORD wWeight;
++    DWORD dwPropertyCount;
++    PWSTR *keys;
++    PWSTR *values;
++    DWORD dwInterfaceIndex;
++} DNS_SERVICE_INSTANCE, *PDNS_SERVICE_INSTANCE;
++
++typedef void WINAPI DNS_SERVICE_REGISTER_COMPLETE(DWORD, void *, PDNS_SERVICE_INSTANCE);
++typedef DNS_SERVICE_REGISTER_COMPLETE *PDNS_SERVICE_REGISTER_COMPLETE;
++
++typedef struct _DNS_SERVICE_REGISTER_REQUEST
++{
++    ULONG                          Version;
++    ULONG                          InterfaceIndex;
++    PDNS_SERVICE_INSTANCE          pServiceInstance;
++    PDNS_SERVICE_REGISTER_COMPLETE pRegisterCompletionCallback;
++    PVOID                          pQueryContext;
++    HANDLE                         hCredentials;
++    BOOL                           unicastEnabled;
++} DNS_SERVICE_REGISTER_REQUEST, *PDNS_SERVICE_REGISTER_REQUEST;
++
++typedef void WINAPI DNS_SERVICE_RESOLVE_COMPLETE(DWORD, void *, PDNS_SERVICE_INSTANCE);
++typedef DNS_SERVICE_RESOLVE_COMPLETE *PDNS_SERVICE_RESOLVE_COMPLETE;
++
++typedef struct _DNS_SERVICE_RESOLVE_REQUEST
++{
++    ULONG                          Version;
++    ULONG                          InterfaceIndex;
++    LPWSTR                         QueryName;
++    PDNS_SERVICE_RESOLVE_COMPLETE  pResolveCompletionCallback;
++    PVOID                          pQueryContext;
++} DNS_SERVICE_RESOLVE_REQUEST, *PDNS_SERVICE_RESOLVE_REQUEST;
++
++typedef struct _MDNS_QUERY_HANDLE
++{
++    WCHAR nameBuf[DNS_MAX_NAME_BUFFER_LENGTH];
++    WORD wType;
++    PVOID pSubscription;
++    PVOID pWnfCallbackParams;
++    ULONG stateNameData[2];
++} MDNS_QUERY_HANDLE, *PMDNS_QUERY_HANDLE;
++
++typedef void WINAPI MDNS_QUERY_CALLBACK(PVOID,PMDNS_QUERY_HANDLE,PDNS_QUERY_RESULT);
++typedef MDNS_QUERY_CALLBACK *PMDNS_QUERY_CALLBACK;
++
++typedef struct _MDNS_QUERY_REQUEST
++{
++    ULONG Version;
++    ULONG ulRefCount;
++    PCWSTR Query;
++    WORD QueryType;
++    ULONG64 QueryOptions;
++    ULONG InterfaceIndex;
++    PMDNS_QUERY_CALLBACK pQueryCallback;
++    PVOID pQueryContext;
++    BOOL fAnswerReceived;
++    ULONG ulResendCount;
++} MDNS_QUERY_REQUEST, *PMDNS_QUERY_REQUEST;
++
+ DNS_STATUS WINAPI DnsAcquireContextHandle_A(DWORD,PVOID,PHANDLE);
+ DNS_STATUS WINAPI DnsAcquireContextHandle_W(DWORD,PVOID,PHANDLE);
+ #define DnsAcquireContextHandle WINELIB_NAME_AW(DnsAcquireContextHandle_)
+@@ -800,6 +868,7 @@
+ #define DnsQuery WINELIB_NAME_AW(DnsQuery_)
+ DNS_STATUS WINAPI DnsQueryEx(DNS_QUERY_REQUEST*,DNS_QUERY_RESULT*,DNS_QUERY_CANCEL*);
+ DNS_STATUS WINAPI DnsCancelQuery(DNS_QUERY_CANCEL*);
++BOOL WINAPI DnsGetCacheDataTable(PDNS_CACHE_ENTRY*);
+ DNS_STATUS WINAPI DnsQueryConfig(DNS_CONFIG_TYPE,DWORD,PCWSTR,PVOID,PVOID,PDWORD);
+ BOOL WINAPI DnsRecordCompare(PDNS_RECORD,PDNS_RECORD);
+ PDNS_RECORD WINAPI DnsRecordCopyEx(PDNS_RECORD,DNS_CHARSET,DNS_CHARSET);
+@@ -813,13 +882,22 @@
+ DNS_STATUS WINAPI DnsReplaceRecordSetUTF8(PDNS_RECORDA,DWORD,HANDLE,PVOID,PVOID);
+ #define DnsReplaceRecordSet WINELIB_NAME_AW(DnsReplaceRecordSet)
+ DNS_STATUS WINAPI DnsServiceBrowse(PDNS_SERVICE_BROWSE_REQUEST, PDNS_SERVICE_CANCEL);
++DNS_STATUS WINAPI DnsServiceBrowseCancel(PDNS_SERVICE_CANCEL);
++PDNS_SERVICE_INSTANCE WINAPI DnsServiceConstructInstance(PCWSTR,PCWSTR,PIP4_ADDRESS,PIP6_ADDRESS,WORD,WORD,WORD,DWORD,PCWSTR*,PCWSTR*);
++DNS_STATUS WINAPI DnsServiceDeRegister(PDNS_SERVICE_REGISTER_REQUEST,PDNS_SERVICE_CANCEL);
++VOID WINAPI DnsServiceFreeInstance(PDNS_SERVICE_INSTANCE);
++DNS_STATUS WINAPI DnsServiceRegister(PDNS_SERVICE_REGISTER_REQUEST,PDNS_SERVICE_CANCEL);
++DNS_STATUS WINAPI DnsServiceRegisterCancel(PDNS_SERVICE_CANCEL);
++DNS_STATUS WINAPI DnsServiceResolve(PDNS_SERVICE_RESOLVE_REQUEST,PDNS_SERVICE_CANCEL);
++DNS_STATUS WINAPI DnsServiceResolveCancel(PDNS_SERVICE_CANCEL);
++DNS_STATUS WINAPI DnsStartMulticastQuery(PMDNS_QUERY_REQUEST,PMDNS_QUERY_HANDLE);
++DNS_STATUS WINAPI DnsStopMulticastQuery(PMDNS_QUERY_HANDLE);
+ DNS_STATUS WINAPI DnsValidateName_A(PCSTR,DNS_NAME_FORMAT);
+ DNS_STATUS WINAPI DnsValidateName_W(PCWSTR, DNS_NAME_FORMAT);
+ DNS_STATUS WINAPI DnsValidateName_UTF8(PCSTR,DNS_NAME_FORMAT);
+ #define DnsValidateName WINELIB_NAME_AW(DnsValidateName_)
+ BOOL WINAPI DnsWriteQuestionToBuffer_W(PDNS_MESSAGE_BUFFER,PDWORD,PCWSTR,WORD,WORD,BOOL);
+ BOOL WINAPI DnsWriteQuestionToBuffer_UTF8(PDNS_MESSAGE_BUFFER,PDWORD,PCSTR,WORD,WORD,BOOL);
+-BOOL WINAPI DnsGetCacheDataTable(PDNS_CACHE_ENTRY*);
+ 
+ #ifdef __cplusplus
+ }

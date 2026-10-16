@@ -1,0 +1,69 @@
+{
+  "parentCanonicalName": null,
+  "files": {
+    "TouchNUX.exe": {
+      "sha256": "857df87af986c243cc4e27251085c308b997aa21ed58c22ada5db1802e8b1a0b",
+      "size": 159232,
+      "segmentSize": 10000000,
+      "segments": [
+        [
+          115938579990749,
+          "857df87af986c243cc4e27251085c308b997aa21ed58c22ada5db1802e8b1a0b",
+          85885
+        ]
+      ]
+    },
+    "TouchNUX\\Binaries\\Win64\\TouchNUX-Win64-Shipping.exe": {
+      "sha256": "746bfb5bea8a57fd2c81b51d99f633711f293b26398d389c1c1f2793bcb9d4b9",
+      "size": 45950464,
+      "segmentSize": 10000000,
+      "segments": [
+        [
+          238054724965948,
+          "df5877bae5bd5d531f34e00a9098e4a38cd4ffc068c3edaf59e36ceaddf5afc7",
+          4156214
+        ],
+        [
+          170141929968035,
+          "52cfb7af70ea7bea5c2cad6a19eb30af088f20dc612bec41e83c34fa511540ba",
+          4302663
+        ],
+        [
+          180638137026525,
+          "e428e462b7e908c1db9aa4e4cf2c824d14c4502e6dfb30f20e8464fc45915d48",
+          3777541
+        ],
+        [
+          62136762428371,
+          "a082def4fcc6f1f29342f02f1384a772d3c0419a233bd1c95226a79417501303",
+          1882840
+        ],
+        [
+          32022214875428,
+          "3dce883fa511de5da3ca0c29b340eae48431beb1203360c028e12dcc9d7cf6fb",
+          2576379
+        ]
+      ]
+    }
+  },
+  "dlcs": {},
+  "assetFiles": {},
+  "packageType": "APP",
+  "isCore": false,
+  "appId": "1217155751659625",
+  "canonicalName": "oculus-first-contact",
+  "launchFile": "TouchNUX/Binaries/Win64/TouchNUX-Win64-Shipping.exe",
+  "launchParameters": "-gamemode=\"experienceonly\"",
+  "launchFile2D": null,
+  "launchParameters2D": "",
+  "version": "1.1.9",
+  "versionCode": 12,
+  "redistributables": [
+    "1183534128364060",
+    "1134814899877089",
+    "822786567843179"
+  ],
+  "firewallExceptionsRequired": false,
+  "thirdParty": false,
+  "manifestVersion": 1
+}

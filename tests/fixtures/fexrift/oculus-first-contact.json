@@ -1,0 +1,61 @@
+{
+  "parentCanonicalName": null,
+  "files": {
+    "Engine\\Binaries\\ThirdParty\\PhysX\\PhysX-3.3\\Win64\\VS2015\\nvToolsExt64_1.dll": {
+      "sha256": "81bd0159a73411791fa1606fe2426b763cc055ac1a50c141ce7e890392ece10a",
+      "size": 42496,
+      "segmentSize": 10000000,
+      "segments": [
+        [
+          104219850989527,
+          "81bd0159a73411791fa1606fe2426b763cc055ac1a50c141ce7e890392ece10a",
+          20030
+        ]
+      ]
+    },
+    "third_party_notices.txt": {
+      "sha256": "5d7413b09526327fba46d138b1570f3d38ba5865bec8dcf7c4b3974749827b53",
+      "size": 227974,
+      "segmentSize": 10000000,
+      "segments": [
+        [
+          68268927150260,
+          "5d7413b09526327fba46d138b1570f3d38ba5865bec8dcf7c4b3974749827b53",
+          50323
+        ]
+      ]
+    },
+    "TouchNUX_Basics.bat": {
+      "sha256": "3018170ab20e39cc16163292828ef627fb66401344681cd24e25dada4981a4d7",
+      "size": 74,
+      "segmentSize": 10000000,
+      "segments": [
+        [
+          4315401951933,
+          "3018170ab20e39cc16163292828ef627fb66401344681cd24e25dada4981a4d7",
+          73
+        ]
+      ]
+    }
+  },
+  "dlcs": {},
+  "assetFiles": {},
+  "packageType": "APP",
+  "isCore": false,
+  "appId": "1217155751659625",
+  "canonicalName": "oculus-first-contact",
+  "launchFile": "TouchNUX/Binaries/Win64/TouchNUX-Win64-Shipping.exe",
+  "launchParameters": "-gamemode=\"experienceonly\"",
+  "launchFile2D": null,
+  "launchParameters2D": "",
+  "version": "1.1.9",
+  "versionCode": 12,
+  "redistributables": [
+    "1183534128364060",
+    "1134814899877089",
+    "822786567843179"
+  ],
+  "firewallExceptionsRequired": false,
+  "thirdParty": false,
+  "manifestVersion": 1
+}

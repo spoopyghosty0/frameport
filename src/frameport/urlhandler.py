@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from .core import applog, winhost
@@ -32,6 +33,72 @@ STARTING = 30  # seconds the handler script waits for an app it started before s
 MAX_LINK_AGE = 600  # links older than this (FramePort never came up) are dropped unopened
 MARK = "frameport-link-handler"  # in every command FramePort registers (how it recognises its own)
 DESKTOP_FILE = "frameport-links.desktop"
+
+
+@contextmanager
+def temporary_oculus_handler(command: str):
+    """Borrow oculus:// for an interactive FEX login only. Never use the install-link disk inbox for credentials.
+
+    Save the entire HKCU tree (including unknown values/subkeys/types), not just its open command: Meta normally
+    owns it. reg.exe export/import works both natively and through WSL. Linux restores the exact mimeapps bytes,
+    including an absent default. The caller supplies a handler which transports links only in memory.
+    """
+    import tempfile
+
+    kind = platform_kind()
+    if kind not in ("windows", "wsl", "linux"):
+        raise RuntimeError("--via-pc sign-in supports Windows, WSL and Linux")
+    if kind in ("windows", "wsl"):
+        user_data_dir().mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="oculus-handler-", dir=user_data_dir()) as tmp:
+            backup = Path(tmp) / "previous.reg"
+            reg = winhost.system32("reg.exe")
+            key = _reg_key("oculus")
+            existed = winhost.run_win([reg, "query", key]).returncode == 0
+            if existed and winhost.run_win([reg, "export", key, winhost.to_windows(backup), "/y"]).returncode:
+                raise RuntimeError("couldn't save the PC's previous Oculus link handler")
+            try:
+                _reg_set("oculus", command)   # explicit --via-pc authorizes a temporary forced registration
+                yield
+            finally:
+                removed = winhost.run_win([reg, "delete", key, "/f"])
+                if existed:
+                    restored = winhost.run_win([reg, "import", winhost.to_windows(backup)])
+                    if restored.returncode:
+                        # Keep the non-secret registry backup for recovery if Windows refuses restoration.
+                        recovery = user_data_dir() / "oculus-handler-restore.reg"
+                        shutil.copyfile(backup, recovery)
+                        raise RuntimeError(f"couldn't restore Oculus link handler; import {recovery}")
+                elif removed.returncode and winhost.run_win([reg, "query", key]).returncode == 0:
+                    raise RuntimeError("couldn't remove the PC's temporary Oculus link handler")
+        return
+    if not shutil.which("xdg-mime"):
+        raise RuntimeError("--via-pc needs xdg-mime on this PC")
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    apps = _desktop_path().parent
+    desktop = apps / "frameport-oculus-login.desktop"
+    paths = {desktop, config / "mimeapps.list", apps / "mimeapps.list", apps / "defaults.list"}
+    for base in (config, apps):
+        paths.update(base.glob("*-mimeapps.list"))
+        for name in os.environ.get("XDG_CURRENT_DESKTOP", "").lower().split(":"):
+            if name and all(c.isalnum() or c in "_-" for c in name):
+                paths.add(base / f"{name}-mimeapps.list")
+    saved = {p: p.read_bytes() if p.exists() else None for p in paths}
+    try:
+        apps.mkdir(parents=True, exist_ok=True)
+        desktop.write_text(desktop_entry(command, ["oculus"]), encoding="utf-8")
+        r = subprocess.run(["xdg-mime", "default", desktop.name, "x-scheme-handler/oculus"],
+                           capture_output=True, timeout=10)
+        if r.returncode:
+            raise RuntimeError("couldn't register the PC's temporary Oculus link handler")
+        yield
+    finally:
+        for p, data in saved.items():
+            if data is None:
+                p.unlink(missing_ok=True)
+            else:
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(data)
 
 
 def links_dir() -> Path:
