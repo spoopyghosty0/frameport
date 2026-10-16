@@ -68,20 +68,31 @@ static XrSpace scene_stage = XR_NULL_HANDLE;  // real STAGE space used to anchor
 static XrSession scene_session = XR_NULL_HANDLE;
 static uint64_t next_request = 0x5ce0000001ull;
 
-#define FAKE_SPACE_TAG 0x5ce0000000000000ull
+// Fit the tag in uintptr_t as the adapter is also built for AArch32. Session generations prevent stale
+// handles from aliasing new room entities when an engine recreates its session in the same process.
+#if UINTPTR_MAX > 0xffffffffu
+#define FAKE_SPACE_TAG ((uintptr_t)0x5ce0000000000000ull)
+#define FAKE_SPACE_MASK ((uintptr_t)0xfff0000000000000ull)
+#else
+#define FAKE_SPACE_TAG ((uintptr_t)0x5ce00000u)
+#define FAKE_SPACE_MASK ((uintptr_t)0xfff00000u)
+#endif
+static unsigned scene_generation;
+
 static int fake_space_index(XrSpace space) {
-    uint64_t v = (uint64_t)(uintptr_t)space;
-    if ((v & 0xfff0000000000000ull) != FAKE_SPACE_TAG) return -1;
-    int i = (int)(v & 0xffff);
+    uintptr_t v = (uintptr_t)space;
+    if ((v & FAKE_SPACE_MASK) != FAKE_SPACE_TAG || ((v >> 12) & 255) != scene_generation) return -1;
+    int i = (int)(v & 4095);
     return i < entity_count && !entities[i].erased ? i : -1;
 }
-static XrSpace fake_space(int index) { return (XrSpace)(uintptr_t)(FAKE_SPACE_TAG | (uint64_t)index); }
+static XrSpace fake_space(int index) { return (XrSpace)(FAKE_SPACE_TAG | ((uintptr_t)scene_generation << 12) | (uintptr_t)index); }
 
 static XrUuidEXT make_uuid(int index) {
     XrUuidEXT u;
     for (int i = 0; i < XR_UUID_SIZE_EXT; ++i) u.data[i] = (uint8_t)(0x5c ^ (i * 37) ^ (index * 101));
     u.data[6] = (uint8_t)((u.data[6] & 0x0f) | 0x40);  // version 4 style
     u.data[15] = (uint8_t)index;
+    u.data[14] ^= (uint8_t)((unsigned)index >> 8);
     return u;
 }
 static int uuid_equal(const XrUuidEXT *a, const XrUuidEXT *b) { return !memcmp(a->data, b->data, XR_UUID_SIZE_EXT); }
@@ -307,14 +318,14 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_retrieve_results(XrSession session, Xr
     return r;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_get_uuid(XrSpace space, XrUuidEXT *uuid) {
+static XRAPI_ATTR XrResult XRAPI_CALL scene_get_uuid(XrSpace space, XrUuidEXT *uuid) {
     int i = fake_space_index(space);
     if (i < 0 || !uuid) return XR_ERROR_HANDLE_INVALID;
     *uuid = entities[i].uuid;
     return XR_SUCCESS;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_enumerate_components(XrSpace space, uint32_t capacity, uint32_t *count,
+static XRAPI_ATTR XrResult XRAPI_CALL scene_enumerate_components(XrSpace space, uint32_t capacity, uint32_t *count,
                                                                XrSpaceComponentTypeFB *types) {
     int i = fake_space_index(space);
     if (i < 0 || !count) return XR_ERROR_HANDLE_INVALID;
@@ -330,10 +341,11 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_enumerate_components(XrSpace space, ui
 
 static XRAPI_ATTR XrResult XRAPI_CALL emu_set_component_status(XrSpace space, const XrSpaceComponentStatusSetInfoFB *info,
                                                                XrAsyncRequestIdFB *request) {
-    int i = fake_space_index(space);
-    if (i < 0 || !info || !request) return XR_ERROR_HANDLE_INVALID;
-    if (!entity_has_component(&entities[i], info->componentType)) return XR_ERROR_SPACE_COMPONENT_NOT_SUPPORTED_FB;
     pthread_mutex_lock(&scene_lock);
+    int i = fake_space_index(space);
+    if (i < 0 || !info || !request) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_HANDLE_INVALID; }
+    if (!entity_has_component(&entities[i], info->componentType)) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_SPACE_COMPONENT_NOT_SUPPORTED_FB; }
+    if (!event_free()) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_LIMIT_REACHED; }
     *request = next_request++;
     XrEventDataSpaceSetStatusCompleteFB e = {XR_TYPE_EVENT_DATA_SPACE_SET_STATUS_COMPLETE_FB, NULL, *request, XR_SUCCESS,
                                              space, entities[i].uuid, info->componentType, info->enabled};
@@ -342,7 +354,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_set_component_status(XrSpace space, co
     return XR_SUCCESS;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_get_component_status(XrSpace space, XrSpaceComponentTypeFB type,
+static XRAPI_ATTR XrResult XRAPI_CALL scene_get_component_status(XrSpace space, XrSpaceComponentTypeFB type,
                                                                XrSpaceComponentStatusFB *status) {
     int i = fake_space_index(space);
     if (i < 0 || !status) return XR_ERROR_HANDLE_INVALID;
@@ -352,7 +364,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_component_status(XrSpace space, Xr
     return XR_SUCCESS;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_get_container(XrSession session, XrSpace space, XrSpaceContainerFB *container) {
+static XRAPI_ATTR XrResult XRAPI_CALL scene_get_container(XrSession session, XrSpace space, XrSpaceContainerFB *container) {
     (void)session;
     int i = fake_space_index(space);
     if (i < 0 || !container) return XR_ERROR_HANDLE_INVALID;
@@ -366,7 +378,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_container(XrSession session, XrSpa
     return XR_SUCCESS;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_get_room_layout(XrSession session, XrSpace space, XrRoomLayoutFB *layout) {
+static XRAPI_ATTR XrResult XRAPI_CALL scene_get_room_layout(XrSession session, XrSpace space, XrRoomLayoutFB *layout) {
     (void)session;
     int i = fake_space_index(space);
     if (i < 0 || !layout) return XR_ERROR_HANDLE_INVALID;
@@ -381,7 +393,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_room_layout(XrSession session, XrS
     return XR_SUCCESS;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_get_bounding_box_2d(XrSession session, XrSpace space, XrRect2Df *rect) {
+static XRAPI_ATTR XrResult XRAPI_CALL scene_get_bounding_box_2d(XrSession session, XrSpace space, XrRect2Df *rect) {
     (void)session;
     int i = fake_space_index(space);
     if (i < 0 || !rect) return XR_ERROR_HANDLE_INVALID;
@@ -390,7 +402,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_bounding_box_2d(XrSession session,
     return XR_SUCCESS;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_get_bounding_box_3d(XrSession session, XrSpace space, XrRect3DfFB *box) {
+static XRAPI_ATTR XrResult XRAPI_CALL scene_get_bounding_box_3d(XrSession session, XrSpace space, XrRect3DfFB *box) {
     (void)session;
     int i = fake_space_index(space);
     if (i < 0 || !box) return XR_ERROR_HANDLE_INVALID;
@@ -399,7 +411,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_bounding_box_3d(XrSession session,
     return XR_SUCCESS;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_get_boundary_2d(XrSession session, XrSpace space, XrBoundary2DFB *boundary) {
+static XRAPI_ATTR XrResult XRAPI_CALL scene_get_boundary_2d(XrSession session, XrSpace space, XrBoundary2DFB *boundary) {
     (void)session;
     int i = fake_space_index(space);
     if (i < 0 || !boundary) return XR_ERROR_HANDLE_INVALID;
@@ -421,7 +433,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_boundary_2d(XrSession session, XrS
     return XR_SUCCESS;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_get_triangle_mesh(XrSpace space, const XrSpaceTriangleMeshGetInfoMETA *info,
+static XRAPI_ATTR XrResult XRAPI_CALL scene_get_triangle_mesh(XrSpace space, const XrSpaceTriangleMeshGetInfoMETA *info,
                                                           XrSpaceTriangleMeshMETA *mesh) {
     (void)info;
     int i = fake_space_index(space);
@@ -439,7 +451,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_triangle_mesh(XrSpace space, const
     return XR_SUCCESS;
 }
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_get_semantic_labels(XrSession session, XrSpace space, XrSemanticLabelsFB *labels) {
+static XRAPI_ATTR XrResult XRAPI_CALL scene_get_semantic_labels(XrSession session, XrSpace space, XrSemanticLabelsFB *labels) {
     (void)session;
     int i = fake_space_index(space);
     if (i < 0 || !labels) return XR_ERROR_HANDLE_INVALID;
@@ -460,11 +472,12 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_request_scene_capture(XrSession sessio
     pthread_mutex_lock(&scene_lock);
     scene_session = session;
     build_room();
+    if (!event_free()) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_LIMIT_REACHED; }
     *request = next_request++;
     XrEventDataSceneCaptureCompleteFB e = {XR_TYPE_EVENT_DATA_SCENE_CAPTURE_COMPLETE_FB, NULL, *request, XR_SUCCESS};
     push_event(&e, sizeof(e));
-    pthread_mutex_unlock(&scene_lock);
     LOG("scene: capture requested -> %s", room_from_file ? "scanned room" : "guardian box");
+    pthread_mutex_unlock(&scene_lock);
     return XR_SUCCESS;
 }
 
@@ -525,6 +538,68 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_erase_space(XrSession session, const X
     return XR_SUCCESS;
 }
 
+// Reads share the mutation lock: engine worker threads may retrieve geometry while anchors are saved.
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_uuid(XrSpace space, XrUuidEXT *uuid) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_get_uuid(space, uuid);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_enumerate_components(XrSpace space, uint32_t capacity, uint32_t *count, XrSpaceComponentTypeFB *types) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_enumerate_components(space, capacity, count, types);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_component_status(XrSpace space, XrSpaceComponentTypeFB type, XrSpaceComponentStatusFB *status) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_get_component_status(space, type, status);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_container(XrSession session, XrSpace space, XrSpaceContainerFB *container) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_get_container(session, space, container);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_room_layout(XrSession session, XrSpace space, XrRoomLayoutFB *layout) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_get_room_layout(session, space, layout);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_bounding_box_2d(XrSession session, XrSpace space, XrRect2Df *rect) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_get_bounding_box_2d(session, space, rect);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_bounding_box_3d(XrSession session, XrSpace space, XrRect3DfFB *box) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_get_bounding_box_3d(session, space, box);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_boundary_2d(XrSession session, XrSpace space, XrBoundary2DFB *boundary) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_get_boundary_2d(session, space, boundary);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_triangle_mesh(XrSpace space, const XrSpaceTriangleMeshGetInfoMETA *info, XrSpaceTriangleMeshMETA *mesh) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_get_triangle_mesh(space, info, mesh);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_semantic_labels(XrSession session, XrSpace space, XrSemanticLabelsFB *labels) {
+    pthread_mutex_lock(&scene_lock);
+    XrResult r = scene_get_semantic_labels(session, space, labels);
+    pthread_mutex_unlock(&scene_lock);
+    return r;
+}
+
 #include "scene_meta.c"
 
 static PFN_xrVoidFunction scene_emulation(const char *name) {
@@ -565,6 +640,7 @@ static void scene_on_create_session(XrSession session) {
                                      {{0, 0, 0, 1}, {0, 0, 0}}};
     pthread_mutex_lock(&scene_lock);
     reset_room();
+    scene_generation = (scene_generation + 1) & 255;
     event_head = event_tail = 0;
     for (int i = 0; i < MAX_QUERIES; ++i) { free(queries[i].results); memset(&queries[i], 0, sizeof(queries[i])); }
     query_next = 0;

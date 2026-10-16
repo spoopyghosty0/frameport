@@ -926,7 +926,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateSpace(XrSpace space, XrSpace baseSpace, X
     pose_time_note("xrLocateSpace", (uint64_t)(uintptr_t)space, (uint64_t)(uintptr_t)baseSpace, time);
     if (emulate_scene && location) {
         XrPosef pose; XrSpaceLocationFlags flags;
-        if (locate_fake(space, baseSpace, time, &pose, &flags)) {
+        pthread_mutex_lock(&scene_lock);
+        int fake = locate_fake(space, baseSpace, time, &pose, &flags);
+        pthread_mutex_unlock(&scene_lock);
+        if (fake) {
             location->pose = pose;
             location->locationFlags = flags;
             return XR_SUCCESS;

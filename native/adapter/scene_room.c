@@ -172,8 +172,9 @@ static int load_room_file(void) {
             if (ok && i == ENT_CEILING) ceiling_set = 1;
         } else if (!strcmp(t[0], "outline")) {
             ok = n >= 2 && room_uint(t[1], &a) && a >= 3 && a <= MAX_OUTLINE && n == 2 + 2 * (int)a;
-            for (uint64_t k = 0; ok && k < a; ++k) ok = room_float(t[2 + k * 2], &outline[k].x) && room_float(t[3 + k * 2], &outline[k].y);
-            if (ok) outline_n = (int)a;
+            XrVector2f parsed[MAX_OUTLINE];
+            for (uint64_t k = 0; ok && k < a; ++k) ok = room_float(t[2 + k * 2], &parsed[k].x) && room_float(t[3 + k * 2], &parsed[k].y);
+            if (ok) { memcpy(outline, parsed, (size_t)a * sizeof(*outline)); outline_n = (int)a; }
         } else if (!strcmp(t[0], "wall")) {
             ok = n == 8 && room_uuid(t[1], &uuid) && room_values(t, 2, 6, v) && room_wall(uuid, v);
         } else if (!strcmp(t[0], "volume") || !strcmp(t[0], "plane")) {
