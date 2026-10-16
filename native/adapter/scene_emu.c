@@ -10,6 +10,7 @@ static int emulate_scene;            // app requested the scene extensions and t
 static const char *const scene_extensions[] = {
     "XR_FB_spatial_entity", "XR_FB_spatial_entity_query", "XR_FB_spatial_entity_storage",
     "XR_FB_spatial_entity_container", "XR_FB_scene", "XR_FB_scene_capture",
+    "XR_META_spatial_entity_mesh",
 };
 #define SCENE_EXTENSION_COUNT (sizeof(scene_extensions) / sizeof(scene_extensions[0]))
 
@@ -156,8 +157,12 @@ static int entity_components(const scene_entity *e, XrSpaceComponentTypeFB *out)
         out[n++] = XR_SPACE_COMPONENT_TYPE_ROOM_LAYOUT_FB;
         out[n++] = XR_SPACE_COMPONENT_TYPE_SPACE_CONTAINER_FB;
     } else if (!e->is_anchor) {
-        out[n++] = XR_SPACE_COMPONENT_TYPE_BOUNDED_2D_FB;
-        out[n++] = XR_SPACE_COMPONENT_TYPE_SEMANTIC_LABELS_FB;
+        if (e->has_bounds) {
+            out[n++] = XR_SPACE_COMPONENT_TYPE_BOUNDED_2D_FB;
+        }
+        if (e->has_bounds3) out[n++] = XR_SPACE_COMPONENT_TYPE_BOUNDED_3D_FB;
+        if (e->vertex_count) out[n++] = XR_SPACE_COMPONENT_TYPE_TRIANGLE_MESH_META;
+        if (e->label[0]) out[n++] = XR_SPACE_COMPONENT_TYPE_SEMANTIC_LABELS_FB;
     }
     return n;
 }
@@ -320,6 +325,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_enumerate_components(XrSpace space, ui
     *count = (uint32_t)n;
     if (!capacity) return XR_SUCCESS;
     if (capacity < (uint32_t)n) return XR_ERROR_SIZE_INSUFFICIENT;
+    if (!types) return XR_ERROR_VALIDATION_FAILURE;
     for (int k = 0; k < n; ++k) types[k] = list[k];
     return XR_SUCCESS;
 }
@@ -357,6 +363,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_container(XrSession session, XrSpa
     container->uuidCountOutput = n;
     if (!container->uuidCapacityInput) return XR_SUCCESS;
     if (container->uuidCapacityInput < n) return XR_ERROR_SIZE_INSUFFICIENT;
+    if (!container->uuids) return XR_ERROR_VALIDATION_FAILURE;
     for (uint32_t k = 0; k < n; ++k) container->uuids[k] = entities[ENT_FLOOR + k].uuid;
     return XR_SUCCESS;
 }
@@ -371,6 +378,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_room_layout(XrSession session, XrS
     layout->wallUuidCountOutput = (uint32_t)wall_count;
     if (!layout->wallUuidCapacityInput) return XR_SUCCESS;
     if (layout->wallUuidCapacityInput < (uint32_t)wall_count) return XR_ERROR_SIZE_INSUFFICIENT;
+    if (!layout->wallUuids) return XR_ERROR_VALIDATION_FAILURE;
     for (int k = 0; k < wall_count; ++k) layout->wallUuids[k] = entities[ENT_WALL0 + k].uuid;
     return XR_SUCCESS;
 }
@@ -385,8 +393,12 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_bounding_box_2d(XrSession session,
 }
 
 static XRAPI_ATTR XrResult XRAPI_CALL emu_get_bounding_box_3d(XrSession session, XrSpace space, XrRect3DfFB *box) {
-    (void)session; (void)space; (void)box;
-    return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
+    (void)session;
+    int i = fake_space_index(space);
+    if (i < 0 || !box) return XR_ERROR_HANDLE_INVALID;
+    if (!entities[i].has_bounds3) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
+    *box = entities[i].bounds3;
+    return XR_SUCCESS;
 }
 
 static XRAPI_ATTR XrResult XRAPI_CALL emu_get_boundary_2d(XrSession session, XrSpace space, XrBoundary2DFB *boundary) {
@@ -394,14 +406,38 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_boundary_2d(XrSession session, XrS
     int i = fake_space_index(space);
     if (i < 0 || !boundary) return XR_ERROR_HANDLE_INVALID;
     if (!entities[i].has_bounds) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
-    boundary->vertexCountOutput = 4;
+    uint32_t n = entities[i].boundary_count ? entities[i].boundary_count : 4;
+    boundary->vertexCountOutput = n;
     if (!boundary->vertexCapacityInput) return XR_SUCCESS;
-    if (boundary->vertexCapacityInput < 4) return XR_ERROR_SIZE_INSUFFICIENT;
+    if (boundary->vertexCapacityInput < n) return XR_ERROR_SIZE_INSUFFICIENT;
+    if (!boundary->vertices) return XR_ERROR_VALIDATION_FAILURE;
+    if (entities[i].boundary_count) {
+        memcpy(boundary->vertices, entities[i].boundary, n * sizeof(*boundary->vertices));
+        return XR_SUCCESS;
+    }
     const XrRect2Df b = entities[i].bounds;
     boundary->vertices[0] = (XrVector2f){b.offset.x, b.offset.y};
     boundary->vertices[1] = (XrVector2f){b.offset.x + b.extent.width, b.offset.y};
     boundary->vertices[2] = (XrVector2f){b.offset.x + b.extent.width, b.offset.y + b.extent.height};
     boundary->vertices[3] = (XrVector2f){b.offset.x, b.offset.y + b.extent.height};
+    return XR_SUCCESS;
+}
+
+static XRAPI_ATTR XrResult XRAPI_CALL emu_get_triangle_mesh(XrSpace space, const XrSpaceTriangleMeshGetInfoMETA *info,
+                                                          XrSpaceTriangleMeshMETA *mesh) {
+    (void)info;
+    int i = fake_space_index(space);
+    if (i < 0 || !mesh) return XR_ERROR_HANDLE_INVALID;
+    const scene_entity *e = &entities[i];
+    if (!e->vertex_count) return XR_ERROR_SPACE_COMPONENT_NOT_ENABLED_FB;
+    mesh->vertexCountOutput = e->vertex_count;
+    mesh->indexCountOutput = e->index_count;
+    if ((mesh->vertexCapacityInput && mesh->vertexCapacityInput < e->vertex_count) ||
+        (mesh->indexCapacityInput && mesh->indexCapacityInput < e->index_count)) return XR_ERROR_SIZE_INSUFFICIENT;
+    if ((mesh->vertexCapacityInput && !mesh->vertices) || (mesh->indexCapacityInput && !mesh->indices))
+        return XR_ERROR_VALIDATION_FAILURE;
+    if (mesh->vertexCapacityInput) memcpy(mesh->vertices, e->vertices, e->vertex_count * sizeof(*e->vertices));
+    if (mesh->indexCapacityInput) memcpy(mesh->indices, e->indices, e->index_count * sizeof(*e->indices));
     return XR_SUCCESS;
 }
 
@@ -414,6 +450,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_semantic_labels(XrSession session,
     labels->bufferCountOutput = n;
     if (!labels->bufferCapacityInput) return XR_SUCCESS;
     if (labels->bufferCapacityInput < n) return XR_ERROR_SIZE_INSUFFICIENT;
+    if (!labels->buffer) return XR_ERROR_VALIDATION_FAILURE;
     memcpy(labels->buffer, entities[i].label, n);
     return XR_SUCCESS;
 }
@@ -492,6 +529,7 @@ static PFN_xrVoidFunction scene_emulation(const char *name) {
         {"xrGetSpaceBoundingBox2DFB", (PFN_xrVoidFunction)emu_get_bounding_box_2d},
         {"xrGetSpaceBoundingBox3DFB", (PFN_xrVoidFunction)emu_get_bounding_box_3d},
         {"xrGetSpaceBoundary2DFB", (PFN_xrVoidFunction)emu_get_boundary_2d},
+        {"xrGetSpaceTriangleMeshMETA", (PFN_xrVoidFunction)emu_get_triangle_mesh},
         {"xrGetSpaceSemanticLabelsFB", (PFN_xrVoidFunction)emu_get_semantic_labels},
         {"xrRequestSceneCaptureFB", (PFN_xrVoidFunction)emu_request_scene_capture},
         {"xrCreateSpatialAnchorFB", (PFN_xrVoidFunction)emu_create_anchor},
