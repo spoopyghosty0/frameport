@@ -3189,6 +3189,8 @@ def upgrade_launchers():
             new = set_gamepad_line(new, wants_gamepad(os.path.dirname(path)))
             new = set_config_sync_line(new, os.path.basename(os.path.dirname(path)),
                                        wants_config_sync(os.path.dirname(path)))
+            new = set_room_sync_line(new, os.path.basename(os.path.dirname(path)),
+                                     wants_scene_room(os.path.dirname(path)))
             pkg = os.path.basename(os.path.dirname(path))
             base = launcher_base(new, pkg)
             if base:  # games on a drive whose path has a space reach Lepton through a link (agent v83)
@@ -3600,7 +3602,7 @@ def upgrade_linux_launcher(text):
     return text
 
 
-def write_launcher(anchor, base, pkg, title, appid, lepton, env, hw_video=False, gamepad=False, config_sync=False):
+def write_launcher(anchor, base, pkg, title, appid, lepton, env, hw_video=False, gamepad=False, config_sync=False, scene_room=False):
     extra = "".join(f"export {k}={shlex.quote(str(v))}\n" for k, v in (env or {}).items()
                     if re.fullmatch(r"[A-Z_][A-Z0-9_]*", k))
     text = LAUNCH_SH.format(title=title.replace("\n", " "), pkg=pkg, app_dir=app_dir_lines(base, pkg), appid=appid,
@@ -3611,6 +3613,7 @@ def write_launcher(anchor, base, pkg, title, appid, lepton, env, hw_video=False,
                             plays_start=plays_lines(anchor)[0],
                             plays_end=plays_lines(anchor)[1], restart=restart_block(pkg, lepton))
     text = set_config_sync_line(text, pkg, config_sync)
+    text = set_room_sync_line(text, pkg, scene_room)
     path = os.path.join(anchor, "launch.sh")
     with open(path + ".tmp", "w") as f:
         f.write(text)
@@ -3921,6 +3924,448 @@ def set_flatscreen(app_dir, on):
         os.remove(marker)
 
 
+# ---------------------------------------------------------------- mixed-reality room storage (format v1)
+# Standalone stdlib code: the PC validates the complete geometry; the agent also checks records and mesh sizes
+# before making an uploaded room current. Never import the desktop package on the Frame.
+ROOMS_DIR = os.path.join(HOME, ".local/share/frameport/rooms")
+ROOM_SCANNER = os.path.join(HOME, ".local/share/frameport/bin/fp_roomscan")
+ROOM_SYNC_LINE = 'python3 {agent_q} _room_sync {pkg_q} >"$app_dir/room-sync.log" 2>&1 9>&- || true # frameport-room-sync'
+
+
+def room_universe(value):
+    text = str(value)
+    if not re.fullmatch(r"[0-9]{1,20}", text) or int(text) >= 2**64:
+        raise AgentError("invalid chaperone universe")
+    return str(int(text))
+
+
+def room_universe_from_log(text):
+    """Last universe switch in vrserver.txt; 424242 is Valve's dummy universe (not a room)."""
+    found = None
+    for line in text.splitlines():
+        match = re.search(r"chaperone universe\s+(\d+)|Switch to\s+(?:.*?\s+)?universe\s*[:=]?\s*(\d+)", line, re.I)
+        if match:
+            found = int(match.group(1) or match.group(2))
+    return None if found is None else (0 if found == 424242 else int(room_universe(found)))
+
+
+def room_chaperone():
+    try:
+        with open(os.path.join(HOME, ".config/openvr/config/chaperone_info.vrchap")) as f:
+            return json.load(f).get("universes") or []
+    except (OSError, ValueError, AttributeError):
+        return []
+
+
+def room_current_universe():
+    try:
+        with open(os.path.join(STEAM, "logs/vrserver.txt"), "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 2 * 1024 * 1024))
+            found = room_universe_from_log(f.read().decode("utf-8", "replace"))
+        if found is not None:
+            return found
+    except (OSError, ValueError, AgentError):
+        pass
+    universes = [u for u in room_chaperone() if str(u.get("universeID", "0")) not in ("0", "424242")]
+    if not universes:
+        return 0
+    newest = max(enumerate(universes), key=lambda item: (str(item[1].get("time", "")), item[0]))[1]
+    try:
+        return int(room_universe(newest["universeID"]))
+    except (KeyError, AgentError):
+        return 0
+
+
+def room_boundary(universes, current):
+    """Chaperone collision quads' bottom edges, in standing/STAGE space, chained into an outline."""
+    import math
+    candidates = [u for u in universes if str(u.get("universeID", "0")) not in ("0", "424242")]
+    if not candidates:
+        raise AgentError("No play area found. Set up a play area in SteamVR first.")
+    u = next((u for u in candidates if str(u.get("universeID")) == str(current)), None)
+    if u is None:
+        u = max(enumerate(candidates), key=lambda item: (str(item[1].get("time", "")), item[0]))[1]
+    edges = []
+    for quad in u.get("collision_bounds") or []:
+        if len(quad) != 4 or any(len(p) != 3 for p in quad):
+            raise AgentError("Invalid chaperone wall")
+        quad = [[float(v) for v in p] for p in quad]
+        if not all(math.isfinite(v) for p in quad for v in p):
+            raise AgentError("Invalid chaperone coordinate")
+        bottom = min(p[1] for p in quad)
+        pts = list(dict.fromkeys((p[0], p[2]) for p in quad if abs(p[1] - bottom) < .001))
+        if len(pts) != 2:
+            raise AgentError("Invalid chaperone wall edge")
+        edges.append(tuple(pts))
+    if len(edges) < 3:
+        raise AgentError("No play area outline found")
+    outline = list(edges.pop(0))
+    while edges:
+        for i, (a, b) in enumerate(edges):
+            if a == outline[-1] or b == outline[-1]:
+                outline.append(b if a == outline[-1] else a)
+                edges.pop(i)
+                break
+        else:
+            raise AgentError("Play area outline is not closed")
+    if outline[-1] != outline[0]:
+        raise AgentError("Play area outline is not closed")
+    return int(room_universe(u["universeID"])), outline[:-1]
+
+
+def room_default_circle(points):
+    import math
+    if len(points) != 20:
+        return False
+    cx = sum(p[0] for p in points) / 20
+    cz = sum(p[1] for p in points) / 20
+    radii = [math.hypot(x-cx, z-cz) for x, z in points]
+    return all(.85 <= r <= 1.15 for r in radii) and max(radii) - min(radii) < .05
+
+
+def room_records(text):
+    """Validate the wire format without desktop dependencies; return its status counts and mesh metadata."""
+    import math
+    lines = [line.split("#", 1)[0].split() for line in text.splitlines()]
+    lines = [line for line in lines if line]
+    if not lines or lines[0] != ["frameport-room", "1"]:
+        raise AgentError("expected frameport-room 1")
+    result = {"universe": 0, "source": "manual", "time": 0,
+              "summary": {"walls": 0, "volumes": {}, "planes": 0}}
+    outline, walls, floor, ceiling = [], [], 0, None
+    ids = set()
+    for row in lines[1:]:
+        k, v = row[0], row[1:]
+        try:
+            if k in ("room", "floor", "ceiling", "wall", "volume", "plane", "mesh"):
+                if not v or not re.fullmatch(r"[a-f0-9]{32}", v[0]) or v[0] in ids:
+                    raise ValueError("invalid or duplicate entity UUID")
+                ids.add(v[0])
+            if k == "universe":
+                if len(v) != 1:
+                    raise ValueError("expected universe")
+                result[k] = int(room_universe(v[0]))
+            elif k == "time":
+                if len(v) != 1 or not v[0].isdigit():
+                    raise ValueError("invalid time")
+                result[k] = int(v[0])
+            elif k == "source":
+                if len(v) != 1 or v[0] not in ("scan", "boundary", "box", "manual"):
+                    raise ValueError("invalid source")
+                result[k] = v[0]
+            elif k == "room":
+                if len(v) != 1:
+                    raise ValueError("invalid room")
+            elif k in ("floor", "ceiling", "wall", "volume", "plane", "outline"):
+                expected = {"floor": 2, "ceiling": 2, "wall": 7, "volume": 9, "plane": 11}
+                if k != "outline" and len(v) != expected[k]:
+                    raise ValueError("invalid field count")
+                nums = [float(x) for x in v[2 if k in ("volume", "plane") else 1:]]
+                if not all(math.isfinite(x) for x in nums):
+                    raise ValueError("nonfinite coordinate")
+                if k == "floor":
+                    floor = nums[0]
+                elif k == "ceiling":
+                    ceiling = nums[0]
+                elif k == "outline":
+                    if int(v[0]) < 3 or len(nums) != int(v[0]) * 2:
+                        raise ValueError("invalid outline")
+                    outline = list(zip(nums[::2], nums[1::2]))
+                elif k == "wall":
+                    if nums[5] <= nums[4] or nums[:2] == nums[2:4]:
+                        raise ValueError("invalid wall dimensions")
+                    walls.append(nums)
+                elif k in ("volume", "plane"):
+                    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", v[1]) or min(nums[-3 if k == "volume" else -2:]) <= 0:
+                        raise ValueError("invalid label or dimensions")
+                    if k == "plane":
+                        if sum(x*x for x in nums[3:7]) < 1e-12:
+                            raise ValueError("zero quaternion")
+                        result["summary"]["planes"] += 1
+                    else:
+                        counts = result["summary"]["volumes"]
+                        counts[v[1]] = counts.get(v[1], 0) + 1
+            elif k == "mesh":
+                ident, name, nv, ni = v
+                nv, ni = int(nv), int(ni)
+                if (not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", name) or name in ("room.txt", "scan.log")
+                        or nv < 0 or ni < 0 or ni % 3 or ni > 600000):
+                    raise ValueError("invalid mesh record")
+                result["mesh"] = {"filename": name, "vertices": nv, "indices": ni}
+        except (ValueError, IndexError) as exc:
+            raise AgentError(f"Invalid room {k}: {exc}") from exc
+    if not outline and walls:
+        xs = [x for w in walls for x in (w[0], w[2])]
+        zs = [z for w in walls for z in (w[1], w[3])]
+        outline = [(min(xs), min(zs)), (max(xs), min(zs)), (max(xs), max(zs)), (min(xs), max(zs))]
+    area = abs(sum(x*b-a*z for (x, z), (a, b) in zip(outline, outline[1:]+outline[:1]))) / 2
+    height = (ceiling if ceiling is not None else floor + 2.5) - floor
+    if len(outline) < 3 or area < 1e-8 or height <= 0:
+        raise AgentError("Invalid room outline or ceiling")
+    result["summary"].update(walls=len(walls) or len(outline), floor_area=area, ceiling_height=height)
+    return result
+
+
+def room_validate_mesh(data, record):
+    import math
+    if len(data) < 16:
+        raise AgentError("truncated room mesh")
+    magic, version, nv, ni = struct.unpack_from("<4sIII", data)
+    if (magic != b"FPRM" or version != 1 or nv != record["vertices"] or ni != record["indices"]
+            or len(data) != 16 + 12*nv + 4*ni):
+        raise AgentError("invalid room mesh header or counts")
+    if any(not math.isfinite(v) for (v,) in struct.iter_unpack("<f", data[16:16+12*nv])):
+        raise AgentError("invalid room mesh coordinate")
+    if any(i >= nv for (i,) in struct.iter_unpack("<I", data[16+12*nv:])):
+        raise AgentError("invalid room mesh index")
+
+
+def room_selected(universe=None):
+    """The matching universe, otherwise current; never follow a link outside the room store."""
+    for name in (room_universe(room_current_universe() if universe is None else universe), "current"):
+        path = os.path.realpath(os.path.join(ROOMS_DIR, name))
+        if (os.path.dirname(path) == os.path.realpath(ROOMS_DIR) and os.path.basename(path).isdigit()
+                and os.path.isfile(os.path.join(path, "room.txt"))):
+            return path
+    return None
+
+
+def cmd_room_status(args):
+    current = room_current_universe()
+    selected = room_selected(current)
+    rooms = []
+    for path in glob.glob(os.path.join(ROOMS_DIR, "*")):
+        if not os.path.basename(path).isdigit() or os.path.islink(path):
+            continue
+        try:
+            with open(os.path.join(path, "room.txt")) as f:
+                record = room_records(f.read())
+            rooms.append(record)
+        except (OSError, AgentError):
+            continue
+    active = None
+    text = None
+    if selected:
+        with open(os.path.join(selected, "room.txt")) as f:
+            text = f.read()
+        active = room_records(text)
+    try:
+        _, points = room_boundary(room_chaperone(), current)
+        circle = room_default_circle(points)
+    except (AgentError, ValueError, TypeError):
+        circle = None
+    return {"rooms": sorted(rooms, key=lambda r: r["time"], reverse=True), "universe": current,
+            "room": active, "room_text": text,
+            "aligned": bool(active and current and active["universe"] == current),
+            "default_circle": circle, "scanner_installed": os.access(ROOM_SCANNER, os.X_OK)}
+
+
+def room_store(text, mesh=None, scan_log=None):
+    record = room_records(text)
+    if record.get("mesh"):
+        if mesh is None:
+            raise AgentError("room mesh sidecar is missing")
+        room_validate_mesh(mesh, record["mesh"])
+    elif mesh is not None:
+        raise AgentError("room has no mesh record")
+    universe = room_universe(record["universe"])
+    os.makedirs(ROOMS_DIR, exist_ok=True)
+    with open(os.path.join(ROOMS_DIR, ".lock"), "a") as lock:
+        if fcntl:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        dest = os.path.join(ROOMS_DIR, universe)
+        if os.path.islink(dest):
+            raise AgentError("refusing a linked room folder")
+        stage = tempfile.mkdtemp(prefix=".room-", dir=ROOMS_DIR)
+        previous = dest + ".previous"
+        try:
+            with open(os.path.join(stage, "room.txt"), "w") as f:
+                f.write(text)
+            if record.get("mesh"):
+                with open(os.path.join(stage, record["mesh"]["filename"]), "wb") as f:
+                    f.write(mesh)
+            if scan_log:
+                with open(os.path.join(stage, "scan.log"), "w") as f:
+                    f.write(scan_log)
+            shutil.rmtree(previous, ignore_errors=True)
+            if os.path.isdir(dest):
+                os.rename(dest, previous)
+            try:
+                os.rename(stage, dest)
+            except OSError:
+                if os.path.isdir(previous):
+                    os.rename(previous, dest)
+                raise
+            link = os.path.join(ROOMS_DIR, ".current-new")
+            if os.path.lexists(link):
+                os.unlink(link)
+            os.symlink(universe, link)
+            os.replace(link, os.path.join(ROOMS_DIR, "current"))
+            shutil.rmtree(previous, ignore_errors=True)
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
+    return record
+
+
+def cmd_room_put(args):
+    # PC uploads to a unique directory below the room store, not to a game's files or an arbitrary host path.
+    path = os.path.realpath(args["path"])
+    if not _inside(path, os.path.realpath(ROOMS_DIR)) or os.path.basename(path) != "room.txt":
+        raise AgentError("upload room.txt below the room store")
+    with open(path) as f:
+        text = f.read(8*1024*1024)
+    record = room_records(text)
+    mesh = None
+    if record.get("mesh"):
+        mesh_path = os.path.realpath(os.path.join(os.path.dirname(path), record["mesh"]["filename"]))
+        if os.path.dirname(mesh_path) != os.path.dirname(path):
+            raise AgentError("linked mesh outside upload folder")
+        with open(mesh_path, "rb") as f:
+            mesh = f.read(64*1024*1024)
+    return {"room": room_store(text, mesh)}
+
+
+def cmd_room_delete(args):
+    selected = room_selected()
+    name = room_universe(args["universe"]) if "universe" in args else (os.path.basename(selected) if selected else None)
+    if name:
+        path = os.path.join(ROOMS_DIR, name)
+        if os.path.islink(path):
+            raise AgentError("refusing a linked room folder")
+        shutil.rmtree(path, ignore_errors=True)
+    current = os.path.join(ROOMS_DIR, "current")
+    if os.path.islink(current) and not os.path.exists(current):
+        os.unlink(current)
+        remaining = cmd_room_status({})["rooms"]
+        if remaining:
+            os.symlink(room_universe(remaining[0]["universe"]), current)
+    return cmd_room_status({})
+
+
+def cmd_room_from_boundary(args):
+    import math
+    import uuid
+    universe, outline = room_boundary(room_chaperone(), room_current_universe())
+    if room_default_circle(outline):
+        raise AgentError("Valve's default circle is not a room. Set up your play area in SteamVR first.")
+    height = float(args.get("height", 2.5))
+    if not math.isfinite(height) or height <= 0:
+        raise AgentError("room height must be positive")
+    area = sum(x*b-a*z for (x, z), (a, b) in zip(outline, outline[1:]+outline[:1]))
+    if area < 0:
+        outline.reverse()
+    rows = ["frameport-room 1", f"universe {universe}", "source boundary", f"time {int(time.time())}",
+            f"room {uuid.uuid4().hex}", f"floor {uuid.uuid4().hex} 0", f"ceiling {uuid.uuid4().hex} {height}",
+            "outline " + str(len(outline)) + " " + " ".join(str(v) for p in outline for v in p)]
+    rows += [f"wall {uuid.uuid4().hex} {x} {z} {a} {b} 0 {height}"
+             for (x, z), (a, b) in zip(outline, outline[1:]+outline[:1])]
+    room_store("\n".join(rows) + "\n")
+    return cmd_room_status({})
+
+
+def cmd_room_build(args):
+    dump = os.path.realpath(args["dump"])
+    if not _inside(dump, os.path.realpath(ROOMS_DIR)):
+        raise AgentError("upload scan dump below the room store")
+    if not os.access(ROOM_SCANNER, os.X_OK):
+        raise AgentError("Room scanner is not installed")
+    universe = room_universe(args.get("universe", room_current_universe()))
+    with tempfile.TemporaryDirectory(prefix=".build-", dir=ROOMS_DIR) as out:
+        result = subprocess.run([ROOM_SCANNER, "--offline", dump, "--out", out, "--universe", universe, "--json"],
+                                capture_output=True, text=True, timeout=300)
+        if result.returncode:
+            raise AgentError("Room scan failed: " + result.stderr[-4000:])
+        try:
+            report = json.loads(result.stdout)
+        except ValueError as exc:
+            raise AgentError("Room scanner returned invalid JSON") from exc
+        with open(os.path.join(out, "room.txt")) as f:
+            text = f.read()
+        record = room_records(text)
+        if str(record["universe"]) != universe:
+            raise AgentError("Room scanner returned the wrong universe")
+        mesh = None
+        if record.get("mesh"):
+            with open(os.path.join(out, record["mesh"]["filename"]), "rb") as f:
+                mesh = f.read()
+        room_store(text, mesh, result.stderr)
+    return {"report": report, **cmd_room_status({})}
+
+
+def capture_roomview(seconds, out_path):
+    """Device-spike hook: attach to IVRBlockQueue_005 /xrservice/roomview3d/meshData + /meshLayout,
+    read their recorded 3D meshes for `seconds`, transform poses to STAGE, and write a v1 FPRS dump at out_path.
+    The maintainer implements this after verifying Valve's queue ABI on the Frame. No synthetic capture here.
+    """
+    raise AgentError("not implemented yet")
+
+
+def cmd_room_capture(args):
+    return {"error": "not implemented yet"}
+
+
+def wants_scene_room(anchor):
+    try:
+        with open(os.path.join(anchor, "deployment.json")) as f:
+            dep = json.load(f)
+        # Live Game settings changes are in settings.conf; older recipes list patch ids only.
+        conf = os.path.join(dep.get("base", anchor), "settings.conf")
+        if os.path.isfile(conf):
+            for line in open(conf):
+                key, _, value = line.strip().partition("=")
+                if key == "scene_emul":
+                    return float(value) != 0
+        recipe = dep.get("recipe") or {}
+        return dep.get("scene_room", "adapter.scene_emul" in (recipe.get("patches") or []))
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def set_room_sync_line(text, pkg, want):
+    text = "".join(line for line in text.splitlines(True) if "# frameport-room-sync" not in line)
+    # Keep a cleanup line after disabling emulation too: stale room sidecars must not survive a settings change.
+    if "\nsetsid " not in text:
+        return text
+    line = ROOM_SYNC_LINE.format(agent_q=shlex.quote(os.path.abspath(__file__)), pkg_q=shlex.quote(pkg))
+    return text.replace("\nsetsid ", "\n" + line + "\nsetsid ", 1)
+
+
+def room_sync_worker(pkg):
+    dep = deployment(check_pkg(pkg))
+    if not dep or dep.get("kind", "quest") != "quest":
+        return
+    base = dep["base"]
+    # Explicit scene_room follows the recipe at finalize; older deployments derive it on launcher upgrade.
+    selected = room_selected() if wants_scene_room(os.path.join(ANCHORS, pkg)) else None
+    record = None
+    if selected:
+        with open(os.path.join(selected, "room.txt")) as f:
+            text = f.read()
+        record = room_records(text)
+        if record.get("mesh"):
+            with open(os.path.join(selected, record["mesh"]["filename"]), "rb") as f:
+                mesh = f.read()
+            room_validate_mesh(mesh, record["mesh"])
+            # The public format allows any sidecar basename; per-game copies use the contract's fixed name.
+            text = re.sub(r"(?m)^(mesh\s+[a-f0-9]{32}\s+)\S+", r"\g<1>room-mesh.bin", text)
+            with open(os.path.join(base, "room-mesh.bin.tmp"), "wb") as f:
+                f.write(mesh)
+            os.replace(os.path.join(base, "room-mesh.bin.tmp"), os.path.join(base, "room-mesh.bin"))
+        with open(os.path.join(base, "room.txt.tmp"), "w") as f:
+            f.write(text)
+        os.replace(os.path.join(base, "room.txt.tmp"), os.path.join(base, "room.txt"))
+    for name in ("room.txt", "room-mesh.bin"):
+        if not selected or (name == "room-mesh.bin" and not record.get("mesh")):
+            try:
+                os.unlink(os.path.join(base, name))
+            except FileNotFoundError:
+                pass
+    print(json.dumps({"room": record, "aligned": bool(record and record["universe"] == room_current_universe())}))
+
+
+# ---------------------------------------------------------- end mixed-reality room storage
+
 def cmd_finalize(args):
     """Move uploaded files into place, write launcher/settings/config files/deployment.json. Keeps saves."""
     pkg = check_pkg(args["package"])
@@ -4076,7 +4521,9 @@ def configure_install(args, prep, moved):
     if gamepad:
         ensure_podman_wrapper()
     config_sync = args.get("config_sync") if isinstance(args.get("config_sync"), dict) else {}
-    write_launcher(anchor, base, pkg, title, appid, lepton, args.get("env"), hw_video, gamepad, bool(config_sync))
+    scene_room = str(settings.get("scene_emul", (recipe.get("adapter") or {}).get("scene_emul", 0))) not in ("0", "0.0")
+    write_launcher(anchor, base, pkg, title, appid, lepton, args.get("env"), hw_video, gamepad,
+                   bool(config_sync), scene_room)
     art_in = os.path.join(base, "incoming-artwork")
     art_moved = False
     if args.get("consume_artwork") and os.path.isdir(art_in):
@@ -4089,6 +4536,7 @@ def configure_install(args, prep, moved):
            "sha256": args.get("apk_sha256") or previous.get("sha256"),
            "recipe": args.get("recipe"), "installed_by": "frameport",
            "hw_video_decode": hw_video, "steam_gamepad": gamepad, "config_sync": config_sync,
+           "scene_room": scene_room,
            "agent_version": AGENT_VERSION, "time": time.time()}
     if previous.get("eye_base"):  # the runtime's eye size learned from an earlier start (device.config_sync)
         dep["eye_base"] = previous["eye_base"]
@@ -7942,6 +8390,9 @@ def main():
         return 0 if restart_requested(sys.argv[2], sys.argv[3], sys.argv[4]) else 1
     if len(sys.argv) >= 4 and sys.argv[1] == "_dashboard_worker":
         dashboard_worker(sys.argv[2], sys.argv[3])
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] == "_room_sync":
+        room_sync_worker(sys.argv[2])
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "_config_sync":
         config_sync_worker(sys.argv[2])
