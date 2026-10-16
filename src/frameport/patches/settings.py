@@ -472,7 +472,7 @@ class AdapterSetting(Patch):
         return UI.get(self.key, {}).get("help") or super().summary
 
     def detect(self, a):
-        from .applicability import uses_scene, uses_equirect_layers, uses_render_models
+        from .applicability import uses_equirect_layers, uses_render_models, uses_scene
 
         if self.key == "controller_fix" and a.extra.get("hand_tracking_only"):
             return Suggestion(True, "Hand tracking is required by the game: pass hands through instead of reporting "

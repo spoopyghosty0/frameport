@@ -3,8 +3,19 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from frameport.mr.room import (Mesh, Plane, Volume, box_room, dumps, from_boundary,
-                               parse, preview_svg, read_mesh, summary, write_mesh)
+from frameport.mr.room import (
+    Mesh,
+    Plane,
+    Volume,
+    box_room,
+    dumps,
+    from_boundary,
+    parse,
+    preview_svg,
+    read_mesh,
+    summary,
+    write_mesh,
+)
 
 
 def test_roundtrip():
@@ -68,3 +79,14 @@ def test_boundary_and_preview():
     for dims in [(0, 1, 1), (1, -1, 1), (1, 1, float("nan"))]:
         with pytest.raises(ValueError):
             box_room(*dims)
+
+
+def test_clockwise_outline_and_wall_directions_are_repaired():
+    r = box_room(4, 3)
+    r.outline.reverse()
+    for w in r.walls:
+        w.x0, w.x1 = w.x1, w.x0
+        w.z0, w.z1 = w.z1, w.z0
+    got = parse(dumps(r))
+    edges = list(zip(got.outline, got.outline[1:] + got.outline[:1], strict=True))
+    assert all(((w.x0, w.z0), (w.x1, w.z1)) in edges for w in got.walls)

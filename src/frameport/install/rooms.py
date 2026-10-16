@@ -1,11 +1,12 @@
 """Room storage and offline scanner operations on a connected Frame. No Flet."""
 from __future__ import annotations
 
+import tempfile
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
-import uuid
 
-from ..core.paths import artifacts_dir
+from ..core.paths import artifacts_dir, user_data_dir
 from ..frame.connection import sh_quote
 from ..mr.room import dumps, parse, preview_svg, read_mesh
 from .livestream import sync_helper
@@ -51,8 +52,12 @@ def put(frame, path: Path) -> dict:
         mesh = read_mesh(mesh_path.read_bytes())
         if (mesh.vertex_count, mesh.index_count) != (room.mesh.vertex_count, room.mesh.index_count):
             raise ValueError("room mesh counts do not match room.txt")
-    with _upload_dir(frame) as remote:
-        frame.put(path, f"{remote}/room.txt", resume=False)
+    staging = user_data_dir() / "rooms"
+    staging.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="import-", dir=staging) as local, _upload_dir(frame) as remote:
+        canonical = Path(local) / "room.txt"
+        canonical.write_text(dumps(room), encoding="utf-8")
+        frame.put(canonical, f"{remote}/room.txt", resume=False)
         if mesh_path:
             frame.put(mesh_path, f"{remote}/{room.mesh.filename}", resume=False)
         return frame.agent("room_put", path=f"{remote}/room.txt")

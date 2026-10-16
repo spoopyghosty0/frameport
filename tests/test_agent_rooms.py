@@ -5,8 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from test_agent import load_agent
+
 from frameport.mr.room import Mesh, box_room, dumps, parse, write_mesh
 
 
@@ -20,7 +20,7 @@ def test_universe_log(monkeypatch, tmp_path):
 
 def chaperone(a, points, universe=7):
     quads = [[[x, 0, z], [b, 0, c], [b, 2.43, c], [x, 2.43, z]]
-             for (x, z), (b, c) in zip(points, points[1:] + points[:1])]
+             for (x, z), (b, c) in zip(points, points[1:] + points[:1], strict=True)]
     path = Path(a.HOME) / ".config/openvr/config/chaperone_info.vrchap"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"universes": [{"universeID": str(universe), "collision_bounds": quads}]}))
@@ -133,3 +133,59 @@ def test_build_offline_scanner(monkeypatch, tmp_path):
     assert result["report"] == {"triangles": 20}
     assert result["room"]["universe"] == 8
     assert Path(a.ROOMS_DIR, "8/scan.log").read_text() == "scan completed"
+
+
+def test_live_scene_setting_updates_only_the_quest_launcher(monkeypatch, tmp_path):
+    a = load_agent(monkeypatch, tmp_path)
+    pkg = "com.test.live"
+    anchor = Path(a.ANCHORS, pkg)
+    anchor.mkdir(parents=True)
+    dep = dict(package=pkg, base=str(anchor), appid=123, scene_room=False)
+    (anchor / "deployment.json").write_text(json.dumps(dep))
+    a.write_launcher(str(anchor), str(anchor), pkg, "Live", 123, "/lepton", {})
+    path = anchor / "launch.sh"
+    assert "# frameport-room-sync" not in path.read_text()
+    (anchor / "settings.conf").write_text("scene_emul=1\n")
+    a.room_setting_changed(pkg, dep, {"scene_emul": 1})
+    assert "# frameport-room-sync" in path.read_text()
+    assert a.deployment(pkg)["scene_room"]
+    (anchor / "room.txt").write_text("stale")
+    (anchor / "settings.conf").write_text("scene_emul=0\n")
+    a.room_setting_changed(pkg, dep, {"scene_emul": 0})
+    assert "# frameport-room-sync" not in path.read_text()
+    assert not (anchor / "room.txt").exists()
+    assert not a.deployment(pkg)["scene_room"]
+
+
+def test_mesh_sync_renames_sidecar_and_changes_current_room(monkeypatch, tmp_path):
+    a = load_agent(monkeypatch, tmp_path)
+    pkg = "com.test.mesh"
+    anchor = Path(a.ANCHORS, pkg)
+    anchor.mkdir(parents=True)
+    (anchor / "deployment.json").write_text(json.dumps(dict(package=pkg, base=str(anchor), scene_room=True)))
+    r = box_room(3, 4)
+    r.universe = 7
+    r.mesh = Mesh(filename="custom.bin", vertices=[(0, 0, 0), (1, 0, 0), (0, 0, 1)], indices=[0, 1, 2])
+    data = write_mesh(r.mesh)
+    a.room_store(dumps(r), data)
+    result = a.room_sync_worker(pkg)
+    assert result["room"]["universe"] == 7
+    got = parse((anchor / "room.txt").read_text())
+    assert got.mesh.filename == "room-mesh.bin"
+    assert (anchor / "room-mesh.bin").read_bytes() == data
+    assert not (anchor / "custom.bin").exists()
+
+
+@pytest.mark.parametrize("settings, recipe, enabled", [
+    ({"scene_emul": 1}, {}, True),
+    ({}, {"adapter": {"scene_emul": 1}}, True),
+    ({}, {"patches": ["adapter.scene_emul"]}, True),
+    ({"scene_emul": 0}, {"patches": ["adapter.scene_emul"]}, False),
+])
+def test_finalize_records_resolved_scene_setting(monkeypatch, tmp_path, settings, recipe, enabled):
+    from test_game_update import PKG, installed_agent
+
+    a, base, _ = installed_agent(monkeypatch, tmp_path)
+    a.configure_install(dict(package=PKG, title="Example", settings=settings, recipe=recipe),
+                        dict(base=str(base), anchor=str(base), appid=42, lepton="/lepton"), 0)
+    assert a.deployment(PKG)["scene_room"] is enabled

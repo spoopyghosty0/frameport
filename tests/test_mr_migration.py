@@ -1,8 +1,9 @@
 from copy import deepcopy
 
+from test_patches import _analysis
+
 from frameport.core import library
 from frameport.patches.applicability import uses_scene
-from test_patches import _analysis
 
 
 def test_scene_migration_only_changes_automatic_recipes_once():

@@ -3602,7 +3602,8 @@ def upgrade_linux_launcher(text):
     return text
 
 
-def write_launcher(anchor, base, pkg, title, appid, lepton, env, hw_video=False, gamepad=False, config_sync=False, scene_room=False):
+def write_launcher(anchor, base, pkg, title, appid, lepton, env, hw_video=False, gamepad=False,
+                   config_sync=False, scene_room=False):
     extra = "".join(f"export {k}={shlex.quote(str(v))}\n" for k, v in (env or {}).items()
                     if re.fullmatch(r"[A-Z_][A-Z0-9_]*", k))
     text = LAUNCH_SH.format(title=title.replace("\n", " "), pkg=pkg, app_dir=app_dir_lines(base, pkg), appid=appid,
@@ -3929,7 +3930,8 @@ def set_flatscreen(app_dir, on):
 # before making an uploaded room current. Never import the desktop package on the Frame.
 ROOMS_DIR = os.path.join(HOME, ".local/share/frameport/rooms")
 ROOM_SCANNER = os.path.join(HOME, ".local/share/frameport/bin/fp_roomscan")
-ROOM_SYNC_LINE = 'python3 {agent_q} _room_sync {pkg_q} >"$app_dir/room-sync.log" 2>&1 9>&- || true # frameport-room-sync'
+ROOM_SYNC_LINE = ('python3 {agent_q} _room_sync {pkg_q} >"$app_dir/room-sync.log" 2>&1 9>&- || true '
+                  '# frameport-room-sync')
 
 
 def room_universe(value):
@@ -4071,7 +4073,7 @@ def room_records(text):
                 elif k == "outline":
                     if int(v[0]) < 3 or len(nums) != int(v[0]) * 2:
                         raise ValueError("invalid outline")
-                    outline = list(zip(nums[::2], nums[1::2]))
+                    outline = list(zip(nums[::2], nums[1::2], strict=True))
                 elif k == "wall":
                     if nums[5] <= nums[4] or nums[:2] == nums[2:4]:
                         raise ValueError("invalid wall dimensions")
@@ -4099,7 +4101,7 @@ def room_records(text):
         xs = [x for w in walls for x in (w[0], w[2])]
         zs = [z for w in walls for z in (w[1], w[3])]
         outline = [(min(xs), min(zs)), (max(xs), min(zs)), (max(xs), max(zs)), (min(xs), max(zs))]
-    area = abs(sum(x*b-a*z for (x, z), (a, b) in zip(outline, outline[1:]+outline[:1]))) / 2
+    area = abs(sum(x*b-a*z for (x, z), (a, b) in zip(outline, outline[1:]+outline[:1], strict=True))) / 2
     height = (ceiling if ceiling is not None else floor + 2.5) - floor
     if len(outline) < 3 or area < 1e-8 or height <= 0:
         raise AgentError("Invalid room outline or ceiling")
@@ -4252,14 +4254,14 @@ def cmd_room_from_boundary(args):
     height = float(args.get("height", 2.5))
     if not math.isfinite(height) or height <= 0:
         raise AgentError("room height must be positive")
-    area = sum(x*b-a*z for (x, z), (a, b) in zip(outline, outline[1:]+outline[:1]))
+    area = sum(x*b-a*z for (x, z), (a, b) in zip(outline, outline[1:]+outline[:1], strict=True))
     if area < 0:
         outline.reverse()
     rows = ["frameport-room 1", f"universe {universe}", "source boundary", f"time {int(time.time())}",
             f"room {uuid.uuid4().hex}", f"floor {uuid.uuid4().hex} 0", f"ceiling {uuid.uuid4().hex} {height}",
             "outline " + str(len(outline)) + " " + " ".join(str(v) for p in outline for v in p)]
     rows += [f"wall {uuid.uuid4().hex} {x} {z} {a} {b} 0 {height}"
-             for (x, z), (a, b) in zip(outline, outline[1:]+outline[:1])]
+             for (x, z), (a, b) in zip(outline, outline[1:]+outline[:1], strict=True)]
     room_store("\n".join(rows) + "\n")
     return cmd_room_status({})
 
@@ -4324,8 +4326,7 @@ def wants_scene_room(anchor):
 
 def set_room_sync_line(text, pkg, want):
     text = "".join(line for line in text.splitlines(True) if "# frameport-room-sync" not in line)
-    # Keep a cleanup line after disabling emulation too: stale room sidecars must not survive a settings change.
-    if "\nsetsid " not in text:
+    if not want or "\nsetsid " not in text:
         return text
     line = ROOM_SYNC_LINE.format(agent_q=shlex.quote(os.path.abspath(__file__)), pkg_q=shlex.quote(pkg))
     return text.replace("\nsetsid ", "\n" + line + "\nsetsid ", 1)
@@ -4361,7 +4362,27 @@ def room_sync_worker(pkg):
                 os.unlink(os.path.join(base, name))
             except FileNotFoundError:
                 pass
-    print(json.dumps({"room": record, "aligned": bool(record and record["universe"] == room_current_universe())}))
+    return {"room": record, "aligned": bool(record and record["universe"] == room_current_universe())}
+
+
+def room_setting_changed(pkg, dep, settings):
+    """Live settings must update the launcher too, including switching emulation on after install."""
+    if "scene_emul" not in settings:
+        return
+    dep["scene_room"] = float(settings["scene_emul"]) != 0
+    write_deployment(pkg, dep)
+    path = os.path.join(ANCHORS, pkg, "launch.sh")
+    if os.path.isfile(path):
+        with open(path) as f:
+            old = f.read()
+        text = set_room_sync_line(old, pkg, dep["scene_room"])
+        if text != old:
+            with open(path + ".tmp", "w") as f:
+                f.write(text)
+            os.chmod(path + ".tmp", 0o755)
+            os.replace(path + ".tmp", path)
+    if not dep["scene_room"]:
+        room_sync_worker(pkg)
 
 
 # ---------------------------------------------------------- end mixed-reality room storage
@@ -4521,7 +4542,9 @@ def configure_install(args, prep, moved):
     if gamepad:
         ensure_podman_wrapper()
     config_sync = args.get("config_sync") if isinstance(args.get("config_sync"), dict) else {}
-    scene_room = str(settings.get("scene_emul", (recipe.get("adapter") or {}).get("scene_emul", 0))) not in ("0", "0.0")
+    scene_value = settings.get("scene_emul", (recipe.get("adapter") or {}).get(
+        "scene_emul", int("adapter.scene_emul" in (recipe.get("patches") or []))))
+    scene_room = float(scene_value) != 0
     write_launcher(anchor, base, pkg, title, appid, lepton, args.get("env"), hw_video, gamepad,
                    bool(config_sync), scene_room)
     art_in = os.path.join(base, "incoming-artwork")
@@ -4558,6 +4581,8 @@ def configure_install(args, prep, moved):
     dep["apk_stat"] = {"size": st.st_size, "mtime_ns": st.st_mtime_ns}
     synced = sync_game_config(pkg, dep)
     write_deployment(pkg, dep)
+    if not scene_room:
+        room_sync_worker(pkg)
     return {"ok": True, "base": base, "appid": appid, "moved_data_files": moved, "controller_models": models,
             "config_sync": synced, "deployment": deployment_summary(dep)}
 
@@ -5828,6 +5853,7 @@ def cmd_set_settings(args):
     os.makedirs(files_dir, exist_ok=True)
     with open(os.path.join(files_dir, "framebridge.conf"), "w") as f:
         f.write(text)
+    room_setting_changed(pkg, dep, args.get("settings") or {})
     models = install_controller_models(files_dir, current.get("controller_models", "0") not in ("0", "0.0"))
     synced = sync_game_config(pkg, dep)
     if isinstance(dep.get("configuration"), dict):
@@ -8392,7 +8418,7 @@ def main():
         dashboard_worker(sys.argv[2], sys.argv[3])
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "_room_sync":
-        room_sync_worker(sys.argv[2])
+        print(json.dumps(room_sync_worker(sys.argv[2])))
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "_config_sync":
         config_sync_worker(sys.argv[2])

@@ -5,14 +5,14 @@ Known records are validated before upload; mesh paths never escape the room fold
 """
 from __future__ import annotations
 
-from collections import Counter
-from dataclasses import dataclass, field
-from html import escape
 import math
 import re
 import struct
 import time
 import uuid
+from collections import Counter
+from dataclasses import dataclass, field
+from html import escape
 
 
 def _id() -> str:
@@ -67,6 +67,12 @@ class Mesh:
     vertices: list[tuple[float, float, float]] = field(default_factory=list)
     indices: list[int] = field(default_factory=list)
 
+    def __post_init__(self):
+        if self.vertices:
+            self.vertex_count = len(self.vertices)
+        if self.indices:
+            self.index_count = len(self.indices)
+
 
 @dataclass
 class Room:
@@ -87,7 +93,7 @@ class Room:
 
 
 def _area(points) -> float:
-    return sum(x * b - a * z for (x, z), (a, b) in zip(points, points[1:] + points[:1])) / 2
+    return sum(x * b - a * z for (x, z), (a, b) in zip(points, points[1:] + points[:1], strict=True)) / 2
 
 
 def _uuid(value: str) -> str:
@@ -117,8 +123,8 @@ def _finish(room: Room) -> Room:
         raise ValueError("ceiling must be above floor")
     if not room.walls:
         room.walls = [Wall(_id(), *a, *b, room.floor, room.ceiling)
-                      for a, b in zip(room.outline, room.outline[1:] + room.outline[:1])]
-    edges = list(zip(room.outline, room.outline[1:] + room.outline[:1]))
+                      for a, b in zip(room.outline, room.outline[1:] + room.outline[:1], strict=True)]
+    edges = list(zip(room.outline, room.outline[1:] + room.outline[:1], strict=True))
     for wall in room.walls:
         if wall.y1 <= wall.y0 or (wall.x0, wall.z0) == (wall.x1, wall.z1):
             raise ValueError("wall must have positive height and length")
@@ -169,7 +175,7 @@ def parse(text: str) -> Room:
                 coords = _numbers(values[1:])
                 if n < 3 or len(coords) != n * 2:
                     raise ValueError("outline count does not match coordinates")
-                room.outline = list(zip(coords[::2], coords[1::2]))
+                room.outline = list(zip(coords[::2], coords[1::2], strict=True))
             elif kind == "wall":
                 if len(values) != 7:
                     raise ValueError("expected UUID and 6 coordinates")
@@ -201,6 +207,8 @@ def parse(text: str) -> Room:
 
 def dumps(room: Room) -> str:
     """Write canonical text; validate programmatically constructed rooms too."""
+    _finish(room)
+
     def row(*values):
         return " ".join(format(v, ".9g") if isinstance(v, float) else str(v) for v in values)
 

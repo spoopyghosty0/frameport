@@ -30,10 +30,11 @@ def room_state(app, force: bool = False) -> dict:
     cached["loading"] = True
 
     def fetch():
+        import hashlib
+
         from ...core.paths import user_data_dir
         from ...install import rooms
         from ...mr.room import parse, preview_svg
-        import hashlib
 
         try:
             status = rooms.status(target.frame)
@@ -232,7 +233,8 @@ class FrameView:
                         tr("Room scanned"), detail, "mr_room"),
                 C.Check(None if cached["loading"] and not status else True if status.get("aligned") else "warn",
                         tr("Lines up with the current play area"),
-                        tr("Same play area") if status.get("aligned") else tr("Set up a room in your current play area"),
+                        tr("Same play area") if status.get("aligned")
+                        else tr("Set up a room in your current play area"),
                         "mr_alignment"),
                 C.Check(None if cached["loading"] and not status else bool(status.get("scanner_installed")),
                         tr("Scanner installed"), tr("Ready") if status.get("scanner_installed")
@@ -253,7 +255,7 @@ class FrameView:
             "Set up a play area in SteamVR first. Valve's default circle does not describe your room.")
 
         def operate(action):
-            if busy:
+            if cached["loading"] or cached.get("working"):
                 return
             cached["working"] = True
             app.refresh_view()
@@ -261,7 +263,9 @@ class FrameView:
             def work():
                 from ...install import rooms
                 try:
-                    {"boundary": rooms.from_boundary, "delete": rooms.delete, "capture": rooms.capture}[action](target.frame)
+                    handler = {"boundary": rooms.from_boundary,
+                               "delete": rooms.delete, "capture": rooms.capture}[action]
+                    handler(target.frame)
                 except Exception as exc:  # noqa: BLE001
                     message = (tr("Room scanning in the headset isn't available yet. You can use your play area now.")
                                if "not implemented yet" in str(exc) else explain(exc))
