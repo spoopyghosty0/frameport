@@ -26,6 +26,14 @@ def test_scene_migration_only_changes_automatic_recipes_once():
     assert data == before
 
 
+def test_scene_emulation_brings_the_xrshim():
+    # OVRPort's dispatcher refuses the scene functions; only the shim gets them to FrameBridge (Pinball FX VR)
+    from frameport.patches.frame.adapter import needs_xrshim
+
+    assert needs_xrshim({"adapter.scene_emul": {"value": 1}})
+    assert not needs_xrshim({"adapter.scene_emul": {"value": 0}})
+
+
 def test_both_scene_permissions_apply_without_mr_only():
     for permission in ("USE_SCENE", "USE_ANCHOR_API"):
         assert uses_scene(_analysis(meta_permissions=["com.oculus.permission." + permission]))

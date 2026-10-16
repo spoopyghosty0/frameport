@@ -448,8 +448,10 @@ UI: dict[str, dict] = {
 
 # settings that need the xrshim (frame/adapter.py: OVRPlugin's own arm64 OpenXR lookups routed to the adapter), so
 # they don't work for 32-bit games on the bridge. surface_native: Batman's native video renderer hooks Vulkan
-# functions OVRPort's dispatcher doesn't know
-XRSHIM_SETTINGS = ("controller_models", "haptic_fix", "surface_native")
+# functions OVRPort's dispatcher doesn't know. scene_emul: the dispatcher refuses every scene/anchor function
+# ("Unknown proc addr: xrQuerySpacesFB", Pinball FX VR 2026-10-16), so the emulated room only reaches the game through
+# the shim (Demeter/NOPE only got it because haptic_fix happened to be on)
+XRSHIM_SETTINGS = ("controller_models", "haptic_fix", "surface_native", "scene_emul")
 
 
 class AdapterSetting(Patch):
