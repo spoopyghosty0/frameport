@@ -61,8 +61,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_save_spaces(XrSession session, const X
     if (!info || !request || !info->spaceCount || !info->spaces) return XR_ERROR_VALIDATION_FAILURE;
     pthread_mutex_lock(&scene_lock);
     if (!event_free()) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_LIMIT_REACHED; }
-    XrResult r = XR_SUCCESS;
-    for (uint32_t k = 0; k < info->spaceCount; ++k) if (fake_space_index(info->spaces[k]) < 0) r = XR_ERROR_HANDLE_INVALID;
+    XrResult r = persist_spaces(info->spaceCount, info->spaces, 0, NULL, 0);
     *request = next_request++;
     XrEventDataSpacesSaveResultMETA done = {XR_TYPE_EVENT_DATA_SPACES_SAVE_RESULT_META, NULL, *request, r};
     push_event(&done, sizeof(done));
@@ -76,8 +75,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_erase_spaces(XrSession session, const 
         return XR_ERROR_VALIDATION_FAILURE;
     pthread_mutex_lock(&scene_lock);
     if (!event_free()) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_LIMIT_REACHED; }
-    XrResult r = XR_SUCCESS;
-    for (uint32_t k = 0; k < info->spaceCount; ++k) if (fake_space_index(info->spaces[k]) < 0) r = XR_ERROR_HANDLE_INVALID;
+    XrResult r = persist_spaces(info->spaceCount, info->spaces, info->uuidCount, info->uuids, 1);
     *request = next_request++;
     XrEventDataSpacesEraseResultMETA done = {XR_TYPE_EVENT_DATA_SPACES_ERASE_RESULT_META, NULL, *request, r};
     push_event(&done, sizeof(done));

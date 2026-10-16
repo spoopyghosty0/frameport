@@ -252,6 +252,8 @@ static int uuid_matches(uint32_t n, const XrUuidEXT *uuids, const scene_entity *
     for (uint32_t i = 0; i < n; ++i) if (uuid_equal(&uuids[i], &e->uuid)) return 1;
     return 0;
 }
+#include "scene_anchors.c"
+
 static int fb_filter_matches(const XrSpaceFilterInfoBaseHeaderFB *f, const scene_entity *e) {
     if (!f) return 1;
     if (f->type == XR_TYPE_SPACE_COMPONENT_FILTER_INFO_FB)
@@ -474,9 +476,16 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_create_anchor(XrSession session, const
     build_room();
     XrPosef base = {{0, 0, 0, 1}, {0, 0, 0}};
     XrSpaceLocationFlags flags = 0;
-    stage_pose(info->space, info->time, &base, &flags);
+    if (event_free() < 1) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_LIMIT_REACHED; }
+    if (!stage_pose(info->space, info->time, &base, &flags) ||
+        !(flags & XR_SPACE_LOCATION_POSITION_VALID_BIT) || !(flags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) {
+        pthread_mutex_unlock(&scene_lock); return XR_ERROR_POSE_INVALID;
+    }
+    XrUuidEXT uuid;
+    if (!anchor_uuid(&uuid)) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_RUNTIME_FAILURE; }
     int i = add_entity(pose_mul(base, info->poseInSpace), NULL, 0, 0, 0, 1);
     *request = next_request++;
+    if (i >= 0) entities[i].uuid = uuid;
     XrEventDataSpatialAnchorCreateCompleteFB e = {XR_TYPE_EVENT_DATA_SPATIAL_ANCHOR_CREATE_COMPLETE_FB, NULL, *request,
         i >= 0 ? XR_SUCCESS : XR_ERROR_LIMIT_REACHED, i >= 0 ? entities[i].handle : XR_NULL_HANDLE,
         i >= 0 ? entities[i].uuid : (XrUuidEXT){{0}}};
@@ -488,24 +497,29 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_create_anchor(XrSession session, const
 static XRAPI_ATTR XrResult XRAPI_CALL emu_save_space(XrSession session, const XrSpaceSaveInfoFB *info, XrAsyncRequestIdFB *request) {
     (void)session;
     if (!info || !request) return XR_ERROR_VALIDATION_FAILURE;
-    int i = fake_space_index(info->space);
     pthread_mutex_lock(&scene_lock);
+    int i = fake_space_index(info->space);
+    if (i < 0) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_HANDLE_INVALID; }
+    if (!event_free()) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_LIMIT_REACHED; }
+    XrResult r = persist_spaces(1, &info->space, 0, NULL, 0);
     *request = next_request++;
-    XrEventDataSpaceSaveCompleteFB e = {XR_TYPE_EVENT_DATA_SPACE_SAVE_COMPLETE_FB, NULL, *request, XR_SUCCESS, info->space,
-                                        i >= 0 ? entities[i].uuid : (XrUuidEXT){{0}}, info->location};
+    XrEventDataSpaceSaveCompleteFB e = {XR_TYPE_EVENT_DATA_SPACE_SAVE_COMPLETE_FB, NULL, *request, r, info->space,
+                                        entities[i].uuid, info->location};
     push_event(&e, sizeof(e));
     pthread_mutex_unlock(&scene_lock);
     return XR_SUCCESS;
 }
-
 static XRAPI_ATTR XrResult XRAPI_CALL emu_erase_space(XrSession session, const XrSpaceEraseInfoFB *info, XrAsyncRequestIdFB *request) {
     (void)session;
     if (!info || !request) return XR_ERROR_VALIDATION_FAILURE;
-    int i = fake_space_index(info->space);
     pthread_mutex_lock(&scene_lock);
+    int i = fake_space_index(info->space);
+    if (i < 0) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_HANDLE_INVALID; }
+    if (!event_free()) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_LIMIT_REACHED; }
+    XrResult r = persist_spaces(1, &info->space, 0, NULL, 1);
     *request = next_request++;
-    XrEventDataSpaceEraseCompleteFB e = {XR_TYPE_EVENT_DATA_SPACE_ERASE_COMPLETE_FB, NULL, *request, XR_SUCCESS, info->space,
-                                         i >= 0 ? entities[i].uuid : (XrUuidEXT){{0}}, info->location};
+    XrEventDataSpaceEraseCompleteFB e = {XR_TYPE_EVENT_DATA_SPACE_ERASE_COMPLETE_FB, NULL, *request, r, info->space,
+                                         entities[i].uuid, info->location};
     push_event(&e, sizeof(e));
     pthread_mutex_unlock(&scene_lock);
     return XR_SUCCESS;
@@ -558,5 +572,6 @@ static void scene_on_create_session(XrSession session) {
     scene_stage = XR_NULL_HANDLE;
     if (create && XR_SUCCEEDED(create(session, &ci, &scene_stage))) LOG("scene: emulation active (anchored to STAGE)");
     build_room();
+    load_anchors();
     pthread_mutex_unlock(&scene_lock);
 }
