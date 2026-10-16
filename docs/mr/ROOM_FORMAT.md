@@ -22,9 +22,12 @@ floor <uuid> <y>                    # floor height (normally 0)
 ceiling <uuid> <y>                  # ceiling height
 outline <n> x0 z0 x1 z1 ... x(n-1) z(n-1)
                                     # floor polygon, n >= 3, counter-clockwise seen from above (+Y), not closed
-wall <uuid> x0 z0 x1 z1 <y0> <y1>   # one wall face from (x0,z0) to (x1,z1), bottom y0, top y1.
+wall <uuid> x0 z0 x1 z1 <y0> <y1> [LABEL]
+                                    # one wall face from (x0,z0) to (x1,z1), bottom y0, top y1.
                                     # Its normal points INTO the room: walls follow the outline counter-clockwise,
                                     # so inward = left of the direction (x0,z0) -> (x1,z1) seen from above.
+                                    # LABEL (optional, default WALL_FACE): INVISIBLE_WALL_FACE for an edge the
+                                    # scanner closed without seeing a wall (open side of a room, doorway gap).
 volume <uuid> <LABEL> cx cz top_y yaw_deg w d h
                                     # furniture box: top-face centre (cx, top_y, cz), yaw about +Y in degrees
                                     # (0 = local X along world X), width w along local X, depth d along the
