@@ -709,6 +709,79 @@ def frame_move(package: str = typer.Argument(..., help="an installed game"),
     typer.echo(f"moved to {st.get('base') or st.get('to')}")
 
 
+# ---------------------------------------------------------------- mixed-reality room commands
+room_app = typer.Typer(help="Store a room for mixed-reality games.", no_args_is_help=True)
+frame_app.add_typer(room_app, name="room")
+
+
+@room_app.command("status")
+def room_status(frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Room summaries, play-area alignment and scanner availability."""
+    from .install import rooms
+
+    typer.echo(json.dumps(rooms.status(_target(frame).frame), indent=2))
+
+
+@room_app.command("from-boundary")
+def room_from_boundary(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
+                       height: float = typer.Option(2.5, help="ceiling height in metres")):
+    """Use your SteamVR play area as a room (refuses Valve's default circle)."""
+    from .install import rooms
+
+    typer.echo(json.dumps(rooms.from_boundary(_target(frame).frame, height), indent=2))
+
+
+@room_app.command("import")
+def room_import(path: Path = typer.Argument(..., exists=True, dir_okay=False),
+                frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Import room.txt and its mesh sidecar."""
+    from .install import rooms
+
+    typer.echo(json.dumps(rooms.put(_target(frame).frame, path), indent=2))
+
+
+@room_app.command("export")
+def room_export(directory: Path = typer.Argument(...),
+                frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
+    """Download the selected room and mesh to a directory."""
+    from .install import rooms
+
+    typer.echo(str(rooms.export(_target(frame).frame, directory)))
+
+
+@room_app.command("delete")
+def room_delete(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
+                universe: Optional[int] = typer.Option(None, help="stored universe (default: selected room)")):
+    """Delete a stored room; saved game anchors are kept."""
+    from .install import rooms
+
+    typer.echo(json.dumps(rooms.delete(_target(frame).frame, universe), indent=2))
+
+
+@room_app.command("build")
+def room_build(dump: Path = typer.Argument(..., exists=True, dir_okay=False),
+               frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
+               universe: Optional[int] = typer.Option(None, help="universe the dump was recorded in")):
+    """Upload a recorded FPRS dump and run the bundled scanner on the Frame."""
+    from .install import rooms
+
+    typer.echo(json.dumps(rooms.build(_target(frame).frame, dump, universe), indent=2))
+
+
+@room_app.command("show")
+def room_show(frame: Optional[str] = typer.Option(None, help=FRAME_HELP),
+              output: Optional[Path] = typer.Option(None, help="SVG preview path")):
+    """Print a room summary and write a top-down SVG preview."""
+    from .core.paths import user_data_dir
+    from .install import rooms
+
+    output = output or user_data_dir() / "rooms" / "preview.svg"
+    typer.echo(json.dumps(rooms.show(_target(frame).frame, output), indent=2))
+    typer.echo(str(output))
+
+
+# ---------------------------------------------------------- end mixed-reality room commands
+
 @frame_app.command("info")
 def frame_info(frame: Optional[str] = typer.Option(None, help=FRAME_HELP)):
     """The Frame's SteamOS build, runtimes, storage and installed games (JSON)."""

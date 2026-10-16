@@ -497,23 +497,29 @@ def ensure_helper(frame) -> bool:
     if local is None:
         return False
     try:
-        from ..frame.connection import sh_quote
-
-        remote = f"{frame.home}/{HELPER_REMOTE}"
-        want = hashlib.sha256(local.read_bytes()).hexdigest()
-        _, out, _ = frame.run(f"sha256sum {sh_quote(remote)} 2>/dev/null")
-        if out.split()[:1] == [want]:
-            return True
-        frame.run(f"mkdir -p {sh_quote(posixpath.dirname(remote))}")
-        tmp = f"{remote}.new-{os.getpid()}-{threading.get_ident()}"  # own name: two starts at once don't collide
-        frame.put(local, tmp, resume=False)
-        code, _, err = frame.run(f"chmod 755 {sh_quote(tmp)} && mv -f {sh_quote(tmp)} {sh_quote(remote)}")
-        if code:
-            raise RuntimeError(err.strip())
+        sync_helper(frame, local, HELPER)
         return True
     except Exception as exc:  # noqa: BLE001
         log.warning("live view: couldn't put %s on the Frame (%s); using the software encoder", HELPER, exc)
         return False
+
+
+def sync_helper(frame, local: Path, name: str) -> str:
+    """Install a bundled host helper by digest, atomically. Shared by live view and the room scanner."""
+    from ..frame.connection import sh_quote
+
+    remote = f"{frame.home}/.local/share/frameport/bin/{name}"
+    want = hashlib.sha256(local.read_bytes()).hexdigest()
+    _, out, _ = frame.run(f"sha256sum {sh_quote(remote)} 2>/dev/null")
+    if out.split()[:1] == [want]:
+        return remote
+    frame.run(f"mkdir -p {sh_quote(posixpath.dirname(remote))}")
+    tmp = f"{remote}.new-{os.getpid()}-{threading.get_ident()}"  # own name: two starts at once don't collide
+    frame.put(local, tmp, resume=False)
+    code, _, err = frame.run(f"chmod 755 {sh_quote(tmp)} && mv -f {sh_quote(tmp)} {sh_quote(remote)}")
+    if code:
+        raise RuntimeError(err.strip())
+    return remote
 
 
 STOP_GRACE = 2.0  # s to wait for the script to end after stdin EOF before killing its process group
