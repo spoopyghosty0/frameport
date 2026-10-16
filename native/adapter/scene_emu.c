@@ -79,6 +79,7 @@ static uint64_t next_request = 0x5ce0000001ull;
 #endif
 static unsigned scene_generation;
 
+static int is_fake_space(XrSpace space) { return ((uintptr_t)space & FAKE_SPACE_MASK) == FAKE_SPACE_TAG; }
 static int fake_space_index(XrSpace space) {
     uintptr_t v = (uintptr_t)space;
     if ((v & FAKE_SPACE_MASK) != FAKE_SPACE_TAG || ((v >> 12) & 255) != scene_generation) return -1;
@@ -212,6 +213,7 @@ static int stage_pose(XrSpace space, XrTime time, XrPosef *pose, XrSpaceLocation
                  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
         return 1;
     }
+    if (is_fake_space(space)) return 0;  // erased or from a prior session: never pass a fake handle to SteamVR
     PFN_xrLocateSpace locate = (PFN_xrLocateSpace)lookup(active_instance, "xrLocateSpace");
     if (!locate || !scene_stage) return 0;
     XrSpaceLocation loc = {XR_TYPE_SPACE_LOCATION, NULL, 0, {{0, 0, 0, 1}, {0, 0, 0}}};
@@ -222,7 +224,7 @@ static int stage_pose(XrSpace space, XrTime time, XrPosef *pose, XrSpaceLocation
 }
 // Locate `space` in `base` when either is fake. Returns 0 if neither is fake (caller forwards).
 static int locate_fake(XrSpace space, XrSpace base, XrTime time, XrPosef *pose, XrSpaceLocationFlags *flags) {
-    if (fake_space_index(space) < 0 && fake_space_index(base) < 0) return 0;
+    if (!is_fake_space(space) && !is_fake_space(base)) return 0;
     XrPosef s, b;
     XrSpaceLocationFlags fs = 0, fb = 0;
     if (!stage_pose(space, time, &s, &fs) || !stage_pose(base, time, &b, &fb)) {

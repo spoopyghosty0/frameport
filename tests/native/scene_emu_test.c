@@ -223,6 +223,17 @@ static int check_persistence(const char *mode) {
         scene_on_create_session(SESSION);
         CHECK(entity_count==ENT_FIXED_COUNT+2 && fake_space_index(spaces[0])<0);
         CHECK(uuid_equal(&first,&entities[ENT_FIXED_COUNT].uuid) && uuid_equal(&second,&entities[ENT_FIXED_COUNT+1].uuid));
+    } else if(!strcmp(mode,"erase-failure")) {
+        CHECK(entity_count==ENT_FIXED_COUNT+2);
+        char path[4096],backup[4128]; CHECK(anchor_path(path,sizeof(path)));
+        snprintf(backup,sizeof(backup),"%s.backup",path);
+        CHECK(rename(path,backup)==0 && mkdir(path,0700)==0);
+        XrSpace handle=entities[ENT_FIXED_COUNT].handle;
+        XrSpacesEraseInfoMETA meta={XR_TYPE_SPACES_ERASE_INFO_META,NULL,1,&handle,0,NULL};
+        CHECK(emu_erase_spaces(SESSION,&meta,&req)==XR_SUCCESS && pop_event(&ev));
+        CHECK(ev.type==XR_TYPE_EVENT_DATA_SPACES_ERASE_RESULT_META && ((XrEventDataSpacesEraseResultMETA *)&ev)->result==XR_ERROR_RUNTIME_FAILURE);
+        CHECK(fake_space_index(handle)>=0 && entities[ENT_FIXED_COUNT].saved);
+        CHECK(rmdir(path)==0 && rename(backup,path)==0);
     } else if(!strcmp(mode,"erase")) {
         CHECK(entity_count==ENT_FIXED_COUNT+2);
         XrSpace old=entities[ENT_FIXED_COUNT].handle;
@@ -293,3 +304,11 @@ int main(int argc,char **argv) {
     for(int i=0;i<MAX_QUERIES;++i) free(queries[i].results);
     return 0;
 }
+
+#ifdef SCENE_SHIM_TEST
+// The shim loads this fake adapter by its production SONAME. Its scene functions are the real implementation.
+__attribute__((visibility("default"))) PFN_xrVoidFunction framebridge_extension_proc(const char *name) {
+    if (!emulate_scene) { emulate_scene=1; scene_on_create_session(SESSION); }
+    return scene_emulation(name);
+}
+#endif

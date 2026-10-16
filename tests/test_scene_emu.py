@@ -146,6 +146,8 @@ def test_fb_and_meta_anchors_persist_across_sessions_and_processes(harness, tmp_
     assert not list(folder.glob("*.tmp-*"))
     assert "loaded 2 saved anchors" in run(harness, tmp_path, "reload", process=process)
     assert p.read_text() == data
+    run(harness, tmp_path, "erase-failure", process=process)
+    assert p.read_text() == data and not list(folder.glob("*.tmp-*"))
     run(harness, tmp_path, "erase", process=process)
     assert p.read_text() == ""
     run(harness, tmp_path, "empty", process=process)
@@ -173,3 +175,31 @@ def test_hundreds_of_walls_have_distinct_default_uuids(harness, tmp_path):
     text = "frameport-room 1\noutline 300 " + " ".join(f"{x} {z}" for x, z in points) + "\n"
     (tmp_path / "room.txt").write_text(text)
     run(harness, tmp_path, "many")
+
+
+def test_real_shim_bypasses_a_dispatcher_that_refuses_scene_calls(harness, tmp_path):
+    import re
+
+    cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
+    inc = next(p for p in (ROOT / "native/.cache").glob("openxr-*")
+               if "#define XR_META_spatial_entity_discovery 1" in (p / "openxr/openxr.h").read_text())
+    native = ROOT / "tests/native"
+    common = [cc, "-std=gnu11", "-O2", "-I", str(inc)]
+    subprocess.run([*common, "-shared", "-fPIC", "-fvisibility=hidden", "-DSCENE_SHIM_TEST",
+                    "-I", str(ROOT / "native/adapter"), str(native / "scene_emu_test.c"), "-pthread", "-lm",
+                    "-o", str(tmp_path / "libopenxr_loader_generic.so")], check=True)
+    subprocess.run([*common, "-shared", "-fPIC", "-DFAKE_DISPATCH", str(native / "scene_shim_test.c"),
+                    "-o", str(tmp_path / "libopenxr_loader.so")], check=True)
+    shim = tmp_path / "libframe_xrshim.so"
+    subprocess.run([*common, "-shared", "-fPIC", "-fvisibility=hidden", "-I", str(ROOT / "tests/fixtures/src/host_include"),
+                    str(ROOT / "native/xrshim/xrshim.c"), "-ldl", "-pthread", "-lm", "-o", str(shim)], check=True)
+    binary = tmp_path / "test-shim"
+    subprocess.run([*common, str(native / "scene_shim_test.c"), "-ldl", "-o", str(binary)], check=True)
+    # Exercise every name the emulation serves, including future additions to its dispatch table.
+    names = re.findall(r'\{"(xr\w+)",', (ROOT / "native/adapter/scene_emu.c").read_text())
+    result = subprocess.run([str(binary), str(shim), *names], capture_output=True, text=True,
+                            env={**os.environ, "LD_LIBRARY_PATH": str(tmp_path),
+                                 "FRAMEBRIDGE_CONFIG": str(tmp_path / "settings.conf")})
+    assert result.returncode == 0, result.stdout + result.stderr
+    for name in names:
+        assert f"extension shim: {name} -> FrameBridge" in result.stderr

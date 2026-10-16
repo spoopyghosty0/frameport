@@ -951,8 +951,8 @@ static XrResult locate_spaces_common(const char *name, XrSession session, const 
     if (info) pose_time_note(name, info->spaceCount ? (uint64_t)(uintptr_t)info->spaces[0] : 0,
                              (uint64_t)(uintptr_t)info->baseSpace, info->time);
     if (emulate_scene && info && locations) {
-        any_fake = fake_space_index(info->baseSpace) >= 0;
-        for (uint32_t i = 0; i < info->spaceCount && !any_fake; ++i) any_fake = fake_space_index(info->spaces[i]) >= 0;
+        any_fake = is_fake_space(info->baseSpace);
+        for (uint32_t i = 0; i < info->spaceCount && !any_fake; ++i) any_fake = is_fake_space(info->spaces[i]);
     }
     if (!any_fake) {
         PFN_xrLocateSpaces fn = (PFN_xrLocateSpaces)lookup(active_instance, name);
@@ -975,7 +975,12 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_locate_spaces_khr(XrSession session, c
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpace(XrSpace space) {
-    if (fake_space_index(space) >= 0) return XR_SUCCESS;  // entity spaces live for the whole session
+    if (is_fake_space(space)) {
+        pthread_mutex_lock(&scene_lock);
+        int valid = fake_space_index(space) >= 0;
+        pthread_mutex_unlock(&scene_lock);
+        return valid ? XR_SUCCESS : XR_ERROR_HANDLE_INVALID;  // entity spaces live for the whole session
+    }
     PFN_xrDestroySpace fn = (PFN_xrDestroySpace)lookup(active_instance, "xrDestroySpace");
     return fn ? fn(space) : XR_ERROR_FUNCTION_UNSUPPORTED;
 }
