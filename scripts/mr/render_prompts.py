@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
-import math
 import sys
 from pathlib import Path
 
@@ -25,11 +24,13 @@ ACCENT, SECONDARY, OK = (255, 138, 31, 255), (58, 168, 255, 255), (74, 222, 128,
 DIRECTIONS = 12
 
 PROMPTS = {
-    "start": ("Turn on passthrough", "FramePort scans your room from the passthrough view.\n"
-              "Open the quick access menu and switch passthrough on."),
-    "ceiling": ("Look up at the ceiling", "Tilt your head back for a few seconds."),
+    "start": ("Starting the scan", "It starts by itself in a moment.\n"
+              "Turn on passthrough to see where you walk."),
+    "ceiling": ("Look up at the ceiling", "Hold it for a few seconds,\n"
+                "then look back down and keep turning."),
+    "floor": ("Look down at the floor", "Hold it for a few seconds,\nthen keep turning."),
     "done": ("Room scanned", "You can take the headset off or start a mixed reality game."),
-    "failed": ("Scan stopped", "No passthrough view arrived. Start the scan again from FramePort."),
+    "failed": ("Scan stopped", "The headset's cameras sent no room view.\nStart the scan again from FramePort."),
 }
 
 
@@ -69,8 +70,8 @@ def images() -> dict[str, bytes]:
     for key, (title, body) in PROMPTS.items():
         out[key] = panel(title, body, accent=OK if key == "done" else ACCENT)
     for n in range(DIRECTIONS + 1):
-        out[f"look_{n:02d}"] = panel("Look around the room", "Turn slowly to see every wall,\n"
-                                     "the floor and your furniture.", seen=n, accent=SECONDARY)
+        out[f"look_{n:02d}"] = panel("Look around the room", "Turn slowly until the ring is full:\n"
+                                     "every wall and your furniture.", seen=n, accent=SECONDARY)
     data = {}
     for key, img in out.items():
         buf = io.BytesIO()

@@ -4505,12 +4505,25 @@ class _ScanPrompt:
         self.handle = None
 
 
-def _prompt_for(started, yaw_bins, pitch, live):
-    if not live and started is None:
+ROOM_SCAN_LOOK_FRAMES = 5   # recorded frames looking up / down (~1.7 s at 3/s) that count as "ceiling/floor seen"
+ROOM_SCAN_MIN_SECONDS = 30  # a complete scan still records this long (more views of every wall)
+
+
+def _prompt_for(started, yaw_bins, pitch):
+    """Which prompt image the headset shows. Valve computes the depth view whenever the cameras run (passthrough
+    visible or not), so "start" is only shown until the first mesh arrives."""
+    if started is None:
         return "start"
-    if len(yaw_bins) >= 10 and pitch["up"] < 5:
+    if len(yaw_bins) >= 10 and pitch["up"] < ROOM_SCAN_LOOK_FRAMES:
         return "ceiling"
+    if len(yaw_bins) >= 10 and pitch["down"] < ROOM_SCAN_LOOK_FRAMES:
+        return "floor"
     return f"look_{min(12, len(yaw_bins)):02d}"
+
+
+def _scan_complete(started, now, yaw_bins, pitch):
+    return (started is not None and now - started >= ROOM_SCAN_MIN_SECONDS and len(yaw_bins) >= 12
+            and pitch["up"] >= ROOM_SCAN_LOOK_FRAMES and pitch["down"] >= ROOM_SCAN_LOOK_FRAMES)
 
 
 def capture_roomview(seconds, out_path, wait=0.0, max_hz=3.0, progress=None, prompts=None):
@@ -4534,10 +4547,12 @@ def capture_roomview(seconds, out_path, wait=0.0, max_hz=3.0, progress=None, pro
             f.write(b"FPRS" + struct.pack("<I", 1))
             while time.time() < t_end:
                 now = time.time()
+                if _scan_complete(started, now, yaw_bins, pitch):
+                    break  # every direction, the ceiling and the floor seen: "Room scanned" at once
                 if now >= next_progress:
                     live = now - last_new < 2.0
                     if prompt:
-                        prompt.show(_prompt_for(started, yaw_bins, pitch, live))
+                        prompt.show(_prompt_for(started, yaw_bins, pitch))
                     if progress:
                         progress({"recording": started is not None, "frames": len(offsets),
                                   "seconds": round(now - started, 1) if started else 0,

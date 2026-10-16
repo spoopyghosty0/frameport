@@ -31,10 +31,21 @@ def test_m34_mul_and_quat(monkeypatch, tmp_path):
 
 def test_prompt_choice(monkeypatch, tmp_path):
     a = load_agent(monkeypatch, tmp_path)
-    assert a._prompt_for(None, set(), {"up": 0}, False) == "start"
-    assert a._prompt_for(1.0, {0, 1, 2}, {"up": 0}, True) == "look_03"
-    assert a._prompt_for(1.0, set(range(12)), {"up": 0}, True) == "ceiling"
-    assert a._prompt_for(1.0, set(range(12)), {"up": 9}, True) == "look_12"
+    assert a._prompt_for(None, set(), {"up": 0, "down": 0}) == "start"
+    assert a._prompt_for(1.0, {0, 1, 2}, {"up": 0, "down": 0}) == "look_03"
+    assert a._prompt_for(1.0, set(range(12)), {"up": 0, "down": 0}) == "ceiling"
+    assert a._prompt_for(1.0, set(range(12)), {"up": 9, "down": 0}) == "floor"
+    assert a._prompt_for(1.0, set(range(11)), {"up": 9, "down": 9}) == "look_11"
+
+
+def test_scan_completes_early_only_when_everything_was_seen(monkeypatch, tmp_path):
+    a = load_agent(monkeypatch, tmp_path)
+    full, seen = set(range(12)), {"up": 9, "down": 9}
+    assert a._scan_complete(0.0, 31.0, full, seen)
+    assert not a._scan_complete(0.0, 20.0, full, seen)  # too short
+    assert not a._scan_complete(0.0, 31.0, set(range(11)), seen)
+    assert not a._scan_complete(0.0, 31.0, full, {"up": 9, "down": 1})
+    assert not a._scan_complete(None, 31.0, full, seen)
 
 
 def test_view_coverage_bins(monkeypatch, tmp_path):
