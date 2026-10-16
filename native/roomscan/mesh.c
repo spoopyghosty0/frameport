@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "scan.h"
 
+#define TANGENT_RADIUS_SQUARED 2.25f
+#define TANGENT_WEIGHT_RADIUS_SQUARED 2.5f
+#define MAX_EXTRACTION_STRIDE 4
 /* Marching cubes without a 256-case table: trace the zero contour on the six faces, then fan each closed loop.
  * Ambiguous faces choose their diagonal from the face centre. Adjacent cubes therefore make the same choice. */
 static const int corners[8][3]={{0,0,0},{1,0,0},{1,0,1},{0,0,1},{0,1,0},{1,1,0},{1,1,1},{0,1,1}};
@@ -20,9 +23,9 @@ static void tsdf(Scan *s)
             if (xx<0 || yy<0 || zz<0 || xx>=s->nx || yy>=s->ny || zz>=s->nz) continue;
             Vec delta=sub(grid_point(s,xx,yy,zz),c->p);
             float d=dot(delta,c->n),tangent=dot(delta,delta)-d*d;
-            if (ab(d)>trunc || tangent>v*v*2.25f) continue;
+            if (ab(d)>trunc || tangent>v*v*TANGENT_RADIUS_SQUARED) continue;
             Cell *dest=&s->cells[(yy*s->nz+zz)*s->nx+xx];
-            float w=(1-tangent/(v*v*2.5f))*mn(c->weight/(v*v),1.f);
+            float w=(1-tangent/(v*v*TANGENT_WEIGHT_RADIUS_SQUARED))*mn(c->weight/(v*v),1.f);
             dest->sdf+=d*w;dest->sw+=w;
         }
     }
@@ -94,7 +97,7 @@ const char *make_mesh(Scan *s)
     s->indices=io_alloc((usize)MAX_TRIANGLES*3*sizeof(u32));
     if(!s->vertices || !s->indices) return "mesh allocation failed";
     tsdf(s);
-    for(int stride=1;stride<=4;stride++) {
+    for(int stride=1;stride<=MAX_EXTRACTION_STRIDE;stride++) {
         s->nv=s->ni=0;int ok=1;
         for(int y=0;y+stride<s->ny && ok;y+=stride)
             for(int z=0;z+stride<s->nz && ok;z+=stride)

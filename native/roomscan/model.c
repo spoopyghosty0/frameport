@@ -7,6 +7,30 @@
 #define FURNITURE_MARGIN .12f
 #define NEAR_WALL .35f
 #define MIN_TOP_AREA .25f
+#define BOX_TRIM .02f
+#define VERTICAL_NORMAL_Y .35f
+#define BOX_SIDE_NORMAL_Y .30f
+#define BOX_EDGE_STRENGTH .40f
+#define MIN_CLUSTER_SURFELS 12
+#define MIN_BOX_EDGE_VOTES 12
+#define MIN_OUTLINE_EXTENT 1.f
+#define MIN_OUTLINE_TWICE_AREA .5f
+#define FLOOR_INFER_DISTANCE .3f
+#define TABLE_MIN_HEIGHT .55f
+#define TABLE_MAX_HEIGHT 1.1f
+#define COUCH_MIN_HEIGHT .35f
+#define COUCH_MAX_HEIGHT .9f
+#define COUCH_MIN_LENGTH 1.4f
+#define BED_MIN_HEIGHT .3f
+#define BED_MAX_HEIGHT .8f
+#define BED_MIN_AREA 2.f
+#define STORAGE_MIN_HEIGHT 1.1f
+#define SCREEN_MAX_DEPTH .22f
+#define SCREEN_MIN_WIDTH .4f
+#define SCREEN_MAX_WIDTH 2.f
+#define DEFAULT_CIRCLE_MIN_POINTS 8
+#define DEFAULT_CIRCLE_RADIAL_CV .05f
+#define LOW_COVERAGE_PERCENT 80.f
 
 static float plane_height(Scan *s, int ceiling, int *found)
 {
@@ -79,7 +103,7 @@ static void walls(Scan *s, int *ids, int n)
 {
     for (int i=0;i<n;i++) {
         Cell *c=&s->cells[ids[i]];
-        c->mark=ab(c->n.y)>.35f || c->p.y<s->floor+FURNITURE_MARGIN || c->p.y>s->ceiling-FURNITURE_MARGIN;
+        c->mark=ab(c->n.y)>VERTICAL_NORMAL_Y || c->p.y<s->floor+FURNITURE_MARGIN || c->p.y>s->ceiling-FURNITURE_MARGIN;
     }
     for (int attempt=0;attempt<MAX_PLANES*2 && s->nplanes<MAX_PLANES;attempt++) {
         Plane best={0}; int best_count=0;
@@ -159,8 +183,8 @@ static void rectangle(Scan *s, int *ids, int n)
         Vec p=s->cells[ids[i]].p;
         x0=mn(x0,p.x);x1=mx(x1,p.x);z0=mn(z0,p.z);z1=mx(z1,p.z);
     }
-    if (x1-x0<1) { float m=(x0+x1)*.5f; x0=m-.5f; x1=m+.5f; }
-    if (z1-z0<1) { float m=(z0+z1)*.5f; z0=m-.5f; z1=m+.5f; }
+    if (x1-x0<MIN_OUTLINE_EXTENT) { float m=(x0+x1)*.5f; x0=m-MIN_OUTLINE_EXTENT/2; x1=m+MIN_OUTLINE_EXTENT/2; }
+    if (z1-z0<MIN_OUTLINE_EXTENT) { float m=(z0+z1)*.5f; z0=m-MIN_OUTLINE_EXTENT/2; z1=m+MIN_OUTLINE_EXTENT/2; }
     push_outline(s,(Pt){x0,z0},1);push_outline(s,(Pt){x1,z0},1);
     push_outline(s,(Pt){x1,z1},1);push_outline(s,(Pt){x0,z1},1);
     warn(s,"incomplete walls; synthesized outline");
@@ -184,7 +208,7 @@ static int valid_polygon(Scan *s)
             if (segment_cross(a,b,s->outline[j],s->outline[(j+1)%s->noutline])) return 0;
         }
     }
-    return s->noutline>=3 && area>.5f;
+    return s->noutline>=3 && area>MIN_OUTLINE_TWICE_AREA;
 }
 static void outline(Scan *s, int *ids, int n)
 {
@@ -223,6 +247,19 @@ static float wall_distance(Scan *s, Vec p)
     for (int i=0;i<s->nplanes;i++) best=mn(best,ab(dot(s->planes[i].n,p)-s->planes[i].d));
     return best;
 }
+static void trimmed_bounds(Scan *s, int *queue, int n, Vec axis, float *lo, float *hi)
+{
+    int hist[512]={0};float start=*lo,range=*hi-start;
+    if(range<.001f) return;
+    for(int i=0;i<n;i++) {
+        float value=dot(s->cells[queue[i]].p,axis);
+        int bin=(int)clamp((value-start)/range*511,0,511);hist[bin]++;
+    }
+    int count=0,target=(int)(n*BOX_TRIM);
+    for(int b=0;b<512;b++) { count+=hist[b];if(count>target) { *lo=start+range*b/511;break; } }
+    count=0;
+    for(int b=511;b>=0;b--) { count+=hist[b];if(count>target) { *hi=start+range*(b+1)/511;break; } }
+}
 static void furniture(Scan *s, int *ids, int n, int *queue)
 {
     for (int j=0;j<n;j++) {
@@ -246,7 +283,7 @@ static void furniture(Scan *s, int *ids, int n, int *queue)
                 if (c->mark==1) { c->mark=2;queue[tail++]=next; }
             }
         }
-        if (tail<12) continue;
+        if (tail<MIN_CLUSTER_SURFELS) continue;
         Vec avg=vec(0,0,0);float top=-1e10f,bottom=1e10f;
         for (int k=0;k<tail;k++) {
             Vec p=s->cells[queue[k]].p;avg=add(avg,p);top=mx(top,p.y);bottom=mn(bottom,p.y);
@@ -256,7 +293,7 @@ static void furniture(Scan *s, int *ids, int n, int *queue)
         for (int k=0;k<tail;k++) {
             Cell *c=&s->cells[queue[k]];
             Vec p=sub(c->p,avg);xx+=p.x*p.x;zz+=p.z*p.z;xz+=p.x*p.z;
-            if(ab(c->n.y)<.3f) {
+            if(ab(c->n.y)<BOX_SIDE_NORMAL_Y) {
                 Vec norm=unit(vec(c->n.x,0,c->n.z));
                 float co2=norm.x*norm.x-norm.z*norm.z,si2=2*norm.x*norm.z;
                 edge_x+=co2*co2-si2*si2;edge_y+=2*co2*si2;edge_count++;
@@ -265,7 +302,7 @@ static void furniture(Scan *s, int *ids, int n, int *queue)
         float yaw=.5f*angle(2*xz,xx-zz);
         /* Opposing faces and perpendicular edges vote for the same fourth harmonic. Unlike PCA, this is not
          * biased by one side being more visible. Non-box objects fall back to position covariance. */
-        if(edge_count>12 && root(edge_x*edge_x+edge_y*edge_y)>edge_count*.4f)
+        if(edge_count>MIN_BOX_EDGE_VOTES && root(edge_x*edge_x+edge_y*edge_y)>edge_count*BOX_EDGE_STRENGTH)
             yaw=.25f*angle(edge_y,edge_x);
         float co=cosine(yaw),si=sine(yaw);
         float u0=1e10f,u1=-1e10f,v0=1e10f,v1=-1e10f,top_count=0;
@@ -275,15 +312,23 @@ static void furniture(Scan *s, int *ids, int n, int *queue)
             u0=mn(u0,u);u1=mx(u1,u);v0=mn(v0,v);v1=mx(v1,v);
             if (c->n.y>s->opt.horizontal && c->p.y>top-s->opt.plane_distance*2) top_count++;
         }
-        float w=u1-u0,d=v1-v0,h=top-(bottom<s->floor+.3f ? s->floor : mn(bottom,s->floor+FURNITURE_MARGIN));
+        /* Stereo discontinuities leave a low-density halo even after long-edge rejection. Trim the outer
+         * two percent before measuring boxes; otherwise a table can become wide enough to look like a couch. */
+        float up=dot(avg,vec(co,0,si)),vp=dot(avg,vec(-si,0,co));
+        u0+=up;u1+=up;v0+=vp;v1+=vp;
+        trimmed_bounds(s,queue,tail,vec(co,0,si),&u0,&u1);
+        trimmed_bounds(s,queue,tail,vec(-si,0,co),&v0,&v1);
+        u0-=up;u1-=up;v0-=vp;v1-=vp;
+        float w=u1-u0,d=v1-v0,h=top-(bottom<s->floor+FLOOR_INFER_DISTANCE ? s->floor : mn(bottom,s->floor+FURNITURE_MARGIN));
         if (w*d*h<s->opt.min_volume) continue;
         float height=top-s->floor,area=w*d,top_area=top_count*s->opt.voxel*s->opt.voxel;
         const char *label="OTHER";
-        if (height>=.3f && height<=.8f && area>=2) label="BED";
-        else if (height>=.35f && height<=.9f && mx(w,d)>=1.4f) label="COUCH";
-        else if (height>=.55f && height<=1.1f && top_area>=MIN_TOP_AREA) label="TABLE";
-        else if (mn(w,d)<.22f && mx(w,d)>=.4f && mx(w,d)<=2 && wall_distance(s,avg)<NEAR_WALL) label="SCREEN";
-        else if (h>=1.1f && wall_distance(s,avg)<NEAR_WALL) label="STORAGE";
+        if (height>=BED_MIN_HEIGHT && height<=BED_MAX_HEIGHT && area>=BED_MIN_AREA) label="BED";
+        else if (height>=COUCH_MIN_HEIGHT && height<=COUCH_MAX_HEIGHT && mx(w,d)>=COUCH_MIN_LENGTH) label="COUCH";
+        else if (height>=TABLE_MIN_HEIGHT && height<=TABLE_MAX_HEIGHT && top_area>=MIN_TOP_AREA) label="TABLE";
+        else if (mn(w,d)<SCREEN_MAX_DEPTH && mx(w,d)>=SCREEN_MIN_WIDTH && mx(w,d)<=SCREEN_MAX_WIDTH &&
+                 wall_distance(s,avg)<NEAR_WALL) label="SCREEN";
+        else if (h>=STORAGE_MIN_HEIGHT && wall_distance(s,avg)<NEAR_WALL) label="STORAGE";
         if (s->nvolumes>=MAX_VOLUMES) { warn(s,"furniture limit reached");break; }
         Vec centre=vec(avg.x+co*(u0+u1)*.5f-si*(v0+v1)*.5f,top,
                        avg.z+si*(u0+u1)*.5f+co*(v0+v1)*.5f);
@@ -316,7 +361,7 @@ const char *make_model(Scan *s)
         if (!s->invisible[i]) observed+=d;
     }
     s->coverage=perimeter ? 100*observed/perimeter : 0;
-    if (s->coverage<80) warn(s,"low wall coverage; scan all walls");
+    if (s->coverage<LOW_COVERAGE_PERCENT) warn(s,"low wall coverage; scan all walls");
     io_free(ids,bytes);io_free(queue,bytes);
     return error;
 }
@@ -328,7 +373,14 @@ static int number(char **cursor, float *value)
     float v=0,scale=1;
     while (*p>='0' && *p<='9') { v=v*10+*p++-'0';digits++;if(v>10000) return 0; }
     if (*p=='.') { p++;while (*p>='0' && *p<='9') { scale*=.1f;v+=(*p++-'0')*scale;digits++; } }
-    if (!digits || !finite(v)) return 0;
+    if(*p=='e' || *p=='E') {
+        p++;int exponent=0,negative=0,edigits=0;
+        if(*p=='-' || *p=='+') { negative=*p=='-';p++; }
+        while(*p>='0' && *p<='9') { exponent=exponent*10+*p++-'0';edigits++;if(exponent>38) return 0; }
+        if(!edigits) return 0;
+        while(exponent--) v=negative ? v*.1f : v*10;
+    }
+    if (!digits || !finite(v) || v>10000) return 0;
     *value=sign*v;*cursor=p;return 1;
 }
 static const char *hint(Scan *s)
@@ -359,7 +411,9 @@ static const char *hint(Scan *s)
     float mean=0,variance=0;
     for (int i=0;i<n;i++) mean+=root(distance2(pts[i],centre))/n;
     for (int i=0;i<n;i++) { float r=root(distance2(pts[i],centre))-mean;variance+=r*r/n; }
-    if (n>=8 && root(variance)<mean*.05f) { warn(s,"default circle hint ignored");return 0; }
+    if (n>=DEFAULT_CIRCLE_MIN_POINTS && root(variance)<mean*DEFAULT_CIRCLE_RADIAL_CV) {
+        warn(s,"default circle hint ignored");return 0;
+    }
     int missing=0;for(int i=0;i<s->noutline;i++) missing+=s->invisible[i];
     if (!missing) return 0;
     Pt saved[MAX_OUTLINE];int inv[MAX_OUTLINE],old=s->noutline;

@@ -75,9 +75,13 @@ static const char *write_files(Scan *s)
     if(!record(&t,"mesh")) return "getrandom failed";
     text(&t," room-mesh.bin ");integer(&t,(u64)s->nv);text(&t," ");integer(&t,(u64)s->ni);text(&t,"\n");
     if(!t.ok) return "room text exceeds output budget";
+    Text rname={.ok=1},mname={.ok=1};
+    text(&rname,"room.txt.");text(&mname,"room-mesh.bin.");
+    if(!uuid(&rname) || !uuid(&mname)) return "getrandom failed";
+    text(&rname,".tmp");text(&mname,".tmp");rname.data[rname.n]=0;mname.data[mname.n]=0;
     char room[4096],mesh[4096],rtmp[4096],mtmp[4096];
     if(!path(room,s->opt.out,"room.txt") || !path(mesh,s->opt.out,"room-mesh.bin") ||
-       !path(rtmp,s->opt.out,"room.txt.tmp") || !path(mtmp,s->opt.out,"room-mesh.bin.tmp")) return "output path too long";
+       !path(rtmp,s->opt.out,rname.data) || !path(mtmp,s->opt.out,mname.data)) return "output path too long";
     if(!io_mkdir(s->opt.out)) return "cannot create output directory";
     int fd=io_open(rtmp,1),ok;
     if(fd<0) return "cannot open room temporary file";

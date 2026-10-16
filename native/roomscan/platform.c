@@ -12,7 +12,7 @@
 #include <time.h>
 #include <unistd.h>
 
-int io_open(const char *p, int w) { return open(p, w ? O_WRONLY|O_CREAT|O_TRUNC : O_RDONLY, 0600); }
+int io_open(const char *p, int w) { return open(p, w ? O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW : O_RDONLY, 0600); }
 long io_read(int fd, void *p, usize n)
 {
     long r;
@@ -66,7 +66,7 @@ static long call(long n, long a, long b, long c, long d, long e, long f)
     __asm__ volatile("svc #0" : "+r"(x0) : "r"(x8), "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5) : "memory", "cc");
     return x0;
 }
-int io_open(const char *p, int w) { return (int)call(56, -100, (long)p, w ? 1|64|512 : 0, 0600, 0, 0); }
+int io_open(const char *p, int w) { return (int)call(56, -100, (long)p, w ? 1|64|128|131072 : 0, 0600, 0, 0); }
 long io_read(int fd, void *p, usize n)
 {
     long r;

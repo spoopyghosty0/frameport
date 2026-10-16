@@ -16,7 +16,7 @@ COUCH = ((.6, 0, .95), (1.6, .65, .65))
 
 def inside(x, z, polygon):
     odd = False
-    for (ax, az), (bx, bz) in zip(polygon, polygon[1:] + polygon[:1]):
+    for (ax, az), (bx, bz) in zip(polygon, polygon[1:] + polygon[:1], strict=False):
         if (az > z) != (bz > z) and x < (bx - ax) * (z - az) / (bz - az) + ax:
             odd = not odd
     return odd
@@ -41,7 +41,7 @@ def cast(eye, direction, polygon, ceiling, furniture, missing_wall):
             t = (height - ey) / dy
             if .3 < t < nearest and inside(ex + t * dx, ez + t * dz, polygon):
                 nearest, hit = t, True
-    for index, ((ax, az), (bx, bz)) in enumerate(zip(polygon, polygon[1:] + polygon[:1])):
+    for index, ((ax, az), (bx, bz)) in enumerate(zip(polygon, polygon[1:] + polygon[:1], strict=False)):
         if index == missing_wall:
             continue
         sx, sz = bx - ax, bz - az
@@ -56,7 +56,7 @@ def cast(eye, direction, polygon, ceiling, furniture, missing_wall):
         near, far = -1e20, 1e20
         for pos, ray, lo, hi in zip(eye, direction,
                                     (cx - width / 2, bottom, cz - depth / 2),
-                                    (cx + width / 2, bottom + height, cz + depth / 2)):
+                                    (cx + width / 2, bottom + height, cz + depth / 2), strict=False):
             if abs(ray) < 1e-8:
                 if not lo <= pos <= hi:
                     far = -1e20
@@ -99,7 +99,7 @@ def render(path: Path, *, shape="box", frames=30, width=56, height=40, noise=.00
             q = (cy * sp, sy * cp, -sy * sp, cy * cp)
             depths = [cast(eye, rotate(ray, q), polygon, ceiling, furniture, missing_wall) for ray in rays]
             vertices, valid = [], []
-            for index, (ray, depth) in enumerate(zip(rays, depths)):
+            for index, (ray, depth) in enumerate(zip(rays, depths, strict=False)):
                 valid.append(depth is not None and rng.random() >= holes)
                 if depth is None:
                     depth = 0
@@ -121,7 +121,7 @@ def render(path: Path, *, shape="box", frames=30, width=56, height=40, noise=.00
                         if all(valid[i] for i in triangle):
                             indices.extend(triangle)
             # Compose the global room transform with each independent mesh -> room pose.
-            pose_eye = tuple(a + b for a, b in zip(rotate(eye, rotation), offset))
+            pose_eye = tuple(a + b for a, b in zip(rotate(eye, rotation), offset, strict=False))
             ax, ay, az, aw = rotation
             bx, by, bz, bw = q
             pose_q = (aw * bx + ax * bw + ay * bz - az * by,

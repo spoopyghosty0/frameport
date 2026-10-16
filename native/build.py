@@ -199,6 +199,18 @@ def build_venc(tc: Path):
          f"-ffile-prefix-map={HERE}=native", "fp_venc.c", "convert.c", "sys.c", "-o", out / "fp_venc"], cwd=src)
 
 
+def build_roomscan(tc: Path):
+    """Offline room reconstruction (Linux aarch64). No libc, headers, generated tables or fetched dependencies."""
+    src = HERE / "roomscan"
+    out = ART / "linux-arm64-bin"
+    out.mkdir(parents=True, exist_ok=True)
+    run([tc / "bin/clang", "--target=aarch64-linux-gnu", "-ffreestanding", "-nostdlib", "-nostdlibinc", "-static",
+         "-fno-stack-protector", "-fno-builtin", "-ffp-contract=off", "-O2", "-Wall", "-Wextra", "-Werror",
+         "-fuse-ld=lld", "-Wl,--build-id=none", "-Wl,-z,max-page-size=65536", "-e", "_start",
+         f"-ffile-prefix-map={HERE}=native", "main.c", "fusion.c", "model.c", "mesh.c", "platform.c",
+         "-o", out / "fp_roomscan"], cwd=src)
+
+
 OCULUSHMD_IMPORTS = ("CreateEventW", "CreateJobObjectW", "AssignProcessToJobObject", "QueryInformationJobObject",
                      "CreateProcessW", "ResumeThread", "WaitForSingleObject", "GetExitCodeProcess", "CloseHandle",
                      "Sleep", "GetCommandLineW", "GetLastError", "GetStdHandle", "WriteFile", "ExitProcess")
@@ -438,7 +450,7 @@ def write_sums():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", default="adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrshim,vkshim,zinkfix,foveation,ovrpshim,tlskeys,luajit,vrsettings,venc,a32")
+    ap.add_argument("--only", default="adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrshim,vkshim,zinkfix,foveation,ovrpshim,tlskeys,luajit,vrsettings,venc,roomscan,a32")
     ap.add_argument("--ndk")
     args = ap.parse_args()
     parts = set(args.only.split(","))
@@ -454,9 +466,10 @@ def main():
              "ovrpshim": lambda: build_ovrpshim(tc), "tlskeys": lambda: build_tlskeys(tc),
              "luajit": lambda: build_luajit(tc),
              "vrsettings": lambda: build_vrsettings(tc), "venc": lambda: build_venc(tc),
+             "roomscan": lambda: build_roomscan(tc),
              "vroverlay_probe": lambda: build_vroverlay_probe(tc), "a32": lambda: build_a32(tc)}
     for name in ("adapter", "bridge", "compat", "langpack", "glshim", "eglfmt", "glmv", "ovrtrace", "xrshim", "vkshim", "zinkfix", "foveation", "ovrpshim", "tlskeys", "luajit", "dex", "xrlayer", "oculushmd", "vrsettings", "venc",
-                 "vroverlay_probe", "a32"):
+                 "roomscan", "vroverlay_probe", "a32"):
         if name in parts:
             log(f"build {name}")
             steps[name]()

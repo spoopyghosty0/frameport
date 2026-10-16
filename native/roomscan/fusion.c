@@ -1,6 +1,17 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "scan.h"
 
+#define MIN_TRIANGLE_TWICE_AREA 1e-8f
+#define MIN_RANGE .1f
+#define MAX_COORDINATE 10000.f
+#define QUATERNION_NORM_TOLERANCE .1f
+#define SAMPLE_SPACING_VOXELS .75f
+#define MAX_SURFEL_WEIGHT 10.f
+#define FEW_FRAMES 8
+#define MAX_GRID_XZ 8.f
+#define MAX_GRID_Y 4.f
+#define GRID_PADDING_VOXELS 5.f
+
 float root(float x)
 {
     if (x <= 0) return 0;
@@ -73,7 +84,7 @@ static void sample(Scan *s, Vec p, Vec n, float w)
     if (i < 0) { s->clipped++; return; }
     Cell *c = &s->cells[i];
     /* Cap repeated views' influence without throwing away later measurements. */
-    float scale = c->weight > 10 ? 10/c->weight : 1;
+    float scale = c->weight > MAX_SURFEL_WEIGHT ? MAX_SURFEL_WEIGHT/c->weight : 1;
     c->p = add(mul(c->p,scale),mul(p,w));
     c->n = add(mul(c->n,scale),mul(n,w));
     c->weight = c->weight*scale+w;
@@ -86,7 +97,7 @@ static void triangle(Scan *s, Vec a, Vec b, Vec c, Vec eye, int fuse)
     float twice_area = root(dot(n,n));
     Vec view = sub(eye,p);
     float distance = root(dot(view,view));
-    if (twice_area < 1e-8f || longest > s->opt.max_edge || distance > s->opt.range || distance < .1f) {
+    if (twice_area < MIN_TRIANGLE_TWICE_AREA || longest > s->opt.max_edge || distance > s->opt.range || distance < MIN_RANGE) {
         if (!fuse) s->rejected++;
         return;
     }
@@ -101,7 +112,7 @@ static void triangle(Scan *s, Vec a, Vec b, Vec c, Vec eye, int fuse)
         if (slot < MAX_SAMPLES) s->samples[slot] = p;
         s->nsamples = (int)mn((float)s->seen,MAX_SAMPLES);
     } else {
-        int steps = (int)(longest/(s->opt.voxel*.75f))+1;
+        int steps = (int)(longest/(s->opt.voxel*SAMPLE_SPACING_VOXELS))+1;
         float weight = twice_area*facing*facing / ((steps+1)*(steps+2)*.5f);
         for (int j = 0; j <= steps; j++) for (int k = 0; k <= steps-j; k++) {
             Vec q = add(a,add(mul(abv,(float)j/steps),mul(ac,(float)k/steps)));
@@ -130,11 +141,11 @@ const char *read_dump(Scan *s, int fuse)
         float pose[7];
         for (int i = 0; i < 7; i++) {
             pose[i] = f32le(header+8+i*4);
-            if (!finite(pose[i]) || ab(pose[i]) > 10000) error = "invalid frame pose";
+            if (!finite(pose[i]) || ab(pose[i]) > MAX_COORDINATE) error = "invalid frame pose";
         }
         float norm = 0;
         for (int i = 3; i < 7; i++) norm += pose[i]*pose[i];
-        if (ab(norm-1) > .1f) error = "invalid pose quaternion";
+        if (ab(norm-1) > QUATERNION_NORM_TOLERANCE) error = "invalid pose quaternion";
         if (error) break;
         for (int i = 3; i < 7; i++) pose[i] /= root(norm);
         u32 nv = u32le(header+36), ni = u32le(header+40);
@@ -152,7 +163,8 @@ const char *read_dump(Scan *s, int fuse)
         for (u32 i = 0; i < nv; i++) {
             u8 *p = (u8 *)&vertices[i];
             Vec v = vec(f32le(p),f32le(p+4),f32le(p+8));
-            if (!finite(v.x) || !finite(v.y) || !finite(v.z) || ab(v.x)>10000 || ab(v.y)>10000 || ab(v.z)>10000) {
+            if (!finite(v.x) || !finite(v.y) || !finite(v.z) ||
+                ab(v.x)>MAX_COORDINATE || ab(v.y)>MAX_COORDINATE || ab(v.z)>MAX_COORDINATE) {
                 error = "invalid vertex"; break;
             }
             Vec t = mul(cross(q,v),2);
@@ -197,10 +209,20 @@ const char *init_grid(Scan *s)
 {
     if (!s->nsamples) return "scan contains no usable triangles";
     float x=median(s,0), y=median(s,1), z=median(s,2), v=s->opt.voxel;
-    s->origin = vec(flo((x-4)/v)*v,flo((y-2)/v)*v,flo((z-4)/v)*v);
-    s->nx = (int)(8/v)+1;
-    s->nz = s->nx;
-    s->ny = (int)(4/v)+1;
+    Vec low=s->samples[0],high=low;
+    for(int i=1;i<s->nsamples;i++) {
+        Vec p=s->samples[i];
+        low=vec(mn(low.x,p.x),mn(low.y,p.y),mn(low.z,p.z));
+        high=vec(mx(high.x,p.x),mx(high.y,p.y),mx(high.z,p.z));
+    }
+    float pad=v*mx(GRID_PADDING_VOXELS,s->opt.truncation+2);
+    low=sub(low,vec(pad,pad,pad));high=add(high,vec(pad,pad,pad));
+    s->origin=vec(mx(flo(low.x/v)*v,flo((x-MAX_GRID_XZ/2)/v)*v),
+                  mx(flo(low.y/v)*v,flo((y-MAX_GRID_Y/2)/v)*v),
+                  mx(flo(low.z/v)*v,flo((z-MAX_GRID_XZ/2)/v)*v));
+    s->nx=(int)mn(-flo(-(high.x-s->origin.x)/v)+1,(int)(MAX_GRID_XZ/v)+1);
+    s->ny=(int)mn(-flo(-(high.y-s->origin.y)/v)+1,(int)(MAX_GRID_Y/v)+1);
+    s->nz=(int)mn(-flo(-(high.z-s->origin.z)/v)+1,(int)(MAX_GRID_XZ/v)+1);
     usize count = (usize)s->nx*s->ny*s->nz;
     if (count > MAX_CELLS) return "voxel grid exceeds memory budget; increase --voxel";
     s->count = (int)count;
@@ -214,6 +236,6 @@ void finish_fusion(Scan *s)
         if (c->weight) { c->p=mul(c->p,1/c->weight); c->n=unit(c->n); }
     }
     if (s->clipped) warn(s,"scan clipped to 8 x 8 x 4 metre grid");
-    if (s->frames < 8) warn(s,"few frames; scan more viewpoints");
+    if (s->frames < FEW_FRAMES) warn(s,"few frames; scan more viewpoints");
     if (s->accepted < s->rejected) warn(s,"many triangles rejected; check depth quality");
 }
