@@ -153,10 +153,11 @@ static void build_room(void) {
     add_entity((XrPosef){{0, 0, 0, 1}, {0, 0, 0}}, NULL, 0, 0, 1, 0);                         // ENT_ROOM
     add_entity((XrPosef){{-s, 0, 0, s}, {0, 0, 0}}, "FLOOR", width, depth, 0, 0);             // +Z (normal) -> +Y
     add_entity((XrPosef){{s, 0, 0, s}, {0, h, 0}}, "CEILING", width, depth, 0, 0);            // +Z -> -Y
+    // Walls in loop order around the floor, as Meta's ROOM_LAYOUT lists them (Demeter walks them as an outline).
     add_entity((XrPosef){{0, 0, 0, 1}, {0, h / 2, -depth / 2}}, "WALL_FACE", width, h, 0, 0); // faces +Z
+    add_entity((XrPosef){{0, -s, 0, s}, {width / 2, h / 2, 0}}, "WALL_FACE", depth, h, 0, 0); // faces -X
     add_entity((XrPosef){{0, 1, 0, 0}, {0, h / 2, depth / 2}}, "WALL_FACE", width, h, 0, 0);  // faces -Z
     add_entity((XrPosef){{0, s, 0, s}, {-width / 2, h / 2, 0}}, "WALL_FACE", depth, h, 0, 0); // faces +X
-    add_entity((XrPosef){{0, -s, 0, s}, {width / 2, h / 2, 0}}, "WALL_FACE", depth, h, 0, 0); // faces -X
     wall_count = 4;
     room_entity_count = entity_count;
     for (int i = ENT_WALL0; i < entity_count; ++i) entities[i].is_wall = 1;
@@ -664,6 +665,22 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_get_semantic_labels(XrSession session,
     return r;
 }
 
+// The app's STAGE bounds: the Frame reports a 1x1 m rect but OVRPlugin can't give its outline ("ovrpBoundary_Outer
+// is not supported"), so Unity games that trust a configured boundary index an empty array (Demeter's
+// RemoveObjectNotInGuardian). With an emulated room there is no play area for the app; build_room asks the runtime.
+static XRAPI_ATTR XrResult XRAPI_CALL emu_stage_bounds(XrSession session, XrReferenceSpaceType type, XrExtent2Df *bounds) {
+    if (type == XR_REFERENCE_SPACE_TYPE_STAGE) {
+        if (!bounds) return XR_ERROR_VALIDATION_FAILURE;
+        static int logged;
+        if (!logged++) LOG("scene: STAGE bounds hidden from the app (no play-area outline on this runtime)");
+        *bounds = (XrExtent2Df){0, 0};
+        return XR_SPACE_BOUNDS_UNAVAILABLE;
+    }
+    PFN_xrGetReferenceSpaceBoundsRect fn =
+        (PFN_xrGetReferenceSpaceBoundsRect)lookup(active_instance, "xrGetReferenceSpaceBoundsRect");
+    return fn ? fn(session, type, bounds) : XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
 #include "scene_meta.c"
 
 static PFN_xrVoidFunction scene_emulation(const char *name) {
@@ -690,6 +707,7 @@ static PFN_xrVoidFunction scene_emulation(const char *name) {
         {"xrRetrieveSpaceDiscoveryResultsMETA", (PFN_xrVoidFunction)emu_retrieve_discovery},
         {"xrSaveSpacesMETA", (PFN_xrVoidFunction)emu_save_spaces},
         {"xrEraseSpacesMETA", (PFN_xrVoidFunction)emu_erase_spaces},
+        {"xrGetReferenceSpaceBoundsRect", (PFN_xrVoidFunction)emu_stage_bounds},
     };
     for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); ++i)
         if (!strcmp(name, table[i].name)) return table[i].fn;

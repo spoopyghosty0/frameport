@@ -316,6 +316,13 @@ int main(int argc,char **argv) {
         CHECK(NEAR(entities[ENT_FLOOR].bounds.extent.height,scene_depth?scene_depth:1.5f));
         CHECK(NEAR(entities[ENT_CEILING].pose_in_stage.position.y,scene_height));
         CHECK(!check_boundary(ENT_FLOOR,4) && uuid_equal(&entities[0].uuid,&(XrUuidEXT){{0}})==0);
+        // walls go round the floor: -Z, +X, +Z, -X
+        CHECK(entities[ENT_WALL0].pose_in_stage.position.z<0 && entities[ENT_WALL0+1].pose_in_stage.position.x>0);
+        CHECK(entities[ENT_WALL0+2].pose_in_stage.position.z>0 && entities[ENT_WALL0+3].pose_in_stage.position.x<0);
+        PFN_xrGetReferenceSpaceBoundsRect bounds_fn=(PFN_xrGetReferenceSpaceBoundsRect)scene_emulation("xrGetReferenceSpaceBoundsRect");
+        XrExtent2Df ext={9,9};
+        CHECK(bounds_fn && bounds_fn(SESSION,XR_REFERENCE_SPACE_TYPE_STAGE,&ext)==XR_SPACE_BOUNDS_UNAVAILABLE && ext.width==0 && ext.height==0);
+        CHECK(bounds_fn(SESSION,XR_REFERENCE_SPACE_TYPE_LOCAL,&ext)==XR_SUCCESS && NEAR(ext.width,1));
         CHECK(!check_discovery());
     } else CHECK(!check_persistence(mode));
     XrAsyncRequestIdFB request;
