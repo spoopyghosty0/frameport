@@ -2114,6 +2114,19 @@ __attribute__((visibility("default"))) PFN_xrVoidFunction framebridge_extension_
         NATIVE_PROC(xrCreateVulkanInstanceKHR)
 #undef NATIVE_PROC
     }
+    // The shim bypasses OVRPort's fixed dispatch table for all scene calls, including consumers of fake spaces.
+    if (name && emulate_scene) {
+        PFN_xrVoidFunction scene = scene_emulation(name);
+        if (scene) return scene;
+#define SCENE_PROC(fn) if (!strcmp(name, #fn)) return (PFN_xrVoidFunction)fn;
+        SCENE_PROC(xrPollEvent)
+        SCENE_PROC(xrGetSystemProperties)
+        SCENE_PROC(xrLocateSpace)
+        SCENE_PROC(xrLocateSpaces)
+        SCENE_PROC(xrDestroySpace)
+#undef SCENE_PROC
+        if (!strcmp(name, "xrLocateSpacesKHR")) return (PFN_xrVoidFunction)emu_locate_spaces_khr;
+    }
     return name ? render_model_emulation(name) : NULL;
 }
 

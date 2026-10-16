@@ -7,6 +7,8 @@
 // Meta's OVRPlugin finds xrGetInstanceProcAddr with dlopen("libopenxr_loader.so") + dlsym, so FramePort points that
 // string in libOVRPlugin.so at this library instead (patches/frame/adapter.py). Names the adapter emulates are served
 // by the adapter (framebridge_extension_proc); everything else goes to overport's xrGetInstanceProcAddr unchanged.
+// The adapter also routes scene discovery/persistence/mesh and the core locate/event functions that consume
+// emulated spaces. Keep this name-agnostic: another fixed table here would repeat the dispatcher's limitation.
 //
 // Haptics (GitHub #9, found by Klownicle in Lucky's Tale): overport's dispatcher converts an
 // XrHapticAmplitudeEnvelopeVibrationFB with its nanosecond duration taken as seconds, so one vibration allocates an
