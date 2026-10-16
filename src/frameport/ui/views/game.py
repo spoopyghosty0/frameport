@@ -332,6 +332,19 @@ class GameView:
         session = self.session_callout()
         if session is not None:
             out.append(session)
+        if not self.rift and not self.linux and self.app.frame_state == "connected":
+            from ...patches.applicability import uses_scene
+            from .frame import room_state
+
+            if uses_scene(library.analysis_from_dict(g["analysis"])):
+                state = room_state(self.app)
+                if state["status"] is not None and not state["status"].get("room"):
+                    out.append(C.callout(ft.Column([
+                        C.body(tr("Scan your room for mixed reality"), T.TEXT),
+                        C.body(tr(HELP["mr_room"])),
+                        C.secondary(tr("Room setup"), ft.Icons.VIEW_IN_AR_ROUNDED,
+                                    lambda e: self.app.go("frame")),
+                    ], spacing=T.S2), "info"))
         extra = g["analysis"].get("extra", {})
         missing =C.missing_libraries(g, self.app.frame_info) if self.linux else []
         if missing:

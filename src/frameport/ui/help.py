@@ -19,6 +19,12 @@ class _Translated(dict):
 
 
 HELP: dict[str, str] = _Translated({
+    "mr_room": "Mixed-reality games use walls and furniture from a saved room. Use your play area for walls now, "
+               "or import a recorded scan. Headset scanning is not available yet.",
+    "mr_alignment": "Room positions belong to the play area where they were recorded. If SteamVR changes it, "
+                    "scan again or use the new boundary to line up virtual walls with your room.",
+    "mr_scanner": "The scanner turns a recorded depth-mesh dump into a room. FramePort installs it when you "
+                  "build a recorded scan.",
     # ---- game status / library
     "status": "How well the game runs on the Steam Frame. \"Works\" and \"Works with issues\" were tested on a Frame; "
               "\"Untested\" is a suggestion nobody has confirmed yet. \"Can't run\" means a known blocker.",

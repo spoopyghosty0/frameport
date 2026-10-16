@@ -528,6 +528,27 @@ def main() -> int:
             app = FramePortApp(page)
             if args.fake_frame:
                 attach_fake_frame(app)
+                # The Room card uses local fixtures too; --fake-frame never contacts a headset.
+                from frameport.mr.room import box_room, dumps, summary
+                room = box_room(4, 3)
+                room.source, room.universe = "scan", 7
+                room_answer = dict(rooms=[], universe=7, room=dict(universe=7, source="scan", summary=summary(room)),
+                                   room_text=dumps(room), aligned=True, default_circle=False, scanner_installed=True)
+                original_agent = app.target.frame.agent
+                def room_agent(command, **kwargs):
+                    if command == "room_capture":
+                        return {"error": "not implemented yet"}
+                    if command == "room_delete":
+                        room_answer.update(room=None, room_text=None, aligned=False)
+                    if command == "room_from_boundary":
+                        room.source = "boundary"
+                        room_answer.update(room=dict(universe=7, source="boundary", summary=summary(room)),
+                                           room_text=dumps(room), aligned=True)
+                    if command.startswith("room_"):
+                        return dict(room_answer)
+                    return original_agent(command, **kwargs)
+                app.target.frame.agent = room_agent
+
         except Exception:  # noqa: BLE001
             ERRORS.append("startup: " + traceback.format_exc())
             return
