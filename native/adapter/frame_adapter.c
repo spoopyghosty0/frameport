@@ -348,7 +348,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(const XrInstanceCreateInfo *info
         }
         if (supported) names[kept++] = ext;
         else if (scene_emul && is_scene_extension(ext)) {
-            if (!emulate_scene) LOG("emulating Meta scene/spatial-entity extensions from the guardian bounds");
+            if (!emulate_scene) LOG("emulating Meta scene/spatial-entity extensions from room file or guardian bounds");
             emulate_scene = 1;
         } else if (controller_models && render_models_available && !strcmp(ext, XR_FB_RENDER_MODEL_EXTENSION_NAME)) {
             emulate_render_model = 1;
@@ -875,6 +875,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(XrInstance instance, XrSyst
                 ((XrSystemPassthroughPropertiesFB *)p)->supportsPassthrough = XR_TRUE;
             if (p->type == XR_TYPE_SYSTEM_SPATIAL_ENTITY_PROPERTIES_FB && emulate_scene)
                 ((XrSystemSpatialEntityPropertiesFB *)p)->supportsSpatialEntity = XR_TRUE;
+            // META scene capability chains used by current MRUK.
+            if (p->type == XR_TYPE_SYSTEM_SPACE_DISCOVERY_PROPERTIES_META && emulate_scene)
+                ((XrSystemSpaceDiscoveryPropertiesMETA *)p)->supportsSpaceDiscovery = XR_TRUE;
+            if (p->type == XR_TYPE_SYSTEM_SPACE_PERSISTENCE_PROPERTIES_META && emulate_scene)
+                ((XrSystemSpacePersistencePropertiesMETA *)p)->supportsSpacePersistence = XR_TRUE;
             if (p->type == XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES2_FB)
                 ((XrSystemPassthroughProperties2FB *)p)->capabilities = XR_PASSTHROUGH_CAPABILITY_BIT_FB;
             if (p->type == XR_TYPE_SYSTEM_RENDER_MODEL_PROPERTIES_FB && emulate_render_model)

@@ -10,7 +10,7 @@ static int emulate_scene;            // app requested the scene extensions and t
 static const char *const scene_extensions[] = {
     "XR_FB_spatial_entity", "XR_FB_spatial_entity_query", "XR_FB_spatial_entity_storage",
     "XR_FB_spatial_entity_container", "XR_FB_scene", "XR_FB_scene_capture",
-    "XR_META_spatial_entity_mesh",
+    "XR_META_spatial_entity_mesh", "XR_META_spatial_entity_discovery", "XR_META_spatial_entity_persistence",
 };
 #define SCENE_EXTENSION_COUNT (sizeof(scene_extensions) / sizeof(scene_extensions[0]))
 
@@ -177,6 +177,7 @@ static int entity_has_component(const scene_entity *e, XrSpaceComponentTypeFB ty
 #define MAX_EVENTS 64
 static XrEventDataBuffer scene_events[MAX_EVENTS];
 static int event_head, event_tail;
+static int event_free(void) { return (event_head - event_tail - 1 + MAX_EVENTS) % MAX_EVENTS; }
 static void push_event(const void *event, size_t size) {
     if ((event_tail + 1) % MAX_EVENTS == event_head) return;
     memset(&scene_events[event_tail], 0, sizeof(XrEventDataBuffer));
@@ -224,89 +225,84 @@ static int locate_fake(XrSpace space, XrSpace base, XrTime time, XrPosef *pose, 
 }
 
 // ---------------------------------------------------------------- emulated entry points
-static XRAPI_ATTR XrResult XRAPI_CALL emu_query_spaces(XrSession session, const XrSpaceQueryInfoBaseHeaderFB *info,
-                                                       XrAsyncRequestIdFB *request) {
-    if (!info || !request) return XR_ERROR_VALIDATION_FAILURE;
-    pthread_mutex_lock(&scene_lock);
-    scene_session = session;
-    build_room();
-    *request = next_request++;
-    XrEventDataSpaceQueryResultsAvailableFB avail = {XR_TYPE_EVENT_DATA_SPACE_QUERY_RESULTS_AVAILABLE_FB, NULL, *request};
-    XrEventDataSpaceQueryCompleteFB done = {XR_TYPE_EVENT_DATA_SPACE_QUERY_COMPLETE_FB, NULL, *request, XR_SUCCESS};
-    push_event(&avail, sizeof(avail));
-    push_event(&done, sizeof(done));
-    pthread_mutex_unlock(&scene_lock);
-    return XR_SUCCESS;
-}
-
-// Query filters are kept per request so retrieve can apply them.
+// Results are snapshotted before their available event is queued, so callers on another thread cannot
+// observe a half-stored filter. A bounded request history supports the count/data calls independently.
+#define MAX_QUERIES 64
 typedef struct {
     XrAsyncRequestIdFB id;
-    int has_component;
-    XrSpaceComponentTypeFB component;
-    uint32_t uuid_count;
-    XrUuidEXT uuids[64];
-} query_filter;
-static query_filter filters[16];
-static int filter_next;
-
-static void store_filter(XrAsyncRequestIdFB id, const XrSpaceQueryInfoFB *q) {
-    query_filter *f = &filters[filter_next++ % 16];
-    memset(f, 0, sizeof(*f));
-    f->id = id;
-    const XrSpaceFilterInfoBaseHeaderFB *flt = q->filter;
-    if (flt && flt->type == XR_TYPE_SPACE_COMPONENT_FILTER_INFO_FB) {
-        f->has_component = 1;
-        f->component = ((const XrSpaceComponentFilterInfoFB *)flt)->componentType;
-    } else if (flt && flt->type == XR_TYPE_SPACE_UUID_FILTER_INFO_FB) {
-        const XrSpaceUuidFilterInfoFB *u = (const XrSpaceUuidFilterInfoFB *)flt;
-        f->uuid_count = u->uuidCount < 64 ? u->uuidCount : 64;
-        for (uint32_t i = 0; i < f->uuid_count; ++i) f->uuids[i] = u->uuids[i];
-    }
+    uint32_t count;
+    XrSpaceQueryResultFB *results;
+} scene_query;
+static scene_query queries[MAX_QUERIES];
+static unsigned query_next;
+static scene_query *new_query(void) {
+    scene_query *q = &queries[query_next % MAX_QUERIES];
+    XrSpaceQueryResultFB *results = malloc((size_t)entity_count * sizeof(*results));
+    if (!results) return NULL;
+    ++query_next;
+    free(q->results);
+    *q = (scene_query){next_request++, 0, results};
+    return q;
 }
-
-static XRAPI_ATTR XrResult XRAPI_CALL emu_query_spaces_filtered(XrSession session, const XrSpaceQueryInfoBaseHeaderFB *info,
-                                                                XrAsyncRequestIdFB *request) {
-    XrResult r = emu_query_spaces(session, info, request);
-    if (XR_SUCCEEDED(r) && info->type == XR_TYPE_SPACE_QUERY_INFO_FB) {
-        pthread_mutex_lock(&scene_lock);
-        store_filter(*request, (const XrSpaceQueryInfoFB *)info);
-        const XrSpaceQueryInfoFB *q = (const XrSpaceQueryInfoFB *)info;
-        LOG("scene: query request=%llu filter=%d", (unsigned long long)*request, q->filter ? q->filter->type : 0);
-        pthread_mutex_unlock(&scene_lock);
-    }
-    return r;
+static scene_query *find_query(XrAsyncRequestIdFB id) {
+    for (int i = 0; i < MAX_QUERIES; ++i) if (queries[i].id == id) return &queries[i];
+    return NULL;
 }
-
-static int filter_matches(const query_filter *f, const scene_entity *e) {
+static int uuid_matches(uint32_t n, const XrUuidEXT *uuids, const scene_entity *e) {
+    for (uint32_t i = 0; i < n; ++i) if (uuid_equal(&uuids[i], &e->uuid)) return 1;
+    return 0;
+}
+static int fb_filter_matches(const XrSpaceFilterInfoBaseHeaderFB *f, const scene_entity *e) {
     if (!f) return 1;
-    if (f->has_component) return entity_has_component(e, f->component);
-    if (f->uuid_count) {
-        for (uint32_t i = 0; i < f->uuid_count; ++i) if (uuid_equal(&f->uuids[i], &e->uuid)) return 1;
-        return 0;
+    if (f->type == XR_TYPE_SPACE_COMPONENT_FILTER_INFO_FB)
+        return entity_has_component(e, ((const XrSpaceComponentFilterInfoFB *)f)->componentType);
+    if (f->type == XR_TYPE_SPACE_UUID_FILTER_INFO_FB) {
+        const XrSpaceUuidFilterInfoFB *u = (const XrSpaceUuidFilterInfoFB *)f;
+        return u->uuids && uuid_matches(u->uuidCount, u->uuids, e);
     }
     return 1;
 }
-
+static XRAPI_ATTR XrResult XRAPI_CALL emu_query_spaces_filtered(XrSession session, const XrSpaceQueryInfoBaseHeaderFB *info,
+                                                                XrAsyncRequestIdFB *request) {
+    if (!info || !request || info->type != XR_TYPE_SPACE_QUERY_INFO_FB) return XR_ERROR_VALIDATION_FAILURE;
+    const XrSpaceQueryInfoFB *info_fb = (const XrSpaceQueryInfoFB *)info;
+    pthread_mutex_lock(&scene_lock);
+    scene_session = session;
+    build_room();
+    if (event_free() < 2) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_LIMIT_REACHED; }
+    scene_query *q = new_query();
+    if (!q) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_OUT_OF_MEMORY; }
+    for (int i = 0; i < entity_count && q->count < info_fb->maxResultCount; ++i) {
+        scene_entity *e = &entities[i];
+        if (!e->erased && fb_filter_matches(info_fb->filter, e))
+            q->results[q->count++] = (XrSpaceQueryResultFB){e->handle, e->uuid};
+    }
+    *request = q->id;
+    XrEventDataSpaceQueryResultsAvailableFB avail = {XR_TYPE_EVENT_DATA_SPACE_QUERY_RESULTS_AVAILABLE_FB, NULL, *request};
+    XrEventDataSpaceQueryCompleteFB done = {XR_TYPE_EVENT_DATA_SPACE_QUERY_COMPLETE_FB, NULL, *request, XR_SUCCESS};
+    push_event(&avail, sizeof(avail)); push_event(&done, sizeof(done));
+    LOG("scene: query request=%llu results=%u", (unsigned long long)*request, q->count);
+    pthread_mutex_unlock(&scene_lock);
+    return XR_SUCCESS;
+}
 static XRAPI_ATTR XrResult XRAPI_CALL emu_retrieve_results(XrSession session, XrAsyncRequestIdFB request,
                                                            XrSpaceQueryResultsFB *results) {
     (void)session;
     if (!results) return XR_ERROR_VALIDATION_FAILURE;
     pthread_mutex_lock(&scene_lock);
-    const query_filter *f = NULL;
-    for (int i = 0; i < 16; ++i) if (filters[i].id == request) f = &filters[i];
-    uint32_t n = 0;
-    for (int i = 0; i < entity_count; ++i) {
-        if (!filter_matches(f, &entities[i])) continue;
-        if (results->resultCapacityInput && n < results->resultCapacityInput && results->results) {
-            results->results[n].space = entities[i].handle;
-            results->results[n].uuid = entities[i].uuid;
+    scene_query *q = find_query(request);
+    XrResult r = XR_SUCCESS;
+    if (!q) r = XR_ERROR_VALIDATION_FAILURE;
+    else {
+        results->resultCountOutput = q->count;
+        if (results->resultCapacityInput && results->resultCapacityInput < q->count) r = XR_ERROR_SIZE_INSUFFICIENT;
+        else if (results->resultCapacityInput) {
+            if (!results->results) r = XR_ERROR_VALIDATION_FAILURE;
+            else memcpy(results->results, q->results, q->count * sizeof(*q->results));
         }
-        ++n;
     }
-    results->resultCountOutput = n;
     pthread_mutex_unlock(&scene_lock);
-    return (results->resultCapacityInput && results->resultCapacityInput < n) ? XR_ERROR_SIZE_INSUFFICIENT : XR_SUCCESS;
+    return r;
 }
 
 static XRAPI_ATTR XrResult XRAPI_CALL emu_get_uuid(XrSpace space, XrUuidEXT *uuid) {
@@ -515,6 +511,8 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_erase_space(XrSession session, const X
     return XR_SUCCESS;
 }
 
+#include "scene_meta.c"
+
 static PFN_xrVoidFunction scene_emulation(const char *name) {
     if (!emulate_scene) return NULL;
     static const struct { const char *name; PFN_xrVoidFunction fn; } table[] = {
@@ -535,6 +533,10 @@ static PFN_xrVoidFunction scene_emulation(const char *name) {
         {"xrCreateSpatialAnchorFB", (PFN_xrVoidFunction)emu_create_anchor},
         {"xrSaveSpaceFB", (PFN_xrVoidFunction)emu_save_space},
         {"xrEraseSpaceFB", (PFN_xrVoidFunction)emu_erase_space},
+        {"xrDiscoverSpacesMETA", (PFN_xrVoidFunction)emu_discover_spaces},
+        {"xrRetrieveSpaceDiscoveryResultsMETA", (PFN_xrVoidFunction)emu_retrieve_discovery},
+        {"xrSaveSpacesMETA", (PFN_xrVoidFunction)emu_save_spaces},
+        {"xrEraseSpacesMETA", (PFN_xrVoidFunction)emu_erase_spaces},
     };
     for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); ++i)
         if (!strcmp(name, table[i].name)) return table[i].fn;
@@ -550,7 +552,8 @@ static void scene_on_create_session(XrSession session) {
     pthread_mutex_lock(&scene_lock);
     reset_room();
     event_head = event_tail = 0;
-    memset(filters, 0, sizeof(filters));
+    for (int i = 0; i < MAX_QUERIES; ++i) { free(queries[i].results); memset(&queries[i], 0, sizeof(queries[i])); }
+    query_next = 0;
     scene_session = session;
     scene_stage = XR_NULL_HANDLE;
     if (create && XR_SUCCEEDED(create(session, &ci, &scene_stage))) LOG("scene: emulation active (anchored to STAGE)");
