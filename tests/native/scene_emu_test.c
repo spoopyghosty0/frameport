@@ -186,11 +186,17 @@ static int check_room(int expect_walls, int mesh_ok) {
     CHECK(emu_get_semantic_labels(SESSION,entities[volume].handle,&labels)==XR_SUCCESS && !strcmp(text,"DESK,OTHER"));
     labels.next=&support;
     uint32_t n; XrSpaceComponentTypeFB types[8];
-    CHECK(emu_enumerate_components(entities[volume].handle,0,&n,NULL)==XR_SUCCESS && n==5);
+    CHECK(emu_enumerate_components(entities[volume].handle,0,&n,NULL)==XR_SUCCESS && n==6);  // incl. SHARABLE
     CHECK(emu_enumerate_components(entities[volume].handle,1,&n,types)==XR_ERROR_SIZE_INSUFFICIENT);
     CHECK(emu_enumerate_components(entities[volume].handle,8,&n,types)==XR_SUCCESS);
     XrSpaceComponentStatusFB status={.type=XR_TYPE_SPACE_COMPONENT_STATUS_FB};
     CHECK(emu_get_component_status(entities[volume].handle,XR_SPACE_COMPONENT_TYPE_BOUNDED_3D_FB,&status)==XR_SUCCESS && status.enabled);
+    // scene loaders of older Meta SDKs switch SHARABLE on for every anchor (Meta's runtime lists it everywhere)
+    XrSpaceComponentStatusSetInfoFB share={XR_TYPE_SPACE_COMPONENT_STATUS_SET_INFO_FB,NULL,XR_SPACE_COMPONENT_TYPE_SHARABLE_FB,XR_TRUE,0};
+    XrAsyncRequestIdFB share_req;
+    CHECK(emu_set_component_status(entities[ENT_WALL0].handle,&share,&share_req)==XR_SUCCESS);
+    XrEventDataBuffer share_ev;
+    CHECK(pop_event(&share_ev) && share_ev.type==XR_TYPE_EVENT_DATA_SPACE_SET_STATUS_COMPLETE_FB);
     XrSpaceContainerFB container={.type=XR_TYPE_SPACE_CONTAINER_FB};
     CHECK(emu_get_container(SESSION,entities[0].handle,&container)==XR_SUCCESS && container.uuidCountOutput==(unsigned)room_entity_count-1);
     container.uuidCapacityInput=1; container.uuids=walls;

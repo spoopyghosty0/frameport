@@ -167,6 +167,7 @@ static int entity_components(const scene_entity *e, XrSpaceComponentTypeFB *out)
     int n = 0;
     out[n++] = XR_SPACE_COMPONENT_TYPE_LOCATABLE_FB;
     out[n++] = XR_SPACE_COMPONENT_TYPE_STORABLE_FB;
+    out[n++] = XR_SPACE_COMPONENT_TYPE_SHARABLE_FB;  // Meta's runtime lists it; nothing is shared from here
     if (e->is_room) {
         out[n++] = XR_SPACE_COMPONENT_TYPE_ROOM_LAYOUT_FB;
         out[n++] = XR_SPACE_COMPONENT_TYPE_SPACE_CONTAINER_FB;
@@ -343,12 +344,27 @@ static XRAPI_ATTR XrResult XRAPI_CALL scene_enumerate_components(XrSpace space, 
     return XR_SUCCESS;
 }
 
+// Which entity refused which component (the first ones only): an app's scene loader gives up on the whole room over
+// one of these, and OVRPlugin's own error line doesn't name the component (Demeter, 2026-10-16).
+static void log_refused_component(const char *op, int i, XrSpaceComponentTypeFB type) {
+    static int logged;
+    if (logged >= 20) return;
+    ++logged;
+    const scene_entity *e = &entities[i];
+    LOG("scene: %s component %d refused on %s (entity %d)", op, (int)type,
+        e->is_room ? "room" : e->is_anchor ? "app anchor" : e->label[0] ? e->label : "unlabelled", i);
+}
+
 static XRAPI_ATTR XrResult XRAPI_CALL emu_set_component_status(XrSpace space, const XrSpaceComponentStatusSetInfoFB *info,
                                                                XrAsyncRequestIdFB *request) {
     pthread_mutex_lock(&scene_lock);
     int i = fake_space_index(space);
     if (i < 0 || !info || !request) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_HANDLE_INVALID; }
-    if (!entity_has_component(&entities[i], info->componentType)) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_SPACE_COMPONENT_NOT_SUPPORTED_FB; }
+    if (!entity_has_component(&entities[i], info->componentType)) {
+        log_refused_component("set", i, info->componentType);
+        pthread_mutex_unlock(&scene_lock);
+        return XR_ERROR_SPACE_COMPONENT_NOT_SUPPORTED_FB;
+    }
     if (!event_free()) { pthread_mutex_unlock(&scene_lock); return XR_ERROR_LIMIT_REACHED; }
     *request = next_request++;
     XrEventDataSpaceSetStatusCompleteFB e = {XR_TYPE_EVENT_DATA_SPACE_SET_STATUS_COMPLETE_FB, NULL, *request, XR_SUCCESS,
@@ -362,7 +378,10 @@ static XRAPI_ATTR XrResult XRAPI_CALL scene_get_component_status(XrSpace space, 
                                                                XrSpaceComponentStatusFB *status) {
     int i = fake_space_index(space);
     if (i < 0 || !status) return XR_ERROR_HANDLE_INVALID;
-    if (!entity_has_component(&entities[i], type)) return XR_ERROR_SPACE_COMPONENT_NOT_SUPPORTED_FB;
+    if (!entity_has_component(&entities[i], type)) {
+        log_refused_component("get", i, type);
+        return XR_ERROR_SPACE_COMPONENT_NOT_SUPPORTED_FB;
+    }
     status->enabled = XR_TRUE;
     status->changePending = XR_FALSE;
     return XR_SUCCESS;
