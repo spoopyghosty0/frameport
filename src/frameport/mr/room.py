@@ -28,6 +28,10 @@ class Wall:
     z1: float
     y0: float = 0
     y1: float = 2.5
+    label: str = "WALL_FACE"  # INVISIBLE_WALL_FACE: an edge the scanner closed without seeing a wall
+
+
+WALL_LABELS = ("WALL_FACE", "INVISIBLE_WALL_FACE")
 
 
 @dataclass
@@ -177,9 +181,9 @@ def parse(text: str) -> Room:
                     raise ValueError("outline count does not match coordinates")
                 room.outline = list(zip(coords[::2], coords[1::2], strict=True))
             elif kind == "wall":
-                if len(values) != 7:
-                    raise ValueError("expected UUID and 6 coordinates")
-                room.walls.append(Wall(_uuid(values[0]), *_numbers(values[1:])))
+                if len(values) not in (7, 8) or (len(values) == 8 and values[7] not in WALL_LABELS):
+                    raise ValueError("expected UUID, 6 coordinates and an optional wall label")
+                room.walls.append(Wall(_uuid(values[0]), *_numbers(values[1:7]), *values[7:]))
             elif kind in ("volume", "plane"):
                 count = 9 if kind == "volume" else 11
                 if len(values) != count or not re.fullmatch(r"[A-Z][A-Z0-9_]*", values[1]):
@@ -216,7 +220,10 @@ def dumps(room: Room) -> str:
             row("room", room.uuid), row("floor", room.floor_uuid, room.floor),
             row("ceiling", room.ceiling_uuid, room.ceiling),
             row("outline", len(room.outline), *(v for p in room.outline for v in p))]
-    for kind, objects in (("wall", room.walls), ("volume", room.volumes), ("plane", room.planes)):
+    for w in room.walls:  # the label only when it isn't the default (older readers know 7 fields)
+        rows.append(row("wall", w.uuid, w.x0, w.z0, w.x1, w.z1, w.y0, w.y1,
+                        *([w.label] if w.label != "WALL_FACE" else [])))
+    for kind, objects in (("volume", room.volumes), ("plane", room.planes)):
         rows.extend(row(kind, *vars(obj).values()) for obj in objects)
     if room.mesh:
         m = room.mesh

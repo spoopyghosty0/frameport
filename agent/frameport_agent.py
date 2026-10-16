@@ -4062,6 +4062,10 @@ def room_records(text):
                     raise ValueError("invalid room")
             elif k in ("floor", "ceiling", "wall", "volume", "plane", "outline"):
                 expected = {"floor": 2, "ceiling": 2, "wall": 7, "volume": 9, "plane": 11}
+                if k == "wall" and len(v) == 8:  # optional label: an edge the scanner closed itself
+                    if v[7] not in ("WALL_FACE", "INVISIBLE_WALL_FACE"):
+                        raise ValueError("invalid wall label")
+                    v = v[:7]
                 if k != "outline" and len(v) != expected[k]:
                     raise ValueError("invalid field count")
                 nums = [float(x) for x in v[2 if k in ("volume", "plane") else 1:]]
