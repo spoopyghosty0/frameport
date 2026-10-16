@@ -24,7 +24,8 @@ def scanner(tmp_path_factory):
     if not compiler:
         pytest.skip("roomscan tests need a host C compiler")
     binary = tmp_path_factory.mktemp("roomscan-build") / "fp_roomscan"
-    subprocess.run([compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-ffp-contract=off", "-DFP_HOSTED",
+    subprocess.run([compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-ffp-contract=off",
+                    "-fno-math-errno", "-DFP_HOSTED",
                     *map(str, sorted((ROOT / "native/roomscan").glob("*.c"))), "-o", str(binary)],
                    check=True, capture_output=True, text=True)
     return binary
@@ -39,7 +40,7 @@ def dumps(tmp_path_factory):
     result = {}
     for name, options in cases.items():
         result[name] = directory / f"{name}.fprs"
-        synth.render(result[name], **options)
+        synth.render(result[name], profile="legacy", **options)
     return result
 
 
@@ -297,3 +298,90 @@ def test_far_vertices_are_dropped_per_vertex(scanner, dumps, tmp_path):
     report = run(scanner, dump, tmp_path / "out")
     assert report["skipped_frames"] == 0 and report["far_vertices"] >= 1
     assert report["rejected_triangles"] >= 1
+
+
+@pytest.fixture(scope="module")
+def roomview_dump(tmp_path_factory):
+    path = tmp_path_factory.mktemp("roomview-fan") / "synthetic.fprs"
+    synth.render(path)
+    return path
+
+
+def frames(path):
+    with path.open("rb") as stream:
+        assert stream.read(8) == b"FPRS\x01\0\0\0"
+        while header := stream.read(44):
+            timestamp, *values = struct.unpack("<d7fII", header)
+            pose, nv, ni = values[:7], values[7], values[8]
+            vertices = list(struct.iter_unpack("<3f", stream.read(nv * 12)))
+            indices = struct.unpack(f"<{ni}I", stream.read(ni * 4))
+            yield timestamp, pose, vertices, indices
+
+
+def test_roomview_renderer_grid_camera_axes_drift_and_inpainting(roomview_dump):
+    heights, far = [], 0
+    for i, (timestamp, pose, vertices, indices) in enumerate(frames(roomview_dump)):
+        assert abs(timestamp - i / 3) < 1e-8
+        assert len(vertices) == 132 * 128 and len(indices) == 99822
+        assert indices[:6] == (0, 132, 1, 1, 132, 133)
+        assert vertices[0][0] < 0 and vertices[0][1] < 0 and vertices[0][2] > 0
+        assert vertices[-1][0] > 0 and vertices[-1][1] > 0 and vertices[-1][2] > 0
+        if i < 2:
+            assert not all(map(math.isfinite, pose))
+        else:
+            assert all(map(math.isfinite, pose))
+            heights.append(pose[1])
+        far += sum(sum(c * c for c in vertex) > 16 for vertex in vertices)
+    assert .89 <= min(heights) <= .92 and 1.68 <= max(heights) <= 1.71
+    assert far > 1000
+
+
+def test_depth_smoothing_reduces_local_noise_without_changing_grid():
+    depth = [1 + ((x * 31 + y * 17) % 7 - 3) * .04 for y in range(128) for x in range(132)]
+    filtered = synth.smooth_depths(depth, 132, 128)
+    assert len(filtered) == len(depth)
+    assert sum((v - 1) ** 2 for v in filtered) < sum((v - 1) ** 2 for v in depth) * .1
+    assert synth.smooth_depths([2.0] * (132 * 128), 132, 128) == [2.0] * (132 * 128)
+
+
+def test_roomview_style_scan_retains_room_and_furniture(scanner, roomview_dump, tmp_path):
+    report = run(scanner, roomview_dump, tmp_path)
+    assert report["frames"] == 30 and report["skipped_frames"] == 2
+    assert report["far_vertices"] > 1000
+    assert report["detected_walls"] == 4
+    assert abs(report["floor_y"]) < .05 and abs(report["ceiling_y"] - 2.6) < .05
+    records = room(tmp_path)
+    assert_walls(outline(records), synth.BOX_OUTLINE)
+    assert any(row[1] == "TABLE" and abs(float(row[4]) - .75) < .05 for row in records["volume"])
+    assert any(row[1] == "COUCH" for row in records["volume"])
+    mesh(tmp_path)
+
+
+def test_depth_discontinuity_is_rejected_below_absolute_edge_limit(scanner, dumps, tmp_path):
+    data = dumps["one"].read_bytes()
+    vertices = (0, 0, 1, .1, 0, 1, 0, .1, 1.5)
+    frame = struct.pack("<d7fII", 0, 0, 1, 0, 0, 0, 0, 1, 3, 3)
+    frame += struct.pack("<9f3I", *vertices, 0, 1, 2)
+    path = tmp_path / "discontinuity.fprs"
+    path.write_bytes(data[:8] + frame + data[8:])
+    report = run(scanner, path, tmp_path / "out")
+    assert report["discontinuity_triangles"] >= 1
+
+
+def test_small_ceiling_patch_does_not_override_default(scanner, dumps, tmp_path):
+    data = dumps["down"].read_bytes()
+    width = 15
+    vertices = [(x * .05 - .35, 1.0, z * .05 - .35) for z in range(width) for x in range(width)]
+    indices = []
+    for z in range(width - 1):
+        for x in range(width - 1):
+            a = z * width + x
+            indices.extend((a, a + width, a + 1, a + 1, a + width, a + width + 1))
+    frame = struct.pack("<d7fII", 0, 0, 1.5, 0, 0, 0, 0, 1, len(vertices), len(indices))
+    frame += b"".join(struct.pack("<3f", *v) for v in vertices)
+    frame += struct.pack(f"<{len(indices)}I", *indices)
+    path = tmp_path / "weak-ceiling.fprs"
+    path.write_bytes(data + frame * 10)
+    report = run(scanner, path, tmp_path / "out", "--ceiling-default", "2.7")
+    assert "ceiling not seen" in report["warnings"]
+    assert abs(report["ceiling_y"] - report["floor_y"] - 2.7) < .001

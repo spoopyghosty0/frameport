@@ -11,15 +11,14 @@
 #define MAX_GRID_XZ 8.f
 #define MAX_GRID_Y 4.f
 #define GRID_PADDING_VOXELS 5.f
+#define NORMAL_PATCH_SIZE 12
+#define MIN_PATCH_POINTS 24
 
 float root(float x)
 {
     if (x <= 0) return 0;
-    /* A float exponent seed plus Newton steps avoids a libm dependency on either host. */
-    union { float f; u32 u; } a = {x};
-    a.u = (a.u >> 1) + 0x1fc00000u;
-    for (int i = 0; i < 5; i++) a.f = .5f * (a.f + x / a.f);
-    return a.f;
+    /* -fno-math-errno makes this one hardware sqrt, with no libc/libm symbol on either build. */
+    return __builtin_sqrtf(x);
 }
 Vec unit(Vec p) { float n = root(dot(p,p)); return n > 1e-12f ? mul(p,1/n) : vec(0,0,0); }
 int flo(float x) { int i = (int)x; return x < (float)i ? i-1 : i; }
@@ -88,8 +87,9 @@ static void sample(Scan *s, Vec p, Vec n, float w)
     c->p = add(mul(c->p,scale),mul(p,w));
     c->n = add(mul(c->n,scale),mul(n,w));
     c->weight = c->weight*scale+w;
+    if(c->last_frame!=s->fuse_frame) { c->last_frame=s->fuse_frame;c->views++; }
 }
-static void triangle(Scan *s, Vec a, Vec b, Vec c, Vec eye, int fuse)
+static void triangle(Scan *s, Vec a, Vec b, Vec c, Vec eye, Vec patch_normal, int fuse)
 {
     Vec abv = sub(b,a), ac = sub(c,a), bc = sub(c,b);
     float longest = root(mx(dot(abv,abv),mx(dot(ac,ac),dot(bc,bc))));
@@ -102,6 +102,7 @@ static void triangle(Scan *s, Vec a, Vec b, Vec c, Vec eye, int fuse)
         return;
     }
     n = mul(n,1/twice_area);
+    if(dot(patch_normal,patch_normal)>.5f) n=patch_normal;
     float facing = dot(n,view)/distance;
     if (ab(facing) < s->opt.grazing) { if (!fuse) s->rejected++; return; }
     if (facing < 0) n = mul(n,-1);
@@ -120,13 +121,70 @@ static void triangle(Scan *s, Vec a, Vec b, Vec c, Vec eye, int fuse)
         }
     }
 }
+static Vec patch_normal(Vec *points, float *depths, int width, int x0, int y0, int x1, int y1,
+                        float tolerance)
+{
+    Vec mean=vec(0,0,0);int count=0;
+    /* Shift before accumulating the covariance: room positions can be large relative to patch residuals. */
+    Vec origin=points[y0*width+x0];
+    for(int y=y0;y<y1;y++) for(int x=x0;x<x1;x++) if(depths[y*width+x]>0) {
+        mean=add(mean,sub(points[y*width+x],origin));count++;
+    }
+    if(count<MIN_PATCH_POINTS) return vec(0,0,0);
+    mean=mul(mean,1.f/count);
+    float cov[3][3]={{0}},basis[3][3]={{1,0,0},{0,1,0},{0,0,1}};
+    for(int y=y0;y<y1;y++) for(int x=x0;x<x1;x++) if(depths[y*width+x]>0) {
+        Vec p=sub(sub(points[y*width+x],origin),mean);float a[3]={p.x,p.y,p.z};
+        for(int i=0;i<3;i++) for(int j=0;j<3;j++) cov[i][j]+=a[i]*a[j];
+    }
+    for(int sweep=0;sweep<8;sweep++) {
+        int p=0,q=1;
+        if(ab(cov[0][2])>ab(cov[p][q])) { p=0;q=2; }
+        if(ab(cov[1][2])>ab(cov[p][q])) { p=1;q=2; }
+        if(ab(cov[p][q])<1e-10f) break;
+        float phi=.5f*angle(2*cov[p][q],cov[q][q]-cov[p][p]),co=cosine(phi),si=sine(phi);
+        float aa=cov[p][p],bb=cov[q][q],abv=cov[p][q];
+        for(int k=0;k<3;k++) if(k!=p && k!=q) {
+            float a=cov[k][p],b=cov[k][q];
+            cov[k][p]=cov[p][k]=co*a-si*b;cov[k][q]=cov[q][k]=si*a+co*b;
+        }
+        cov[p][p]=co*co*aa-2*si*co*abv+si*si*bb;
+        cov[q][q]=si*si*aa+2*si*co*abv+co*co*bb;cov[p][q]=cov[q][p]=0;
+        for(int k=0;k<3;k++) {
+            float a=basis[k][p],b=basis[k][q];basis[k][p]=co*a-si*b;basis[k][q]=si*a+co*b;
+        }
+    }
+    int least=0;
+    for(int i=1;i<3;i++) if(cov[i][i]<cov[least][least]) least=i;
+    if(cov[least][least]/count>tolerance*tolerance) return vec(0,0,0);
+    return unit(vec(basis[0][least],basis[1][least],basis[2][least]));
+}
+static int grid_normals(Scan *s, Vec *points, float *depths, Vec *normals, u32 nv, u32 ni, const u8 *indices)
+{
+    if(ni<6 || u32le(indices)!=0 || u32le(indices+8)!=1) return 0;
+    u32 width=u32le(indices+4);
+    if(width<3 || width>nv || nv%width || ni!=6*(width-1)*(nv/width-1)) return 0;
+    /* Only a complete regular fan uses patch normals. Other meshes retain ordinary triangle normals. */
+    u32 at=0;
+    for(u32 row=0;row+1<nv/width;row++) for(u32 col=0;col+1<width;col++) {
+        u32 a=row*width+col,expected[6]={a,a+width,a+1,a+1,a+width,a+width+1};
+        for(int k=0;k<6;k++) if(u32le(indices+4*at++)!=expected[k]) return 0;
+    }
+    int height=(int)(nv/width);
+    for(int y=0;y<height;y+=NORMAL_PATCH_SIZE) for(int x=0;x<(int)width;x+=NORMAL_PATCH_SIZE) {
+        int x1=(int)mn(x+NORMAL_PATCH_SIZE,(float)width),y1=(int)mn(y+NORMAL_PATCH_SIZE,height);
+        Vec n=patch_normal(points,depths,(int)width,x,y,x1,y1,s->opt.patch_residual);
+        for(int yy=y;yy<y1;yy++) for(int xx=x;xx<x1;xx++) normals[yy*width+xx]=n;
+    }
+    return 1;
+}
 const char *read_dump(Scan *s, int fuse)
 {
     int fd = io_open(s->opt.input,0);
     if (fd < 0) return "cannot open scan dump";
     u8 header[44];
     const char *error = 0;
-    Vec *vertices = 0;
+    Vec *vertices = 0,*normals=0;
     float *depths = 0;
     u8 *indices = 0;
     usize vs = 0, is = 0, ds = 0;
@@ -154,10 +212,12 @@ const char *read_dump(Scan *s, int fuse)
             error = "invalid frame counts"; break;
         }
         usize needv = (usize)nv*12, needi = (usize)ni*4;
-        if (needv > vs) { io_free(vertices,vs); vs=needv; vertices=io_alloc(vs); }
+        if (needv > vs) {
+            io_free(vertices,vs);io_free(normals,vs);vs=needv;vertices=io_alloc(vs);normals=io_alloc(vs);
+        }
         if (needi > is) { io_free(indices,is); is=needi; indices=io_alloc(is); }
         if((usize)nv*4>ds) { io_free(depths,ds);ds=(usize)nv*4;depths=io_alloc(ds); }
-        if ((nv && (!vertices || !depths)) || (ni && !indices)) { error = "frame allocation failed"; break; }
+        if ((nv && (!vertices || !depths || !normals)) || (ni && !indices)) { error = "frame allocation failed"; break; }
         if ((needv && exact(fd,vertices,needv)!=1) || (needi && exact(fd,indices,needi)!=1)) {
             error = "truncated frame data"; break;
         }
@@ -175,7 +235,9 @@ const char *read_dump(Scan *s, int fuse)
             Vec t = mul(cross(q,v),2);
             vertices[i] = add(eye,add(v,add(mul(t,pose[6]),cross(q,t))));
         }
+        int regular=!invalid && grid_normals(s,vertices,depths,normals,nv,ni,indices);
         /* Structural errors are fatal even in a frame whose tracking/depth is unusable. */
+        s->fuse_frame=frames+1;
         for (u32 i = 0; i < ni; i+=3) {
             u32 a=u32le(indices+4*i), b=u32le(indices+4*(i+1)), c=u32le(indices+4*(i+2));
             if (a>=nv || b>=nv || c>=nv) { error = "index outside vertex array"; break; }
@@ -185,7 +247,9 @@ const char *read_dump(Scan *s, int fuse)
             if(far_depth-near>s->opt.depth_jump+s->opt.depth_ratio*near) {
                 if(!fuse) { s->rejected++;s->discontinuities++; }continue;
             }
-            triangle(s,vertices[a],vertices[b],vertices[c],eye,fuse);
+            Vec normal=regular ? normals[a] : vec(0,0,0);
+            if(regular && dot(normal,normal)<.5f) { if(!fuse) s->rejected++;continue; }
+            triangle(s,vertices[a],vertices[b],vertices[c],eye,normal,fuse);
         }
         if (error) break;
         if(!fuse) { if(invalid) s->skipped_frames++;else s->far_vertices+=far; }
@@ -195,6 +259,7 @@ const char *read_dump(Scan *s, int fuse)
     if (!error && !fuse) s->frames = frames;
 done:
     io_free(vertices,vs);
+    io_free(normals,vs);
     io_free(indices,is);
     io_free(depths,ds);
     io_close(fd);
@@ -244,8 +309,12 @@ const char *init_grid(Scan *s)
 }
 void finish_fusion(Scan *s)
 {
+    /* A short look-around cannot expose each surface in many frames. Cap the target at ten percent of usable
+     * views (at least one); long recordings still require repeated evidence rather than transient depth. */
+    unsigned required=(unsigned)mn(s->opt.min_views,mx(1,(s->frames-s->skipped_frames)/10.f));
     for (int i=0; i<s->count; i++) {
         Cell *c=&s->cells[i];
+        if(c->views<required) { c->weight=0;continue; }
         if (c->weight) { c->p=mul(c->p,1/c->weight); c->n=unit(c->n); }
     }
     if (s->clipped) warn(s,"scan clipped to 8 x 8 x 4 metre grid");

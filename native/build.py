@@ -205,7 +205,7 @@ def build_roomscan(tc: Path):
     out = ART / "linux-arm64-bin"
     out.mkdir(parents=True, exist_ok=True)
     run([tc / "bin/clang", "--target=aarch64-linux-gnu", "-ffreestanding", "-nostdlib", "-nostdlibinc", "-static",
-         "-fno-stack-protector", "-fno-builtin", "-ffp-contract=off", "-O2", "-Wall", "-Wextra", "-Werror",
+         "-fno-stack-protector", "-fno-builtin", "-ffp-contract=off", "-fno-math-errno", "-O2", "-Wall", "-Wextra", "-Werror",
          "-fuse-ld=lld", "-Wl,--build-id=none", "-Wl,-z,max-page-size=65536", "-e", "_start",
          f"-ffile-prefix-map={HERE}=native", "main.c", "fusion.c", "model.c", "mesh.c", "platform.c",
          "-o", out / "fp_roomscan"], cwd=src)

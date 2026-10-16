@@ -31,6 +31,50 @@
 #define DEFAULT_CIRCLE_MIN_POINTS 8
 #define DEFAULT_CIRCLE_RADIAL_CV .05f
 #define LOW_COVERAGE_PERCENT 80.f
+#define WALL_MERGE_DISTANCE .25f
+#define WALL_MERGE_COSINE .97f
+#define RELATIVE_WALL_AREA .20f
+#define DOMINANT_WALL_TOLERANCE 12.f
+#define ORTHOGONAL_SUPPORT_FRACTION .65f
+#define CEILING_SUPPORT_RATIO .15f
+#define MIN_FURNITURE_TOP .25f
+#define WALL_FURNITURE_CLEARANCE .15f
+#define MIN_TOP_DENSITY .30f
+
+static void consolidate_walls(Scan *s)
+{
+    if(!s->nplanes) return;
+    Plane result[MAX_PLANES]={0};int count=0;
+    float largest=0;
+    for(int i=0;i<s->nplanes;i++) {
+        Plane p=s->planes[i];int merge=-1;
+        largest=mx(largest,p.area);
+        for(int j=0;j<count;j++) if(dot(p.n,result[j].n)>WALL_MERGE_COSINE &&
+            ab(p.d-result[j].d)<WALL_MERGE_DISTANCE) { merge=j;break; }
+        if(merge<0) result[count++]=p;
+        else {
+            Plane *r=&result[merge];
+            r->area+=p.area;r->bottom=mn(r->bottom,p.bottom);r->top=mx(r->top,p.top);
+            r->lo=mn(r->lo,p.lo);r->hi=mx(r->hi,p.hi);
+        }
+    }
+    float base=angle(result[0].n.z,result[0].n.x),aligned=0,total=0;
+    for(int i=0;i<count;i++) {
+        Plane *p=&result[i];float a=angle(p->n.z,p->n.x)-base;
+        float delta=ab(a-flo(a/(PI/2)+.5f)*(PI/2));
+        total+=p->area;
+        if(delta<DOMINANT_WALL_TOLERANCE*PI/180) aligned+=p->area;
+    }
+    int orthogonal=aligned>total*ORTHOGONAL_SUPPORT_FRACTION && s->opt.snap_degrees>0;
+    s->nplanes=0;
+    for(int i=0;i<count;i++) {
+        Plane p=result[i];float a=angle(p.n.z,p.n.x)-base;
+        float delta=ab(a-flo(a/(PI/2)+.5f)*(PI/2));
+        if(p.area<largest*RELATIVE_WALL_AREA) continue;
+        if(orthogonal && delta>DOMINANT_WALL_TOLERANCE*PI/180) continue;
+        s->planes[s->nplanes++]=p;
+    }
+}
 
 static float plane_height(Scan *s, int ceiling, int *found)
 {
@@ -50,14 +94,16 @@ static float plane_height(Scan *s, int ceiling, int *found)
         float h=hist[b-1]+hist[b]+hist[b+1];
         if (h>score) { score=h; best=b; }
     }
-    float y=s->origin.y+(best+.5f)*step, total=0, sum=0;
+    float y=s->origin.y+(best+.5f)*step, total=0, sum=0,upward=0;
     for (int i=0;i<s->count;i++) {
         Cell *c=&s->cells[i];
+        if(c->weight && c->n.y>s->opt.horizontal) upward++;
         if (!c->weight || ab(c->p.y-y)>s->opt.plane_distance) continue;
         if (ceiling ? c->n.y > -s->opt.horizontal : c->n.y < s->opt.horizontal) continue;
         total++; sum+=c->p.y;
     }
     *found=score* s->opt.voxel*s->opt.voxel >= s->opt.min_plane_area && total>0;
+    if(ceiling && total<upward*CEILING_SUPPORT_RATIO) *found=0;
     return *found ? sum/total : (ceiling ? s->floor+s->opt.ceiling_default : 0);
 }
 static int on_plane(Scan *s, Cell *c, Plane *p)
@@ -153,6 +199,7 @@ static void walls(Scan *s, int *ids, int n)
             }
         }
     }
+    consolidate_walls(s);
 }
 static Pt endpoint(Plane *p, int end)
 {
@@ -210,6 +257,40 @@ static int valid_polygon(Scan *s)
     }
     return s->noutline>=3 && area>MIN_OUTLINE_TWICE_AREA;
 }
+static int convex_fallback(Scan *s)
+{
+    if(s->nplanes<3 || s->nplanes>4) return 0;
+    /* A concave multi-wall room must use directed segments. A small set of enclosure planes can instead be
+     * clipped as inward half-planes when smeared endpoints prevent reliable corner ordering. */
+    Pt a[MAX_OUTLINE],b[MAX_OUTLINE];float x0=1e10f,x1=-1e10f,z0=1e10f,z1=-1e10f;
+    for(int i=0;i<s->nplanes;i++) for(int end=0;end<2;end++) {
+        Pt p=endpoint(&s->planes[i],end);x0=mn(x0,p.x);x1=mx(x1,p.x);z0=mn(z0,p.z);z1=mx(z1,p.z);
+    }
+    int n=4;a[0]=(Pt){x0,z0};a[1]=(Pt){x1,z0};a[2]=(Pt){x1,z1};a[3]=(Pt){x0,z1};
+    for(int i=0;i<s->nplanes;i++) {
+        Plane *p=&s->planes[i];int count=0;
+        for(int j=0;j<n;j++) {
+            Pt u=a[j],v=a[(j+1)%n];float du=p->n.x*u.x+p->n.z*u.z-p->d,dv=p->n.x*v.x+p->n.z*v.z-p->d;
+            if(du>=0) b[count++]=u;
+            if((du>=0)!=(dv>=0)) {
+                float t=du/(du-dv);b[count++]=(Pt){u.x+t*(v.x-u.x),u.z+t*(v.z-u.z)};
+            }
+        }
+        if(count<3 || count>=MAX_OUTLINE) return 0;
+        n=count;memcpy(a,b,(usize)n*sizeof(Pt));
+    }
+    s->noutline=n;
+    for(int j=0;j<n;j++) {
+        s->outline[j]=a[j];s->invisible[j]=1;Pt v=a[(j+1)%n];
+        for(int i=0;i<s->nplanes;i++) {
+            Plane *p=&s->planes[i];
+            if(ab(p->n.x*a[j].x+p->n.z*a[j].z-p->d)<s->opt.plane_distance &&
+               ab(p->n.x*v.x+p->n.z*v.z-p->d)<s->opt.plane_distance) s->invisible[j]=0;
+        }
+    }
+    if(!valid_polygon(s)) { s->noutline=0;return 0; }
+    warn(s,"wall endpoints uncertain; using plane intersections");return 1;
+}
 static void outline(Scan *s, int *ids, int n)
 {
     if (s->nplanes<3) { rectangle(s,ids,n); return; }
@@ -239,7 +320,10 @@ static void outline(Scan *s, int *ids, int n)
             push_outline(s,ends[k],1);warn(s,"gaps closed with invisible walls");
         }
     }
-    if (!valid_polygon(s)) { s->noutline=0;rectangle(s,ids,n);warn(s,"wall ordering ambiguous"); }
+    if (!valid_polygon(s)) {
+        s->noutline=0;
+        if(!convex_fallback(s)) { rectangle(s,ids,n);warn(s,"wall ordering ambiguous"); }
+    }
 }
 static float wall_distance(Scan *s, Vec p)
 {
@@ -260,18 +344,67 @@ static void trimmed_bounds(Scan *s, int *queue, int n, Vec axis, float *lo, floa
     count=0;
     for(int b=511;b>=0;b--) { count+=hist[b];if(count>target) { *hi=start+range*(b+1)/511;break; } }
 }
+static float top_height(Scan *s, int *queue, int n, float low, float high)
+{
+    int histogram[512]={0},bins=(int)mn((high-low)/(s->opt.voxel*.25f)+2,512);
+    float step=s->opt.voxel*.25f;
+    for(int i=0;i<n;i++) {
+        int bin=flo((s->cells[queue[i]].p.y-low)/step);
+        if(bin>=0 && bin<bins) histogram[bin]++;
+    }
+    int count=0;
+    for(int bin=0;bin<bins;bin++) {
+        count+=histogram[bin];
+        /* The median resists a softened lip without selecting one of several noisy sub-peaks as a new top. */
+        if(count>=n/2) return low+(bin+.5f)*step;
+    }
+    return (low+high)*.5f;
+}
 static void furniture(Scan *s, int *ids, int n, int *queue)
 {
+    /* Tops remain separable when a softened sofa/table edge blends into its neighbouring wall. Vertical-only
+     * components are considered separately for screens; they cannot turn a whole wall into an OTHER volume. */
+    for(int mode=0;mode<2;mode++) {
+    float histogram[256]={0},levels[32];int nlevels=0;
+    if(!mode) {
+        for(int j=0;j<n;j++) {
+            Cell *c=&s->cells[ids[j]];
+            if(c->n.y>s->opt.horizontal && c->p.y>s->floor+MIN_FURNITURE_TOP &&
+               c->p.y<s->ceiling-FURNITURE_MARGIN && wall_distance(s,c->p)>WALL_FURNITURE_CLEARANCE) {
+                int bin=flo((c->p.y-s->floor)/s->opt.voxel);
+                if(bin>=0 && bin<256) histogram[bin]++;
+            }
+        }
+        for(int k=0;k<32;k++) {
+            int best=0;float score=0;
+            for(int bin=1;bin<255;bin++) {
+                float count=histogram[bin-1]+histogram[bin]+histogram[bin+1];
+                if(count>score) { score=count;best=bin; }
+            }
+            if(score*s->opt.voxel*s->opt.voxel<MIN_TOP_AREA) break;
+            levels[nlevels++]=s->floor+(best+.5f)*s->opt.voxel;
+            int radius=(int)(s->opt.plane_distance*2/s->opt.voxel)+1;
+            for(int bin=best-radius;bin<=best+radius;bin++) if(bin>=0 && bin<256) histogram[bin]=0;
+        }
+    }
     for (int j=0;j<n;j++) {
         Cell *c=&s->cells[ids[j]];
-        c->mark=(c->p.y>s->floor+FURNITURE_MARGIN && c->p.y<s->ceiling-FURNITURE_MARGIN &&
-                 wall_distance(s,c->p)>s->opt.plane_distance*2) ? 1 : 0;
+        int normal=mode ? ab(c->n.y)<BOX_SIDE_NORMAL_Y : c->n.y>s->opt.horizontal;
+        c->mark=(normal && c->p.y>s->floor+MIN_FURNITURE_TOP && c->p.y<s->ceiling-FURNITURE_MARGIN &&
+                 wall_distance(s,c->p)>WALL_FURNITURE_CLEARANCE) ? 1 : 0;
+        if(c->mark && !mode) {
+            c->mark=0;float best=s->opt.plane_distance*2;
+            for(int k=0;k<nlevels;k++) if(ab(c->p.y-levels[k])<best) {
+                best=ab(c->p.y-levels[k]);c->mark=k+1;
+            }
+        }
     }
     int radius=(int)(s->opt.cluster_gap/s->opt.voxel)+1;
     for (int j=0;j<n;j++) {
         int seed=ids[j];
-        if (s->cells[seed].mark!=1) continue;
-        int head=0,tail=1;queue[0]=seed;s->cells[seed].mark=2;
+        if (s->cells[seed].mark<=0) continue;
+        int group=s->cells[seed].mark;
+        int head=0,tail=1;queue[0]=seed;s->cells[seed].mark=-1;
         while (head<tail) {
             int id=queue[head++],x=id%s->nx,z=(id/s->nx)%s->nz,y=id/(s->nx*s->nz);
             for (int dy=-radius;dy<=radius;dy++) for (int dz=-radius;dz<=radius;dz++) for (int dx=-radius;dx<=radius;dx++) {
@@ -280,7 +413,7 @@ static void furniture(Scan *s, int *ids, int n, int *queue)
                 if (xx<0 || yy<0 || zz<0 || xx>=s->nx || yy>=s->ny || zz>=s->nz) continue;
                 int next=(yy*s->nz+zz)*s->nx+xx;
                 Cell *c=&s->cells[next];
-                if (c->mark==1) { c->mark=2;queue[tail++]=next; }
+                if (c->mark==group) { c->mark=-1;queue[tail++]=next; }
             }
         }
         if (tail<MIN_CLUSTER_SURFELS) continue;
@@ -304,6 +437,18 @@ static void furniture(Scan *s, int *ids, int n, int *queue)
          * biased by one side being more visible. Non-box objects fall back to position covariance. */
         if(edge_count>MIN_BOX_EDGE_VOTES && root(edge_x*edge_x+edge_y*edge_y)>edge_count*BOX_EDGE_STRENGTH)
             yaw=.25f*angle(edge_y,edge_x);
+        if(!mode) {
+            float smallest=1e10f;
+            for(int degree=0;degree<90;degree++) {
+                float a=degree*PI/180,co=cosine(a),si=sine(a),u0=1e10f,u1=-1e10f,v0=1e10f,v1=-1e10f;
+                for(int k=0;k<tail;k++) {
+                    Vec p=s->cells[queue[k]].p;float u=p.x*co+p.z*si,v=-p.x*si+p.z*co;
+                    u0=mn(u0,u);u1=mx(u1,u);v0=mn(v0,v);v1=mx(v1,v);
+                }
+                float area=(u1-u0)*(v1-v0);
+                if(area<smallest) { smallest=area;yaw=a; }
+            }
+        }
         float co=cosine(yaw),si=sine(yaw);
         float u0=1e10f,u1=-1e10f,v0=1e10f,v1=-1e10f,top_count=0;
         for (int k=0;k<tail;k++) {
@@ -319,21 +464,30 @@ static void furniture(Scan *s, int *ids, int n, int *queue)
         trimmed_bounds(s,queue,tail,vec(co,0,si),&u0,&u1);
         trimmed_bounds(s,queue,tail,vec(-si,0,co),&v0,&v1);
         u0-=up;u1-=up;v0-=vp;v1-=vp;
+        trimmed_bounds(s,queue,tail,vec(0,1,0),&bottom,&top);
+        if(!mode) top=top_height(s,queue,tail,bottom,top);
         float w=u1-u0,d=v1-v0,h=top-(bottom<s->floor+FLOOR_INFER_DISTANCE ? s->floor : mn(bottom,s->floor+FURNITURE_MARGIN));
+        if(d>w) { float t=w;w=d;d=t;yaw+=PI/2; }
+        while(yaw>PI/2) yaw-=PI;
+        if(!mode) h=top-s->floor;
         if (w*d*h<s->opt.min_volume) continue;
-        float height=top-s->floor,area=w*d,top_area=top_count*s->opt.voxel*s->opt.voxel;
+        float height=top-s->floor,area=w*d,top_area=(mode ? top_count : tail)*s->opt.voxel*s->opt.voxel;
+        if(!mode && (top_area<MIN_TOP_AREA || top_area<area*MIN_TOP_DENSITY)) continue;
         const char *label="OTHER";
         if (height>=BED_MIN_HEIGHT && height<=BED_MAX_HEIGHT && area>=BED_MIN_AREA) label="BED";
-        else if (height>=COUCH_MIN_HEIGHT && height<=COUCH_MAX_HEIGHT && mx(w,d)>=COUCH_MIN_LENGTH) label="COUCH";
+        else if (height>=COUCH_MIN_HEIGHT && height<=COUCH_MAX_HEIGHT && mx(w,d)+2*s->opt.voxel>=COUCH_MIN_LENGTH) label="COUCH";
         else if (height>=TABLE_MIN_HEIGHT && height<=TABLE_MAX_HEIGHT && top_area>=MIN_TOP_AREA) label="TABLE";
         else if (mn(w,d)<SCREEN_MAX_DEPTH && mx(w,d)>=SCREEN_MIN_WIDTH && mx(w,d)<=SCREEN_MAX_WIDTH &&
                  wall_distance(s,avg)<NEAR_WALL) label="SCREEN";
         else if (h>=STORAGE_MIN_HEIGHT && wall_distance(s,avg)<NEAR_WALL) label="STORAGE";
+        if(mode && !same(label,"SCREEN")) continue;
+        if(!mode && same(label,"OTHER") && height>TABLE_MAX_HEIGHT) continue;
         if (s->nvolumes>=MAX_VOLUMES) { warn(s,"furniture limit reached");break; }
         Vec centre=vec(avg.x+co*(u0+u1)*.5f-si*(v0+v1)*.5f,top,
                        avg.z+si*(u0+u1)*.5f+co*(v0+v1)*.5f);
         /* ROOM_FORMAT yaw is an active right-handed rotation about +Y. */
         s->volumes[s->nvolumes++]=(Volume){centre,-yaw*180/PI,w,d,h,label};
+    }
     }
 }
 
