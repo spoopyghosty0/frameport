@@ -4509,10 +4509,14 @@ ROOM_SCAN_LOOK_FRAMES = 5   # recorded frames looking up / down (~1.7 s at 3/s) 
 ROOM_SCAN_MIN_SECONDS = 30  # a complete scan still records this long (more views of every wall)
 
 
-def _prompt_for(started, yaw_bins, pitch):
-    """Which prompt image the headset shows. Valve computes the depth view whenever the cameras run (passthrough
-    visible or not), so "start" is only shown until the first mesh arrives."""
-    if started is None:
+ROOMVIEW_STREAM_MESHES = 3     # new meshes within ROOMVIEW_STREAM_WINDOW s = passthrough is on (Valve: ~30/s)
+ROOMVIEW_STREAM_WINDOW = 2.0
+ROOM_SCAN_MIN_FRAMES = 30      # fewer recorded frames is no room: refused instead of replacing the saved one
+
+
+def _prompt_for(started, yaw_bins, pitch, streaming=True):
+    """Which prompt image the headset shows: "start" (turn on passthrough) whenever no meshes stream, also mid-scan."""
+    if started is None or not streaming:
         return "start"
     if len(yaw_bins) >= 10 and pitch["up"] < ROOM_SCAN_LOOK_FRAMES:
         return "ceiling"
@@ -4537,9 +4541,12 @@ def capture_roomview(seconds, out_path, wait=0.0, max_hz=3.0, progress=None, pro
     offsets, raw_poses = [], []
     yaw_bins, pitch = set(), {"up": 0, "down": 0}
     indices, layout_id, last_mesh, last_write = None, None, None, 0.0
-    last_new = 0.0  # when a new mesh id last arrived: meshIsUpToDate stays true after the headset comes off
+    # Valve only computes new meshes while passthrough is shown; a queue's last block (and meshIsUpToDate) stays
+    # after it stops. So "streaming" = ROOMVIEW_STREAM_MESHES new mesh ids within ROOMVIEW_STREAM_WINDOW seconds, and
+    # frames are recorded only then (2026-10-16: a scan started on one leftover block and recorded nothing else).
+    arrivals = []
     seen_mesh = None
-    started = None
+    started, paused_since, paused_total = None, None, 0.0
     t_end = time.time() + (wait or seconds)
     next_progress = time.time()
     try:
@@ -4547,16 +4554,26 @@ def capture_roomview(seconds, out_path, wait=0.0, max_hz=3.0, progress=None, pro
             f.write(b"FPRS" + struct.pack("<I", 1))
             while time.time() < t_end:
                 now = time.time()
+                arrivals = [t for t in arrivals if now - t < ROOMVIEW_STREAM_WINDOW]
+                streaming = len(arrivals) >= ROOMVIEW_STREAM_MESHES
+                if started is not None:  # passthrough off mid-scan: the countdown waits (at most `wait` in all)
+                    if not streaming and paused_since is None:
+                        paused_since = now
+                    elif streaming and paused_since is not None:
+                        pause = min(now - paused_since, max(0.0, (wait or seconds) - paused_total))
+                        t_end += pause
+                        paused_total += pause
+                        paused_since = None
                 if _scan_complete(started, now, yaw_bins, pitch):
                     break  # every direction, the ceiling and the floor seen: "Room scanned" at once
                 if now >= next_progress:
-                    live = now - last_new < 2.0
                     if prompt:
-                        prompt.show(_prompt_for(started, yaw_bins, pitch))
+                        prompt.show(_prompt_for(started, yaw_bins, pitch, streaming))
                     if progress:
                         progress({"recording": started is not None, "frames": len(offsets),
-                                  "seconds": round(now - started, 1) if started else 0,
-                                  "directions": len(yaw_bins), "looked_up": pitch["up"], "live": live})
+                                  "seconds": round(now - started - paused_total, 1) if started else 0,
+                                  "directions": len(yaw_bins), "looked_up": pitch["up"],
+                                  "looked_down": pitch["down"], "live": streaming})
                     next_progress = now + 1
                 blk, buf = rv.acquire(rv.data, 1, 200)  # EBlockQueueReadType_New
                 if blk is None:
@@ -4564,8 +4581,9 @@ def capture_roomview(seconds, out_path, wait=0.0, max_hz=3.0, progress=None, pro
                 try:
                     mesh_id = rv.prop(blk.value, "/meshData/meshId", "<Q")
                     if mesh_id != seen_mesh:
-                        seen_mesh, last_new = mesh_id, now
-                    if not rv.up_to_date() or now - last_write < 1.0 / max_hz:
+                        seen_mesh = mesh_id
+                        arrivals.append(now)
+                    if not streaming or not rv.up_to_date() or now - last_write < 1.0 / max_hz:
                         continue
                     lid = rv.prop(blk.value, "/meshData/layoutId", "<Q")
                     count = rv.prop(blk.value, "/meshData/elementCount", "<i") or 0
@@ -4675,8 +4693,9 @@ def room_capture_worker(payload):
                                    prompts=ROOM_SCAN_PROMPTS if os.path.isdir(ROOM_SCAN_PROMPTS) else None)
         status.update(capture=summary, state="building")
         _write_json(ROOM_SCAN_STATUS, status)
-        if not summary["frames"]:
-            raise AgentError("No passthrough view arrived: turn on passthrough in the headset and scan again")
+        if summary["frames"] < ROOM_SCAN_MIN_FRAMES:  # never replace a saved room with a scrap of one
+            raise AgentError("The scan saw too little of the room: keep passthrough on, look around until the "
+                             "headset says \"Room scanned\", and scan again")
         built = cmd_room_build({"dump": dump})
         status.update(state="done", report=built.get("report"), room=built.get("room"), finished=time.time())
     except Exception as exc:  # noqa: BLE001 - every failure ends in the status file the PC polls

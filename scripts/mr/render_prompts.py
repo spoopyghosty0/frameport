@@ -24,8 +24,8 @@ ACCENT, SECONDARY, OK = (255, 138, 31, 255), (58, 168, 255, 255), (74, 222, 128,
 DIRECTIONS = 12
 
 PROMPTS = {
-    "start": ("Starting the scan", "It starts by itself in a moment.\n"
-              "Turn on passthrough to see where you walk."),
+    "start": ("Turn on passthrough", "The scan runs while you can see your room:\n"
+              "open the quick access menu and switch passthrough on."),
     "ceiling": ("Look up at the ceiling", "Hold it for a few seconds,\n"
                 "then look back down and keep turning."),
     "floor": ("Look down at the floor", "Hold it for a few seconds,\nthen keep turning."),

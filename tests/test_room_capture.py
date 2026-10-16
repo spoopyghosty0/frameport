@@ -60,13 +60,14 @@ def test_view_coverage_bins(monkeypatch, tmp_path):
 
 
 class FakeReader:
-    """Two fresh mesh blocks, then nothing; raw->standing moves the floor by +0.5 m at the end."""
+    """A stream of six fresh mesh blocks (alternately facing 0 / 90 deg), then nothing; raw->standing moves the
+    floor by +0.5 m at the end. The first two only make the stream count as "passthrough on"."""
 
-    def __init__(self, app_type=None):
+    def __init__(self, app_type=None, blocks=6):
         import ctypes
 
         self.ct = ctypes
-        self.blocks = [(1, rot_y(0, (0, 1.0, 0))), (2, rot_y(90, (0, 1.0, 0)))]
+        self.blocks = [(i, rot_y(90 * (i % 2 == 0), (0, 1.0, 0))) for i in range(1, blocks + 1)]
         self.verts = ctypes.create_string_buffer(struct.pack("<9f", *range(9)))
         self.idx = ctypes.create_string_buffer(struct.pack("<3I", 0, 1, 2))
         self.data, self.layout = "data", "layout"
@@ -102,19 +103,35 @@ def test_capture_rewrites_poses_with_final_transform(monkeypatch, tmp_path):
     a = load_agent(monkeypatch, tmp_path)
     monkeypatch.setattr(a, "_RoomViewReader", FakeReader)
     out = tmp_path / "scan.fprs"
-    clock = iter(i * 0.5 for i in range(1000))
+    clock = iter(i * 0.05 for i in range(10000))
     monkeypatch.setattr(a.time, "time", lambda: next(clock))
     res = a.capture_roomview(3, str(out), max_hz=100)
-    assert res["frames"] == 2
+    assert res["frames"] == 3  # blocks 4-6: three meshes had to stream before the first recorded one
     data = out.read_bytes()
     assert data[:8] == b"FPRS\x01\0\0\0"
     hdr = struct.calcsize(a.FPRS_FRAME)
     t, px, py, pz, qx, qy, qz, qw, vc, ic = struct.unpack_from(a.FPRS_FRAME, data, 8)
     assert (vc, ic) == (3, 3) and py == pytest.approx(1.5)  # raw y 1.0 + the final floor shift 0.5
+    assert qy == pytest.approx(math.sin(math.radians(45)))  # block 4 faces 90 deg
     second = 8 + hdr + 3 * 12 + 3 * 4
     _, _, py2, _, qx2, qy2, qz2, qw2, _, _ = struct.unpack_from(a.FPRS_FRAME, data, second)
-    assert py2 == pytest.approx(1.5) and qy2 == pytest.approx(math.sin(math.radians(45)))
+    assert py2 == pytest.approx(1.5) and qy2 == pytest.approx(0)  # block 5 faces 0 deg
     assert "ceiling not seen: look up" in res["warnings"]
+
+
+def test_capture_ignores_a_leftover_block(monkeypatch, tmp_path):
+    # passthrough off: the queue still hands out its last block once; that is no scan (owner's run, 2026-10-16)
+    a = load_agent(monkeypatch, tmp_path)
+    monkeypatch.setattr(a, "_RoomViewReader", lambda app_type=None: FakeReader(app_type, blocks=1))
+    clock = iter(i * 0.05 for i in range(10000))
+    monkeypatch.setattr(a.time, "time", lambda: next(clock))
+    res = a.capture_roomview(3, str(tmp_path / "scan.fprs"), max_hz=100)
+    assert res["frames"] == 0 and res["warnings"][0].startswith("no passthrough")
+
+
+def test_prompt_asks_for_passthrough_whenever_the_stream_stops(monkeypatch, tmp_path):
+    a = load_agent(monkeypatch, tmp_path)
+    assert a._prompt_for(5.0, {0, 1}, {"up": 0, "down": 0}, streaming=False) == "start"
 
 
 def test_capture_worker_status(monkeypatch, tmp_path):
@@ -123,9 +140,12 @@ def test_capture_worker_status(monkeypatch, tmp_path):
     a.room_capture_worker(json.dumps({"seconds": 10, "wait": 0}))
     st = a.cmd_room_capture_status({})
     assert st["state"] == "failed" and "passthrough" in st["error"]
+    monkeypatch.setattr(a, "capture_roomview", lambda *args, **kw: {"frames": 12, "warnings": []})
+    a.room_capture_worker(json.dumps({"seconds": 10, "wait": 0}))  # a scrap of a scan never replaces a room
+    assert a.cmd_room_capture_status({})["state"] == "failed"
 
     built = {"report": {"walls": 4}, "room": {"universe": 7}}
-    monkeypatch.setattr(a, "capture_roomview", lambda *args, **kw: {"frames": 12, "warnings": []})
+    monkeypatch.setattr(a, "capture_roomview", lambda *args, **kw: {"frames": 40, "warnings": []})
     monkeypatch.setattr(a, "cmd_room_build", lambda args: built)
     a.room_capture_worker(json.dumps({"seconds": 10, "wait": 0}))
     st = a.cmd_room_capture_status({})
