@@ -6,6 +6,16 @@
 # with diagnostics. Launch tests and real play sessions (agent session_log, `frameport session`) are both matched.
 # Sources: every failure we hit porting 34 games to the Steam Frame (see docs/PLAYBOOK.md).
 signatures:
+  - id: mr-no-room
+    pattern: 'FrameBridge[^\r\n]*scene: (?:capture requested -> (?:guardian box|using guardian room)|room from guardian|room [^\r\n]*(?:from guardian|configured/default size|box))'
+    severity: info
+    diagnosis: 'The game is using a simple fallback room. Scan your room for mixed reality, or use Frame > Room > Use my play area for walls without furniture. A recorded scan can be imported until headset capture is available.'
+    suggest: []
+  - id: mr-discovery-unsupported
+    pattern: '(?:Unknown proc addr:\s*xrDiscoverSpacesMETA|(?:MRUK[^\r\n]*)?NoRoomsFound)'
+    severity: warning
+    diagnosis: 'The game cannot discover a Meta room. Enable room layout (adapter.scene_emul), rebuild and reinstall for the updated extension shim, then save a room under Frame > Room.'
+    suggest: [adapter.scene_emul]
   - id: meta-asset-status-error
     pattern: 'Asset status error\s+\(code 100\)'
     severity: error

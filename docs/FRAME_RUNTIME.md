@@ -60,6 +60,30 @@
   `launch.sh` at the new folder and only then deletes the old copy; on the same filesystem it renames instead.
   Moving a game whose Lepton data holds absolute paths, or a PC VR prefix, is not yet verified on the device.
 
+## Room data
+
+- SteamVR on the Frame has no Meta scene/anchor extensions. Its chaperone supplies only a 2D outline raised to
+  2.43 m, without furniture, ceiling or a room mesh. Valve's default boundary is a 20-point circle of roughly 1 m
+  radius; FramePort refuses to treat it as a room.
+- FrameBridge's `scene_emul=1` serves saved room data, with a guardian box when no room is available. OVRPort's
+  loader only dispatches functions in its own table: newer Meta entry points go through FramePort's extension shim.
+  MRUK uses discovery (`xrDiscoverSpacesMETA`, older versions `xrQuerySpacesFB`) and requests Space Setup when
+  discovery returns no rooms. Volumes hang below their top-face anchor in Meta's coordinate convention.
+- Room files use STAGE coordinates (metres, +Y up, floor y=0, -Z forward). The format contract is
+  [mr/ROOM_FORMAT.md](mr/ROOM_FORMAT.md). On the Frame: `~/.local/share/frameport/rooms/<universe>/room.txt`,
+  optional `room-mesh.bin` and `scan.log`; `rooms/current` points to the most recently saved room.
+- A room belongs to its chaperone universe. The agent reads the last universe switch from `vrserver.txt`, falling
+  back to the newest universe in `~/.config/openvr/config/chaperone_info.vrchap`; dummy 424242 means none.
+  A matching room is selected first, else `current`; the app reports `aligned: false` after a universe change.
+- Quest launchers copy that room beside `settings.conf` before Lepton starts; FrameBridge reads
+  `dirname($FRAMEBRIDGE_CONFIG)/room.txt`. Stale copies are removed if no room exists or emulation is disabled.
+  Each game's persistent anchors stay in `/sdcard/Android/data/<pkg>/files/framebridge-anchors.txt`.
+- Frame → Room and `frameport frame room` manage rooms. `from-boundary` creates walls without furniture;
+  `import` / `export` transfer room files; `show` writes an SVG preview; `build <dump.fprs>` syncs the bundled
+  `fp_roomscan` by SHA-256 and runs it on the Frame with `--offline`. Headset capture (`room_capture`) deliberately
+  returns "not implemented yet" pending the RoomView device spike. The scanner consumes recorded RoomView meshes
+  from `/xrservice/roomview3d/meshData` + `/meshLayout` (`IVRBlockQueue_005`); it does not capture them itself.
+
 ## OpenXR runtime (as seen by games through overport's loader)
 - Instance extensions present include KHR_android_create_instance (must be enabled; the adapter adds it),
   KHR_vulkan_enable(2), KHR_opengl_es_enable, KHR_composition_layer_depth, FB_display_refresh_rate, EXT_hand_tracking

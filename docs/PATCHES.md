@@ -1942,6 +1942,7 @@ Scene games get your saved room. Without one, they get a simple room from the pl
   - Game settings → Mixed reality → "Use room layout".
 - **Catalog games (13):** Arkio, AugmentedEmpire, Battlemarked, Demeo, Demeter, Ghostbusters: Rise of the Ghost Lord, Neko Atsume Purrfect, NOPE CHALLENGE and 5 more.
 - **Suggested by launch-test signatures:**
+  - `mr-discovery-unsupported` (warning): The game cannot discover a Meta room.
   - `scene-missing` (warning): The game wants Meta's room data (scene API), which the Frame lacks.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
