@@ -31,7 +31,7 @@ typedef struct { Vec p; float yaw, w, d, h; const char *label; } Volume;
 typedef struct {
     const char *input, *out, *hint;
     u64 universe;
-    float voxel, ceiling_default, truncation, max_edge, grazing, range;
+    float voxel, ceiling_default, truncation, max_edge, grazing, range, depth_jump, depth_ratio;
     float plane_distance, min_plane_area, wall_height, snap_degrees;
     float floor_band, ceiling_min, min_volume, cluster_gap, gap, horizontal;
 } Options;
@@ -42,8 +42,8 @@ typedef struct {
     Vec origin;
     Vec samples[MAX_SAMPLES];
     int nsamples;
-    u64 seen, accepted, rejected, clipped;
-    unsigned frames;
+    u64 seen, accepted, rejected, clipped, far_vertices, discontinuities;
+    unsigned frames, skipped_frames;
     Plane planes[MAX_PLANES];
     int nplanes;
     Pt outline[MAX_OUTLINE];

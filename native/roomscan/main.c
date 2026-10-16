@@ -60,10 +60,11 @@ static const char *write_files(Scan *s)
     text(&t,"\n");
     for(int i=0;i<s->noutline;i++) {
         Pt a=s->outline[i],b=s->outline[(i+1)%s->noutline];
-        if(s->invisible[i]) text(&t,"# INVISIBLE_WALL_FACE: synthesized edge follows\n");
         if(!record(&t,"wall")) return "getrandom failed";
         space_number(&t,a.x);space_number(&t,a.z);space_number(&t,b.x);space_number(&t,b.z);
-        space_number(&t,s->floor);space_number(&t,s->ceiling);text(&t,"\n");
+        space_number(&t,s->floor);space_number(&t,s->ceiling);
+        if(s->invisible[i]) text(&t," INVISIBLE_WALL_FACE");
+        text(&t,"\n");
     }
     for(int i=0;i<s->nvolumes;i++) {
         Volume *v=&s->volumes[i];
@@ -126,7 +127,8 @@ static int parse_universe(const char *p,u64 *out)
 }
 static const char *options(Options *o,int argc,char **argv)
 {
-    *o=(Options){.voxel=.05f,.ceiling_default=2.5f,.truncation=3,.max_edge=.6f,.grazing=.12f,.range=5.5f,
+    *o=(Options){.voxel=.05f,.ceiling_default=2.5f,.truncation=3,.max_edge=.6f,.grazing=.12f,.range=4.f,
+        .depth_jump=.25f,.depth_ratio=.12f,
         .plane_distance=.045f,.min_plane_area=.45f,.wall_height=1.5f,.snap_degrees=5,.floor_band=.35f,
         .ceiling_min=1.8f,.min_volume=.05f,.cluster_gap=.10f,.gap=.65f,.horizontal=.85f};
     for(int i=1;i<argc;i++) {
@@ -146,6 +148,8 @@ static const char *options(Options *o,int argc,char **argv)
             else if(same(arg,"--max-edge")) { dest=&o->max_edge;low=.05f;high=1.5f; }
             else if(same(arg,"--grazing")) { dest=&o->grazing;low=.01f;high=.9f; }
             else if(same(arg,"--range")) { dest=&o->range;low=1;high=10; }
+            else if(same(arg,"--depth-jump")) { dest=&o->depth_jump;low=.02f;high=1; }
+            else if(same(arg,"--depth-ratio")) { dest=&o->depth_ratio;high=.5f; }
             else if(same(arg,"--plane-distance")) { dest=&o->plane_distance;low=.01f;high=.15f; }
             else if(same(arg,"--min-plane-area")) { dest=&o->min_plane_area;low=.1f;high=4; }
             else if(same(arg,"--wall-height")) { dest=&o->wall_height;low=.5f;high=3; }
@@ -166,6 +170,9 @@ static void duration(Text *t,i64 a,i64 b) { decimal(t,(float)(b-a)/1000000); }
 static void summary(Scan *s)
 {
     Text t={.ok=1};text(&t,"{\"ok\":true,\"frames\":");integer(&t,s->frames);
+    text(&t,",\"skipped_frames\":");integer(&t,s->skipped_frames);
+    text(&t,",\"far_vertices\":");integer(&t,s->far_vertices);
+    text(&t,",\"discontinuity_triangles\":");integer(&t,s->discontinuities);
     text(&t,",\"walls\":");integer(&t,(u64)s->noutline);
     text(&t,",\"detected_walls\":");integer(&t,(u64)s->nplanes);
     text(&t,",\"volumes\":");integer(&t,(u64)s->nvolumes);
@@ -188,7 +195,7 @@ int main(int argc,char **argv)
     if(argc==2 && same(argv[1],"--help")) {
         const char usage[]="fp_roomscan --offline dump.fprs --out directory [--universe N] [--voxel 0.05]\n"
             "  [--ceiling-default 2.5] [--hint outline.txt] [--json]\n"
-            "Tuning: --truncation --max-edge --grazing --range --plane-distance --min-plane-area\n"
+            "Tuning: --truncation --max-edge --grazing --range --depth-jump --depth-ratio --plane-distance --min-plane-area\n"
             "  --wall-height --snap-degrees --floor-band --ceiling-min --min-volume --cluster-gap --gap --horizontal\n"
             "Always prints one JSON summary; errors exit 2. See docs/mr/scan.md for units and ranges.\n";
         io_write(1,usage,sizeof(usage)-1);return 0;

@@ -110,7 +110,7 @@ def mesh(directory):
 def test_box_room_geometry_furniture_and_wire_format(scanner, dumps, tmp_path):
     report = run(scanner, dumps["box"], tmp_path, "--universe", "18446744073709551615")
     assert report["walls"] == report["detected_walls"] == 4
-    assert report["warnings"] == []
+    assert all(w == "out-of-range depth vertices skipped" for w in report["warnings"])
     assert report["coverage_percent"] == 100
     assert abs(report["floor_y"]) < .05
     assert abs(report["ceiling_y"] - 2.6) < .05
@@ -201,6 +201,8 @@ def test_missing_wall_is_closed_and_circle_hint_is_ignored(scanner, dumps, tmp_p
     assert "default circle hint ignored" in report["warnings"]
     assert report["coverage_percent"] < 100
     assert "INVISIBLE_WALL_FACE" in (out / "room.txt").read_text()
+    labels = [row[7] if len(row) == 8 else "WALL_FACE" for row in room(out)["wall"]]
+    assert "INVISIBLE_WALL_FACE" in labels and "WALL_FACE" in labels
     assert area(outline(room(out))) > 8
 
 
@@ -270,3 +272,28 @@ def test_coarser_voxels_and_repeatable_geometry(scanner, dumps, tmp_path):
     assert (first / "room-mesh.bin").read_bytes() == (second / "room-mesh.bin").read_bytes()
     assert room(first)["room"] != room(second)["room"]  # fresh OS-random anchors on every scan
     mesh(first)
+
+
+@pytest.mark.parametrize("offset", [12, 16, 28, 52])
+def test_nonfinite_frame_is_skipped_before_and_after_valid_frame(scanner, dumps, tmp_path, offset):
+    data = dumps["one"].read_bytes()
+    bad = bytearray(data[8:])
+    # High word of timestamp, pose position/quaternion, or a vertex; body offsets exclude FPRS header.
+    struct.pack_into("<I", bad, offset - 8, 0x7fffffff)
+    dump = tmp_path / "tracking-start.fprs"
+    dump.write_bytes(data[:8] + bad + data[8:] + bad)
+    report = run(scanner, dump, tmp_path / "out")
+    assert report["frames"] == 3 and report["skipped_frames"] == 2
+    assert "non-finite or invalid frames skipped" in report["warnings"]
+    assert len(outline(room(tmp_path / "out"))) >= 3
+
+
+def test_far_vertices_are_dropped_per_vertex(scanner, dumps, tmp_path):
+    data = bytearray(dumps["one"].read_bytes())
+    # A single inpainted vertex must remove every incident triangle, without losing its whole frame.
+    struct.pack_into("<3f", data, 52, 0, 0, 9)
+    dump = tmp_path / "far.fprs"
+    dump.write_bytes(data)
+    report = run(scanner, dump, tmp_path / "out")
+    assert report["skipped_frames"] == 0 and report["far_vertices"] >= 1
+    assert report["rejected_triangles"] >= 1

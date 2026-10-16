@@ -127,8 +127,9 @@ const char *read_dump(Scan *s, int fuse)
     u8 header[44];
     const char *error = 0;
     Vec *vertices = 0;
+    float *depths = 0;
     u8 *indices = 0;
-    usize vs = 0, is = 0;
+    usize vs = 0, is = 0, ds = 0;
     if (exact(fd,header,8) != 1 || header[0]!='F' || header[1]!='P' || header[2]!='R' || header[3]!='S' ||
         u32le(header+4) != 1) { error = "invalid FPRS header"; goto done; }
     unsigned frames = 0;
@@ -136,18 +137,18 @@ const char *read_dump(Scan *s, int fuse)
         int r = exact(fd,header,44);
         if (r == 0) break;
         if (r < 0) { error = "truncated frame header"; break; }
-        /* Timestamps must be finite too; they are opaque to reconstruction. */
-        if ((u32le(header+4)&0x7ff00000u) == 0x7ff00000u) { error = "invalid frame timestamp"; break; }
+        /* Tracking can start before poses are available. Consume the entire bounded record before skipping,
+         * so one NaN cannot hide a truncated payload or desynchronize the next frame. */
+        int invalid=(u32le(header+4)&0x7ff00000u) == 0x7ff00000u;
         float pose[7];
         for (int i = 0; i < 7; i++) {
             pose[i] = f32le(header+8+i*4);
-            if (!finite(pose[i]) || ab(pose[i]) > MAX_COORDINATE) error = "invalid frame pose";
+            if (!finite(pose[i]) || ab(pose[i]) > MAX_COORDINATE) invalid=1;
         }
         float norm = 0;
         for (int i = 3; i < 7; i++) norm += pose[i]*pose[i];
-        if (ab(norm-1) > QUATERNION_NORM_TOLERANCE) error = "invalid pose quaternion";
-        if (error) break;
-        for (int i = 3; i < 7; i++) pose[i] /= root(norm);
+        if (!finite(norm) || ab(norm-1) > QUATERNION_NORM_TOLERANCE) invalid=1;
+        if(!invalid) for (int i = 3; i < 7; i++) pose[i] /= root(norm);
         u32 nv = u32le(header+36), ni = u32le(header+40);
         if (nv > MAX_FRAME_VERTICES || ni > MAX_FRAME_INDICES || ni%3 || (!nv && ni)) {
             error = "invalid frame counts"; break;
@@ -155,28 +156,39 @@ const char *read_dump(Scan *s, int fuse)
         usize needv = (usize)nv*12, needi = (usize)ni*4;
         if (needv > vs) { io_free(vertices,vs); vs=needv; vertices=io_alloc(vs); }
         if (needi > is) { io_free(indices,is); is=needi; indices=io_alloc(is); }
-        if ((nv && !vertices) || (ni && !indices)) { error = "frame allocation failed"; break; }
+        if((usize)nv*4>ds) { io_free(depths,ds);ds=(usize)nv*4;depths=io_alloc(ds); }
+        if ((nv && (!vertices || !depths)) || (ni && !indices)) { error = "frame allocation failed"; break; }
         if ((needv && exact(fd,vertices,needv)!=1) || (needi && exact(fd,indices,needi)!=1)) {
             error = "truncated frame data"; break;
         }
         Vec eye = vec(pose[0],pose[1],pose[2]), q = vec(pose[3],pose[4],pose[5]);
+        u64 far=0;
         for (u32 i = 0; i < nv; i++) {
             u8 *p = (u8 *)&vertices[i];
             Vec v = vec(f32le(p),f32le(p+4),f32le(p+8));
             if (!finite(v.x) || !finite(v.y) || !finite(v.z) ||
                 ab(v.x)>MAX_COORDINATE || ab(v.y)>MAX_COORDINATE || ab(v.z)>MAX_COORDINATE) {
-                error = "invalid vertex"; break;
+                invalid=1;break;
             }
+            depths[i]=root(dot(v,v));
+            if(depths[i]>s->opt.range || depths[i]<MIN_RANGE) { depths[i]=-1;far++;continue; }
             Vec t = mul(cross(q,v),2);
             vertices[i] = add(eye,add(v,add(mul(t,pose[6]),cross(q,t))));
         }
-        if (error) break;
+        /* Structural errors are fatal even in a frame whose tracking/depth is unusable. */
         for (u32 i = 0; i < ni; i+=3) {
             u32 a=u32le(indices+4*i), b=u32le(indices+4*(i+1)), c=u32le(indices+4*(i+2));
             if (a>=nv || b>=nv || c>=nv) { error = "index outside vertex array"; break; }
+            if(invalid) continue;
+            if(depths[a]<0 || depths[b]<0 || depths[c]<0) { if(!fuse) s->rejected++;continue; }
+            float near=mn(depths[a],mn(depths[b],depths[c])),far_depth=mx(depths[a],mx(depths[b],depths[c]));
+            if(far_depth-near>s->opt.depth_jump+s->opt.depth_ratio*near) {
+                if(!fuse) { s->rejected++;s->discontinuities++; }continue;
+            }
             triangle(s,vertices[a],vertices[b],vertices[c],eye,fuse);
         }
         if (error) break;
+        if(!fuse) { if(invalid) s->skipped_frames++;else s->far_vertices+=far; }
         frames++;
     }
     if (!error && !frames) error = "scan contains no frames";
@@ -184,6 +196,7 @@ const char *read_dump(Scan *s, int fuse)
 done:
     io_free(vertices,vs);
     io_free(indices,is);
+    io_free(depths,ds);
     io_close(fd);
     return error;
 }
@@ -237,5 +250,7 @@ void finish_fusion(Scan *s)
     }
     if (s->clipped) warn(s,"scan clipped to 8 x 8 x 4 metre grid");
     if (s->frames < FEW_FRAMES) warn(s,"few frames; scan more viewpoints");
+    if(s->skipped_frames) warn(s,"non-finite or invalid frames skipped");
+    if(s->far_vertices) warn(s,"out-of-range depth vertices skipped");
     if (s->accepted < s->rejected) warn(s,"many triangles rejected; check depth quality");
 }
