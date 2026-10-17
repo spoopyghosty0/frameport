@@ -133,6 +133,7 @@ static int flip_quads = 0;
 static int flip_emul_setting = 1;
 static int cylinder_strips_on = 1;  // show cylinder layers as flat quad strips (cylinder_strips)
 static int scene_emul;  // scene emulation setting (per game)
+static int scene_hide_bounds;  // per game: the app's STAGE bounds query answers "no play area" (Demeter)
 static float scene_height = 2.5f;  // scene emulation ceiling height (m)
 static float scene_width, scene_depth;  // optional room size override (m)
 static int64_t xr_time_offset;  // XrTime minus CLOCK_MONOTONIC ns, measured at xrWaitFrame
@@ -198,6 +199,7 @@ static void read_settings(const char *path) {
         if (sscanf(line, "flip_emul=%f", &value) == 1) flip_emul_setting = value != 0;
         if (sscanf(line, "cylinder_strips=%f", &value) == 1) cylinder_strips_on = value != 0;
         if (sscanf(line, "scene_emul=%f", &value) == 1) scene_emul = value != 0;
+        if (sscanf(line, "scene_hide_bounds=%f", &value) == 1) scene_hide_bounds = value != 0;
         if (sscanf(line, "scene_height=%f", &value) == 1 && value > 1.5f && value < 5.0f) scene_height = value;
         if (sscanf(line, "scene_width=%f", &value) == 1 && value > 0.5f && value < 20.0f) scene_width = value;
         if (sscanf(line, "scene_depth=%f", &value) == 1 && value > 0.5f && value < 20.0f) scene_depth = value;

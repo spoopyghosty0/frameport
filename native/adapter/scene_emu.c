@@ -685,6 +685,8 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_stage_bounds(XrSession session, XrRefe
 
 static PFN_xrVoidFunction scene_emulation(const char *name) {
     if (!emulate_scene) return NULL;
+    if (!strcmp(name, "xrGetReferenceSpaceBoundsRect"))  // only for games that trust the 1x1 m rect (NOPE stalled)
+        return scene_hide_bounds ? (PFN_xrVoidFunction)emu_stage_bounds : NULL;
     static const struct { const char *name; PFN_xrVoidFunction fn; } table[] = {
         {"xrQuerySpacesFB", (PFN_xrVoidFunction)emu_query_spaces_filtered},
         {"xrRetrieveSpaceQueryResultsFB", (PFN_xrVoidFunction)emu_retrieve_results},
@@ -707,7 +709,6 @@ static PFN_xrVoidFunction scene_emulation(const char *name) {
         {"xrRetrieveSpaceDiscoveryResultsMETA", (PFN_xrVoidFunction)emu_retrieve_discovery},
         {"xrSaveSpacesMETA", (PFN_xrVoidFunction)emu_save_spaces},
         {"xrEraseSpacesMETA", (PFN_xrVoidFunction)emu_erase_spaces},
-        {"xrGetReferenceSpaceBoundsRect", (PFN_xrVoidFunction)emu_stage_bounds},
     };
     for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); ++i)
         if (!strcmp(name, table[i].name)) return table[i].fn;

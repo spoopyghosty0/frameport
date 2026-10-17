@@ -12,6 +12,7 @@
 #define NEAR(a,b) (fabsf((a)-(b)) < 0.0001f)
 static XrInstance active_instance = (XrInstance)(uintptr_t)1;
 static float scene_width, scene_depth, scene_height = 2.5f;
+static int scene_hide_bounds;
 #define STAGE ((XrSpace)(uintptr_t)42)
 #define LOCAL ((XrSpace)(uintptr_t)43)
 #define SESSION ((XrSession)(uintptr_t)1)
@@ -293,6 +294,7 @@ int main(int argc,char **argv) {
     const char *mode=argv[1];
     if(!strcmp(mode,"override")) { scene_width=3; scene_depth=4; scene_height=2.7f; }
     emulate_scene=1;
+    scene_hide_bounds=!strcmp(mode,"box");  // only box mode hides the play area
     scene_app_mesh=!getenv("SCENE_NO_MESH_EXT");  // the app enabled XR_META_spatial_entity_mesh (the usual case)
     scene_on_create_session(SESSION);
     CHECK(is_scene_extension("XR_META_spatial_entity_discovery") && is_scene_extension("XR_META_spatial_entity_persistence") && is_scene_extension("XR_META_spatial_entity_mesh"));
@@ -319,10 +321,13 @@ int main(int argc,char **argv) {
         // walls go round the floor: -Z, +X, +Z, -X
         CHECK(entities[ENT_WALL0].pose_in_stage.position.z<0 && entities[ENT_WALL0+1].pose_in_stage.position.x>0);
         CHECK(entities[ENT_WALL0+2].pose_in_stage.position.z>0 && entities[ENT_WALL0+3].pose_in_stage.position.x<0);
-        PFN_xrGetReferenceSpaceBoundsRect bounds_fn=(PFN_xrGetReferenceSpaceBoundsRect)scene_emulation("xrGetReferenceSpaceBoundsRect");
-        XrExtent2Df ext={9,9};
-        CHECK(bounds_fn && bounds_fn(SESSION,XR_REFERENCE_SPACE_TYPE_STAGE,&ext)==XR_SPACE_BOUNDS_UNAVAILABLE && ext.width==0 && ext.height==0);
-        CHECK(bounds_fn(SESSION,XR_REFERENCE_SPACE_TYPE_LOCAL,&ext)==XR_SUCCESS && NEAR(ext.width,1));
+        CHECK(!strcmp(mode,"box") || !scene_emulation("xrGetReferenceSpaceBoundsRect"));  // off: the runtime answers
+        if(!strcmp(mode,"box")) {
+            PFN_xrGetReferenceSpaceBoundsRect bounds_fn=(PFN_xrGetReferenceSpaceBoundsRect)scene_emulation("xrGetReferenceSpaceBoundsRect");
+            XrExtent2Df ext={9,9};
+            CHECK(bounds_fn && bounds_fn(SESSION,XR_REFERENCE_SPACE_TYPE_STAGE,&ext)==XR_SPACE_BOUNDS_UNAVAILABLE && ext.width==0 && ext.height==0);
+            CHECK(bounds_fn(SESSION,XR_REFERENCE_SPACE_TYPE_LOCAL,&ext)==XR_SUCCESS && NEAR(ext.width,1));
+        }
         CHECK(!check_discovery());
     } else CHECK(!check_persistence(mode));
     XrAsyncRequestIdFB request;

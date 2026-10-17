@@ -249,6 +249,11 @@
   "title": "Room height",
   "group": "Game settings"
  },
+ "adapter.scene_hide_bounds": {
+  "anchor": "adapter-scene_hide_bounds",
+  "title": "Hide play-area size",
+  "group": "Game settings"
+ },
  "adapter.scene_width": {
   "anchor": "adapter-scene_width",
   "title": "Room width",

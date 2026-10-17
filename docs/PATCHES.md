@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 169 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 170 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -12,7 +12,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 
 - [Patches from OVRPort](#group-overport) (25)
 - [Steam Frame patches](#group-frame) (55)
-- [Game settings](#group-adapter) (68)
+- [Game settings](#group-adapter) (69)
 - [Files and settings on the Frame](#group-device) (8)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
 
@@ -150,6 +150,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Room depth](#adapter-scene_depth) | `adapter.scene_depth` | Game settings |  |
 | [Use room layout](#adapter-scene_emul) | `adapter.scene_emul` | Game settings | 13 |
 | [Room height](#adapter-scene_height) | `adapter.scene_height` | Game settings |  |
+| [Hide play-area size](#adapter-scene_hide_bounds) | `adapter.scene_hide_bounds` | Game settings | 1 |
 | [Room width](#adapter-scene_width) | `adapter.scene_width` | Game settings |  |
 | [Eye-image snapshots (diagnostics)](#adapter-snapshot) | `adapter.snapshot` | Game settings |  |
 | [Keep menus in place](#adapter-stable_local) | `adapter.stable_local` | Game settings | 1 |
@@ -1961,6 +1962,21 @@ Ceiling height of the pretend room.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Ceiling height for scene_emul.
+
+### <a id="adapter-scene_hide_bounds"></a>Hide play-area size
+
+For games that reject the room because of the play area.
+
+- `adapter.scene_hide_bounds`
+- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:**
+  - Value: int, default `0`.
+  - Game settings → Mixed reality → "Hide play-area size" (advanced); shown while `adapter.scene_emul` is on.
+- **Catalog games (1):** Demeter.
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> With scene_emul, the game's play-area (STAGE bounds) query answers "no play area". The Frame reports a 1x1 m area whose outline OVRPlugin can't give, and some Unity MR games then fail their guardian check (for example Demeter). Off by default: other games stalled without a play area.
 
 ### <a id="adapter-scene_width"></a>Room width
 
