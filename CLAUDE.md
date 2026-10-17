@@ -475,7 +475,9 @@ Repo is on an NTFS drive (`core.fileMode=false`); line endings are LF (`.gitattr
   XR_KHR_composition_layer_equirect2/cylinder, XR_FB_composition_layer_image_layout (flip emulated by Vulkan blit).
 - `xrConvertTimespecTimeToTimeKHR`/`xrConvertTimeToTimespecTimeKHR` return FUNCTION_UNSUPPORTED → adapter emulates
   (offset = predictedDisplayTime − period − CLOCK_MONOTONIC, sampled in xrWaitFrame).
-- Guardian STAGE bounds report 1×1 m (scene emulation uses ≥1.5 m).
+- Guardian STAGE bounds report 1×1 m (scene emulation uses ≥1.5 m). OVRPlugin treats that rect as a configured
+  boundary but can't outline it ("ovrpBoundary_Outer is not supported"): Demeter's guardian check indexed an empty
+  array → with `scene_emul` the app's STAGE `xrGetReferenceSpaceBoundsRect` returns XR_SPACE_BOUNDS_UNAVAILABLE.
 - GL goes through **Zink** (Mesa GL on Vulkan). Mesa GLSL is strict: `#pragma` before `#extension` fails, implicit
   int/float conversions fail (enable `GL_EXT_shader_implicit_conversions`), num_views=2 shaders on single-view FBOs
   give GL_INVALID_OPERATION. Some GLES games hit `zink: DEVICE LOST` (Unity MSAA RTT; Sniper Elite VR even without).

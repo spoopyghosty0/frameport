@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -45,7 +46,14 @@ def _last_error(output: str) -> str:
     """The exception line of Cpp2IL's output (its stack trace isn't useful to a user)."""
     lines = [ln.strip() for ln in output.splitlines() if ln.strip()]
     msg = next((ln for ln in reversed(lines) if "Exception" in ln and not ln.startswith("at ")), None)
-    return (msg or (lines[-1] if lines else "no output"))[:300]
+    msg = msg or next((ln for ln in reversed(lines) if not ln.startswith("at ")), None)
+    return (msg or "no output")[:300]
+
+
+def _runtime_failure(error: str) -> bool:
+    """.NET itself stopped before Cpp2IL read anything ("Process terminated", e.g. no libicu on the PC): not a fact
+    about the game, so it isn't cached. Older FramePort versions cached it as the stack line it ends with."""
+    return "Process terminated" in error or error.endswith("at Cpp2IL.Program.Main(System.String[])")
 
 
 def _plain_version(version: str) -> str:
@@ -70,7 +78,9 @@ def find_methods(lib: bytes, metadata: bytes, unity_version: str, wanted: dict[s
     nightly = False  # Cpp2IL's development build: for metadata newer than its release reads (Unity 6.5+)
     try:
         cached = json.loads(cache_file.read_text())
-        if cached.get("error"):  # Cpp2IL can't read this build (e.g. an old Unity): don't run it again per patch
+        if cached.get("error") and _runtime_failure(cached["error"]):
+            pass  # the PC's .NET failed last time, not the game: run again
+        elif cached.get("error"):  # Cpp2IL can't read this build (e.g. an old Unity): don't run it again per patch
             if cpp2il is not None or cached.get("nightly") or not tool.unsupported_metadata(cached["error"]):
                 raise RuntimeError(cached["error"])
             nightly = True  # only the release couldn't: the development build gets one try
@@ -87,6 +97,8 @@ def find_methods(lib: bytes, metadata: bytes, unity_version: str, wanted: dict[s
             break
         except _Unreadable as exc:
             error = "Cpp2IL couldn't read this game's code: " + str(exc)
+            if _runtime_failure(error):
+                raise RuntimeError("Cpp2IL couldn't start on this PC: " + str(exc)) from None
             if not explicit and not nightly and tool.unsupported_metadata(error):
                 nightly, exe = True, tool.ensure_nightly()
                 continue
@@ -114,7 +126,10 @@ def _run(cpp2il: Path, lib: bytes, metadata: bytes, unity_version: str, wanted: 
                                "--force-unity-version", _plain_version(unity_version),
                                "--use-processor", "attributeinjector", "--output-as", "diffable-cs",
                                "--output-to", str(t / "out")], capture_output=True, text=True, errors="replace",
-                              timeout=timeout, cwd=tmp)
+                              timeout=timeout, cwd=tmp,
+                              # .NET aborts at start without libicu (fresh WSL/Linux installs); Cpp2IL needs no
+                              # culture data
+                              env={**os.environ, "DOTNET_SYSTEM_GLOBALIZATION_INVARIANT": "1"})
         root = t / "out" / "DiffableCs"
         if not root.is_dir():
             raise _Unreadable(_last_error(proc.stdout + proc.stderr))

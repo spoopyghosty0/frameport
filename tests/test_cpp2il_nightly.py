@@ -105,3 +105,45 @@ def test_other_errors_dont_fetch_the_development_build(tools, monkeypatch):
     with pytest.raises(RuntimeError):
         il2cpp.find_methods(b"lib", b"meta", "2022.3.1f1", WANTED)
     assert runs == [release]
+
+
+ICU = ("Process terminated. Couldn't find a valid ICU package installed on the system. Please install libicu\n"
+       "   at System.Environment.FailFast(System.String)\n   at Cpp2IL.Program.Main(System.String[])")
+
+
+def test_dotnet_runtime_failure_is_named_and_not_cached(tools, monkeypatch):
+    release, nightly, runs = tools
+    assert il2cpp._last_error(ICU).startswith("Process terminated.")
+
+    def run(exe, *a):
+        runs.append(exe)
+        raise il2cpp._Unreadable(il2cpp._last_error(ICU))
+
+    monkeypatch.setattr(il2cpp, "_run", run)
+    with pytest.raises(RuntimeError, match="couldn't start on this PC"):
+        il2cpp.find_methods(b"lib", b"meta", "2022.3.9f1", WANTED)
+    assert not il2cpp._cache_file(b"lib", b"meta").exists() and runs == [release]
+
+
+def test_cached_runtime_failure_from_older_versions_is_retried(tools):
+    release, nightly, runs = tools
+    cache = il2cpp._cache_file(b"lib", b"meta")
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps({"unity_version": "2022.3.9f1", "nightly": False, "error":
+                                 "Cpp2IL couldn't read this game's code: at Cpp2IL.Program.Main(System.String[])"}))
+    runs.clear()
+    # the fixture's release fails on the metadata version -> the development build: both run, nothing cached wrong
+    assert il2cpp.find_methods(b"lib", b"meta", "2022.3.9f1", WANTED) and runs == [release, nightly]
+
+
+def test_cpp2il_runs_with_invariant_globalization(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw.get("env") or {})
+        raise il2cpp._Unreadable("stop")
+
+    monkeypatch.setattr(il2cpp.subprocess, "run", fake_run)
+    with pytest.raises(il2cpp._Unreadable):
+        il2cpp._run(Path("Cpp2IL"), b"lib", b"meta", "2022.3.9f1", WANTED, 5)
+    assert seen.get("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT") == "1"
