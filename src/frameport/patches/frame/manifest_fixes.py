@@ -75,11 +75,14 @@ class MetaPermissions(Patch):
     order = 22
 
     def detect(self, a):
-        from ..applicability import needs_scene
+        from ..applicability import needs_scene, uses_scene
 
         if needs_scene(a):
             return Suggestion(True, "Mixed-reality game that needs the room model: its 'use spatial data' "
                                     "permission must be granted (for example Demeter).")
+        if uses_scene(a):  # gets the room (scene_emul) too: without the permission it never asks for it
+            return Suggestion(True, "Uses Meta's room or anchor APIs: their permissions must be granted, or the "
+                                    "game never asks for the room (for example NOPE's MR mode).")
         scene = [p for p in a.meta_permissions if any(k in p for k in ("SCENE", "ANCHOR", "SPATIAL", "BOUNDARY"))]
         if scene:
             names = ", ".join(p.rsplit(".", 1)[-1] for p in scene[:3])

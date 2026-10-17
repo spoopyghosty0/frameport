@@ -793,15 +793,44 @@ static int layer_usable(const XrCompositionLayerBaseHeader *layer) {
 static uint64_t next_fake_handle = 0x7f000001;
 #define FAKE_HANDLE(type) ((type)(uintptr_t)__atomic_fetch_add(&next_fake_handle, 1, __ATOMIC_RELAXED))
 
-static XRAPI_ATTR XrResult XRAPI_CALL emu_create_passthrough(XrSession s, const XrPassthroughCreateInfoFB *i, XrPassthroughFB *out) {
-    (void)s; (void)i; if (!out) return XR_ERROR_VALIDATION_FAILURE; *out = FAKE_HANDLE(XrPassthroughFB); return XR_SUCCESS;
+// The app's passthrough calls, logged (each kind at most 8 times) to see where an MR game stops (NOPE: black).
+static void passthrough_log(const char *what, uint64_t handle, uint32_t flags, int purpose) {
+    static int counts[8];
+    static const char *const kinds[8] = {"create", "start", "pause", "destroy", "layer create", "layer resume",
+                                         "layer pause", "layer destroy"};
+    for (int k = 0; k < 8; ++k)
+        if (!strcmp(what, kinds[k]) && counts[k]++ < 8)
+            LOG("passthrough: %s 0x%llx flags=0x%x purpose=%d", what, (unsigned long long)handle, flags, purpose);
 }
-static XRAPI_ATTR XrResult XRAPI_CALL emu_passthrough_handle(XrPassthroughFB p) { (void)p; return XR_SUCCESS; }
+static XRAPI_ATTR XrResult XRAPI_CALL emu_create_passthrough(XrSession s, const XrPassthroughCreateInfoFB *i, XrPassthroughFB *out) {
+    (void)s; if (!out) return XR_ERROR_VALIDATION_FAILURE; *out = FAKE_HANDLE(XrPassthroughFB);
+    passthrough_log("create", (uint64_t)(uintptr_t)*out, i ? (uint32_t)i->flags : 0, -1);
+    return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_passthrough_start(XrPassthroughFB p) {
+    passthrough_log("start", (uint64_t)(uintptr_t)p, 0, -1); return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_passthrough_pause(XrPassthroughFB p) {
+    passthrough_log("pause", (uint64_t)(uintptr_t)p, 0, -1); return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_passthrough_handle(XrPassthroughFB p) {
+    passthrough_log("destroy", (uint64_t)(uintptr_t)p, 0, -1); return XR_SUCCESS;
+}
 static XRAPI_ATTR XrResult XRAPI_CALL emu_create_passthrough_layer(XrSession s, const XrPassthroughLayerCreateInfoFB *i,
         XrPassthroughLayerFB *out) {
-    (void)s; (void)i; if (!out) return XR_ERROR_VALIDATION_FAILURE; *out = FAKE_HANDLE(XrPassthroughLayerFB); return XR_SUCCESS;
+    (void)s; if (!out) return XR_ERROR_VALIDATION_FAILURE; *out = FAKE_HANDLE(XrPassthroughLayerFB);
+    passthrough_log("layer create", (uint64_t)(uintptr_t)*out, i ? (uint32_t)i->flags : 0, i ? (int)i->purpose : -1);
+    return XR_SUCCESS;
 }
-static XRAPI_ATTR XrResult XRAPI_CALL emu_passthrough_layer_handle(XrPassthroughLayerFB l) { (void)l; return XR_SUCCESS; }
+static XRAPI_ATTR XrResult XRAPI_CALL emu_passthrough_layer_resume(XrPassthroughLayerFB l) {
+    passthrough_log("layer resume", (uint64_t)(uintptr_t)l, 0, -1); return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_passthrough_layer_pause(XrPassthroughLayerFB l) {
+    passthrough_log("layer pause", (uint64_t)(uintptr_t)l, 0, -1); return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL emu_passthrough_layer_handle(XrPassthroughLayerFB l) {
+    passthrough_log("layer destroy", (uint64_t)(uintptr_t)l, 0, -1); return XR_SUCCESS;
+}
 static XRAPI_ATTR XrResult XRAPI_CALL emu_passthrough_layer_style(XrPassthroughLayerFB l, const XrPassthroughStyleFB *st) {
     (void)l; (void)st; return XR_SUCCESS;
 }
@@ -837,12 +866,12 @@ static PFN_xrVoidFunction passthrough_emulation(const char *name) {
     static const struct { const char *name; PFN_xrVoidFunction fn; } table[] = {
         {"xrCreatePassthroughFB", (PFN_xrVoidFunction)emu_create_passthrough},
         {"xrDestroyPassthroughFB", (PFN_xrVoidFunction)emu_passthrough_handle},
-        {"xrPassthroughStartFB", (PFN_xrVoidFunction)emu_passthrough_handle},
-        {"xrPassthroughPauseFB", (PFN_xrVoidFunction)emu_passthrough_handle},
+        {"xrPassthroughStartFB", (PFN_xrVoidFunction)emu_passthrough_start},
+        {"xrPassthroughPauseFB", (PFN_xrVoidFunction)emu_passthrough_pause},
         {"xrCreatePassthroughLayerFB", (PFN_xrVoidFunction)emu_create_passthrough_layer},
         {"xrDestroyPassthroughLayerFB", (PFN_xrVoidFunction)emu_passthrough_layer_handle},
-        {"xrPassthroughLayerPauseFB", (PFN_xrVoidFunction)emu_passthrough_layer_handle},
-        {"xrPassthroughLayerResumeFB", (PFN_xrVoidFunction)emu_passthrough_layer_handle},
+        {"xrPassthroughLayerPauseFB", (PFN_xrVoidFunction)emu_passthrough_layer_pause},
+        {"xrPassthroughLayerResumeFB", (PFN_xrVoidFunction)emu_passthrough_layer_resume},
         {"xrPassthroughLayerSetStyleFB", (PFN_xrVoidFunction)emu_passthrough_layer_style},
         {"xrCreateGeometryInstanceFB", (PFN_xrVoidFunction)emu_create_geometry},
         {"xrDestroyGeometryInstanceFB", (PFN_xrVoidFunction)emu_geometry_handle},
@@ -883,6 +912,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(XrInstance instance, XrSyst
                 ((XrSystemSpaceDiscoveryPropertiesMETA *)p)->supportsSpaceDiscovery = XR_TRUE;
             if (p->type == XR_TYPE_SYSTEM_SPACE_PERSISTENCE_PROPERTIES_META && emulate_scene)
                 ((XrSystemSpacePersistencePropertiesMETA *)p)->supportsSpacePersistence = XR_TRUE;
+            if (p->type == XR_TYPE_SYSTEM_BOUNDARY_VISIBILITY_PROPERTIES_META && emulate_scene)
+                ((XrSystemBoundaryVisibilityPropertiesMETA *)p)->supportsBoundaryVisibility = XR_TRUE;
             if (p->type == XR_TYPE_SYSTEM_PASSTHROUGH_PROPERTIES2_FB)
                 ((XrSystemPassthroughProperties2FB *)p)->capabilities = XR_PASSTHROUGH_CAPABILITY_BIT_FB;
             if (p->type == XR_TYPE_SYSTEM_RENDER_MODEL_PROPERTIES_FB && emulate_render_model)

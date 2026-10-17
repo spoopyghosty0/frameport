@@ -68,6 +68,23 @@ static XRAPI_ATTR XrResult XRAPI_CALL emu_save_spaces(XrSession session, const X
     pthread_mutex_unlock(&scene_lock);
     return XR_SUCCESS;
 }
+// XR_META_boundary_visibility: the Frame shows no guardian over an app anyway, so a request always succeeds; the
+// change event (once per new state, like Meta's runtime) is what MR games wait for before they start.
+static XrBoundaryVisibilityMETA boundary_visibility = XR_BOUNDARY_VISIBILITY_NOT_SUPPRESSED_META;
+static XRAPI_ATTR XrResult XRAPI_CALL emu_request_boundary_visibility(XrSession session, XrBoundaryVisibilityMETA v) {
+    (void)session;
+    if (v != XR_BOUNDARY_VISIBILITY_SUPPRESSED_META && v != XR_BOUNDARY_VISIBILITY_NOT_SUPPRESSED_META)
+        return XR_ERROR_VALIDATION_FAILURE;
+    pthread_mutex_lock(&scene_lock);
+    if (v != boundary_visibility) {
+        boundary_visibility = v;
+        XrEventDataBoundaryVisibilityChangedMETA e = {XR_TYPE_EVENT_DATA_BOUNDARY_VISIBILITY_CHANGED_META, NULL, v};
+        push_event(&e, sizeof(e));
+        LOG("scene: boundary %s", v == XR_BOUNDARY_VISIBILITY_SUPPRESSED_META ? "suppressed" : "shown");
+    }
+    pthread_mutex_unlock(&scene_lock);
+    return XR_SUCCESS;
+}
 static XRAPI_ATTR XrResult XRAPI_CALL emu_erase_spaces(XrSession session, const XrSpacesEraseInfoMETA *info,
                                                       XrAsyncRequestIdFB *request) {
     (void)session;

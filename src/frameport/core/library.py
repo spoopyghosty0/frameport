@@ -322,6 +322,22 @@ def _migrate(data: dict) -> bool:
                     "Scene and spatial anchor APIs use the saved room on the Frame.")
         done.append("scene_emul_all")
         changed = True
+    if "scene_permissions" not in done:
+        # Games that got the room also need Meta's scene/anchor permissions declared, or Android never grants them
+        # and the game never asks for the room (NOPE, Pinball FX). Keep explicitly edited recipes intact.
+        from ..patches.applicability import uses_scene
+
+        for g in (data.get("games") or {}).values():
+            a, r = g.get("analysis"), g.get("recipe")
+            if (not isinstance(a, dict) or not isinstance(r, dict) or r.get("source") == "user"
+                    or g.get("kind") in ("linux", "rift")):
+                continue
+            if (r.get("patches") or {}).get("adapter.scene_emul", {}).get("value") and uses_scene(analysis_from_dict(a)):
+                r["patches"].setdefault("frame.meta_permissions", {})
+                r.setdefault("reasons", {}).setdefault(
+                    "frame.meta_permissions", "Meta's room and anchor permissions must be granted for the saved room.")
+        done.append("scene_permissions")
+        changed = True
     if "flat_hide_navbar" not in done:
         # Android apps without VR gain the default-on "Hide Android's navigation bar" patch
         for g in (data.get("games") or {}).values():

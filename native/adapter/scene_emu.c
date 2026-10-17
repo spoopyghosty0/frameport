@@ -13,6 +13,7 @@ static const char *const scene_extensions[] = {
     "XR_FB_spatial_entity", "XR_FB_spatial_entity_query", "XR_FB_spatial_entity_storage",
     "XR_FB_spatial_entity_container", "XR_FB_scene", "XR_FB_scene_capture",
     "XR_META_spatial_entity_mesh", "XR_META_spatial_entity_discovery", "XR_META_spatial_entity_persistence",
+    "XR_META_boundary_visibility",  // MR games hide the guardian before starting (NOPE asks every frame)
 };
 #define SCENE_EXTENSION_COUNT (sizeof(scene_extensions) / sizeof(scene_extensions[0]))
 
@@ -709,6 +710,7 @@ static PFN_xrVoidFunction scene_emulation(const char *name) {
         {"xrRetrieveSpaceDiscoveryResultsMETA", (PFN_xrVoidFunction)emu_retrieve_discovery},
         {"xrSaveSpacesMETA", (PFN_xrVoidFunction)emu_save_spaces},
         {"xrEraseSpacesMETA", (PFN_xrVoidFunction)emu_erase_spaces},
+        {"xrRequestBoundaryVisibilityMETA", (PFN_xrVoidFunction)emu_request_boundary_visibility},
     };
     for (size_t i = 0; i < sizeof(table) / sizeof(table[0]); ++i)
         if (!strcmp(name, table[i].name)) return table[i].fn;

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from ..core.models import Analysis, Recipe
 from ..patches import base
+from ..patches.applicability import uses_scene
 from . import catalog
 from .catalog import TOGGLED_DEVICE
 
@@ -61,6 +62,11 @@ def suggest(analysis: Analysis, use_catalog: bool = True) -> Recipe:
         for key, value in entry.adapter.items():
             recipe.patches[f"adapter.{key}"] = {"value": value}
             recipe.reasons[f"adapter.{key}"] = why
+        if ((recipe.patches.get("adapter.scene_emul") or {}).get("value") and uses_scene(analysis)
+                and "frame.meta_permissions" not in entry.frame_remove):
+            # the room needs Meta's scene/anchor permissions granted, or the game never asks for it (NOPE)
+            recipe.patches.setdefault("frame.meta_permissions", {})
+            recipe.reasons.setdefault("frame.meta_permissions", "Meta's room and anchor permissions for the saved room.")
         if entry.device_files:
             recipe.patches["device.files"] = {"files": dict(entry.device_files)}
             recipe.reasons["device.files"] = why

@@ -26,6 +26,27 @@ def test_scene_migration_only_changes_automatic_recipes_once():
     assert data == before
 
 
+def test_scene_games_get_the_meta_permissions():
+    # NOPE / Pinball FX never asked for the room: Android couldn't grant USE_SCENE without the declarations
+    from frameport.patches import base
+
+    data = {"settings": {"migrations": ["scene_emul_all"]}, "games": {
+        "com.test.scene": {"analysis": _analysis(meta_permissions=["com.oculus.permission.USE_SCENE"]).to_dict(),
+                           "recipe": {"source": "catalog", "patches": {"adapter.scene_emul": {"value": 1}}}},
+        "com.test.off": {"analysis": _analysis(meta_permissions=["com.oculus.permission.USE_SCENE"]).to_dict(),
+                         "recipe": {"source": "catalog", "patches": {"adapter.scene_emul": {"value": 0}}}},
+        "com.test.mine": {"analysis": _analysis(meta_permissions=["com.oculus.permission.USE_SCENE"]).to_dict(),
+                          "recipe": {"source": "user", "patches": {"adapter.scene_emul": {"value": 1}}}}}}
+    library._migrate(data)
+    patches = {pkg: g["recipe"]["patches"] for pkg, g in data["games"].items()}
+    assert "frame.meta_permissions" in patches["com.test.scene"]
+    assert "frame.meta_permissions" not in patches["com.test.off"]
+    assert "frame.meta_permissions" not in patches["com.test.mine"]
+    anchor = _analysis(meta_permissions=["com.oculus.permission.USE_ANCHOR_API"])
+    assert base.get("frame.meta_permissions").detect(anchor).recommended
+    assert base.get("frame.meta_permissions").detect(_analysis()) is None
+
+
 def test_scene_emulation_brings_the_xrshim():
     # OVRPort's dispatcher refuses the scene functions; only the shim gets them to FrameBridge (Pinball FX VR)
     from frameport.patches.frame.adapter import needs_xrshim

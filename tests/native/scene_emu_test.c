@@ -299,6 +299,16 @@ int main(int argc,char **argv) {
     scene_on_create_session(SESSION);
     CHECK(is_scene_extension("XR_META_spatial_entity_discovery") && is_scene_extension("XR_META_spatial_entity_persistence") && is_scene_extension("XR_META_spatial_entity_mesh"));
     CHECK(scene_emulation("xrDiscoverSpacesMETA") && scene_emulation("xrGetSpaceTriangleMeshMETA") && !scene_emulation("garbage"));
+    {  // boundary visibility: one change event per new state
+        PFN_xrRequestBoundaryVisibilityMETA vis=(PFN_xrRequestBoundaryVisibilityMETA)scene_emulation("xrRequestBoundaryVisibilityMETA");
+        XrEventDataBuffer bev;
+        CHECK(is_scene_extension("XR_META_boundary_visibility") && vis);
+        CHECK(vis(SESSION,XR_BOUNDARY_VISIBILITY_SUPPRESSED_META)==XR_SUCCESS && pop_event(&bev));
+        CHECK(bev.type==XR_TYPE_EVENT_DATA_BOUNDARY_VISIBILITY_CHANGED_META &&
+              ((XrEventDataBoundaryVisibilityChangedMETA*)&bev)->boundaryVisibility==XR_BOUNDARY_VISIBILITY_SUPPRESSED_META);
+        CHECK(vis(SESSION,XR_BOUNDARY_VISIBILITY_SUPPRESSED_META)==XR_SUCCESS && !pop_event(&bev));  // unchanged: no event
+        CHECK(vis(SESSION,(XrBoundaryVisibilityMETA)7)==XR_ERROR_VALIDATION_FAILURE);
+    }
     if(!strcmp(mode,"room")) { CHECK(argc==4); CHECK(!check_room(atoi(argv[2]),atoi(argv[3]))); }
     else if(!strcmp(mode,"derived")) {
         CHECK(room_from_file && wall_count==4 && room_entity_count==7);
