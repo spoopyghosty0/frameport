@@ -391,12 +391,12 @@ def test_frame_loop_fixes_are_per_game_settings():
 
     from frameport.patches import settings
 
-    src = Path(settings.__file__).read_text()
+    src = Path(settings.__file__).read_text(encoding="utf-8")
     assert '("ovrp_begin_gate", "int", 0,' in src and '("ovrp_hold_physics", "int", 0,' in src
-    shim = (Path(__file__).parents[1] / "native/ovrpshim/ovrpshim.c").read_text()
+    shim = (Path(__file__).parents[1] / "native/ovrpshim/ovrpshim.c").read_text(encoding="utf-8")
     assert "if (!begin_gate) return 1;" in shim and "if (hold_physics && step == STEP_PHYSICS" in shim
     recipe = yaml.safe_load((Path(__file__).parents[1] / "catalog/games/com.JustAddWater.SniperEliteVR.yaml")
-                            .read_text())
+                            .read_text(encoding="utf-8"))
     assert recipe["adapter"]["ovrp_begin_gate"] == 1 and recipe["adapter"]["ovrp_hold_physics"] == 1
 
 
@@ -528,8 +528,7 @@ def test_meta_depth_occlusion_patch_neutralises_keywords(tmp_path):
         assert b"SOFT_OCCLUSION" not in split_data
         assert b"NO_OCCLUSION_X" in split_data
         assert b"NO_OCCLUSION_Y" in split_data
-        assert b"HARD_OCCLUSION" not in meta_data
-        assert b"SOFT_OCCLUSION" not in meta_data
-        assert b"NO_OCCLUSION_X" in meta_data
-        assert b"NO_OCCLUSION_Y" in meta_data
-        assert other_data == b"HARD_OCCLUSION"  # non-asset/metadata left alone
+        # Managed metadata is left untouched so managed code cannot enable the renamed variant
+        assert b"HARD_OCCLUSION" in meta_data
+        assert b"NO_OCCLUSION_X" not in meta_data
+        assert other_data == b"HARD_OCCLUSION"  # non-asset left alone

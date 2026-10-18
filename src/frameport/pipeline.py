@@ -1051,6 +1051,13 @@ def _store_analysis(package: str, a) -> dict:
         if library.recipe_from_dict(g.get("recipe") or {"package": package}).source != "user":
             g["recipe"] = library.recipe_to_dict(suggested)
             g["status"] = suggested.status
+        elif a.extra.get("meta_depth_occlusion"):
+            rec = g.get("recipe")
+            if isinstance(rec, dict) and "frame.meta_depth_occlusion" not in rec.get("patches", {}):
+                rec.setdefault("patches", {})["frame.meta_depth_occlusion"] = {}
+                rec.setdefault("reasons", {})["frame.meta_depth_occlusion"] = (
+                    "Disables missing Meta depth sensor occlusion."
+                )
     return library.update_game(package, change)
 
 

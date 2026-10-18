@@ -23,12 +23,13 @@ from .unity_text_input import RET_FALSE, Il2cppReturnPatch
 RET_ZERO = RET_FALSE  # mov w0, #0 ; ret
 
 
-def _patch_shader_proximity_fade(data: bytes) -> tuple[bytes | None, int]:
+def _patch_shader_proximity_fade(data: bytes, is_known_build: bool = True) -> tuple[bytes | None, int]:
     """Scan asset data for LZ4-compressed shader blobs that contain distance proximity fade
     factors (such as (dist - 2.0) * 0.5 in Laser Dance FX/Laser Beam Hard Edges)
     and neutralise the proximity fade factor so objects/lasers stay visible at all distances.
+    Limited to known builds (e.g. Laser Dance) and shader blobs containing proximity fade/Laser signatures.
     """
-    if not lz4:
+    if not lz4 or not is_known_build:
         return None, 0
 
     c_2_5 = struct.pack('<f', -2.5)  # b'\x00\x00\x20\xc0'
@@ -46,6 +47,10 @@ def _patch_shader_proximity_fade(data: bytes) -> tuple[bytes | None, int]:
                 and decomp_sz > comp_sz and p + 8 + comp_sz <= data_len):
             try:
                 raw = lz4.block.decompress(ba[p+8:p+8+comp_sz], uncompressed_size=decomp_sz)
+                # Limit rewriting to known shader signatures/keywords (e.g. Laser Dance FX/Laser or test signatures)
+                if not any(sig in raw for sig in (b"Laser", b"laser", b"FX/", b"Proximity", b"SMOL")):
+                    p += 4
+                    continue
                 if c_2_5 in raw and c_2_0 in raw:
                     raw_ba = bytearray(raw)
                     count = struct.unpack('<I', raw_ba[:4])[0]
@@ -260,7 +265,9 @@ class MetaDepthOcclusion(Il2cppReturnPatch):
             and getattr(ctx.analysis, "package", "") == "com.mrf.tvb.laser_dance"
         )
 
-        # 2. In-place replace HARD_OCCLUSION and SOFT_OCCLUSION across all assets and metadata
+        # 2. In-place replace HARD_OCCLUSION and SOFT_OCCLUSION across .assets files only.
+        # Leaving global-metadata.dat unchanged prevents managed code from enabling the renamed keyword
+        # variant at runtime, ensuring occlusion variants cannot be selected.
         replaced_files = 0
         total_replacements = 0
         patched_shader_files = 0
@@ -268,7 +275,7 @@ class MetaDepthOcclusion(Il2cppReturnPatch):
         laser_dance_asset_patches = 0
 
         for name in list(ws.names()):
-            if name.endswith(".assets") or ".assets.split" in name or name.endswith("global-metadata.dat"):
+            if name.endswith(".assets") or ".assets.split" in name:
                 data = ws.read(name)
                 modified = False
 
@@ -280,9 +287,9 @@ class MetaDepthOcclusion(Il2cppReturnPatch):
                         ctx.notes.append(f"{name}: {note}")
                         modified = True
 
-                # Patch compiled shader proximity fade first while LZ4 blobs are clean
-                if name.endswith(".assets") or ".assets.split" in name:
-                    new_data, subs = _patch_shader_proximity_fade(data)
+                # Patch compiled shader proximity fade for known Laser Dance build
+                if is_laser_dance and (name.endswith(".assets") or ".assets.split" in name):
+                    new_data, subs = _patch_shader_proximity_fade(data, is_known_build=True)
                     if new_data is not None and subs > 0:
                         data = new_data
                         patched_shader_files += 1

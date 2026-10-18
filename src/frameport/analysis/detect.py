@@ -54,7 +54,9 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 #     USB MIDI driver polls the missing USB service: frame.usb_midi_watcher, GitHub #297) (2026-10)
 # 22: unreal_binned3 (Unreal built with FMallocBinned3 reserves tens of GiB at load: frame.unreal_noreserve,
 #     GitHub #349) (2026-10)
-ANALYSIS_VERSION = 22
+# 23: meta_depth_occlusion (Unity games using Meta depth sensor occlusion: frame.meta_depth_occlusion) (2026-10)
+ANALYSIS_VERSION = 23
+
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)

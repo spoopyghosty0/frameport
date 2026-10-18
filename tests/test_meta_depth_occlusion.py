@@ -83,5 +83,90 @@ def test_patch_laser_dance_assets():
 def test_analysis_version_bumped():
     from frameport.analysis.detect import ANALYSIS_VERSION
 
-    assert ANALYSIS_VERSION >= 14
+    assert ANALYSIS_VERSION >= 23
+
+
+def test_patch_shader_proximity_fade_ignores_unknown_build_and_unrelated_shader():
+    c_2_5 = struct.pack('<f', -2.5)
+    c_2_0 = struct.pack('<f', -2.0)
+
+    # Subprogram with constants but NO known shader keyword/signature
+    sub = b'UNRELATED_SHADER' + b'\x00' * 10 + c_2_5 + b'\x00' * 4 + c_2_0 + b'\x00' * 26
+    entry0 = struct.pack('<III', 16, len(sub), 0)
+    raw = struct.pack('<I', 1) + entry0 + sub
+    noise = (os.urandom(256) * 300)[:60000]
+    raw = raw + noise
+    decomp_sz = len(raw)
+    comp = lz4.block.compress(raw, mode='high_compression', compression=10, store_size=False)
+    asset_data = struct.pack('<II', decomp_sz, len(comp)) + comp
+
+    # If is_known_build=False, returns None, 0 immediately
+    res, subs = _patch_shader_proximity_fade(asset_data, is_known_build=False)
+    assert res is None and subs == 0
+
+    # Even with is_known_build=True, unrelated shader without known signature is not modified
+    res, subs = _patch_shader_proximity_fade(asset_data, is_known_build=True)
+    assert res is None and subs == 0
+
+
+def test_migration_meta_depth_occlusion_deferred_and_applied_after_reanalysis(tmp_path):
+    from frameport.core import library
+    from frameport.pipeline import _store_analysis
+    from test_patches import _analysis
+
+    fake_apk = tmp_path / "game.apk"
+    fake_apk.write_bytes(b"PK\x03\x04")
+
+    # Entry whose analysis predates the meta_depth_occlusion field
+    data = {
+        "settings": {"migrations": []},
+        "games": {
+            "com.test.mrgame": {
+                "package": "com.test.mrgame",
+                "apk": str(fake_apk),
+                "analysis": {
+                    "package": "com.test.mrgame",
+                    "engine": "Unity",
+                    "extra": {"analysis_version": 13},  # predates meta_depth_occlusion
+                },
+                "recipe": {
+                    "package": "com.test.mrgame",
+                    "source": "user",
+                    "patches": {},
+                    "reasons": {},
+                },
+            }
+        },
+    }
+
+    # First migration run: deferred because analysis predates field and game has an APK
+    library._migrate(data)
+    assert "meta_depth_occlusion" not in data["settings"]["migrations"]
+    assert "frame.meta_depth_occlusion" not in data["games"]["com.test.mrgame"]["recipe"]["patches"]
+
+    # Save to library to test _store_analysis with user recipe
+    library.upsert_game(
+        "com.test.mrgame",
+        apk=str(fake_apk),
+        recipe={"package": "com.test.mrgame", "source": "user", "patches": {}, "reasons": {}},
+        analysis={"package": "com.test.mrgame", "engine": "Unity", "extra": {"analysis_version": 13}},
+    )
+
+    new_a = _analysis(
+        package="com.test.mrgame",
+        engine="Unity",
+        graphics="Vulkan",
+        extra={"analysis_version": 23, "meta_depth_occlusion": True},
+    )
+
+    _store_analysis("com.test.mrgame", new_a)
+    stored = library.game("com.test.mrgame")
+    assert "frame.meta_depth_occlusion" in stored["recipe"]["patches"]
+
+    # Now that the game's analysis includes meta_depth_occlusion, migration completes and marks done
+    data["games"]["com.test.mrgame"] = stored
+    library._migrate(data)
+    assert "meta_depth_occlusion" in data["settings"]["migrations"]
+
+
 
