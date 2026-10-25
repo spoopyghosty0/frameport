@@ -14,7 +14,7 @@ const steps = [
   { side: 'pc', where: 'On your PC', title: 'Start setup' },
   { side: 'fr', where: 'On the Frame, once', title: 'Run the setup line' },
   { side: 'pc', where: 'On your PC', title: 'Allow it' },
-  { side: 'fr', where: 'On the Frame, by itself', title: 'It sets itself up' },
+  { side: 'fr', where: 'On the Frame, by itself', title: 'The Frame sets itself up' },
   { side: 'fr', where: 'Every game', title: 'Add games, play' },
 ];
 ---
@@ -34,7 +34,8 @@ const steps = [
       <div class="txt">
         <p class="ey pc">Step 1 · On your PC</p>
         <h3>Download FramePort</h3>
-        <p>Windows, macOS or Linux. Unpack it anywhere and start it. No installer; it updates itself.</p>
+        <p>Windows, macOS or Linux. Unpack the download anywhere and start FramePort. No installer; FramePort updates
+            itself.</p>
         <div class="dls">
           {DOWNLOADS.map((d) => (
             <a class="dl" href={downloadPage(d.os)} data-os={d.os} data-first={FIRST[d.os]} data-asset={d.asset} data-run={RUN[d.os]}>
@@ -90,7 +91,7 @@ const steps = [
           <p>Open Konsole: SteamVR dashboard → <b>Launch a program → Desktop</b>, then app menu → <b>System → Konsole</b>.
             Run this line:</p>
           <div class="cmd"><code><span class="prompt">$</span>{LINE}</code><button type="button" class="btn btn-ghost btn-small" data-copy-line={LINE}>Copy</button></div>
-          <p class="calm">It finds FramePort on your PC and waits: nothing changes on the Frame until you click
+          <p class="calm">The setup line finds FramePort on your PC and waits: nothing changes on the Frame until you click
             <b>Allow</b>. Then it turns on Developer Mode. No password, no root. <a href={url('setup.sh')}>Read the script</a></p>
           <p class="small">No keyboard? Open <a href={url('setup/')}>the setup page</a> in Chromium on the Frame (Steam's
             <b>+</b> on the taskbar installs it) and copy the line.</p>
@@ -116,7 +117,7 @@ const steps = [
     <section class="pane" data-pane="3" role="tabpanel" hidden>
       <div class="txt">
         <p class="ey pc">Step 4 · On your PC</p>
-        <h3>Allow it when the codes match</h3>
+        <h3>Allow the Frame when the codes match</h3>
         <p>Konsole and FramePort show the same 4 digits. Click <b>Allow</b>. Nothing changes on the Frame before
           that.</p>
         <p class="small">Try it: the Frame here shows <b data-digits-txt>4831</b>.</p>
@@ -159,7 +160,7 @@ const steps = [
         <p class="ey fr">Step 6 · Every game</p>
         <h3>Add games, install, play</h3>
         <p><b>Add games → Scan a folder…</b>, pick a game, click <b>Install on Frame</b>. It shows up in the Frame's
-          Steam library. Play it from FramePort or in the headset.</p>
+          Steam library. Play the game from FramePort or in the headset.</p>
         <a class="video" href={url('media/frameport-install.mp4')}>
           <video muted loop playsinline preload="none" poster={url('media/frameport-install.jpg')} data-preview={url('media/preview-install.mp4')} width="1280" height="720" aria-hidden="true"></video>
           <span>▶ Watch the video</span>

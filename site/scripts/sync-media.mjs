@@ -48,9 +48,9 @@ for (const [id, from] of [['tour', 18], ['install', 28]]) {
 copy(join(repo, 'bootstrap/setup.sh'), join(site, 'public/s'));
 copy(join(repo, 'bootstrap/setup.sh'), join(site, 'public/setup.sh'));
 
-// every image the docs pages show (docs/images → media/docs)
+// every image the docs pages show (docs/images → media/docs, subfolders such as controllers/ included)
 let docImages = 0;
-for (const name of readdirSync(join(repo, 'docs/images'))) {
+for (const name of readdirSync(join(repo, 'docs/images'), { recursive: true })) {
   if (!/\.(png|jpe?g|webp|gif|svg)$/i.test(name)) continue;
   copy(join(repo, 'docs/images', name), join(site, 'public/media/docs', name));
   docImages++;

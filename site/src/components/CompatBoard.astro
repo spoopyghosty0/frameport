@@ -60,7 +60,7 @@ const latest = latestCheck(games);
           <span role="columnheader" class="c-date">Checked</span>
         </div>
         <ul class="rows" role="rowgroup" data-rows set:html={rowsHtml(games, patchHref)} />
-        <p class="empty" data-empty hidden>No tested game matches. It may still work: FramePort suggests patches.</p>
+        <p class="empty" data-empty hidden>No tested game matches. The game may still work: FramePort suggests patches.</p>
       </div>
       <div class="board-foot">
         <button type="button" class="btn btn-ghost btn-small" data-more>Show all {games.length} games</button>

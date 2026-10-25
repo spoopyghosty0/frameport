@@ -40,8 +40,8 @@ import { DOWNLOADS, downloadPage, url } from '../../data/site';
 
       <section class="status" data-when="fallback">
         <h2>FramePort didn't open?</h2>
-        <p class="muted">It may not be on this PC yet. FramePort is free and installs games on a Steam Frame from your
-          PC.</p>
+        <p class="muted">FramePort may not be on this PC yet. FramePort is free and installs games on a Steam Frame from
+          your PC.</p>
 
         <ol class="steps">
           <li>
@@ -52,8 +52,8 @@ import { DOWNLOADS, downloadPage, url } from '../../data/site';
                 <a class="btn btn-primary" href={downloadPage()} data-download><Glyph name="frame-solid" size={18} /><span data-download-label>Download FramePort</span></a>
                 {DOWNLOADS.map((d) => <a class="other" href={downloadPage(d.os)} data-os={d.os}>{d.label}</a>)}
               </div>
-              <p class="muted small">Unpack it and start FramePort. It shows how to <a href={url('setup/')}>set up
-                your Frame</a>.</p>
+              <p class="muted small">Unpack the download and start FramePort. FramePort shows how to <a href={url('setup/')}>set
+                up your Frame</a>.</p>
             </div>
           </li>
           <li>

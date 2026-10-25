@@ -593,7 +593,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
       dialog(`<h4>Set up your Steam Frame</h4>`
         + `<p>On the Frame, open the SteamVR dashboard → <b>Launch a program → Desktop</b>, then app menu → <b>System → Konsole</b>, and run:</p>`
         + `<div class="cmdl"><code>curl -fsSL https://frameport.app/s | bash</code></div>`
-        + `<p class="small">It finds this PC ("amber-otter") and asks. You allow it here.</p>`
+        + `<p class="small">The setup line finds this PC ("amber-otter") and asks. You allow the Frame here.</p>`
         + `<div data-ask></div><ul class="progress" data-prog></ul>`
         + `<div class="row"><button class="btn-p" data-act="ran">I ran it on the Frame</button><button class="btn-s" data-act="close">Close</button></div>`);
       emit('command');
@@ -876,7 +876,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
       target: '[data-sidebar] [data-route="frame"]', wait: 'route:frame' },
     { title: 'Set up the Frame', text: 'Pick <b>Wi-Fi</b> or <b>USB cable</b>, then <b>Start setup</b>.',
       target: '[data-act="show-command"]', wait: 'command' },
-    { title: 'Run it, allow it', text: 'Run the line in Konsole on the Frame. Click the button, then <b>Allow</b> when the codes match.',
+    { title: 'Run the line, allow the Frame', text: 'Run the line in Konsole on the Frame. Click the button, then <b>Allow</b> when the codes match.',
       target: '.dlg', wait: 'connected' },
     { title: 'Connected', text: 'The Frame card shows the battery and what is playing.',
       target: '[data-framecard]', next: 'Next' },
@@ -887,7 +887,7 @@ export function initMock(root: HTMLElement, games: MockGame[], opts: MockOptions
       target: '.grid .card', wait: 'route:game' },
     { title: 'One click', text: 'Click <b>Install on Frame</b> and watch the activity card.',
       target: '[data-act="install"]', wait: 'installed' },
-    { title: 'Play', text: "It's in the Frame's Steam library now. Play it from here or in the headset.",
+    { title: 'Play', text: "The game is in the Frame's Steam library now. Play the game from here or in the headset.",
       target: '[data-act="play"]', wait: 'played' },
     { title: "That's it", text: 'Now try Monitor, Room, Live view, Screenshots, Files, Type on Frame and Settings.',
       place: 'center', next: 'Explore' },

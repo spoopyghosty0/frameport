@@ -6,7 +6,7 @@ import { REPO, url } from '../data/site';
 
 type Step = { glyph: Parameters<typeof Glyph>[0]['name']; side: 'pc' | 'frame'; name: string; text: string };
 const onFrame: Step[] = [
-  { glyph: 'pc', side: 'pc', name: 'scan', text: 'One folder per game. FramePort finds the program that starts it and asks when there are several.' },
+  { glyph: 'pc', side: 'pc', name: 'scan', text: 'One folder per game. FramePort finds the program that starts the game and asks when there are several.' },
   { glyph: 'container', side: 'pc', name: 'analyze', text: 'Reads which VR interface the game uses (OpenXR, OpenVR or Oculus) from its files.' },
   { glyph: 'sync', side: 'frame', name: 'upload', text: 'The game goes to the Frame unchanged. Proton, Valve’s layer for Windows games, is installed for you.' },
   { glyph: 'patch', side: 'frame', name: 'patch', text: 'A small OpenXR layer lets the game talk to the Frame’s SteamVR. Unreal games start without their crash reporter.' },
@@ -31,8 +31,8 @@ const onPc: Step[] = [
           <li class={s.side}><span class="g"><Glyph name={s.glyph} size={18} /></span><code class="n">{s.name}</code><p>{s.text}</p></li>
         ))}
       </ol>
-      <p class="note muted">Games that use OpenXR or OpenVR run directly. Oculus-only games run on your PC; running them on the Frame
-        is the experimental path below. <a href={url('docs/install/#pc-vr-games')}>PC VR in the docs</a></p>
+      <p class="note muted">Games that use OpenXR or OpenVR run directly. Oculus-only games run on your PC; the experimental
+        path below runs them on the Frame. <a href={url('docs/install/#pc-vr-games')}>PC VR in the docs</a></p>
     </details>
 
     <details class="panel">
@@ -42,7 +42,7 @@ const onPc: Step[] = [
           <li class={s.side}><span class="g"><Glyph name={s.glyph} size={18} /></span><code class="n">{s.name}</code><p>{s.text}</p></li>
         ))}
       </ol>
-      <p class="note muted">Needs Windows with Steam and SteamVR. Games that check their license through Meta’s app need that
+      <p class="note muted">Needs Windows with Steam and SteamVR. Games that check their license through Meta’s app need Meta’s
         app on the PC too. <a href={url('docs/install/#pc-vr-games')}>PC VR in the docs</a></p>
     </details>
 

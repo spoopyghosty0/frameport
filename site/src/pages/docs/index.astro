@@ -12,7 +12,7 @@ const groups = [...new Set(docs.map((d) => d.group))];
 // what people come for → the pages to read, in order (docs-ui.ts lights them up)
 const paths = [
   { key: 'first', label: 'Get my first game running', say: 'From the download to playing, in this order:', docs: ['install', 'frame-setup', 'compatibility', 'faq'] },
-  { key: 'broken', label: "A game won't start or looks wrong", say: 'Check whether it can run, then look up the symptom or report it:', docs: ['compatibility', 'diagnostics', 'playbook', 'frame-runtime'] },
+  { key: 'broken', label: "A game won't start or looks wrong", say: 'Look up the symptom, check whether the game can run, then report the problem:', docs: ['faq', 'compatibility', 'controllers', 'diagnostics', 'playbook'] },
   { key: 'button', label: 'Add an install button to my site', say: 'The button, then what your players will see:', docs: ['install-button', 'install'] },
   { key: 'how', label: 'Understand how it works', say: 'The big picture first, then the details:', docs: ['architecture', 'frame-runtime', 'playbook'] },
   { key: 'look', label: 'Make it look my way', say: 'Color themes and how to share your own:', docs: ['themes'] },

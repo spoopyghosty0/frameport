@@ -37,11 +37,11 @@ const logGames = games.filter((g) => g.status !== 'unsupported' && g.platform ==
 ---
 <Layout
   title="FramePort · Quest and PC VR games on the Steam Frame"
-  description="FramePort puts Quest games, PC VR games and Android apps on the Steam Frame and in your Steam library. Free and open source."
+  description="FramePort puts Quest games, PC VR games, Android apps and Linux apps on the Steam Frame and in your Steam library. Free and open source."
   data={[
     { '@type': 'WebSite', name: 'FramePort', url: Astro.site!.href },
     { '@type': 'SoftwareApplication', name: 'FramePort', url: Astro.site!.href,
-      description: 'Installs Meta Quest games, PC VR games and Android apps on the Valve Steam Frame, patched to run there.',
+      description: 'Installs Meta Quest games, PC VR games, Android apps and Linux apps on the Valve Steam Frame, patched to run there.',
       applicationCategory: 'GameApplication', operatingSystem: 'Windows, macOS, Linux',
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
       license: 'https://www.gnu.org/licenses/gpl-3.0.html', isAccessibleForFree: true,

@@ -59,14 +59,14 @@ const builds = DOWNLOADS.map((d) => ({ os: d.os, label: d.label, detail: d.detai
         <span class="sha" data-sha-wrap hidden>SHA-256 <code data-sha></code><button type="button" data-copysha>Copy</button></span>
         <a href={RELEASES}>Release notes</a>
       </p>
-      <p class="trust">Windows and macOS warn the first time you open FramePort: it's signed by its developer, not with a
-        paid certificate. Each release lists every file's SHA-256 in SHA256SUMS.txt to check it.</p>
+      <p class="trust">Windows and macOS warn the first time you open FramePort: FramePort is signed by its developer, not
+        with a paid certificate. Each release lists every file's SHA-256 in SHA256SUMS.txt.</p>
     </section>
 
     <section class="wrap next" aria-labelledby="next-h">
       <h2 id="next-h">Then</h2>
       <ol>
-        <li><span class="n">1</span><div><h3>Unpack it</h3><p>Anywhere you like. No admin rights needed.</p></div></li>
+        <li><span class="n">1</span><div><h3>Unpack the download</h3><p>Anywhere you like. No admin rights needed.</p></div></li>
         <li><span class="n">2</span><div><h3>Start FramePort</h3><p data-first>Open FramePort. The first start downloads its tools (about a minute).</p></div></li>
         <li><span class="n">3</span><div><h3>Connect your Steam Frame</h3><p>Run one line on the Frame, then click Allow on your PC. <a href={url('setup/')}>Setup</a></p></div></li>
       </ol>

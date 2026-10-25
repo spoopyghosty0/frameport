@@ -21,6 +21,8 @@ export const DOCS: DocInfo[] = [
     summary: "Common questions about FramePort: how to lay out game folders with APK and OBB files, where a game's settings are, and how to fix games that don't start, hang, look wrong or stutter." },
   { file: 'COMPATIBILITY.md', slug: 'compatibility', name: 'Compatibility', group: 'Using FramePort', blurb: 'What runs on the Frame.',
     summary: 'Which Quest games, PC VR games and Android apps run on the Steam Frame with FramePort, and how to share a recipe that works.' },
+  { file: 'CONTROLLERS.md', slug: 'controllers', name: 'Controller buttons', group: 'Using FramePort', blurb: 'Quest buttons on the Frame’s controllers.',
+    summary: "How Quest games' controller buttons map to the Steam Frame's controllers, and the Mirror and Quest pair modes in Game settings." },
   { file: 'THEMES.md', slug: 'themes', name: 'Themes', group: 'Using FramePort', blurb: 'Color themes and making your own.',
     summary: "FramePort's dark color themes (Portal, Portal OLED, Original) and how to make and share your own theme file." },
   { file: 'INSTALL_BUTTON.md', slug: 'install-button', name: 'Install button', group: 'For developers', blurb: 'An install button for your download page.',
