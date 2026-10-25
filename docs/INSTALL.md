@@ -20,14 +20,13 @@ On first start FramePort downloads the tools it uses (Settings → Tools shows t
 
 ## First launch
 
-Starting FramePort again brings its existing window to the front. If a previous instance was left running after
-its window closed, FramePort recovers it automatically, including on Windows where the GUI lock cannot be read.
-
 FramePort isn't signed with a paid certificate, so the first start shows a warning:
 
 - **Windows:** "Windows protected your PC" → **More info** → **Run anyway**.
 - **macOS:** right-click `FramePort.app` → **Open** → **Open** (once).
-- **Linux:** `tar xzf FramePort-linux-x64.tar.gz && ./FramePort/FramePort`. On Arch Linux, install the community AUR package [`frameport-bin`](https://aur.archlinux.org/packages/frameport-bin) (`yay -S frameport-bin`).
+- **Linux:** `tar xzf FramePort-linux-x64.tar.gz && ./FramePort/FramePort`. Arch Linux: `yay -S frameport-bin`.
+
+Starting FramePort again brings its open window to the front.
 
 ## Connecting the Steam Frame
 
@@ -87,24 +86,8 @@ FramePort can run on the Frame itself, without a PC:
 2. In Desktop Mode, download `FramePort-linux-arm64.tar.gz`, unpack it (`tar xzf FramePort-linux-arm64.tar.gz`) and
    start `FramePort/FramePort`.
 
-With the default **Steam library: Now**, games appear after you close FramePort and return to Gaming Mode.
-FramePort also waits while its window is open in Gaming Mode, so you can install several games in one session.
-Please report anything odd with **Report a problem…**.
-
-Settings → Installing → **Steam library** controls future installs:
-
-- **Now** (default): restart Steam after adding shortcuts, waiting while a game, Desktop Mode, or FramePort's local
-  window is open (up to 12 hours). Unchanged shortcuts need no restart.
-- **Later**: save shortcuts without restarting Steam. Keep installing; changes are applied at the next Steam
-  service start, including after a reboot. **Restart Steam now** applies them immediately. It closes Desktop Mode
-  and FramePort running on the Frame, and asks again if a game is running.
-- **Off**: skip new Steam shortcuts; existing entries stay. FramePort's **Play** runs the installed launcher directly.
-  Steam and SteamVR must already be running. Steam's per-game overlay, controller setup, and Exit game integration
-  are unavailable; stop the game from FramePort's Monitor. Pending games in Later also use this direct Play path.
-
-CLI: `frameport frame steam-library now|later|off` saves the setting and applies it to the connected Frame.
-`frameport frame restart-steam` applies pending entries now; `--yes` confirms ending a running game.
-These settings concern game shortcuts; installing a missing Steam runtime such as Proton can still require a restart.
+Games appear in Steam after you close FramePort and return to Gaming Mode (see [When games appear in
+Steam](#when-games-appear-in-steam)). Report anything odd with **Report a problem…**.
 
 **Moving from a PC:**
 
@@ -135,28 +118,46 @@ These settings concern game shortcuts; installing a missing Steam runtime such a
 - App bundles (`.xapk`, `.apks`, `.apkm`, `.apkx` or a folder of split APKs) are added like an APK. FramePort merges
   their parts into one APK; see [the FAQ](FAQ.md#can-i-add-xapk-apks-apkm-or-apkx-files-app-bundles).
 
+A game's **menu** opens with a right-click in the Library or the **…** button on its page; its groups (**Update**,
+**On the Frame**, **Saves**, **Name and artwork**, **Recipe**, **Troubleshoot**) open to the side.
+
 **Game settings…** (in the game's menu) shows the settings that matter for that game in plain words: sharpness,
 refresh rate, controllers, menus, 360° video and mixed reality. Changes are used the next time the game starts.
 
 ![Game settings](images/game-settings.png)
 
-**Rename…** (in the game's menu) changes the name in the Library and in Steam; FramePort keeps it from then on. An
-installed game keeps its Steam entry, artwork and saves (Steam restarts once).
+**Rename…** (game menu → **Name and artwork**) changes the name in the Library and in Steam; FramePort keeps it
+from then on. An installed game keeps its Steam entry, artwork and saves (Steam restarts once).
+
+### When games appear in Steam
+
+Steam only reads new library entries when it starts. Settings → Installing → **Steam library** sets when that happens:
+
+- **Now** (default): Steam restarts after an install, but waits while a game, Desktop Mode or FramePort's window
+  on the Frame is open (up to 12 hours). With FramePort on the Frame, games appear once you close it and return
+  to Gaming Mode.
+- **Later**: Steam isn't restarted; new games appear at its next start (also after a reboot). **Restart Steam
+  now** adds them at once; it closes Desktop Mode and FramePort on the Frame, and asks first if a game is running.
+- **Off**: no new Steam entries (existing ones stay). FramePort's **Play** starts the game directly; Steam and
+  SteamVR must be running, and Steam's overlay, controller setup and Exit game don't apply to it (end it from
+  **Monitor**). Games waiting for **Later** start this way too.
+
+Command line: `frameport frame steam-library now|later|off`, `frameport frame restart-steam [--yes]`. Installing
+Proton can still restart Steam whatever this setting says.
 
 ### microSD cards and other drives
 
 - The **Steam Frame** page's **Storage** section sets where new games go (**Install new games to**).
-- To move an installed game, right-click it (or use **…** on its page) → **On the Frame** → **Move to…**. The game must be closed; saves and the Steam entry stay.
+- To move an installed game: game menu → **On the Frame** → **Move to…**. The game must be closed; saves and the Steam entry stay.
 - A game on a card only starts while the card is inserted.
 - Cards formatted as FAT, exFAT or NTFS can't hold games: format the card in SteamOS first.
 
-### Why do the controller buttons repeat or do the wrong thing?
+### Controller buttons
 
-SteamVR maps Quest Touch onto the Frame's controller buttons by default: three top buttons repeat Touch Y/B.
-Choose **Game settings → Controllers → Controller buttons** to use Mirror or Quest pair for one game, or
-**Settings → Controllers** for the library default. **Apply to installed games now** sends the default to Quest
-games without an override. Changes take effect at the next launch.
-See [Controller buttons](CONTROLLERS.md) for the diagram, mappings and limits.
+Buttons repeat or do the wrong thing? SteamVR maps Quest Touch onto the Frame's controllers, and three top buttons
+repeat Touch Y/B. **Game settings → Controllers → Controller buttons** picks **Mirror** or **Quest pair** for one
+game; **Settings → Controllers** sets the default (**Apply to installed games now** sends it to games without
+their own choice). Changes apply at the next start. Diagram and limits: [Controller buttons](CONTROLLERS.md).
 
 ### Android apps and Windows programs
 
@@ -186,7 +187,7 @@ Website owners: see [Install button](INSTALL_BUTTON.md).
 - **Steam's on-screen keyboard** works in apps shown as a window. Steam lists that window as **Gamescope**: leave it
   open.
 - **Unity games whose text fields close at once:** FramePort suggests the patch **Make Unity text fields work**.
-  Games added before this patch existed: open the game's menu → **Analyze again**, then reinstall.
+  Games added before this patch existed: game menu → **Troubleshoot** → **Analyze again**, then **Update on Frame**.
 
 ![Type on Frame](images/type-on-frame.png)
 
@@ -232,8 +233,7 @@ FramePort downloads it, checks it, restarts and keeps your games and settings. *
 - **Recipes** (the tested patches and settings for each game) update by themselves. A game whose recipe changed shows
   **Update on Frame**.
 - **Moved your games?** Scan the new folder (or **Rescan folders**): games found there whose old files are gone keep their library entry, name, artwork, tags and settings, and only their location changes. **Settings → Library folders** lists the folders FramePort scans; remove the old one there (the games stay). See the [FAQ](FAQ.md#i-moved-my-games-to-another-folder-or-drive-how-do-i-update-the-library).
-- **A newer version of a game:** right-click it (or use **…** on its page) → **Update** → **Update with a newer
-  APK…** (Quest and Android games) or **Update with a newer version…** (Linux apps: the new AppImage, archive or
+- **A newer version of a game:** game menu → **Update** → **Update with a newer APK…** (Quest and Android games) or **Update with a newer version…** (Linux apps: the new AppImage, archive or
   folder; PC VR games: the new game folder). Its name, artwork, tags and your settings stay. Then click **Update on
   Frame** (or **on this PC**).
 - **Dev builds:** if you're asked to test a change before its release, use Settings → Updates → **Install the latest
@@ -267,11 +267,9 @@ the Steam library.
 - If the app needs libraries the Frame doesn't have, the game page lists them: look for a build that includes them.
 - Linux apps also appear in **Desktop Mode**'s app menu. Turn this off on the game
   page (**Desktop Mode**).
-- **SteamVR overlay apps** (a wrist watch, a performance display: programs that draw over games instead of being
-  one) are registered with the Frame's SteamVR, which shows them over whatever you play, Quest and PC VR games
-  alike. FramePort recognises them by the `.vrmanifest` file they ship. By default they start by themselves whenever
-  SteamVR starts (**SteamVR overlay → Start with SteamVR** on the game page; a small FramePort service on the Frame
-  does this, `frameport-vr-overlays`); otherwise start the app from your library before the game. Windows overlay
+- **SteamVR overlay apps** (a wrist watch, a performance display: programs drawn over games) are recognised by
+  their `.vrmanifest` file and shown over any game, Quest and PC VR alike. They start with SteamVR (**Start with
+  SteamVR** on the game page); with that off, start the app from your library before the game. Windows overlay
   apps get the patch **SteamVR overlay app (Frame)**.
 
 ## Files on the Frame
@@ -285,21 +283,22 @@ The **Files** tab copies files between your PC and the Frame: videos, documents,
 - In the downloaded app you can drag files from your PC onto the list.
 - **Videos**, **Downloads** and **Documents** are shared by every Quest game (inside the game: `/sdcard/Movies`,
   `/sdcard/Download`, `/sdcard/Documents`).
-- **Game storage** holds each game's own files. A game's menu → **Add videos and files…** opens it.
+- **Game storage** holds each game's own files. Game menu → **On the Frame** → **Add videos and files** opens it.
 
 ## Backing up saves
 
 Steam doesn't sync Quest games' saves. **Back up saves** next to **Play** on a game's page copies them to your PC
-(close the game first; also in the game's menu → **Saves**); **Back up all saves** on the Steam Frame page does every
-installed Quest game. The game's menu (right-click it, or **…** on its page) → **Saves** → **Restore saves…** puts a backup back on the Frame and keeps a copy of the replaced saves there (**Undo last
-restore**). Backups live in FramePort's data folder under `save-backups/`; the 10 newest per game are kept (Settings →
-Data). Caches and large downloaded content stay out. More in the [FAQ](FAQ.md#can-i-back-up-a-games-saves).
+(close the game first); **Back up all saves** on the Steam Frame page does every installed Quest game. The game's
+menu → **Saves** → **Restore saves…** puts a backup back and keeps the replaced saves for **Undo last restore**.
+Settings → **Data** sets the backup folder (a cloud-sync folder works), how many backups to keep (10 by default) and
+**Back up saves when a game closes**. Details: [FAQ](FAQ.md#can-i-back-up-a-games-saves).
 
 ## Share a recipe or report a problem
 
-- **Share working recipe…** (on the game's page, under **What FramePort will do**) opens a GitHub issue with the
-  game's recipe filled in. Accepted recipes become built-in for everyone. Untested games ask how they run after you install or test them.
-- **Report a problem…** (in the game's menu, or Settings → Problems and feedback) saves a diagnostics zip with
+- **Share working recipe…** (game menu → **Recipe**, or under **What FramePort will do** on the game's page) opens
+  a GitHub issue with the game's recipe filled in. Accepted recipes become built-in for everyone. For untested games
+  FramePort asks how they ran after you install or test them.
+- **Report a problem…** (game menu → **Troubleshoot**, or Settings → Problems and feedback) saves a diagnostics zip with
   personal data removed and opens a GitHub issue to attach it to.
 
 Without the app: [share a recipe](https://github.com/spoopyghosty0/frameport/issues/new?template=working-config.yml)
@@ -327,17 +326,19 @@ Windows: to show FramePort as the publisher, import `FramePort-selfsigned.cer` (
 The **command-line version** (Python 3.11 or newer) installs from the release's
 `frameport-<version>-py3-none-any.whl` with `uv tool install <link>` (or pipx or pip).
 
-Everything the app does is also a `frameport` command; `frameport --help` and `frameport <command> --help` list every
-option. The main ones:
+Almost everything the app does is also a `frameport` command; `frameport --help` and `frameport <command> --help`
+list every option. The main ones:
 
 | Command | What it does |
 |---|---|
 | `scan <folder>` / `list` / `show <game>` | add games, list the library, show a game's patches |
+| `rename <game> "<name>"` | rename a game in the library and in Steam (`--reset` goes back to the automatic name) |
 | `folders [--add <folder>] [--remove <folder>]` / `rescan` | list the library folders, add or remove one (its games stay); scan them again for new and moved games |
 | `add-linux <path> [--exe <program>]` | add a Linux app (AppImage, folder or archive) |
 | `new-version <game> <path>` | point a game at its newer version (APK, Linux app file/folder, PC VR game folder) |
 | `recipe <game> --enable/--disable <patch>` | change a game's patches (`patches` lists them all) |
 | `build <game>` / `install <game>` / `test <game>` | build, install on the Frame (`--to pc` for this PC), launch test |
+| `session <game>` / `settings <game> <key>=<value>` | check the last play session; change a game setting on the Frame without rebuilding |
 | `frame discover` / `frame connect` / `frame info` | find, connect to and describe the Frame |
 | `frame send <files> --dest videos` / `frame storage` / `frame cleanup` | copy files to the Frame, list where they can go, free space |
 | `frame drives` / `frame move <game> --to <drive>` / `install --dest <drive>` | list the Frame's drives, move a game, install to a drive |

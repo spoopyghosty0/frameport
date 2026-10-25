@@ -116,19 +116,18 @@ Every game has three places; the answers below refer to them.
 
 - **Game settings:** right-click the game in the **Library** → **Game settings…**. Render resolution (supersampling), refresh rate,
   controllers, menus and more, in plain words. Changes apply the next time the game starts.
-- **Patches:** click the game in the **Library** to open its page, then **Customize** (in the **Patches** section).
-  Turn a patch on or off, then click **Update on Frame** at the top of the page.
+- **Patches:** click the game in the **Library** to open its page, then **Customize** (next to **What FramePort
+  will do**). Turn a patch on or off, then click **Update on Frame** at the top of the page.
 - **The game's menu:** right-click the game in the **Library**, or the **…** button at the top of its page. Its
   groups open to the side: **Update**, **On the Frame**, **Saves**, **Name and artwork**, **Recipe** (with **Reset to
   suggested recipe…**) and **Troubleshoot** (with **Report a problem…**). The arrow keys, Enter and Esc work too.
 - **The recipe:** **Reset to suggested recipe…**, **Save as known-good recipe** and **Share working recipe…** are also
   under **What FramePort will do** on the game's page.
 
-The sidebar has two tabs for troubleshooting: **Monitor** (the running game's frame rate, CPU and graphics) and
-**Files** (each installed game's storage on the Frame, under **Game storage**). Quest games expose their Android
-storage; PC VR and Linux games expose their install folders, including installations on another drive.
-SD cards, USB drives and other Steam library drives appear under **Drives**, with free space when available.
-Read-only drives can be browsed and downloaded from, but cannot be changed.
+Two sidebar tabs help with troubleshooting: **Monitor** (the running game's frame rate, CPU and graphics) and
+**Files**. Under **Game storage**, Files shows each installed game's files on the Frame (Quest games: their Android
+storage; PC VR games and Linux apps: their install folder). microSD cards, USB drives and other Steam library
+drives are under **Drives**; read-only ones can only be browsed and downloaded from.
 
 ## A game doesn't work right. Where do I start?
 
@@ -168,8 +167,8 @@ How to tell what it's doing: leave it running and open **Monitor** in FramePort'
 - **CPU or graphics busy:** it's still working, often preparing its shaders on the first start. Wait up to 10 minutes
   once; the next start is quicker.
 - **CPU and graphics near zero:** it's stuck waiting for something. While it still hangs, open the game's menu →
-  **Report a problem…** and save the diagnostics: that zip shows what each of the game's threads waits for (FramePort
-  1.0.1 and newer), which a zip saved after quitting can't. Attach it to the report.
+  **Report a problem…** and save the diagnostics: that zip shows what each of the game's threads waits for, which a
+  zip saved after quitting can't. Attach it to the report.
 - **The game starts with a video** and hangs at its logo: game page → **Customize** → turn off **Hardware video
   decoding** → **Update on Frame**, and try again.
 
@@ -183,7 +182,7 @@ need **Update on Frame**).
 | Something shows in one eye only, or one eye is gray (Unity games) | Game page → **Customize** → [Unity: render each eye separately](PATCHES.md#frame-unity_multipass) |
 | Left and right look swapped (depth feels wrong) | **Game settings…** → **Swap eyes** |
 | Textures flicker, objects pop in and out | **Game settings…** → **Turn off space warp** |
-| One eye shimmers while menus look steady | Game page → **Customize** → **Eye-tracked foveation (Valve)**: **Fixed**, else **Off** |
+| One eye shimmers while menus look steady | **Game settings…** → **Foveated rendering (Valve)**: **Fixed**, else **Off** |
 | Menus or screens upside down | **Game settings…** → **Fix upside-down menus** |
 | Curved menus or video screens missing | **Game settings…** → **Show curved menus and screens** |
 | Blurry | **Game settings…** → raise **Render resolution (supersampling)** (costs frame rate) |
@@ -196,8 +195,8 @@ description of what you see.
 How to tell: open **Monitor** in the sidebar while you play. Smooth play needs the game's frame rate at the refresh
 rate (for example 72 or 90 fps).
 
-- **Below the refresh rate:** right-click the game → **Game settings…** → lower **Render resolution (supersampling)** (for example to 0.8×) or
-  pick a lower **Refresh rate**. After a session, the game's page may suggest a value.
+- **Below the refresh rate:** right-click the game → **Game settings…** → lower **Render resolution
+  (supersampling)** (for example to 0.8×) or pick a lower **Refresh rate**. After a session, the game's page may suggest a value.
 - **At the refresh rate but it still judders:** report it; that points to timing, not speed.
 
 ## The game pauses or recenters by itself
@@ -213,19 +212,22 @@ Right-click the game → **Game settings…**:
 - **No controllers, or only hands:** turn on **Use controllers**.
 - **Buttons work but you can't aim at menus:** adjust **Pointer angle**.
 - **Vibration too strong:** lower **Vibration strength**.
+- **Buttons repeat or do the wrong thing:** **Controller buttons** → **Mirror** or **Quest pair**; see
+  [Controller buttons](CONTROLLERS.md).
 
 ## The Frame turns off or gets hot during a game
 
 How to tell: if it only happens on battery and never while plugged in, it's power, not FramePort. Heavy games can
 draw more than the battery delivers, especially at lower charge, and the Frame then turns off without an error.
 
-- Play plugged in, or right-click the game → **Game settings…** → lower **Render resolution (supersampling)** to reduce the load.
+- Play plugged in, or right-click the game → **Game settings…** → lower **Render resolution (supersampling)** to
+  reduce the load.
 - It also turns off while plugged in: report it. The diagnostics include the log of the boot that ended.
 
 ## My progress isn't saved
 
-1. Quit through the game's own menu, not Steam's **Exit game**. Exit game closes the game at once, and some games only
-   save when they exit normally.
+1. Quit through the game's own menu. FramePort pauses a game before Steam's **Exit game** ends it, which is when
+   most games save, but some only save when you quit them yourself.
 2. Check whether it saves at all: **Files** in the sidebar → under **Game storage**, the game → look at the files'
    dates. Play, save in the game, quit from its menu and look again.
 3. Nothing changes: report it.
@@ -235,26 +237,24 @@ Saves stay on the Frame when you update or reinstall a game.
 ## Can I back up a game's saves?
 
 Yes. Steam doesn't sync Quest games' saves, so FramePort copies them to your PC: **Back up saves** next to Play on
-the installed game's page, or **Back up all saves** on the Steam Frame page (Installed games). Close the game
-first. A backup holds the game's own storage (`/data/data/<package>` and `/sdcard/Android/data/<package>`), without
-caches, shader caches and large downloaded content (videos, OBBs, files over 64 MB); the job says when something was
-left out. FramePort keeps the 10 newest backups per game (Settings → Data). They're in FramePort's data folder under
-`save-backups/<package>/` (**Open backups folder** in the game's menu).
+the installed game's page, or **Back up all saves** on the Steam Frame page. Close the game first. A backup holds the
+game's own storage (`/data/data/<package>` and `/sdcard/Android/data/<package>`) without caches, shader caches and
+large downloaded content (videos, OBBs, files over 64 MB); the job says when something was left out.
 
-In **Settings → Data**, **Choose backup folder…** selects a different folder, including a local Drive or Nextcloud
-sync folder. FramePort checks that it can write there. **Use the default** resets the location. Existing backups stay
-where they are and remain listed for restoring; retention only removes old backups in the currently selected folder.
-FramePort writes local files; your cloud client handles uploading them.
+- **Where:** FramePort's data folder, `save-backups/<package>/` (game menu → **Saves** → **Open backups folder**).
+  Settings → **Data** → **Choose backup folder…** picks another one, for example a Drive or Nextcloud sync folder
+  (your sync app does the uploading); **Use the default** goes back. Older backups stay where they were and can still
+  be restored.
+- **How many:** the 10 newest per game by default (Settings → Data); only the selected folder is cleaned up.
+- **Automatically:** **Back up saves when a game closes** (Settings → Data, off by default) keeps the 3 newest
+  changed snapshots per game on the Frame, even while FramePort is closed. FramePort copies them to your backup
+  folder when it connects (marked **automatic**). Connect once after turning it on. A snapshot only has what the game
+  wrote to disk.
+- **Restore:** game menu → **Saves** → **Restore saves…** replaces the game's saves on the Frame; the Frame keeps the
+  replaced ones, so **Undo last restore** in the same window takes you back. Uninstalling a game with *Also delete its
+  saves* ticked backs them up first.
 
-**Back up saves when a game closes** (Settings → Data, off by default) keeps the newest three changed snapshots per
-game on the Frame, even while FramePort is closed. Connect once after changing this setting to apply it to the Frame.
-New snapshots are copied to your backup folder when FramePort connects or polls the connection, marked **automatic**,
-and count toward the same backup limit. Unchanged saves are skipped. A snapshot captures what the game wrote to disk;
-it cannot recover progress a forcibly closed game never saved.
-
-**Restore saves…** puts one back: it replaces the game's saves on the Frame. The Frame keeps a copy of the saves it
-had, so **Undo last restore** in the same window takes you back. When you uninstall a game and tick *Also delete its
-saves*, FramePort backs them up first. Command line: `frameport saves backup|list|restore|undo <game>`.
+Command line: `frameport saves backup|list|restore|undo <game>`.
 
 ## A game with mods crashes
 
