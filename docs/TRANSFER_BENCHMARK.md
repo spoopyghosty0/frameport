@@ -16,7 +16,7 @@ Paramiko; cancellation stops the owned SFTP/SSH process trees and does not trigg
 Windows matched production comparison: eight 64 MiB files, 512 MiB total, three shuffled repetitions per backend,
 three workers, same home Wi-Fi/internal storage. OpenSSH median **15.51 MB/s**, Paramiko median **11.08 MB/s**
 (about 40% faster). All six checksums passed. OpenSSH trials ranged 9.5–16.8 MB/s, so link variability still
-matters; it was slower than Paramiko in one pass. Native credential/progress setup took 0.12–0.13 seconds.
+matters; OpenSSH was slower than Paramiko in one pass. Native credential/progress setup took 0.12–0.13 seconds.
 
 The separate Windows 128 MiB production test also passed every checksum. Native cancellation left a partial file
 of 74,752,000 bytes; resuming with OpenSSH produced the expected SHA-256. The log confirmed no fallback for the
@@ -57,7 +57,7 @@ checks application cancellation and both resume paths; native SFTP cancellation 
 
 The Frame's USB and hotspot interfaces were up, but neither direct endpoint was reachable from the PC. No removable
 storage was mounted. USB, hotspot and microSD performance remain **unmeasured** in this round. The Frame's router
-connection used 5 GHz / 80 MHz Wi-Fi, with roughly -56 dBm signal during a read-only probe. This does not reproduce
+connection used 5 GHz / 80 MHz Wi-Fi, with roughly -56 dBm signal during a read-only probe. That setup does not reproduce
 the 6 GHz direct-hotspot setup in [discussion #242](https://github.com/spoopyghosty0/frameport/discussions/242), where
 the reporter measured about 114 MB/s with OpenSSH versus 23 MB/s with Paramiko.
 
@@ -75,7 +75,7 @@ uses independent Paramiko connections.
 The later comparison tested both backends sequentially on Windows and WSL, with three shuffled repetitions of
 the same eight 16 MiB files per worker count. Native `sftp-files-N` balances files across N persistent OpenSSH
 SFTP batch processes. Setup and completion are included; checksum verification is excluded. All 60 transfers
-passed SHA-256 checks. This is benchmark code; the production uploader still uses Paramiko.
+passed SHA-256 checks. `sftp-files-N` is benchmark code; the production uploader still uses Paramiko.
 
 | Workers | Windows Paramiko MB/s | Windows OpenSSH MB/s | WSL Paramiko MB/s | WSL OpenSSH MB/s |
 |---|---:|---:|---:|---:|
@@ -90,7 +90,7 @@ by 6.5% on Windows and 22.8% on WSL. Eight was faster on Windows but slower on W
 default remains two because three regressed by 16.1% on Windows and 5.3% on WSL in this matched comparison.
 Link variability remains substantial, and no fast hotspot/USB result is claimed.
 
-Settings → Installing → **Parallel uploads** accepts **1–8** (default 2 at the time, 3 now). It controls large files within one
+Settings → Installing → **Parallel uploads** accepts **1–8** (default 2 at the time, 3 now). The setting controls large files within one
 install; the FIFO still runs one install job at a time. A single APK is not split into chunks. Large files are
 scheduled largest first, with at most one authenticated SSH connection per active worker and never more workers
 than files. Small files still use tar batches after the large-file uploads. Choose 1 on a busy network; a higher
@@ -112,7 +112,7 @@ closes only its worker transports; completed files and interrupted `.part` files
 On Windows, the production uploader improved from 5.6 to 10.9 MB/s with 2 workers (**1.95 times faster**), and
 17.3 MB/s with 8 (**3.08 times faster**). All twelve Windows production transfers passed SHA-256 verification.
 The preceding Windows prototype also tested 3 workers (12.2 MB/s median), before aggregate progress/cancellation
-were integrated; that is not included as a production measurement in the table.
+were integrated; that result is not included as a production measurement in the table.
 
 WSL was noisy: four workers improved its median by about 29%, but 2 did not improve its median, and 3 was slower.
 There is no evidence that a particular worker count is universally fastest. The option is retained because it
@@ -146,7 +146,7 @@ other network traffic. A 512 MiB payload is preferred for follow-up tests on fas
 above used 128 MiB.
 
 The script creates a unique scratch directory on the selected filesystem, checks content outside the timed upload,
-and removes its own temporary remote files and temporary key copy. It never modifies the pairing key's ACL. Windows
+and removes its own temporary remote files and temporary key copy. The script never modifies the pairing key's ACL. Windows
 OpenSSH rejects an `OWNER RIGHTS` ACL entry; the temporary copy grants only the current user, without Python's
 Windows `chmod` behaviour that can introduce that entry. Native clients use the application's key and known-hosts
 file with strict host verification.
@@ -189,7 +189,7 @@ when the user customized their recipe.
   safely. Converted-copy cleanup and `build.keep_copies` remain in effect; a configuration/data update does not
   require the deleted converted APK.
 
-Install results record `stage_seconds` in the library's install history. This includes planning, conversion,
+Install results record `stage_seconds` in the library's install history. The timings include planning, conversion,
 validation, transfer and finalization stages reached by that operation; the GUI's subsequent optional launch test
 is separate. Use these timings to distinguish build cost, network transfer and device/Steam work when reviewing a
 slow install. Configuration success is recorded after writing the configuration and completing its sync; a failed

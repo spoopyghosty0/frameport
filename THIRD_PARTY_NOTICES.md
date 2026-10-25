@@ -1,6 +1,6 @@
 # Third-party notices
 
-FramePort is GPL-3.0-only (see `LICENSE`). It includes or downloads the following third-party work.
+FramePort is GPL-3.0-only (see `LICENSE`). FramePort includes or downloads the following third-party work.
 
 ## Included in this repository / the release bundles
 | Component | Where | License |

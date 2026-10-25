@@ -5,7 +5,7 @@ setup changes on the Steam Frame, how to undo it and what your network needs.
 
 ## Changes on the Frame
 
-The setup runs [`bootstrap/bootstrap.sh`](../bootstrap/bootstrap.sh), which FramePort sends from your PC. It changes:
+The setup runs [`bootstrap/bootstrap.sh`](../bootstrap/bootstrap.sh), which FramePort sends from your PC. The script changes:
 
 | Change | Where | How to undo |
 |---|---|---|
@@ -14,14 +14,14 @@ The setup runs [`bootstrap/bootstrap.sh`](../bootstrap/bootstrap.sh), which Fram
 | Stops game starts from failing after about 200 launches (a limit in podman, the tool Lepton runs games with). | `[containers]` / `keyring = false` in `~/.config/containers/containers.conf`. | Remove those lines. |
 | Asks Steam to install **Lepton** (Valve's Android runtime) if it's missing. You confirm it in Steam. | Steam library | Uninstall it in Steam. |
 
-Valve's Developer Mode helper is the same one the Settings switch uses. It turns on remote login (SSH), the service
+Valve's Developer Mode helper is the same one the Settings switch uses. The helper turns on remote login (SSH), the service
 that makes the Frame findable on your network, remote desktop, debugging and crash dumps; turning Developer Mode off
 turns them all off again.
 
-The script runs as your user: no root, no `sudo`, no password. Nothing else on the system changes. It also leaves two
-files: `~/.cache/frameport-setup.sh` (the part that finishes on its own) and its log.
+The script runs as your user: no root, no `sudo`, no password. Nothing else on the system changes. The script also leaves
+two files: `~/.cache/frameport-setup.sh` (the part that finishes on its own) and its log.
 
-If Developer Mode can't be turned on automatically, the script asks you to turn it on in Settings → System →
+If Developer Mode can't be turned on automatically, the script asks you to turn Developer Mode on in Settings → System →
 **Enable Developer Mode** and run the setup line again.
 
 **Later, FramePort adds** (as your user):
@@ -41,7 +41,7 @@ stay: undo them as shown above.
 
 ## Network and firewalls
 
-The setup is the only time the Frame connects to your PC. It downloads the setup script from FramePort on TCP port
+The setup is the only time the Frame connects to your PC. The Frame downloads the setup script from FramePort on TCP port
 8765 (8766 or 8767 if taken), only while the setup page is open and for at most 30 minutes. Everything else goes
 from your PC to the Frame.
 
@@ -55,15 +55,15 @@ How the setup line finds your PC:
 The setup line's script is [bootstrap/setup.sh](../bootstrap/setup.sh). If the setup just says "timed out", the
 setup page shows what is likely blocking it after about 45 seconds:
 
-- **Windows:** allow FramePort when Windows asks. On a network Windows treats as **Public** it stays blocked; set
+- **Windows:** allow FramePort when Windows asks. On a network Windows treats as **Public** the connection stays blocked; set
   your home network to Private in Windows' network settings.
 - **macOS:** with the firewall on (System Settings → Network → Firewall), allow incoming connections for FramePort
   when asked.
 - **Linux:** firewalld: `sudo firewall-cmd --add-port=8765/tcp` (until the next restart). ufw:
   `sudo ufw allow 8765/tcp`, afterwards `sudo ufw delete allow 8765/tcp`.
 - **WSL** (FramePort's Linux version on Windows): Windows blocks connections into WSL without asking. FramePort
-  adds a temporary firewall rule (one admin prompt) and removes it when setup is done or after 35 minutes. WSL must
+  adds a temporary firewall rule (one admin prompt) and removes the rule when setup is done or after 35 minutes. WSL must
   share Windows' network: `networkingMode=mirrored` under `[wsl2]` in `%UserProfile%\.wslconfig`, then
   `wsl --shutdown`.
 - Or skip the setup line and use **Pair new host** (see [Install and first steps](INSTALL.md#connecting-the-steam-frame)):
-  it needs no connection into your PC.
+  **Pair new host** needs no connection into your PC.

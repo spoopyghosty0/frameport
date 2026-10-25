@@ -1,7 +1,7 @@
 # Controller buttons
 
 > **Experimental.** The Frame's runtime accepts these bindings, but few games have been tried in the headset. If
-> buttons stop working in a game, set it back to **SteamVR default** (Game settings → Controllers) and report it.
+> buttons stop working in a game, set the game back to **SteamVR default** (Game settings → Controllers) and report the problem.
 
 Quest games expect Quest Touch controllers. The Frame's left controller has a d-pad and a View button; the right one
 has an A/B/X/Y diamond and a Menu button. Without a game's own Frame bindings, SteamVR sends Touch X/A from the bottom
@@ -43,8 +43,9 @@ Triggers, grips, thumbsticks, tracking and vibration keep their Touch bindings. 
 
 - **One game:** **Game settings → Controllers → Controller buttons**. **Use global default** follows Settings; any
   other choice stays for that game, including an explicit **SteamVR default**.
-- **All games:** **Settings → Controllers**. New installs and updates use it for games without their own choice.
-  **Apply to installed games now** sends it to installed Quest games that follow the default.
+- **All games:** **Settings → Controllers**. New installs and updates use the default for games without their own
+  choice.
+  **Apply to installed games now** sends the default to installed Quest games that follow it.
 
 Changes apply at the **next launch**. Games installed before this feature need **Update on Frame** once.
 
@@ -54,7 +55,7 @@ Command line, for an installed game (writes the Frame's settings only):
 frameport settings <pkg> quest_buttons=2
 ```
 
-To keep the value through later installs, also save it in the recipe (or use Game settings):
+To keep the value through later installs, also save the value in the recipe (or use Game settings):
 
 ```sh
 frameport recipe <pkg> --set quest_buttons=2
@@ -63,11 +64,11 @@ frameport recipe <pkg> --set quest_buttons=2
 ## Limits
 
 - Custom bindings in SteamVR's binding UI override these. Check them if the result differs from the diagram.
-- The d-pad has one touch sensor: a thumb resting on it touches X and Y together. The right face buttons sense touch
+- The d-pad has one touch sensor: a thumb resting on the d-pad touches X and Y together. The right face buttons sense touch
   one by one.
 - Bumpers and thumbrest touch have no Touch counterpart and do nothing. System buttons keep their role.
-- Mirror and Quest pair need the runtime's `XR_VALVE_frame_controller_interaction` extension. Without it, FrameBridge
-  logs that and keeps SteamVR's mapping.
+- Mirror and Quest pair need the runtime's `XR_VALVE_frame_controller_interaction` extension. Without the extension,
+  FrameBridge logs the fact and keeps SteamVR's mapping.
 - Games with their own Frame Controller bindings keep them; these modes don't replace a game's own mapping.
 - Touch bindings on bare pose, trigger, squeeze or button paths are translated too, as are `/pose`, `/value`,
   `/click` and `/touch` where the mapping has them.

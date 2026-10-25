@@ -1,8 +1,8 @@
 # Evaluating patch heuristics
 
 `scripts/eval_heuristics.py` compares `engine.suggest(analysis, use_catalog=False)` with the bundled
-`catalog/games/*.yaml` entries. It does not merge personal or remote catalog recipes into the benchmark.
-It supports the original dumps command, or a precomputed `scripts/heuristics_snapshot.py` snapshot:
+`catalog/games/*.yaml` entries. The script does not merge personal or remote catalog recipes into the benchmark.
+The script supports the original dumps command, or a precomputed `scripts/heuristics_snapshot.py` snapshot:
 
 ```sh
 .venv/bin/python scripts/eval_heuristics.py '<dumps folder>' --verbose
@@ -62,7 +62,7 @@ adding (inherited). Results 2026-10-15: strict 5/65 exact, F1 73.8%; dated 39/65
 79.5%). Remaining misses are one-game fixes found at runtime (for example Vader's gl_error_clear, BlazeRush's GL settings).
 
 An evaluation writes JSON even when its headline has differences, then exits 1 for compatibility with the original
-script. It exits 0 when exact, or after producing a fit report.
+script. The script exits 0 when exact, or after producing a fit report.
 
 ## New patch fit
 

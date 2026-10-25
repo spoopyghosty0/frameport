@@ -8,7 +8,7 @@
 ![Steam Frame](https://img.shields.io/badge/Steam%20Frame-supported-1b2838?logo=steam&logoColor=white)
 
 Install Quest games, Android apps, Linux apps and PC VR games on the **Valve Steam Frame**. FramePort sets up the
-Frame, patches each game to run there, uploads it and adds it to your Steam library with artwork.
+Frame, patches each game to run there, uploads the game and adds the game to your Steam library with artwork.
 
 [![FramePort: library, one-click install, play, monitor](docs/images/tour-teaser.webp)](docs/media/frameport-tour.mp4)
 
@@ -16,8 +16,8 @@ Frame, patches each game to run there, uploads it and adds it to your Steam libr
 (about 90 seconds each)
 
 > **Notice:** FramePort doesn't download, share or unlock games. Use games you got legally, for example from
-> [SideQuest](https://sidequestvr.com/). It downloads published open-source tools ([Built on](#built-on)) and adds
-> its own patches.
+> [SideQuest](https://sidequestvr.com/). FramePort downloads published open-source tools ([Built on](#built-on))
+> and adds its own patches.
 >
 > Not every game runs on the Frame. Some need Meta's services or hardware the Frame lacks.
 
@@ -26,14 +26,14 @@ Frame, patches each game to run there, uploads it and adds it to your Steam libr
 ![Library](docs/images/library.png)
 
 - **Easy setup:** one line in the Frame's terminal. No root, no password. [What it changes](docs/FRAME_SETUP.md).
-- **One click per game:** patch, upload, add to Steam with artwork, test that it starts.
+- **One click per game:** patch, upload, add to Steam with artwork, test that the game starts.
 - **Recipes:** tested patches and settings for hundreds of games. Other games get suggested patches, each explained.
 - **Game settings:** sharpness, refresh rate, controllers, 360° video and mixed reality as simple switches.
 - **More than Quest games:** Android apps in a window, Linux apps, PC VR games and Windows programs.
 - **Install links:** "Install with FramePort" buttons on websites open in FramePort.
 - **Your Frame from your PC:** Type on Frame, Files, Screenshots, Live view (what the headset shows) and Monitor
   (frame rate, temperatures, battery, processes).
-- **Your room for mixed reality (experimental):** scan your room in the headset and fix it up in 3D. Try it with
+- **Your room for mixed reality (experimental):** scan your room in the headset and fix the scan up in 3D. Try the room with
   [Test Quest MR](https://github.com/spoopyghosty0/TestQuestMR).
 - **Updates itself**, and reports problems without personal data.
 
@@ -46,7 +46,7 @@ Frame, patches each game to run there, uploads it and adds it to your Steam libr
 ## Quick start
 
 1. [Download](https://github.com/spoopyghosty0/frameport/releases/latest) FramePort for Windows, macOS (Apple
-   Silicon) or Linux, unpack it and start it.
+   Silicon) or Linux, unpack the download and start FramePort.
 2. Click **Steam Frame → Start setup**. The Frame and your PC must be on the same Wi-Fi (or use a USB cable).
 3. On the Frame open **SteamVR dashboard → Launch a program → Desktop**, then **app menu → System → Konsole**, and
    run:
@@ -55,9 +55,9 @@ Frame, patches each game to run there, uploads it and adds it to your Steam libr
    curl -fsSL https://frameport.app/s | bash
    ```
 
-4. Click **Allow** when FramePort shows the same 4-digit code as the Frame. Steam restarts once. If it asks to install
+4. Click **Allow** when FramePort shows the same 4-digit code as the Frame. Steam restarts once. If Steam asks to install
    **Lepton** (Valve's Android runtime), confirm.
-5. **Add games → Scan a folder…**, open a game and click **Install on Frame**. Play it from the Frame's Steam library.
+5. **Add games → Scan a folder…**, open a game and click **Install on Frame**. Play the game from the Frame's Steam library.
 
 Full guide: [Install and first steps](docs/INSTALL.md). Game folders: [FAQ](docs/FAQ.md).
 
@@ -99,7 +99,7 @@ FrameDrop and Valve's own tools install an app as it is. FramePort also:
 Based on each tool's own pages, checked 2026-10-09:
 [FrameDrop about](https://framedropvr.com/about) · [how-to](https://framedropvr.com/how-to) ·
 [Valve: loading games on Steam Frame](https://partner.steamgames.com/doc/steamhardware/steamframe/loadgames).
-Out of date? [Report it](https://github.com/spoopyghosty0/frameport/issues/new).
+Out of date? [Report the problem](https://github.com/spoopyghosty0/frameport/issues/new).
 
 ## Built on
 

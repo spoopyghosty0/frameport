@@ -1,7 +1,7 @@
 # Install button
 
 A button for web pages and READMEs that opens a game in FramePort. FramePort shows what it would download and asks
-before it does anything ([Install links](INSTALL.md#install-links-install-with-frameport-buttons)).
+before doing anything ([Install links](INSTALL.md#install-links-install-with-frameport-buttons)).
 
 <p>
   <img src="badges/install-with-frameport-animated.svg" alt="Install with FramePort" width="216" height="60">
@@ -11,12 +11,12 @@ before it does anything ([Install links](INSTALL.md#install-links-install-with-f
 
 All files are in [`docs/badges/`](badges/). Each SVG is self-contained (no external fonts or images), 216 × 60.
 
-| File | Use it for |
+| File | Use for |
 |---|---|
 | [`install-with-frameport.svg`](badges/install-with-frameport.svg) | Everywhere. No motion. |
 | [`install-with-frameport-animated.svg`](badges/install-with-frameport-animated.svg) | GitHub READMEs and other image-only pages. Glows every 6 seconds. |
-| [`install-with-frameport-hover.svg`](badges/install-with-frameport-hover.svg) | Websites where you can paste HTML. Glows under the pointer, only when its SVG code is in the page ([below](#on-a-website)). |
-| [`install-with-frameport@2x.png`](badges/install-with-frameport@2x.png) | Places without SVG (some forums, email). 432 × 120; show it at 216 × 60. |
+| [`install-with-frameport-hover.svg`](badges/install-with-frameport-hover.svg) | Websites where you can paste HTML. Glows under the pointer, only when the SVG code is in the page ([below](#on-a-website)). |
+| [`install-with-frameport@2x.png`](badges/install-with-frameport@2x.png) | Places without SVG (some forums, email). 432 × 120; show the PNG at 216 × 60. |
 
 The animated versions stand still for visitors who turn on reduced motion.
 
@@ -51,8 +51,8 @@ The manifest:
 
 - `name` becomes the game's title in Steam.
 - `sha256` is optional but recommended: FramePort checks the download against it.
-- `frameport` is optional: its icon and description are shown in the install question.
-- `version` is optional (it can also go inside `frameport`) and enables updates. FramePort fetches the manifest again
+- `frameport` is optional: the icon and description are shown in the install question.
+- `version` is optional (`version` can also go inside `frameport`) and enables updates. FramePort fetches the manifest again
   at most every 6 hours and offers newer versions (Library bar, game page, `frameport link-updates [--install]`).
   Keep the manifest at the same address and raise `version` with every build. Versions compare number by number
   (`1.10` > `1.9`); a suffix sorts before the release (`1.2.0-beta2` < `1.2.0`). Bare file links (`?url=…`) and
@@ -61,11 +61,11 @@ The manifest:
 
 To build a link from Python: `frameport.deeplink.make_link(manifest_url="https://…/my-game.json")`.
 
-**Where to host the manifest.** The install page shows the manifest's name, description and icon only when its host
-allows web pages to read it (CORS); otherwise it shows "A game or app". FramePort itself reads any public address.
+**Where to host the manifest.** The install page shows the manifest's name, description and icon only when the
+manifest's host allows web pages to read the manifest (CORS); otherwise the page shows "A game or app". FramePort itself reads any public address.
 On GitHub, commit the manifest and link the raw file
-(`https://raw.githubusercontent.com/<owner>/<repo>/main/my-game.json`) or its `…/blob/main/my-game.json` page, which
-is turned into the raw address. A manifest attached to a GitHub release installs fine, but the page then shows the
+(`https://raw.githubusercontent.com/<owner>/<repo>/main/my-game.json`) or the file's `…/blob/main/my-game.json` page,
+which FramePort turns into the raw address. A manifest attached to a GitHub release installs fine, but the page then shows the
 release's name instead.
 
 ## On a website
@@ -108,18 +108,18 @@ The example button on [frameport.app](https://frameport.app/#button) uses a demo
 https://frameport.app/install/?manifest=https%3A%2F%2Fframeport.app%2Fdemo%2Fcool-game.json
 ```
 
-Click it to check that FramePort receives install links on your PC. It shows a demo install question for "Cool Game";
-nothing is downloaded or installed (`frameport open-link` says it's the demo and stops).
+Click the button to check that FramePort receives install links on your PC. FramePort shows a demo install question for "Cool Game";
+nothing is downloaded or installed (`frameport open-link` says the link is the demo and stops).
 
 ## If a visitor doesn't have FramePort
 
-The `https://frameport.app/install?…` link handles this: its page offers the download. A bare `frameport://` link does
+The `https://frameport.app/install?…` link handles a missing FramePort: the install page offers the download. A bare `frameport://` link does
 nothing visible without FramePort, so add a line such as "Needs [FramePort](https://frameport.app)". On macOS, web
 pages can't hand links to FramePort yet: users paste the link into **Add games → Add from a link…**.
 
 ## Usage rules
 
 - Keep the alt text "Install with FramePort".
-- Don't recolor, stretch, crop or redraw the button, and don't show it smaller than 40 px tall.
-- Leave at least 8 px of space around it.
-- It works on light and dark pages as it is; there is no light version.
+- Don't recolor, stretch, crop or redraw the button, and don't show the button smaller than 40 px tall.
+- Leave at least 8 px of space around the button.
+- The button works on light and dark pages as it is; there is no light version.

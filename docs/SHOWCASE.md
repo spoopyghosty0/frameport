@@ -81,7 +81,7 @@ scenes:
 
 Filmed scenes are one continuous session: each starts where the last one left off. Cards are rendered at the end
 and slotted in, with crossfades between everything. The `fresh` profile starts FramePort as on a new computer: an
-empty library, the welcome screen and a Frame that isn't set up. Its games wait for the pretend folder scan.
+empty library, the welcome screen and a Frame that isn't set up. The demo games wait for the pretend folder scan.
 
 ## Writing steps
 

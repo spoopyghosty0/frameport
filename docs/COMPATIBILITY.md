@@ -18,6 +18,6 @@ Got a game working? [Share its recipe](INSTALL.md#share-a-recipe-or-report-a-pro
 | Linux apps | Installed unchanged. x86_64 builds run through FEX, slower than arm64 builds: see [Linux apps](INSTALL.md#linux-apps) |
 | Can't run | x86-only Android apps, apps for Pico's or HTC's own VR system, Android XR apps, and games that check their license through the Oculus app |
 
-Launch tests show that a game starts. Only the headset shows whether it looks right.
+Launch tests show that a game starts. Only the headset shows whether the game looks right.
 
 ![Steam Frame](images/frame.png)

@@ -28,13 +28,13 @@
   module: a probe that finds the fix in OVRPort's output (True / False / None = can't tell). Each build runs the probes
   on the converted APK and leaves out the workarounds whose fix is there (log "not needed: …", `build.superseded`,
   left out of settings.conf at install; game page and `frameport show` say so). The recipe keeps asking for the fix,
-  so builds made with an older runtime keep the workaround. `FRAMEPORT_KEEP_WORKAROUNDS=1` turns it off.
-- **New heuristic**: put it in the patch's `detect()` (and `applies()` for visibility), with the evidence in the
+  so builds made with an older runtime keep the workaround. `FRAMEPORT_KEEP_WORKAROUNDS=1` turns the probes off.
+- **New heuristic**: put the rule in the patch's `detect()` (and `applies()` for visibility), with the evidence in the
   reason text; check `scripts/eval_heuristics.py` still reproduces the catalog and add a test in
   `tests/test_heuristics.py`.
 - **New game recipe**: `catalog/games/<package>.yaml` (or "Save as known-good" in the GUI, which writes to the user
   catalog). Installed apps fetch `catalog/games/` from GitHub `main` every 6 hours (`recommend/catalog.refresh_remote`),
-  so a merged recipe reaches users without a release; `catalog/triage.yaml` follows the same way. `FRAMEPORT_CATALOG_URL` points them at another folder that
+  so a merged recipe reaches users without a release; `catalog/triage.yaml` follows the same way. `FRAMEPORT_CATALOG_URL` points the apps at another folder that
   serves `index.json` + `<package>.yaml` instead.
 - **New target**: implement `targets/base.Target`; the pipeline and UI only use that interface.
 
@@ -75,10 +75,10 @@ directly, x86_64 builds through Valve's FEX), a Desktop Mode menu entry and, for
   release's wheel).
 - `prepare()` (bundle): `<data>/updates/<ver>/`: download → SHA256SUMS.txt check → extract to `staged/` (ditto on
   macOS) → layout check → on Windows the same Authenticode signer as the running exe → `ready.json`.
-- `apply()`: writes `<data>/updates/apply.{ps1,sh}` and starts it detached; FramePort quits. The script waits for the
+- `apply()`: writes `<data>/updates/apply.{ps1,sh}` and starts the script detached; FramePort quits. The script waits for the
   pid. Windows: backs up the files it replaces (`updates/<ver>/previous`) and copies over the folder (the zip has no
   folder of its own). macOS/Linux: `mv` target → `.old`, staged → target, rollback on failure, clears the quarantine.
-  Then it relaunches FramePort. Log: `<data>/logs/update.log`.
+  Then the script relaunches FramePort. Log: `<data>/logs/update.log`.
 GUI: background check 10 s after start + every 6 h → sidebar card + Library bar → dialog with notes → job
 `app-update` (waits for other jobs) → restart. "Install updates automatically": prepare in the background, apply in
 `main()` before the window opens. CLI: once-a-day hint from the cached result (a daemon thread refreshes it), `frameport

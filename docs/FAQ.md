@@ -3,7 +3,7 @@
 ## How should I lay out a game that has OBB files?
 
 Some Quest games come as an APK (the app) plus `.obb` files (the game's data). Give every game its own folder. Put
-the APK in it, and the data in a folder named after the game's **package name** (for example `com.Armature.VR4`):
+the APK in the game's folder, and the data in a folder named after the game's **package name** (for example `com.Armature.VR4`):
 
 ```tree
 Games/                                  ← scan this folder (Add games → Scan a folder)
@@ -16,7 +16,8 @@ Games/                                  ← scan this folder (Add games → Scan
     └── com.beatgames.beatsaber.apk     ← games without OBBs: just the APK
 ```
 
-- **Data folder name:** the package name or `obb`. Everything in it is copied to the Frame, subfolders included.
+- **Data folder name:** the package name or `obb`. Everything in the data folder is copied to the Frame,
+  subfolders included.
 - **One game per folder.** Several APKs in one folder count as one game.
 - **Scanning:** pick the folder with the game folders to add them all, or one game's folder for one game.
   FramePort looks up to 5 levels deep. **Add games → Add an APK…** also finds the data folder next to the APK.
@@ -28,14 +29,17 @@ page.
 
 Scan the new folder (**Add games → Scan a folder…** or **Settings → Library folders → Add folder…**). Games found
 there whose old files are gone keep their library entry: name, tags, artwork, your recipe and the install on the
-Frame stay. **Rescan folders** in the Library does this for every library folder.
+Frame stay. **Rescan folders** in the Library checks every library folder
+the same way.
 
-- **Remove the old folder** in **Settings → Library folders** (bin icon). Its games stay in the library.
-- **Another version in the new folder:** **Scan a folder…** takes it like **Update with a newer APK…** would.
+- **Remove the old folder** in **Settings → Library folders** (bin icon). The folder's games stay in the library.
+- **Another version in the new folder:** **Scan a folder…** takes the new version like **Update with a newer
+  APK…** would.
   **Rescan folders** leaves such games alone; use the game's **Update** menu to switch.
-- **Both copies still there:** the library keeps its copy. Delete or rename the old one and rescan.
+- **Both copies still there:** the library keeps the copy it already has. Delete or rename the old
+  copy and rescan.
 - PC VR games are matched by folder name, or by program file if renamed. Linux apps aren't scanned: add the moved app
-  again with **Add a Linux app…** (it keeps its name, art and switches).
+  again with **Add a Linux app…** (the app keeps its name, art and switches).
 - Command line: `frameport folders [--add DIR] [--remove DIR]`, `frameport rescan`.
 
 ## Can I scan SideQuest backups or AXRB downloads directly?
@@ -68,11 +72,11 @@ AXRB/                                   ← AXRB's download folder (Downloads/AX
 - **AXRB's patched builds** (`patched/`, `*-axrb.apk`) are made for AXRB's PC runtime and lack the game's data, so
   FramePort skips them.
 - **AXRB export ZIPs:** unpack them first.
-- **"Game data (.obb) is missing"** although you have it: the backup didn't include it (copy
-  `Android/obb/<package>` from the Quest with SideQuest), or it's somewhere FramePort doesn't look. Use the layout in
+- **"Game data (.obb) is missing"** although you have the OBB files: the backup didn't include them (copy
+  `Android/obb/<package>` from the Quest with SideQuest), or the files are somewhere FramePort doesn't look. Use the layout in
   the first answer.
-- **The game starts and stops at once (Steam shows Resume):** add it again from its original download or backup,
-  click **Update on Frame**, and report it if it still stops.
+- **The game starts and stops at once (Steam shows Resume):** add the game again from its original download or
+  backup, click **Update on Frame**, and report the problem if the game still stops.
 
 ## Can I add .xapk, .apks, .apkm or .apkx files (app bundles)?
 
@@ -87,14 +91,14 @@ Yes. Add them like an APK: **Add an APK…**, drag them onto the Library, scan a
 | `.apkx` | various | the same kind of zip under another name |
 | a folder of split APKs | `adb pull` of `pm path`, unpacked bundles | `base.apk` + `split_config.arm64_v8a.apk` … |
 
-- FramePort merges the parts into one APK (the Frame installs one APK per game), in its own data folder
-  (`bundles/`). Your file isn't changed. It takes the 64-bit ARM part, else the 32-bit one. Language and screen
+- FramePort merges the parts into one APK (the Frame installs one APK per game), in FramePort's data folder
+  (`bundles/`). Your file isn't changed. FramePort takes the 64-bit ARM part, else the 32-bit one. Language and screen
   parts are merged with [APKEditor](https://github.com/REAndroid/APKEditor), downloaded on first use.
-- OBB files in the bundle, or in an `obb/` or `<package>` folder next to it, are sent like a normal game's data.
+- OBB files in the bundle, or in an `obb/` or `<package>` folder next to the bundle, are sent like a normal game's data.
 - The merged APK is signed with the game's own key, like every build. A game that checks its own signature may
   refuse to run.
-- **"is a protected APKMirror bundle":** older `.apkm` files are encrypted for APKMirror's installer. Download it
-  again (current `.apkm` files work), or get an `.apk` or `.xapk`.
+- **"is a protected APKMirror bundle":** older `.apkm` files are encrypted for APKMirror's installer. Download the
+  app again (current `.apkm` files work), or get an `.apk` or `.xapk`.
 - Unpacking needs about twice the bundle's size in free space.
 
 ## Where are a game's settings in FramePort?
@@ -103,7 +107,7 @@ Yes. Add them like an APK: **Add an APK…**, drag them onto the Library, scan a
   and more. Changes apply at the next start.
 - **Patches:** open the game's page → **Customize** (next to **What FramePort will do**). Turn a patch on or off,
   then click **Update on Frame**.
-- **The game's menu:** right-click the game, or **…** on its page. Groups: **Update**, **On the Frame**, **Saves**,
+- **The game's menu:** right-click the game, or **…** on the game's page. Groups: **Update**, **On the Frame**, **Saves**,
   **Name and artwork**, **Recipe** (**Reset to suggested recipe…**, **Share working recipe…**) and **Troubleshoot**
   (**Report a problem…**).
 
@@ -112,12 +116,12 @@ Frame under **Game storage**; microSD cards and other drives under **Drives**).
 
 ## A game doesn't work right. Where do I start?
 
-1. **Update FramePort**, then open the game's page. If it shows **Update on Frame**, click it.
+1. **Update FramePort**, then open the game's page. If the page shows **Update on Frame**, click **Update on Frame**.
 2. **Read the game's page.** The last launch test and **Last session** often suggest a patch or setting, with a
-   button that applies it. Try that first.
+   button that applies the suggestion. Try the suggestion first.
 3. **Changed patches yourself?** **Recipe → Reset to suggested recipe…** brings back the tested ones.
 4. **Find your symptom below.**
-5. **Still stuck?** [Report it](#how-do-i-report-a-problem-well).
+5. **Still stuck?** [Report the problem](#how-do-i-report-a-problem-well).
 
 ## The game doesn't start, or stops right away
 
@@ -132,15 +136,15 @@ The game's page shows the last launch test's result with an explanation.
 - **32-bit-only APK:** the Frame has no 32-bit support. FramePort's 32-bit bridge (experimental) is suggested; if the
   game still doesn't run, look for a PC VR version.
 - **"The game quit itself right after starting":** click **Update on Frame** so the suggested patches apply.
-- **Anything else:** report it.
+- **Anything else:** report the problem.
 
-## It hangs on a logo, a black screen or a loading screen
+## The game hangs on a logo, a black screen or a loading screen
 
-Leave it running and open **Monitor**.
+Leave the game running and open **Monitor**.
 
-- **CPU or graphics busy:** it's still working, often preparing shaders on the first start. Wait up to 10 minutes
+- **CPU or graphics busy:** the game is still working, often preparing shaders on the first start. Wait up to 10 minutes
   once; later starts are quicker.
-- **CPU and graphics near zero:** it's stuck. **While it still hangs**, use **Troubleshoot → Report a problem…**: the
+- **CPU and graphics near zero:** the game is stuck. **While the game still hangs**, use **Troubleshoot → Report a problem…**: the
   zip then shows what the game waits for.
 - **The game starts with a video** and hangs at its logo: **Customize** → turn off **Hardware video decoding** →
   **Update on Frame**.
@@ -159,19 +163,19 @@ Change one thing at a time, then start the game again (patches also need **Updat
 | Curved menus or video screens missing | **Game settings…** → **Show curved menus and screens** |
 | Blurry | **Game settings…** → raise **Render resolution (supersampling)** (costs frame rate) |
 
-Every patch is in the [patch reference](PATCHES.md). Nothing helps? Report it and describe what you see.
+Every patch is in the [patch reference](PATCHES.md). Nothing helps? Report the problem and describe what you see.
 
-## It stutters or runs slowly
+## The game stutters or runs slowly
 
 Open **Monitor** while you play. Smooth play needs the frame rate at the refresh rate (for example 72 or 90 fps).
 
-- **Below it:** **Game settings…** → lower **Render resolution (supersampling)** (for example to 0.8×) or the
+- **Below the refresh rate:** **Game settings…** → lower **Render resolution (supersampling)** (for example to 0.8×) or the
   **Refresh rate**. After a session, the game's page may suggest a value.
-- **At it, but it still judders:** report it.
+- **At the refresh rate, but the game still judders:** report the problem.
 
 ## The game pauses or recenters by itself
 
-The Frame briefly tells games they lost focus, for example when its sensor thinks you took the headset off.
+The Frame briefly tells games they lost focus, for example when the headset's sensor thinks you took the headset off.
 **Game settings…**: keep **Don't pause on short interruptions** on and raise **Ignore focus dips up to** (for example
 to 2.5 s).
 
@@ -187,18 +191,18 @@ In **Game settings…**:
 
 ## The Frame turns off or gets hot during a game
 
-Only on battery, never plugged in? That's power, not FramePort: heavy games can draw more than the battery delivers.
+Only on battery, never plugged in? The cause is power, not FramePort: heavy games can draw more than the battery delivers.
 
 - Play plugged in, or lower **Render resolution (supersampling)** in **Game settings…**.
-- It also turns off while plugged in: report it.
+- The Frame also turns off while plugged in: report the problem.
 
 ## My progress isn't saved
 
 1. Quit through the game's own menu. Most games save when Steam's **Exit game** pauses them, but some only save when
    you quit them yourself.
-2. Check that it saves at all: **Files** → **Game storage** → the game → look at the files' dates. Play, save, quit
+2. Check that the game saves at all: **Files** → **Game storage** → the game → look at the files' dates. Play, save, quit
    and look again.
-3. Nothing changes: report it.
+3. Nothing changes: report the problem.
 
 Saves stay on the Frame when you update or reinstall a game.
 
@@ -212,8 +216,8 @@ content (videos, OBBs, files over 64 MB) are left out.
   **Data** → **Choose backup folder…** picks another, for example a cloud-sync folder. Older backups stay restorable.
 - **How many:** the 10 newest per game by default (Settings → Data).
 - **Automatically:** **Back up saves when a game closes** (Settings → Data, off by default). The Frame keeps 3
-  snapshots per game, even while FramePort is closed; FramePort copies them over when it connects. Connect once
-  after turning it on.
+  snapshots per game, even while FramePort is closed; FramePort copies the snapshots over when FramePort
+  connects. Connect once after turning the setting on.
 - **Restore:** **Saves → Restore saves…**. **Undo last restore** in the same window takes you back. Uninstalling a
   game with *Also delete its saves* backs them up first.
 
@@ -221,12 +225,13 @@ Command line: `frameport saves backup|list|restore|undo <game>`.
 
 ## A game with mods crashes
 
-Play once without mods. If it then works, a mod is the cause (the diagnostics zip usually names it). Report it to
-the mod's author, and check for a mod version that matches your game version.
+Play once without mods. If the game then works, a mod is the cause (the diagnostics zip usually names the mod).
+Report the crash to the mod's author, and check for a mod version that matches your game version.
 
 ## The game needs files I supply (ports, emulators, mods)
 
-The game's instructions say where; it's usually `Android/data/<package>/files` (its `launch.log` names the path).
+The game's instructions say where; the place is usually `Android/data/<package>/files` (the game's `launch.log`
+names the path).
 
 1. Unpack the files on your PC first: these apps read folders, not disc images (`.iso`) or archives.
 2. **Files** → **Game storage** → the game → that folder → **Upload folder…** or **Upload files…**.
@@ -235,8 +240,8 @@ In-game "choose a file" buttons don't work: the Frame has no file picker.
 
 ## How do I report a problem well?
 
-1. Reproduce it, then right away use **Troubleshoot → Report a problem…** in the game's menu. For a hang, do it while
-   the game still hangs.
+1. Reproduce the problem, then right away use **Troubleshoot → Report a problem…** in the game's menu. For a hang,
+   report while the game still hangs.
 2. Say what you saw in the headset and what you tried.
-3. **Collect and open GitHub** saves a diagnostics zip and opens a prefilled report: attach the zip. It holds logs,
+3. **Collect and open GitHub** saves a diagnostics zip and opens a prefilled report: attach the zip. The zip holds logs,
    not your game files, and personal details are removed.

@@ -41,17 +41,17 @@ The Frame and your PC must be on the same network, or connected with a [USB cabl
       ```
 
       No keyboard? Open [the setup page](https://frameport.app/setup/) in Chromium on the Frame, tap **Copy** and
-      paste it into Konsole.
+      paste the line into Konsole.
    4. Konsole shows a 4-digit code. When FramePort shows the same code, click **Allow**. Nothing changes before that.
-   5. Steam restarts once. If it asks to install **Lepton** (Valve's Android runtime), confirm.
+   5. Steam restarts once. If Steam asks to install **Lepton** (Valve's Android runtime), confirm.
 
 FramePort connects within a minute, without a password, and from then on by itself. The setup turns on **Developer
-Mode** (Settings → System on the Frame); keep it on. [What the setup changes](FRAME_SETUP.md) lists everything.
+Mode** (Settings → System on the Frame); keep Developer Mode on. [What the setup changes](FRAME_SETUP.md) lists everything.
 
-- **Network blocks the search?** Click **Use the setup command** and run the line it shows in Konsole instead (it
-  holds your PC's address and a one-time code).
+- **Network blocks the search?** Click **Use the setup command** and run the line FramePort shows in Konsole
+  instead (the line holds your PC's address and a one-time code).
 - **Without Konsole:** turn on Developer Mode, then open Settings → Developer → **Pair new host** on the Frame.
-  Approve FramePort's request in the headset. Install Lepton from FramePort's Steam Frame page if it's missing.
+  Approve FramePort's request in the headset. Install Lepton from FramePort's Steam Frame page if Lepton is missing.
 
 ### With a USB cable
 
@@ -61,7 +61,7 @@ A cable works on networks that block the setup, and uploads are about three time
 2. Connect the Frame's USB-C port to your PC. No driver needed.
 3. Click **Steam Frame → Set up with a USB cable** and follow the steps.
 
-Uploads use the cable while it's plugged in. Unplug it any time.
+Uploads use the cable while the cable is plugged in. You can unplug the cable any time.
 
 ### Firewalls
 
@@ -71,7 +71,7 @@ says which one. Details: [Network and firewalls](FRAME_SETUP.md#network-and-fire
 ## Running FramePort on the Frame (experimental)
 
 1. Turn on Developer Mode (Settings → System).
-2. In Desktop Mode, download `FramePort-linux-arm64.tar.gz`, unpack it and start `FramePort/FramePort`.
+2. In Desktop Mode, download `FramePort-linux-arm64.tar.gz`, unpack the file and start `FramePort/FramePort`.
 
 Games appear in Steam once you close FramePort and return to Gaming Mode ([when games appear in
 Steam](#when-games-appear-in-steam)).
@@ -100,26 +100,27 @@ Steam](#when-games-appear-in-steam)).
 - App bundles (`.xapk`, `.apks`, `.apkm`, `.apkx`, split APKs) are added like an APK:
   [FAQ](FAQ.md#can-i-add-xapk-apks-apkm-or-apkx-files-app-bundles).
 
-A game's **menu** opens with a right-click in the Library or the **…** button on its page. Its groups are
+A game's **menu** opens with a right-click in the Library or the **…** button on the game's page. The menu's groups
+are
 **Update**, **On the Frame**, **Saves**, **Name and artwork**, **Recipe** and **Troubleshoot**.
 
 - **Game settings…** shows the settings that matter for that game: sharpness, refresh rate, controllers, menus,
   360° video and mixed reality. Changes apply the next time the game starts.
-- **Name and artwork → Rename…** renames the game in the Library and in Steam. Its Steam entry, artwork and saves
-  stay.
+- **Name and artwork → Rename…** renames the game in the Library and in Steam. The game's Steam entry, artwork and
+  saves stay.
 
 ![Game settings](images/game-settings.png)
 
 ### When games appear in Steam
 
-Steam reads new games only when it starts. Settings → Installing → **Steam library** sets when that happens:
+Steam reads new games only when Steam starts. Settings → Installing → **Steam library** sets when Steam restarts:
 
-- **Now** (default): Steam restarts after an install. It waits while a game, Desktop Mode or FramePort on the Frame
+- **Now** (default): Steam restarts after an install. The restart waits while a game, Desktop Mode or FramePort on the Frame
   is open (up to 12 hours).
 - **Later**: new games appear at Steam's next start, also after a reboot. **Restart Steam now** adds them at once
-  (it closes Desktop Mode and FramePort on the Frame, and asks first if a game is running).
+  (the restart closes Desktop Mode and FramePort on the Frame, and asks first if a game is running).
 - **Off**: no new Steam entries; existing ones stay. FramePort's **Play** starts the game directly. Steam and SteamVR
-  must be running, and Steam's overlay, controller setup and Exit game don't work for it: end it from **Monitor**.
+  must be running, and Steam's overlay, controller setup and Exit game don't work for the game: end the game from **Monitor**.
   Games waiting for **Later** start this way too.
 
 Command line: `frameport frame steam-library now|later|off`, `frameport frame restart-steam [--yes]`. Installing
@@ -128,29 +129,29 @@ Proton can still restart Steam.
 ### microSD cards and other drives
 
 - **Steam Frame → Storage → Install new games to** sets where new games go.
-- **On the Frame → Move to…** in a game's menu moves it. Close the game first; saves and the Steam entry stay.
+- **On the Frame → Move to…** in a game's menu moves the game. Close the game first; saves and the Steam entry stay.
 - A game on a card only starts while the card is inserted.
 - Cards formatted as FAT, exFAT or NTFS can't hold games. Format the card in SteamOS first.
 
 ### Controller buttons
 
 Buttons repeat or do the wrong thing? **Game settings → Controllers → Controller buttons** picks **Mirror** or
-**Quest pair** for one game. **Settings → Controllers** sets the default; **Apply to installed games now** sends it
-to games without their own choice. Details: [Controller buttons](CONTROLLERS.md).
+**Quest pair** for one game. **Settings → Controllers** sets the default; **Apply to installed games now** sends the
+default to games without their own choice. Details: [Controller buttons](CONTROLLERS.md).
 
 ### Android apps and Windows programs
 
 - Android apps without VR are installed unchanged and shown as a window. Shows nothing, or a VR app opens as a
   window? On the game's page: **Customize** → **Show as VR or as a flat window** → **Update on Frame**.
-- **Add games → Add a Windows program…** adds one Windows program. The Frame runs it as a window through Proton.
+- **Add games → Add a Windows program…** adds one Windows program. The Frame runs the program as a window through Proton.
 
 ### Install links ("Install with FramePort" buttons)
 
 Some websites have an **Install with FramePort** button (a `https://frameport.app/install?…` link).
 
-- **Click it** (Windows, Linux): FramePort opens, shows what it would download and asks first.
+- **Click the button** (Windows, Linux): FramePort opens, shows what FramePort would download and asks first.
 - **Add games → Add from a link…** takes a button's address (right-click → Copy link) or a direct download link.
-  Use this on macOS, where buttons can't open FramePort yet.
+  Use **Add from a link…** on macOS, where buttons can't open FramePort yet.
 - **Settings → Install links** turns the buttons on or off.
 - Only `https://` links to public servers work. Only install from sites you trust.
 
@@ -160,8 +161,8 @@ Website owners: [Install button](INSTALL_BUTTON.md).
 
 - **Type on Frame** (sidebar): while the tab is open, your PC's keyboard types on the Frame. Select a text field in
   the headset and type, or paste text into the box.
-- **Steam's on-screen keyboard** works in apps shown as a window. Steam lists that window as **Gamescope**: leave it
-  open.
+- **Steam's on-screen keyboard** works in apps shown as a window. Steam lists that window as **Gamescope**: leave the
+  window open.
 - **Unity text fields close at once?** Use the patch **Make Unity text fields work**. Not offered for an older game?
   **Troubleshoot → Analyze again**, then **Update on Frame**.
 
@@ -171,26 +172,26 @@ Website owners: [Install button](INSTALL_BUTTON.md).
 
 - **Monitor** (sidebar): the running game's frame rate, CPU, graphics, memory, temperature, power and battery.
   **Show details** shows more.
-- Under **Processes**, right-click a process to end it. **End game** closes the game like Steam's Exit game.
+- Under **Processes**, right-click a process to end the process. **End game** closes the game like Steam's Exit game.
   FramePort asks again before ending programs Steam or the desktop needs (marked with a lock).
-- **Live view** streams what the headset shows, with sound, to your browser. It uses about one CPU core of the
-  Frame: stop it when you're done.
+- **Live view** streams what the headset shows, with sound, to your browser. Live view uses about one CPU core of the
+  Frame: stop Live view when you're done.
 - **Screenshots** shows your headset screenshots by game and day, to view or download.
 
 ## Your room (mixed reality, experimental)
 
-Mixed-reality games ask for your room: walls, furniture and surfaces. The **Room** tab keeps it.
+Mixed-reality games ask for your room: walls, furniture and surfaces. The **Room** tab keeps the room.
 
 1. **Scan room in the headset**, put the headset on and look around for about a minute. **Cancel scan** keeps your
    saved room. **Use my play area** makes walls only, from the SteamVR play area.
-2. Check the room in 3D: drag to turn, scroll to zoom, right-drag to move, double-click to see all of it. **Open full
+2. Check the room in 3D: drag to turn, scroll to zoom, right-drag to move, double-click to see the whole room. **Open full
    3D view** shows every detail in your browser.
-3. Fix it if needed:
+3. Fix the room if needed:
    - **Clean-up** tidies every scan. The recommended settings suit most rooms; **Apply** re-cleans your scan with
      changed ones (also used for later scans).
    - **Labels** shows what each scanned box became and why. A tall, thin box by a wall can be **Add as door** or
      **Add as closet**.
-   - **Furniture & screens**: click a box to change its type, place or size; add or delete boxes; add doors and
+   - **Furniture & screens**: click a box to change the box's type, place or size; add or delete boxes; add doors and
      windows. **Save** sends them to the Frame. They survive a new clean-up (**Back to the scan's boxes** drops them).
 
 The free **Test Quest MR** app (**Get Test Quest MR** on the tab) shows what a game receives.
@@ -201,8 +202,8 @@ The free **Test Quest MR** app (**Get Test Quest MR** on the tab) shows what a g
 
 ## Updating
 
-FramePort checks for a new version at start and every 6 hours. **Update now** in the Library downloads it, checks
-it and restarts; your games and settings stay. **Later** skips that version.
+FramePort checks for a new version at start and every 6 hours. **Update now** in the Library downloads the new
+version, checks it and restarts FramePort; your games and settings stay. **Later** skips that version.
 
 - Settings → **Updates** turns the check off or on, or turns on **Install updates automatically**.
 - **Recipes** update by themselves. A game whose recipe changed shows **Update on Frame**.
@@ -217,10 +218,10 @@ it and restarts; your games and settings stay. **Later** skips that version.
 ## PC VR games
 
 Scan a folder of Windows VR games (one folder per game), or **Add games → Add a PC game folder…**. If a game has
-several programs, FramePort asks which one starts it.
+several programs, FramePort asks which program starts the game.
 
-- **Play from this PC** (Windows with Steam and SteamVR): **Install on this PC** adds it to Steam. Stream it to the
-  Frame with Steam Link.
+- **Play from this PC** (Windows with Steam and SteamVR): **Install on this PC** adds the game to Steam. Stream the
+  game to the Frame with Steam Link.
 - **Play on the Frame (experimental):** install *PC VR games (Proton)* on the Steam Frame page, then **Install on
   Frame**.
 - **Oculus games** (made for Meta's Rift) need Revive, which FramePort downloads, and run only on your PC. Games that
@@ -231,7 +232,7 @@ several programs, FramePort asks which one starts it.
 ## Linux apps
 
 **Add games → Add a Linux app…** takes an AppImage or a `.zip`/`.tar.gz`/`.tar.xz` archive; **Add a Linux app
-folder…** takes an unpacked app. **Install on Frame** uploads it unchanged and adds it to Steam.
+folder…** takes an unpacked app. **Install on Frame** uploads the app unchanged and adds the app to Steam.
 
 - **arm64** builds run directly. **x86_64** builds run through FEX, which Steam installs the first time; they're
   slower. The game page shows which you have.
@@ -264,7 +265,7 @@ one back. Settings → **Data** sets the folder, how many to keep and automatic 
 - **Share working recipe…** (game menu → **Recipe**) opens a GitHub issue with the game's recipe filled in. Accepted
   recipes become built-in for everyone.
 - **Report a problem…** (game menu → **Troubleshoot**, or Settings → Problems and feedback) saves a diagnostics zip
-  without personal data and opens a GitHub issue to attach it to.
+  without personal data and opens a GitHub issue to attach the zip to.
 
 Without the app: [share a recipe](https://github.com/spoopyghosty0/frameport/issues/new?template=working-config.yml)
 · [report a problem](https://github.com/spoopyghosty0/frameport/issues/new?template=bug-report.yml).
@@ -272,7 +273,7 @@ Without the app: [share a recipe](https://github.com/spoopyghosty0/frameport/iss
 ## Uninstalling
 
 Settings → **Uninstall FramePort…** removes FramePort's data and, if you choose, its games on the Frame (saves can be
-kept). It first saves your signing keys to Documents; you need them to update your games later. Then delete the
+kept). The uninstaller first saves your signing keys to Documents; you need them to update your games later. Then delete the
 FramePort folder.
 
 ## Verify a download
@@ -281,7 +282,7 @@ FramePort folder.
 - `gh attestation verify FramePort-windows-x64.zip -R spoopyghosty0/frameport` checks that GitHub built the file from
   this repository.
 - Windows: to show FramePort as the publisher, import `FramePort-selfsigned.cer` (attached to each release) into
-  *Trusted Root Certification Authorities* (Current User). It can only sign code; remove it with `certmgr.msc`.
+  *Trusted Root Certification Authorities* (Current User). The certificate can only sign code; remove the certificate with `certmgr.msc`.
   SHA-256 fingerprint:
   `4E:12:98:91:62:C0:E4:50:FB:65:1D:34:BB:73:00:09:7B:78:BE:88:5C:A7:6C:42:23:46:9B:92:A1:59:A7:6E`.
 

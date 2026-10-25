@@ -3,10 +3,10 @@
 Thanks for helping. The quickest contributions:
 
 - **A game works on the Frame?** Game menu → **Recipe → Share working recipe…** opens a prefilled issue. After
-  review it becomes a built-in recipe (`catalog/games/<package>.yaml`), and installed copies of FramePort get it within
-  6 hours.
+  review the recipe becomes a built-in recipe (`catalog/games/<package>.yaml`), and installed copies of FramePort get
+  the recipe within 6 hours.
 - **Something doesn't work?** Game menu → **Troubleshoot → Report a problem…** saves a diagnostics zip (personal data
-  removed) and opens a prefilled issue to attach it to.
+  removed) and opens a prefilled issue to attach the zip to.
 
 Without the app: [working recipe form](https://github.com/spoopyghosty0/frameport/issues/new?template=working-config.yml)
 · [problem report form](https://github.com/spoopyghosty0/frameport/issues/new?template=bug-report.yml).
@@ -41,7 +41,7 @@ The app's texts can be translated, no programming needed. The command line, logs
 3. Fill in the values. Each key is the English text; an empty value keeps the English. Plural entries take a list:
    `["<one>", "<other>"]`. Keep `{placeholders}` such as `{title}` exactly, and `…`, `·` and line breaks where the
    English has them.
-4. Try it: `uv run frameport-gui`, pick the language in Settings → Appearance → Language, restart FramePort.
+4. Try the translation: `uv run frameport-gui`, pick the language in Settings → Appearance → Language, restart FramePort.
 5. Open a pull request with the file. New English texts show in English until they're translated.
 
 ## Ground rules

@@ -13,12 +13,12 @@ FramePort has three color themes, all dark. Switch in **Settings → Appearance*
 A theme is a small JSON file.
 
 1. In **Settings → Appearance**, pick the closest theme and click **Copy this theme as a file**.
-2. Paste it into a text editor and save it as `something.json`.
+2. Paste the theme into a text editor and save the file as `something.json`.
 3. Change the name and the colors you want. Delete the colors you keep: missing ones come from the `base` theme.
-4. Click **Install theme file…** and choose the file. FramePort checks it, switches to it and keeps a copy, so you
-   can delete the original.
+4. Click **Install theme file…** and choose the file. FramePort checks the file, switches to the theme and keeps a
+   copy, so you can delete the original.
 
-The bin icon on a theme's card removes it.
+The bin icon on a theme's card removes the theme.
 
 ### Format
 
@@ -48,8 +48,8 @@ The bin icon on a theme's card removes it.
 | `SURFACE`, `SURFACE_2`, `SURFACE_3` | Cards; raised and hovered parts; inputs and chips |
 | `BORDER`, `BORDER_STRONG` | Outlines |
 | `TEXT`, `TEXT_2`, `TEXT_3` | Main text; secondary text; captions and disabled text |
-| `ACCENT`, `ACCENT_SOFT`, `ON_ACCENT` | Main buttons and the current selection; its tint; text on it |
-| `SECONDARY`, `SECONDARY_SOFT` | Secondary buttons, progress, switch tracks; its tint |
+| `ACCENT`, `ACCENT_SOFT`, `ON_ACCENT` | Main buttons and the current selection; the accent's tint; text on the accent |
+| `SECONDARY`, `SECONDARY_SOFT` | Secondary buttons, progress, switch tracks; the secondary color's tint |
 | `OK`, `WARN`, `ERROR`, `INFO` | Status: works, needs attention, failed, information |
 | `PC` | PC VR games and "on this PC" |
 

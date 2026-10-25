@@ -1,16 +1,18 @@
 # Announcements
 
-`current.md` is the one announcement FramePort shows as a pop-up in the app. Edit it on `main`: the app reads it
-from GitHub `main` (raw.githubusercontent.com) at most every 6 hours, so a push reaches everyone without a release.
+`current.md` is the one announcement FramePort shows as a pop-up in the app. Edit `current.md` on `main`: the app
+reads the file from GitHub `main` (raw.githubusercontent.com) at most every 6 hours, so a push reaches everyone
+without a release.
 
 ## Who sees it
 
-- **Only people who already used FramePort before the announcement's `date`.** A new install never shows one, and
-  nor does an announcement published before FramePort was installed.
-- **Once.** Closing it in any way (the X, a click outside it, Escape, or its button) dismisses it for good. The app
-  remembers dismissals in its settings (`announce.dismissed`).
-- **A new announcement = a new `id`.** Fixing a typo with the same `id` doesn't show it again to anyone who closed it.
-  A new `id` shows to everyone who used FramePort before its `date`, whether they closed the earlier one or not.
+- **Only people who used FramePort before the announcement's `date`.** A new install never shows an announcement,
+  and neither does an announcement published before FramePort was installed.
+- **Once.** Closing the pop-up in any way (the X, a click outside, Escape, or the pop-up's button) dismisses the
+  announcement for good. The app remembers dismissals in its settings (`announce.dismissed`).
+- **A new announcement = a new `id`.** A typo fix with the same `id` doesn't show the announcement again to anyone
+  who closed it. A new `id` shows to everyone who used FramePort before its `date`, whether they closed the earlier
+  announcement or not.
 
 ## The file
 

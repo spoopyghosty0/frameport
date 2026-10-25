@@ -7,7 +7,7 @@ Facts about the Steam Frame's runtime that FramePort relies on, checked on the d
 ## Setup from the project page (checked 2026-10-10, SteamOS build 20260922)
 
 - Factory Frames have no browser; Steam's taskbar **+** offers Chromium as a Flatpak (`org.chromium.Chromium`,
-  flathub is configured as a system remote). It is the default handler for https links once installed.
+  flathub is configured as a system remote). Chromium is the default handler for https links once installed.
 - Desktop Mode has `curl`, `wget`, `python3` 3.12, `konsole`, `kdialog`, `xdg-open`, `avahi-browse`, `systemd-run`;
   no `wl-copy`/`xclip`.
 - avahi-daemon runs, but `avahi-browse` from an SSH session fails ("Daemon not running": no system D-Bus access
@@ -50,7 +50,7 @@ Facts about the Steam Frame's runtime that FramePort relies on, checked on the d
 - 64-bit only (no AArch32): 32-bit-only APKs run through FramePort's a32 bridge (`frame.a32_bridge`).
 - `<install>/lepton-shaders/` holds Mesa's shader cache (Lepton sets `mesa.shader.cache.dir=/data/shaders`):
   `foz_cache.foz` + `foz_cache_idx.foz` per graphics driver (Turnip Vulkan, zink GL), typically 4–6 files and 7–19 MB
-  per game, 2D apps included. It speeds up later starts; deleting it only costs one slower start.
+  per game, 2D apps included. The cache speeds up later starts; deleting the cache only costs one slower start.
 - **2D apps** (verified 2026-10-02 with an open-source 2048 game): Lepton runs every app headless
   (`lepton.headless=true`; only OpenXR output reaches the headset) unless the app folder (`STEAM_COMPAT_INSTALL_PATH`)
   contains a file `lepton-show-flatscreen` (`liblepton/app_metadata.sh`): then Android (11, Waydroid) gets a Wayland
@@ -104,7 +104,7 @@ Facts about the Steam Frame's runtime that FramePort relies on, checked on the d
   `dirname($FRAMEBRIDGE_CONFIG)/room.txt`. Stale copies are removed if no room exists or emulation is disabled.
   Each game's persistent anchors stay in `/sdcard/Android/data/<pkg>/files/framebridge-anchors.txt`.
 - With `scene_emul`, launch.sh starts `_scan_watch <pkg>` after Lepton, closing fd 9; its exit trap stops the
-  watcher, which also exits if the launcher disappears. It polls once a second and logs to `<base>/scan-watch.log`.
+  watcher, which also exits if the launcher disappears. The watcher polls once a second and logs to `<base>/scan-watch.log`.
   In `<base>/lepton-data/external/Android/data/<pkg>/files/`, FrameBridge writes `framebridge-scan-request`
   (`request <id> <unix_seconds>`); the watcher clears stale request/ack/result files at startup, writes
   `framebridge-scan-ack` (`ack <id>`), reuses the headset capture/build worker, stores the current room and copies
@@ -126,7 +126,7 @@ scan's first recorded camera position. Every 16th depth vertex contributes to ra
 per second, newly occupied cells redraw a 256×256 RGBA map in one colour (FramePort's secondary blue), each cell a
 filled 10 cm square, only the opacity telling floor (<0.3 m, faint), raised surfaces (0.3–1.5 m) and tall surfaces
 (>1.5 m, strongest, the room's outline) apart; unseen transparent. Overlays have no depth (they draw over hands and
-passthrough), so the map stays faint; three colours in 3x3 blotches clashed in the first headset test. It shows
+passthrough), so the map stays faint; three colours in 3x3 blotches clashed in the first headset test. The map shows
 coverage, not a validated room boundary. IVROverlay_028 slots 1/3/20/22/33/43/62 (OpenVR 2.15.6 header)
 create/destroy/sort order (1, below the scan prompts' 10)/set width/set absolute STAGE transform/show/upload raw
 pixels. Each upload is 256 KiB (at most 256 KiB/s); timing for the first
@@ -175,7 +175,7 @@ need device validation.
   (archive stdout, result JSON stderr). PC `install/saves.sync_snapshots` runs in the background, verifies the archive
   hash and package, imports it as a normal backup marked `automatic`, and applies `saves.keep`. A local
   `<data>/save-snapshots-synced.json` digest ledger prevents reimporting snapshots after pruning or deleting backups.
-  Failures leave snapshots on the Frame for the next poll. This path does no disk/SSH work in rendering.
+  Failures leave snapshots on the Frame for the next poll. The snapshot sync does no disk/SSH work in rendering.
 
 ## OpenXR runtime (as seen by games through overport's loader)
 - Instance extensions present include KHR_android_create_instance (must be enabled; the adapter adds it),
@@ -190,7 +190,7 @@ need device validation.
 - Layer types (checked 2026-09-30 in `/opt/steamvr/bin/androidarm64/vrclient.so`, the Android-side runtime Lepton
   mounts at `/data/steamvr/runtime`): its compositors (`CSxrCompositorPrism`, `CSxrCompositorOpenVR`) only have
   `ComposeLayerQuad` and `ComposeLayerProjection`; cube/cylinder/equirect/equirect2 exist only as enum names, so
-  there is nothing to switch on. It has a layer limit ("Exceeded the layer limit"; the value is logged by
+  there is nothing to switch on. The runtime has a layer limit ("Exceeded the layer limit"; the value is logged by
   `layer_debug` from `maxLayerCount`). The adapter emulates cylinders (strips) and, per game, equirect layers
   (`equirect_emul`, an adapter projection layer). Refused cube swapchains use GLES/Vulkan stand-ins;
   `cube_quads` (default on) copies their faces into six quads for frames without a projection
@@ -221,7 +221,7 @@ and left/up/right as Touch Y; right A as Touch A and X/Y/B as Touch B. Left View
 FrameBridge's `quest_buttons` preference (`0` default, `1` Mirror, `2` Quest pair) enables the extension when offered
 and suggests a Frame binding translated from the game's Touch suggestions. Common pressure/trigger/thumbstick,
 pose and haptic paths keep their Touch counterparts; thumbrest touch and system click are dropped, bumpers stay
-unbound. The player's SteamVR custom bindings can override suggestions. This works on both bridge ABIs, without
+unbound. The player's SteamVR custom bindings can override suggestions. `quest_buttons` works on both bridge ABIs, without
 the arm64-only extension shim. See [Controller buttons](CONTROLLERS.md) and the [mapping contract](input/QUEST_BUTTONS.md).
 The runtime accepts the suggested bindings in headless launches; the modes haven't been tried in the headset on
 many games yet.
@@ -229,16 +229,16 @@ many games yet.
 ## Lua native pointer compatibility
 
 Frame's Android processes can map libraries above the lowest 2^47 bytes of address space. The verified xLua API 105
-engine in BattleTalent 4.7 rejects those otherwise valid pointers in `lua_pushlightuserdata`. This was isolated using
+engine in BattleTalent 4.7 rejects those otherwise valid pointers in `lua_pushlightuserdata`. The cause was isolated using
 the unchanged library from the source APK: a real allocation at `0x10000000` round-trips, but its own native `xlua_tag`
 pointer above 47 bits raises `bad light userdata pointer` and exits. With `frame.luajit_pointers`, both round-trip
-exactly. No game scripts or account checks are changed. This validates an address-layout compatibility requirement;
+exactly. No game scripts or account checks are changed. The test validates an address-layout compatibility requirement;
 the APK was not run on an actual Quest during this investigation.
 
 The patch is restricted to SHA-256 `6d5860e4a4f1cc2b05c600c63297ed467369739666edca79413fff4374ff2684`.
-It redirects only the Lua engine's public API to a pinned full-pointer LuaJIT, keeping the original xLua bindings,
+The patch redirects only the Lua engine's public API to a pinned full-pointer LuaJIT, keeping the original xLua bindings,
 LuaSocket and game helpers. The patched build survives a 60 s headless launch and creates OpenXR swapchains.
-Early frame-rectangle errors and backend login errors remain in the capture; this does not verify rendering or play.
+Early frame-rectangle errors and backend login errors remain in the capture; the launch does not verify rendering or play.
 An arbitrary `lj_err_throw` followed by Unity destructor failures does not prove this pointer issue: first capture the
 Lua error text. `Unknown Platform` also appears after this crash is fixed, so it was not the fatal cause here.
 
@@ -249,10 +249,10 @@ Lua error text. `Unknown Platform` also appears after this crash is fixed, so it
   Appending `debug` while preserving inherited flags showed `fdm_injection_CreateInstance: skipped`.
   A temporary `FDM_DEBUG=enable,debug` launch created the Unity/Manta Vulkan instance and device,
   detected a 54x54 two-layer density map for 1728x1728 eye buffers, and logged render passes with
-  `fdm 1`, `already_has_fdm=1`, and changing offsets for both eyes. This verifies the injection path,
+  `fdm 1`, `already_has_fdm=1`, and changing offsets for both eyes. The probe verifies the injection path,
   not visual quality, gaze calibration, sustained gameplay stability, or an FPS/power improvement.
   `device.foveation` mode `tracked` now explicitly loads the layer and sets `FDM_DEBUG=enable` without
-  debug spam. It is opt-in; do not enable it globally or assume all GLES/Zink and Vulkan renderers work.
+  debug spam. The mode is opt-in; do not enable it globally or assume all GLES/Zink and Vulkan renderers work.
   Follow-up wearer test on 2026-10-11 FAILED in Batman: large rainbow glitches outside the gaze region
   and jitter even in clear regions. Restoring the original launcher and restarting removed BOTH symptoms,
   confirmed by the wearer. Do not recommend forced injection for this Batman build. Reaching foveated
@@ -287,8 +287,8 @@ Lua error text. `Unknown Platform` also appears after this crash is fixed, so it
 - **x86_64 Linux apps (verified on the device 2026-10-07: an x86_64 glibc test program installed + launch test
   RUNNING, "machine=x86_64 glibc=2.41"):**
   FEX is Steam app 3127680 (`fex`, installs as `common/FEX-Emu`, ~6 MB, 21 s via the appmanifest-stub path:
-  `install_proton` / `proton_status` with `kind: linux_x86`). Its toolmanifest commandline is
-  `/fex-compat-tool %verb% --`, **no** require_tool_appid: it does not use the Steam Linux Runtime. fex-compat-tool
+  `install_proton` / `proton_status` with `kind: linux_x86`). FEX's toolmanifest commandline is
+  `/fex-compat-tool %verb% --`, **no** require_tool_appid: FEX does not use the Steam Linux Runtime. fex-compat-tool
   (Python) runs `<FEX-Emu>/usr/bin/FEX` with RootFS `/usr/share/guestos/fex-mesa` (part of the SteamOS image: an
   x86 Arch-style root with glibc 2.41, Mesa, graphics_provider.json for x86_64 + i386), emulates x86_64 and i386
   (emulator.json), honors `STEAM_FEX_TSOENABLED`, `STEAM_FEX_MULTIBLOCK`, `STEAM_COMPAT_FEX_CONFIG`, sets
@@ -424,18 +424,18 @@ over Quest games.
 
 ## Video of the headset view (surveyed 2026-10-05; used by the Live view tab)
 - `steamvr-v4l2cam.service` (user unit, part of gamescope-session.target, `Restart=always`) runs SteamVR's
-  `/opt/steamvr/bin/linuxarm64/v4l2cam --output=99`: it reads the compositor's "Headset View" (IVRHeadsetView) and
+  `/opt/steamvr/bin/linuxarm64/v4l2cam --output=99`: v4l2cam reads the compositor's "Headset View" (IVRHeadsetView) and
   writes it to a v4l2loopback webcam named **"SteamVR"** (`/dev/video99`, 1920x1080 RGB24, advertised 30 fps, frames
   arrive at the display rate). Nothing on the Frame reads it by default; idle it costs nothing, read ~0.2 core.
   It shows what the wearer sees: SteamVR home, Steam's panels and games (4XVR's theatre with an overlay on top,
   2026-10-10).
   Black and ~1 fps (one frame per ~1.0 s) while the Frame sleeps (standby): a 30 fps stream then repeats each
-  frame in bursts, which looks like a stall in a player. Its size follows SteamVR's headset view (v4l2cam has no size
+  frame in bursts, which looks like a stall in a player. The picture's size follows SteamVR's headset view (v4l2cam has no size
   option), so the live view only scales down (360p/480p/720p/1080p) or sends it as is ("full").
 - Sound: `pactl get-default-sink` (`alsa_loopback_device.stereo.alsa_output.platform-sound.HiFi__Speaker__sink`) and its
   `.monitor` source carry what the Frame plays; the Frame's ffmpeg has the `pulse` input and `aac`. Timestamps: pulse
   uses the wall clock, v4l2 CLOCK_MONOTONIC → `-ts mono2abs` on the v4l2 input. Don't force
-  `-use_wallclock_as_timestamps` on the pulse input: it stamped bursts of AAC packets with one time.
+  `-use_wallclock_as_timestamps` on the pulse input: that option stamped bursts of AAC packets with one time.
 - Steam's own game recording / Remote Play / broadcast capture the **gamescope** PipeWire node (`CDesktopCapturePipeWire:
   ... node path: gamescope`): with gamescope's `--backend openvr` that's only the flat Steam UI, not VR. Steam's arm64
   `libvideo.so` encodes with x264 (vaapi/nvenc paths don't apply). No cast/spectator feature for the Frame's own VR view
@@ -444,9 +444,9 @@ over Quest games.
   `h264_v4l2m2m` hangs, gst `v4l2h264enc` not-negotiated). ffmpeg + libx264 works: FramePort's live view
   (`install/livestream.py`: `fps=30` before the scale, ultrafast/zerolatency, 3 threads, nice 10, fragmented MP4 on
   stdout, + AAC 128k) measured 0.34 core at 720p / 0.56 at 1080p with a quiet picture (video only); expect ~1-1.4
-  cores with a busy scene. That is now only the fallback.
+  cores with a busy scene. The x264 path is now only the fallback.
 - Hardware encoding (2026-10-07): the iris encoder works when driven directly through the V4L2 stateful encoder
-  interface. That is FramePort's `fp_venc` (`native/venc`, spec + every measured value in `native/venc/SPEC.md`).
+  interface. FramePort's `fp_venc` does that (`native/venc`, spec + every measured value in `native/venc/SPEC.md`).
   Facts:
   - Device: `/dev/video23` (`/dev/video-enc0` links to it), driver `iris_driver`, M2M multiplanar.
   - Formats: input NV12/NV21/AB24(RGBA)/QC24/Q08C; output H264/HEVC; sizes 128..8192.
@@ -484,7 +484,7 @@ over Quest games.
       0–N s alongside), plus `frag_keyframe` so that a requested keyframe starts a fragment.
     - With sound, ffmpeg paces its inputs against each other and pulse's audio arrives later than the wall clock
       (more while something plays). The video input then counts as ahead, and ffmpeg stops reading it for up to
-      0.7 s, so the writer blocks. That was the cause of 1080p dropping frames: busy 1080p replayed with sound took
+      0.7 s, so the writer blocks. The blocked writer caused 1080p's dropped frames: busy 1080p replayed with sound took
       34–47 s for 20 s of video. Video alone was fine; `nice`, `-raw_packet_size` and the input queue size didn't
       matter. Shifting the video input back fixes it, but too far makes ffmpeg hold the video for interleaving and
       release it in clumps: -1 s gave output gaps of up to 550 ms, a longer and stuttering delay in the browser.
@@ -529,7 +529,7 @@ radius pairs do **not** describe the generated shared-injection density map.
 The inspected arm64 `libVkLayer_VALVE_fdm_injection.so` has these semantics (virtual addresses):
 - `init_fdm_fove_level` at `0x1cdf4` calls the cached option reader, then
   `debug_parse_flags_option` (`0x21d74`) with table `0x27e70`: named tokens `lo` → 1,
-  `med` → 2, `hi` → 3. It does not call atoi/strtol. Unset, empty, unknown and numeric
+  `med` → 2, `hi` → 3. The parser does not call atoi/strtol. Unset, empty, unknown and numeric
   strings parse to zero and retain the current profile (initialized to 1 at `0x1ce74`).
   Tokens are case-sensitive and separated by non-alphanumeric/non-underscore characters;
   matching values are ORed, so combinations can alias another profile. `all` also yields 3;
@@ -548,7 +548,7 @@ The inspected arm64 `libVkLayer_VALVE_fdm_injection.so` has these semantics (vir
   `disable_offsets` fixes the gaze position (`0x1b6c8`), and `yflip` flips the vertical
   offset (`0x1b9b8`). These three flags do not resize the profile.
 - `FDM_SWAPCHAIN_SIZE` is parsed by `atoi` (`0x1c518`), clamped to nonnegative, and
-  seeds a known swapchain size (`0x1ccf8`). It is a size/matching hint, not a radius.
+  seeds a known swapchain size (`0x1ccf8`). The value is a size/matching hint, not a radius.
   The synthetic map (Zink/GLES dynamic-rendering path, `CmdBeginRendering`) is square with side
   `ceil(size/32)`, size = the render area width (`0x19048–0x19088`); image association also matches
   this tile size (`0x16c78`).
@@ -556,7 +556,7 @@ The inspected arm64 `libVkLayer_VALVE_fdm_injection.so` has these semantics (vir
   DEVICE_NOTES.md "Foveation: sharp area centre and size"): for Vulkan games the layer's
   `xrCreateSwapchain` creates a map of `ceil(w/32) x ceil(h/32)` texels per eye swapchain (one array
   layer per eye) and fills the preset rectangles in map-normalized coordinates, so the sharp area is
-  centred on the **whole swapchain** (all presets centre at about 0.51, 0.51). It knows each view's
+  centred on the **whole swapchain** (all presets centre at about 0.51, 0.51). The layer knows each view's
   imageRect (`xrEndFrame` stores them) but doesn't use it for the map. Eye-tracked offsets
   (`calc_offset`, `0x1b848`) are `gaze NDC x 0.5 x render-area size`, rounded to the offset
   granularity (8), measured from that same swapchain centre; `disable_offsets` (Fixed) also leaves
@@ -570,15 +570,15 @@ The inspected arm64 `libVkLayer_VALVE_fdm_injection.so` has these semantics (vir
 - Turnip (freedreno) applies a density map per GMEM **bin**: it reads the map on the CPU at the
   bin's centre (`tu_calc_frag_area`, texel size `2^ceil(log2(fb/map))` >= 32 px) and renders the
   whole bin at that density. The visible sharp area is therefore the set of bins whose centre falls
-  in Valve's rectangle: its size snaps to the bin grid (bins are ~150-200 px here and get relatively
+  in Valve's rectangle: the area's size snaps to the bin grid (bins are ~150-200 px here and get relatively
   smaller as render resolution grows), so the same preset looks bigger or smaller and changes
-  shape between render scales. That part is the driver's design, not a setting; FramePort can't
+  shape between render scales. The bin snapping is the driver's design, not a setting; FramePort can't
   pick the bins.
 
 Per-game library preferences now store `level`. Legacy radius choices are translated on read
 (and written as `level` on Save): nearest old nominal .30 → lo, .25 → med, .20 → hi,
 with larger values clamped by nearest choice; zero or unknown/invalid values → Default.
-This preserves approximate intent, not a claim that these presets implement those radii.
+The translation preserves approximate intent, not a claim that these presets implement those radii.
 Explicit `level` wins. Obsolete radius exports are removed from managed launchers.
 
 For device verification, hold game scene, render resolution and gaze constant; compare explicit
@@ -591,7 +591,7 @@ builds need diagnostic support installed. Turn the test and snapshots off before
 Agent `FOVEATION_ENV_KEYS` must include `"FOVE_LEVEL"` for launcher updates via `set_settings`.
 
 `device.foveation` enables Valve's shared Vulkan injection and suppresses competing native foveation through
-`foveation_fix=1`. Game settings stores mode, profile and test selection as a per-game library preference, outside shared recipes. This remains
+`foveation_fix=1`. Game settings stores mode, profile and test selection as a per-game library preference, outside shared recipes. Foveation remains
 experimental: complete images were confirmed in RE4, Batman, Deadpool, The Climb 2 and Asgard's Wrath 2,
 not all Quest games or renderers. RE4 and Batman checks include title/calibration scenes; these are not
 equivalent to extended gameplay coverage. Asgard gameplay was visually confirmed, without an on/off benchmark.
@@ -599,7 +599,7 @@ Batman additionally receives the verified ordinary shared-allocation patch, guar
 OVRPlugin hash; unknown Batman versions fail explicitly rather than receiving unchecked binary offsets.
 
 The Climb 2 uses a private `libvrapi_foveation.so` bridge, installed only into that game's APK after the
-standard bridge patch. It retains images during held-focus visibility dips, separates mono overlay output
+standard bridge patch. The private bridge retains images during held-focus visibility dips, separates mono overlay output
 storage from stereo density-map storage, and rate-limits its view-cache writes. Its process-local Valve layer
 correction supplies both eye offsets and avoids the invalid subpass mask-table reads seen during Alps loading;
 `yflip` corrects vertical gaze direction. The renderer SHA-256 and 1.0 resolution scale are checked before
@@ -609,7 +609,7 @@ the reason. No system library is changed. A SteamOS update requires revalidation
 Both-eye gaze following was confirmed in Climb's darkening diagnostic, but long-session stability remains
 experimental. Off disables injection through launcher exports; the private APK compatibility support remains installed.
 
-**Darken coarse fragments (test)** enables the dormant Vulkan shader diagnostic. It dims RGB where the
+**Darken coarse fragments (test)** enables the dormant Vulkan shader diagnostic. The diagnostic dims RGB where the
 actual `FragSizeEXT` footprint exceeds one pixel; alpha is unchanged. Deadpool's shaded regions were confirmed
 to follow gaze in the headset. Unsupported shader output interfaces are skipped, and multiple passes may
 compound darkening, so this is a diagnostic rather than a precise composited mask. Do not benchmark with it on.
@@ -684,10 +684,10 @@ mode isn't `later` and nothing is pending, and by purge; an otherwise empty `ste
 SteamOS 0.3.0 facts (checked 2026-10-16): Steam is the static user unit `/usr/lib/systemd/user/steam.service`
 (Type=simple, Restart=always, TimeoutStartSec 90 s, its own `-` ExecStartPre lines; `extra_args.conf` drop-ins are
 Valve's documented way to extend it), systemd 257; no user drop-ins exist by default.
-This automatic application targets SteamOS's `steam.service`; if Steam is started outside that service, use
+The automatic reapplication targets SteamOS's `steam.service`; if Steam is started outside that service, use
 FramePort's Restart Steam now action to apply the journal safely.
 
 Off skips new shortcuts (existing entries remain). Play in Off, and Play for a pending Later entry, starts launch.sh
 in a detached user systemd unit, just as launch tests do, without adding a devkit entry. Steam/SteamVR must already
-be running. This loses Steam's per-game overlay/controller setup and Exit game integration; use FramePort Monitor
-to stop the game. This direct path has unit coverage; headset input/visual behaviour needs device validation.
+be running. Direct starts lose Steam's per-game overlay/controller setup and Exit game integration; use FramePort Monitor
+to stop the game. The direct path has unit coverage; headset input/visual behaviour needs device validation.
