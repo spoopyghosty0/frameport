@@ -1,9 +1,15 @@
 # Transfer measurements and incremental installs
 
+## Current uploader
+
+OpenSSH SFTP is the installer backend for files of 8 MiB and more, with Paramiko as the fallback; smaller files go in
+tar batches. **Parallel uploads** (Settings → Installing) is 3 by default (1–8; saved preferences are kept). The
+sections after "Production OpenSSH follow-up" are the measurements that led there, kept for reference: their
+statements about the "production" uploader describe the state at the time.
+
 ## Production OpenSSH follow-up
 
-OpenSSH is now the preferred installer backend for files >=8 MiB. The new default is three workers (range 1–8),
-with saved preferences preserved. Fresh files use `put`; existing partial files use `reput`. Each worker keeps
+With the OpenSSH backend, the default became three workers. Fresh files use `put`; existing partial files use `reput`. Each worker keeps
 one SFTP batch session. Progress is polled through a separate bounded SFTP channel. Native failures resume via
 Paramiko; cancellation stops the owned SFTP/SSH process trees and does not trigger fallback.
 
@@ -14,16 +20,13 @@ matters; it was slower than Paramiko in one pass. Native credential/progress set
 
 The separate Windows 128 MiB production test also passed every checksum. Native cancellation left a partial file
 of 74,752,000 bytes; resuming with OpenSSH produced the expected SHA-256. The log confirmed no fallback for the
-resumed production upload. Reports:
-`/mnt/c/Users/Austin/AppData/Local/Temp/frameport-upload-native-production-comparison-windows.json` and
-`/mnt/c/Users/Austin/AppData/Local/Temp/frameport-upload-native-production-windows.json`.
+resumed production upload.
 
 The earlier sections below preserve measurements made before the production backend switch.
 
 The WSL production validation (128 MiB, three workers, three repetitions) measured 14.1 / 19.1 / 15.0 MB/s,
 with every checksum passing and native backend logs recorded. Production cancellation left a 72,330,240-byte
-partial file; OpenSSH resumed it in 4.23 seconds with the expected SHA-256 and no Paramiko fallback. Report:
-`/tmp/frameport-upload-native-production-wsl.json`.
+partial file; OpenSSH resumed it in 4.23 seconds with the expected SHA-256 and no Paramiko fallback.
 
 ## Measurements (2026-10-14)
 
@@ -87,10 +90,7 @@ by 6.5% on Windows and 22.8% on WSL. Eight was faster on Windows but slower on W
 default remains two because three regressed by 16.1% on Windows and 5.3% on WSL in this matched comparison.
 Link variability remains substantial, and no fast hotspot/USB result is claimed.
 
-Reports: `/mnt/c/Users/Austin/AppData/Local/Temp/frameport-upload-native-parallel-windows.json` and
-`/tmp/frameport-upload-native-parallel-wsl.json`.
-
-Settings → Installing → **Parallel uploads** accepts **1–8**, default **2**. It controls large files within one
+Settings → Installing → **Parallel uploads** accepts **1–8** (default 2 at the time, 3 now). It controls large files within one
 install; the FIFO still runs one install job at a time. A single APK is not split into chunks. Large files are
 scheduled largest first, with at most one authenticated SSH connection per active worker and never more workers
 than files. Small files still use tar batches after the large-file uploads. Choose 1 on a busy network; a higher
@@ -124,7 +124,8 @@ environment. Production code, including cleanup and progress checks, was used fo
 uv run python scripts/upload_bench.py --mib 128 --repeat 3 --methods app-files-1,app-files-2,app-files-3,app-files-4,app-files-8 --json parallel.json
 ```
 
-`install.upload_threads` persists the setting. Malformed values use 2 and numeric values are clamped to 1–8.
+`install.upload_threads` persists the setting. Malformed values use the default and numeric values are clamped to
+1–8.
 The serial setting reuses the existing control connection; parallel workers verify that the new transport reaches
 the same paired headset before sending any files.
 
@@ -169,7 +170,7 @@ when the user customized their recipe.
   data manifest/digest and artwork hashes. Routine device samples carry only the digest, and updates fetch a
   detailed manifest only when necessary. Live numeric settings writes update only the applied runtime configuration,
   leaving APK build identity intact. Desired data manifests are cached locally for badges, without render-path I/O.
-- Runtime-only updates use agent v87 `configure`: no conversion, signing, APK transfer, artwork, Steam restart or
+- Runtime-only updates use the agent's `configure`: no conversion, signing, APK transfer, artwork, Steam restart or
   automatic launch test. They still require the installed APK identity and an available destination, and refuse
   changes while the game is running. Defaults explicitly reset overrides embedded in an older APK. Generated
   configuration files are restored or removed only when they still match FramePort's last write; user edits survive.
