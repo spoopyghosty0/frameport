@@ -17,7 +17,7 @@ export const HEADLINES: Headline[] = [
     frameport: 'GPL-3.0. Read it, build it, change it, share it.',
     others: ['Free (donationware). Source not published.', 'Free, from Valve.'] },
   { icon: 'game', title: "Quest games that don't run as they are",
-    frameport: 'Patches them for the Frame, with a tested recipe for 220+ games.',
+    frameport: 'Patches them for the Frame, with tested recipes for hundreds of games.',
     others: ['Installs the APK as it is.', 'Installs the APK as it is.'] },
   { icon: 'pc', title: 'Your PC',
     frameport: 'Windows, macOS and Linux.',
@@ -45,7 +45,7 @@ export const ROWS: Row[] = [
     y('Converted and patched for the Frame'),
     n('Installs the APK as it is'),
     n('Installs the APK as it is')] },
-  { label: 'Does it know which patches a game needs?', cells: [y('A tested recipe for 220+ games, updated without an app update'), u(), n('No')] },
+  { label: 'Does it know which patches a game needs?', cells: [y('Tested recipes for hundreds of games, updated without an app update'), u(), n('No')] },
   { label: 'Will the game be in my Steam library?', cells: [
     y('Yes, with artwork and tags'), p('As a "Devkit Game" shortcut'), p('As "Devkit Game: <title>"; not with adb')] },
   { label: 'Android apps, Linux apps, Windows programs?', cells: [

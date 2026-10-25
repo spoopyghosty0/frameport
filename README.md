@@ -8,40 +8,34 @@
 ![Steam Frame](https://img.shields.io/badge/Steam%20Frame-supported-1b2838?logo=steam&logoColor=white)
 
 Install Quest games, Android apps, Linux apps and PC VR games on the **Valve Steam Frame**. FramePort sets up the
-Frame, patches each game so it runs there, uploads it and adds it to your Steam library with artwork.
+Frame, patches each game to run there, uploads it and adds it to your Steam library with artwork.
 
 [![FramePort: library, one-click install, play, monitor](docs/images/tour-teaser.webp)](docs/media/frameport-tour.mp4)
 
-▶ [Watch the full tour](docs/media/frameport-tour.mp4) · New to FramePort? [Watch the install tutorial](docs/media/frameport-install.mp4)
+▶ [Watch the tour](docs/media/frameport-tour.mp4) · [Watch the install tutorial](docs/media/frameport-install.mp4)
 (about 90 seconds each)
 
 > **Notice:** FramePort doesn't download, share or unlock games. Use games you got legally, for example from
-> [SideQuest](https://sidequestvr.com/). FramePort downloads published open-source tools (see [Built on](#built-on))
-> and adds its own patches so games run on the Frame.
+> [SideQuest](https://sidequestvr.com/). It downloads published open-source tools ([Built on](#built-on)) and adds
+> its own patches.
 >
-> Not every game runs on the Frame: recipes are tested by the community, and some games need Meta's services or
-> hardware the Frame lacks.
+> Not every game runs on the Frame. Some need Meta's services or hardware the Frame lacks.
 
 ## Features
 
 ![Library](docs/images/library.png)
 
 - **Easy setup:** one line in the Frame's terminal. No root, no password. [What it changes](docs/FRAME_SETUP.md).
-- **One click per game:** patch, upload, add to Steam with artwork and test that it starts.
-- **Recipes:** tested patches and settings for 220+ games; other games get suggested patches, each explained in
-  plain words.
+- **One click per game:** patch, upload, add to Steam with artwork, test that it starts.
+- **Recipes:** tested patches and settings for hundreds of games. Other games get suggested patches, each explained.
 - **Game settings:** sharpness, refresh rate, controllers, 360° video and mixed reality as simple switches.
 - **More than Quest games:** Android apps in a window, Linux apps, PC VR games and Windows programs.
-- **Install links:** "Install with FramePort" buttons on websites ([frameport.app](https://frameport.app) links) open
-  in FramePort.
-- **Your Frame from your PC:** Type on Frame (your keyboard on the Frame), Files, Screenshots, Live view (what the
-  headset shows, in your browser) and Monitor (frame rate, temperatures, battery, processes).
-- **Your room for mixed reality (experimental):** scan the room in the headset, see it in 3D, clean up the scan and
-  fix furniture, screen and door labels, so mixed-reality games get your room. Try it with
+- **Install links:** "Install with FramePort" buttons on websites open in FramePort.
+- **Your Frame from your PC:** Type on Frame, Files, Screenshots, Live view (what the headset shows) and Monitor
+  (frame rate, temperatures, battery, processes).
+- **Your room for mixed reality (experimental):** scan your room in the headset and fix it up in 3D. Try it with
   [Test Quest MR](https://github.com/spoopyghosty0/TestQuestMR).
 - **Updates itself**, and reports problems without personal data.
-
-Details for each: [Install and first steps](docs/INSTALL.md).
 
 ![Monitor](docs/images/monitor.png)
 
@@ -51,40 +45,36 @@ Details for each: [Install and first steps](docs/INSTALL.md).
 
 ## Quick start
 
-1. [Download](https://github.com/spoopyghosty0/frameport/releases/latest) the build for Windows, macOS (Apple
-   Silicon) or Linux (Arch Linux: [AUR package](docs/INSTALL.md)), unpack it and start FramePort.
-2. In FramePort click **Steam Frame → Start setup**. The Frame and your PC must be on the same Wi-Fi (or use a USB
-   cable).
-3. On the Frame open the **SteamVR dashboard → Launch a program → Desktop**, then the app menu → **System →
-   Konsole**, and run:
+1. [Download](https://github.com/spoopyghosty0/frameport/releases/latest) FramePort for Windows, macOS (Apple
+   Silicon) or Linux, unpack it and start it.
+2. Click **Steam Frame → Start setup**. The Frame and your PC must be on the same Wi-Fi (or use a USB cable).
+3. On the Frame open **SteamVR dashboard → Launch a program → Desktop**, then **app menu → System → Konsole**, and
+   run:
 
    ```
    curl -fsSL https://frameport.app/s | bash
    ```
 
-4. Click **Allow** in FramePort when it shows the same 4-digit code as the Frame. Steam restarts once; if it asks to
-   install **Lepton** (Valve's Android runtime), confirm it.
-5. **Add games → Scan a folder…** with your games, open one and click **Install on Frame**. Play it from the Frame's
-   Steam library.
+4. Click **Allow** when FramePort shows the same 4-digit code as the Frame. Steam restarts once. If it asks to install
+   **Lepton** (Valve's Android runtime), confirm.
+5. **Add games → Scan a folder…**, open a game and click **Install on Frame**. Play it from the Frame's Steam library.
 
-Full guide, firewalls and troubleshooting: [Install and first steps](docs/INSTALL.md). How to lay out game folders:
-[FAQ](docs/FAQ.md).
+Full guide: [Install and first steps](docs/INSTALL.md). Game folders: [FAQ](docs/FAQ.md).
 
 ## Compatibility
 
-Tested games use their recipe (the patches and settings that work for them) automatically; for other games FramePort
-suggests patches. See the [list of tested games](docs/GAMES.md). Got a game working? Share its recipe from the game's
-menu (**Recipe → Share working recipe…**): [how](docs/INSTALL.md#share-a-recipe-or-report-a-problem).
+Tested games get their recipe (the patches and settings that work) automatically. Other games get suggested
+patches. See the [tested games](docs/GAMES.md). Got a game working?
+[Share its recipe](docs/INSTALL.md#share-a-recipe-or-report-a-problem).
 
 ## Compared with other tools
 
-FrameDrop and Valve's own tools install an app as it is. FramePort differs in four ways:
+FrameDrop and Valve's own tools install an app as it is. FramePort also:
 
-- **Free and open source** (GPL-3.0). FrameDrop is free (donationware) without published source.
-- **Quest games that don't run on the Frame as they are** get converted and patched, with a tested recipe for 220+
-  games. The others install the game unchanged.
-- **Windows, macOS and Linux.** FrameDrop is for Windows.
-- **Wi-Fi or a USB cable**, and no **Pair new host** step.
+- is **free and open source** (GPL-3.0). FrameDrop is free (donationware), without published source.
+- **converts and patches Quest games** that don't run as they are, with tested recipes for hundreds of games.
+- runs on **Windows, macOS and Linux**. FrameDrop is for Windows.
+- connects over **Wi-Fi or a USB cable**, without a **Pair new host** step.
 
 <details>
 <summary>All differences</summary>
@@ -93,12 +83,12 @@ FrameDrop and Valve's own tools install an app as it is. FramePort differs in fo
 |---|---|---|---|
 | Cost and source code | Free, open source (GPL-3.0) | Free (donationware), source not published | Free, from Valve |
 | Runs on | Windows, macOS, Linux | Windows | Depends on the tool |
-| First connection | One line in the Frame's terminal; it turns on Developer Mode itself. No password | Turn on Developer Mode, then **Pair new host** | Turn on Developer Mode and pair, or use Android's debug tool (adb) |
+| First connection | One line in the Frame's terminal; turns on Developer Mode itself. No password | Turn on Developer Mode, then **Pair new host** | Turn on Developer Mode and pair, or use Android's debug tool (adb) |
 | Wireless or cable | Wi-Fi, the Frame's hotspot or a USB cable | Same Wi-Fi network | Wi-Fi, or adb |
 | Quest games that don't run as they are | Converted and patched for the Frame | Installed as they are | Installed as they are |
-| Knows which patches a game needs | Tested recipes for 220+ games, updated without an app update | Not stated | No |
+| Knows which patches a game needs | Tested recipes for hundreds of games, updated without an app update | Not stated | No |
 | In the Steam library | Yes, with artwork and tags | As a "Devkit Game" shortcut | As "Devkit Game: &lt;title&gt;"; not with adb |
-| Android apps, Linux apps, Windows programs | All three; Proton (runs Windows programs) is installed for you | All three; install Proton first | Yes; 2D Android apps need an extra file |
+| Android apps, Linux apps, Windows programs | All three; Proton is installed for you | All three; install Proton first | Yes; 2D Android apps need an extra file |
 | PC VR games | On your PC; some also on the Frame | Not supported | Not supported |
 | "Install with …" buttons on websites | Yes ([frameport.app](https://frameport.app) links) | Its own | No |
 | A game doesn't start | A launch test reads the logs and suggests a patch | A log viewer | No help |
@@ -106,10 +96,10 @@ FrameDrop and Valve's own tools install an app as it is. FramePort differs in fo
 
 </details>
 
-Other tools as described on their own pages, checked 2026-10-09:
+Based on each tool's own pages, checked 2026-10-09:
 [FrameDrop about](https://framedropvr.com/about) · [how-to](https://framedropvr.com/how-to) ·
 [Valve: loading games on Steam Frame](https://partner.steamgames.com/doc/steamhardware/steamframe/loadgames).
-Out of date? [Report a problem](https://github.com/spoopyghosty0/frameport/issues/new).
+Out of date? [Report it](https://github.com/spoopyghosty0/frameport/issues/new).
 
 ## Built on
 
@@ -124,20 +114,17 @@ What FramePort adds: [Architecture](docs/ARCHITECTURE.md).
 
 | | |
 |---|---|
-| [Install and first steps](docs/INSTALL.md) | Install, connect, update, PC VR games, files, problem reports |
-| [What the setup changes](docs/FRAME_SETUP.md) | What setup changes on the Frame, networks and firewalls, undoing it |
-| [Compatibility](docs/COMPATIBILITY.md) | Which kinds of games and apps run |
-| [Tested games](docs/GAMES.md) | Every tested game and how well it runs |
-| [FAQ](docs/FAQ.md) | Game folders and common questions |
-| [Controller buttons](docs/CONTROLLERS.md) | Quest Touch buttons on the Frame: SteamVR default, Mirror and Quest pair |
+| [Install and first steps](docs/INSTALL.md) | Install, connect, install games, update |
+| [What the setup changes](docs/FRAME_SETUP.md) | Changes on the Frame, firewalls, undoing it |
+| [FAQ](docs/FAQ.md) | Game folders and fixing problems |
+| [Compatibility](docs/COMPATIBILITY.md) · [Tested games](docs/GAMES.md) | What runs, and how well |
+| [Controller buttons](docs/CONTROLLERS.md) | Quest buttons on the Frame's controllers |
 | [Themes](docs/THEMES.md) | Color themes and making your own |
 | [Install button](docs/INSTALL_BUTTON.md) | An "Install with FramePort" button for your download page |
-| [Diagnostics](docs/DIAGNOSTICS.md) | What a problem report contains and how personal data is removed |
+| [Diagnostics](docs/DIAGNOSTICS.md) | What a problem report contains |
 | [Patch reference](docs/PATCHES.md) | Every patch and game setting |
-| [Porting playbook](docs/PLAYBOOK.md) | Symptoms and fixes per game |
-| [Steam Frame runtime reference](docs/FRAME_RUNTIME.md) | Facts about the Frame's runtime |
-| [Architecture](docs/ARCHITECTURE.md) | How the code is organized |
-| [Screenshots and videos](docs/SHOWCASE.md) | How the docs' pictures and videos are rendered |
+| [Porting playbook](docs/PLAYBOOK.md) · [Runtime reference](docs/FRAME_RUNTIME.md) | Symptoms and fixes; facts about the Frame |
+| [Architecture](docs/ARCHITECTURE.md) · [Screenshots and videos](docs/SHOWCASE.md) | How the code and the docs' pictures are made |
 | [Contributing](CONTRIBUTING.md) | Code, recipes, translations |
 
 ## Development
