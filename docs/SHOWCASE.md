@@ -139,7 +139,7 @@ The `showcase` workflow (`.github/workflows/showcase.yml`):
 1. **When it runs:** on pushes to `main` that touch the UI, its translations or the showcase files, and on
    **Run workflow**.
 2. **What it renders:** the screenshots every time. Videos when their storyboard changed (all of them when the
-   scripts changed), or the ones named on a manual run (`all`, or e.g. `tour install`). UI tweaks alone don't
+   scripts changed), or the ones named on a manual run (`all`, or for example `tour install`). UI tweaks alone don't
    re-commit 10 MB videos.
 3. **What happens next:** every render is uploaded as the run's `showcase` artifact. When a picture changed, the
    workflow opens or updates the pull request on branch `showcase/update`, which you review and merge.

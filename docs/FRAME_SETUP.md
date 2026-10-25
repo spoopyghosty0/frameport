@@ -29,10 +29,14 @@ If Developer Mode can't be turned on automatically, the script asks you to turn 
 - the games, each with a launcher and its data in `~/Applications/quest-frame/<package>/`;
 - their Steam library entries and artwork (`shortcuts.vdf` + `config/grid/`);
 - for PC VR games: an OpenXR layer (`~/.local/share/openxr/1/api_layers/explicit.d/XR_APILAYER_FRAMEPORT_timefix.json`)
-  and Valve's ARM64 Proton with its Steam Linux Runtime (Steam downloads them and restarts once).
+  and Valve's ARM64 Proton with its Steam Linux Runtime (Steam downloads them and restarts once); for x86_64 Linux
+  apps: Valve's FEX;
+- for Linux apps: entries in Desktop Mode's app menu (`~/.local/share/applications/frameport-*.desktop`);
+- only when used: a user service that starts SteamVR overlay apps (`frameport-vr-overlays.service`) and, with
+  **Steam library: Later**, a drop-in for Steam's service (`~/.config/systemd/user/steam.service.d/`).
 
 **Settings → Uninstall FramePort → Also remove from the Frame** deletes the games, their Steam entries, the helper
-folder, the OpenXR layer and the setup files. Developer Mode, the login line, the podman setting, Lepton and Proton
+folder, the OpenXR layer, the menu entries, the services and the setup files. Developer Mode, the login line, the podman setting, Lepton and Proton
 stay: undo them as shown above.
 
 ## Network and firewalls

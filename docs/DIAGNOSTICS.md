@@ -2,18 +2,19 @@
 
 Two ways users feed results back, both without a GitHub token:
 
-- **Share working recipe…** (game page, recipe card; `frameport share-recipe <pkg>`): saves the recipe as a user catalog entry and
+- **Share working recipe…** (game menu → Recipe, or the game page's recipe card; `frameport share-recipe <pkg>`): saves the recipe as a user catalog entry and
   opens a prefilled issue from `.github/ISSUE_TEMPLATE/working-config.yml`. A maintainer checks it and adds the label
   `catalog-accepted`. Then `.github/workflows/catalog-from-issue.yml` runs `scripts/catalog_from_issue.py`, which reads
   only the YAML block, validates it, and writes `catalog/games/<pkg>.yaml`, and the workflow opens a PR.
   - The PR step needs Settings → Actions → "Allow GitHub Actions to create and approve pull requests".
   - Create the labels `working-config`, `catalog-accepted` and `bug` once.
-- **Report a problem…** / **Collect logs** (game menu, Settings, the failure pop-up, `frameport diag report|collect`): writes
+- **Report a problem…** / **Collect logs** (game menu → Troubleshoot, Settings, the failure pop-up,
+  `frameport diag report|collect`): writes
   a redacted zip and opens a prefilled `bug-report.yml` issue.
   - GitHub has no API for issue attachments, so the user drags the zip in (25 MB max; the bundle stays under 24 MB).
   - Prefilled links are capped at about 7.5k characters. Free text is trimmed first; the recipe is never cut.
 
-Code: `src/frameport/diag/` (`redact.py`, `bundle.py`, `issue.py`), agent command `collect_diag` (agent ≥ 21),
+Code: `src/frameport/diag/` (`redact.py`, `bundle.py`, `issue.py`), agent command `collect_diag`,
 `Target.collect_diag`, `core/applog.py` (app log + saved job logs).
 
 ## Bundle layout (schema 1)
@@ -41,19 +42,19 @@ games/<pkg>/package/         stand-in for the game files (no content):
 games/<pkg>/target/          from the Frame (or the PC): launch.sh, settings.conf, deployment.json, launch.log,
                              launch-test.log (PC VR), lepton-steamlaunch-<appid>.log, logcat-{main,crash,system,...}.log,
                              ReviveInjector.txt / steam-<appid>.log / game-log-N.txt (PC VR), files.json (+ missing)
-                             stop-pause.log, exit-hook.log, theater.log, dashboard.log, plays.log (agent v122): how
-                             the last session ended (pause before the stop, Steam's Exit game hook; play start/end)
+                             stop-pause.log, exit-hook.log, theater.log, dashboard.log, plays.log: how the last
+                             session ended (pause before the stop, Steam's Exit game hook; play start/end)
                              (game-log-N.txt: Unreal Saved/Logs + crash summaries, Unity Player.log / Player-prev.log /
-                             output_log.txt + crash error.log from the Proton prefix, agent v67)
-                             threads.txt (agent v79): saved while a Quest game runs (e.g. hangs), each thread's
+                             output_log.txt + crash error.log from the Proton prefix)
+                             threads.txt: saved while a Quest game runs (for example a hang): each thread's
                              state, CPU ms over 2 s, kernel wait and syscall, plus its TCP sockets (remote = loopback /
                              local / internet + port, no addresses); read once from /proc, the game isn't paused
-games/<pkg>/target/shaders/  shader dumps (agent v72), when the game wrote any:
+games/<pkg>/target/shaders/  shader dumps, when the game wrote any:
     fp_vk_shaders/           adapter vk_shader_dump=1 (Vulkan shim): <size>_<sha256>.spv + index.txt
     fp_spirv/                adapter zink_shader_dump=1 (OpenGL ES, shader-fix layer under Zink): <size>_<sha256>.spv
 ```
 Each log keeps at most its last 4 MB (2 MB per file from the Frame). Shader dumps, SPIR-V unchanged (compiled game
-shaders, not redacted): Vulkan (agent v74) every module the game's newest run (the last `# start` in `index.txt`)
+shaders, not redacted): Vulkan: every module the game's newest run (the last `# start` in `index.txt`)
 created, last used first, each up to 4 MB and up to 30 MB in all, with that run's index lines, so a module created
 well before a GPU hang comes along too (if the zip would pass 24 MB, the least recently used ones are left out
 after the logs were cut); OpenGL ES (no index): the newest modules (by time written) up to 4 MB.
@@ -83,8 +84,8 @@ a rendering or monitor-link problem.
    test, and a fresh triage of the newest launch log with the current `catalog/triage.yaml`.
 2. Match the findings and log lines against `docs/PLAYBOOK.md` (symptom → cause → fix) and `docs/FRAME_RUNTIME.md`.
 3. Check the analysis in `entry.json` (engine, XR API, `extra`: missing ovr symbols, features, Unreal version) and
-   `package/elf.json` against the heuristics in CLAUDE.md. Compare `recipe.yaml` with catalog games that use the same
+   `package/elf.json` against the patches' heuristics (each patch's `detect()`; [HEURISTICS_EVAL.md](HEURISTICS_EVAL.md)). Compare `recipe.yaml` with catalog games that use the same
    engine and API.
 4. Compare `manifest.json → env.frame.build_id` with the build the docs describe: SteamOS updates change the runtime.
 5. A new failure signature means adding a patch module, a `triage.yaml` signature, a PLAYBOOK row and a unit test (see
-   Conventions). Then `diag inspect` on the same zip should report it.
+   [CONTRIBUTING.md](../CONTRIBUTING.md)). Then `diag inspect` on the same zip should report it.

@@ -3,7 +3,9 @@
 ![FramePort's modules: the desktop app and the CLI drive pipeline.py (add, suggest, build, install, launch test), which uses sources/, analysis/, recommend/, build.py, targets/ and validate/; builds use patches/ and tools/; targets reach the agent on the Steam Frame through frame/ and install/ over SSH](images/architecture.svg)
 
 ## Data flow for one game
-1. **Source** (`sources/quest_dump.py`): folder with an APK and optional `<package>/` or `obb/` data.
+1. **Source** (`sources/quest_dump.py`): folder with an APK and optional `<package>/` or `obb/` data; SideQuest
+   backups and AXRB downloads are recognised, app bundles (`.xapk`/`.apks`/`.apkm`/`.apkx`, split APKs) are merged
+   into one APK first (`sources/bundles.py`).
 2. **Analysis** (`analysis/detect.py`): package/label/version (pyaxmlparser), ABIs, engine, XR API, graphics API,
    direct-VrApi, GLAD/eglGetProcAddress, Unity MSAA levels, Meta permissions, telemetry references.
 3. **Recipe** (`recommend/engine.py`): every patch's `detect()` suggests itself with a reason; a catalog entry (exact
@@ -16,12 +18,13 @@
    deployment.json, artwork) → `shortcuts` (detached systemd unit stops Steam, writes shortcuts.vdf + grid art,
    restarts Steam).
 6. **Test** (`validate/device.py`): agent `launch_test` (systemd-run launch.sh, wait, stop) → fetch launch.log →
-   `triage.py` (milestones + signatures → suggested patches) → UI offers "apply suggestions and rebuild".
+   `triage.py` (milestones + signatures → suggested patches) → UI offers "apply suggestions and rebuild". Real play
+   sessions are triaged the same way afterwards (`validate/session.py`, game page "Last session").
 
 ## Extending
 - **New patch**: `patches/frame/<name>.py` with a `Patch` subclass (`detect`, `apply`, optional `validate`), plus a
   signature in `catalog/triage.yaml` and a PLAYBOOK row. Stages: `overport` | `apk` | `install`.
-- **Upstream fixed a bug we work around**: register an `UpstreamFix` (`patches/upstream.py`) in the workaround's
+- **Upstream fixed a bug FramePort works around**: register an `UpstreamFix` (`patches/upstream.py`) in the workaround's
   module: a probe that finds the fix in OVRPort's output (True / False / None = can't tell). Each build runs the probes
   on the converted APK and leaves out the workarounds whose fix is there (log "not needed: …", `build.superseded`,
   left out of settings.conf at install; game page and `frameport show` say so). The recipe keeps asking for the fix,
@@ -30,23 +33,35 @@
   reason text; check `scripts/eval_heuristics.py` still reproduces the catalog and add a test in
   `tests/test_heuristics.py`.
 - **New game recipe**: `catalog/games/<package>.yaml` (or "Save as known-good" in the GUI, which writes to the user
-  catalog). Publish recipes by serving a folder with `index.json` and pointing `FRAMEPORT_CATALOG_URL` at it.
+  catalog). Installed apps fetch `catalog/games/` from GitHub `main` every 6 hours (`recommend/catalog.refresh_remote`),
+  so a merged recipe reaches users without a release. `FRAMEPORT_CATALOG_URL` points them at another folder that
+  serves `index.json` + `<package>.yaml` instead.
 - **New target**: implement `targets/base.Target`; the pipeline and UI only use that interface.
 
-## Oculus Rift (PC VR) games
-`sources/rift_dump` finds Windows game folders; `analysis/rift` (own PE reader) detects exe, bitness, engine, LibOVR vs
-OpenXR, D3D version and Oculus Platform SDK use; ids are `rift.<slug>`. Their only patches are the `pcvr` category
-(`patches/pcvr.py`: Revive, OpenVR backend, crash reporter, Oculus detection, OpenXR layer, Proton
-log/version/env); `base.for_game` keeps Quest and PC VR patches
-apart. "Build" = `pipeline.prepare_rift` (checks + Revive). Revive is a portable tool (`tools/revive.py` unpacks
-`ReviveInstaller.exe` in pure Python: NSIS header + deflate blocks). Targets:
-- `targets/pc_revive.PcReviveTarget`: Windows/WSL (`core/winhost.py`), non-Steam shortcut running
-  `ReviveInjector.exe /openxr <exe>` via the agent's VDF code, grid art, local records in `<user data>/pc/`.
+## PC VR (Oculus Rift and SteamVR) games
+`sources/rift_dump` finds Windows game folders (one game per folder); `analysis/rift` (own PE reader) ranks the
+programs, detects bitness, engine, the VR APIs (LibOVR, OpenVR, OpenXR), D3D version and Oculus Platform SDK use; ids
+are `rift.<slug>`. Their only patches are the `pcvr` category (`patches/pcvr.py`: Revive, OpenVR backend, crash
+reporter, Oculus detection, OpenXR layer, launch arguments, Proton version/env); `base.for_game` keeps Quest and PC
+VR patches apart. Repacks are usually pre-patched, so a game is installed unchanged and its program started
+directly; Revive is only suggested for games with LibOVR code, and those run only on the PC (Revive's hooks don't
+work under Proton on ARM64). "Build" = `pipeline.prepare_rift` (checks, plus Revive when the recipe has it). Revive
+is a portable tool (`tools/revive.py` unpacks `ReviveInstaller.exe` in pure Python: NSIS header + deflate blocks).
+Targets:
+- `targets/pc_revive.PcReviveTarget`: Windows/WSL (`core/winhost.py`), non-Steam shortcut (the game's program, or
+  `ReviveInjector.exe [/openxr] <exe>`; Revive's OpenVR backend by default) via the agent's VDF code, grid art, local
+  records in `<user data>/pc/`.
 - `FrameLeptonTarget.install_pcvr` → `installer.install_pcvr` → agent `prepare_pcvr`/`finalize_pcvr`: upload
-  `game/` + `revive/` (+ `xrlayer/` for `pcvr.xr_timefix`, `helpers/` for `pcvr.oculus_unreal`; size-manifest dedupe,
+  `game/` (+ `revive/`, `xrlayer/` for `pcvr.xr_timefix`, `helpers/` for `pcvr.oculus_unreal`; size-manifest dedupe,
   stale files removed), `launch.sh` running the ARM64 Proton chain (built from toolmanifest.vdf; with
-  `pcvr.oculus_unreal` the injector runs through `helpers/fp_oculushmd.exe`, which provides Unreal's
+  `pcvr.oculus_unreal` the program runs through `helpers/fp_oculushmd.exe`, which provides Unreal's
   `OculusHMDConnected` event); `proton_status`/`install_proton` manage Proton from Valve's ARM64 compat list.
+
+## Linux apps and Windows programs
+`pipeline.add_linux_app` (AppImage, archive or folder; library kind `linux`) and `pipeline.add_windows_exe` add
+programs that are installed unchanged. The agent's `finalize_linux` unpacks them, writes the launcher (arm64 builds
+directly, x86_64 builds through Valve's FEX), a Desktop Mode menu entry and, for SteamVR overlay apps, their
+`.vrmanifest` registration; Windows programs run through Proton like PC VR games.
 - **Native binaries** (`artifacts/`): edit `native/…`, run `python native/build.py`, commit the new artifacts + SHA256SUMS,
   run `frameport parity` to see which games change.
 
@@ -70,9 +85,10 @@ GUI: background check 10 s after start + every 6 h → sidebar card + Library ba
 update [--check] [--yes]`. CI runs `scripts/update_smoke.py` on every OS with the archive it just built.
 
 ## Dynamic data (fetched live, cached, bundled fallback)
-overport CLI release (Android-XR-Bridge/OVRPort, fallback ovrport/app) + patch list + titles, Temurin JRE (Adoptium API), apksigner (Google repository index),
-store artwork/titles (overport image API), catalog (optional remote), Lepton location/appid (Frame appmanifests),
-Steam user (Frame userdata).
+overport CLI release (Android-XR-Bridge/OVRPort, fallback ovrport/app) + patch list + titles, Temurin JRE (Adoptium
+API), apksigner (Google repository index), Cpp2IL and APKEditor (GitHub releases, on first use), store artwork,
+titles and details (overport image API, OculusDB, Steam), catalog recipes (GitHub `main`),
+announcements, Lepton location/appid (Frame appmanifests), Steam user (Frame userdata).
 
 ## Built on
 

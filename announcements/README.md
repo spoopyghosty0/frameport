@@ -31,7 +31,7 @@ The body, in Markdown: **bold**, *italic*, `code`, [links](https://frameport.app
 
 The body is Markdown (no HTML). A `date` in the future works as a schedule: nobody sees it before then.
 
-Images look best at about 2:1 (e.g. 1200×600). The pop-up is 600 px wide and shows between 140 and 320 px of the
+Images look best at about 2:1 (for example 1200×600). The pop-up is 600 px wide and shows between 140 and 320 px of the
 picture's height.
 
 `pytest tests/test_announcements.py` checks this file, so a broken announcement fails CI instead of silently showing
