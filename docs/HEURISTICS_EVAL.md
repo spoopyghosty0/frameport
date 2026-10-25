@@ -24,7 +24,7 @@ can move the cutoff. Very small strata can have no holdout. Unsupported entries 
 
 Ground truth contains catalog choices and patch registry defaults, with no inherited heuristic adapter settings.
 Default expectations are determined per analysis, using each default patch's own detection in the same way as the
-engine's initial heuristic pass. Thus a conditional default that is not detected (e.g. LTW on a game without LTW)
+engine's initial heuristic pass. Thus a conditional default that is not detected (for example LTW on a game without LTW)
 is not expected. Explicit catalog `overport_remove` and `frame_remove` entries remove expected defaults. An absent
 expected default is represented as `remove:<patch id>`; enabled defaults do not inflate patch scores.
 
@@ -59,7 +59,7 @@ Before tuning a rule to remove an "extra", check which kind it is: a gap on an o
 catalog (fit report), not a detection error. Before adding a patch to a working entry, weigh its benefit (does it
 fix something the game hits?) against a rebuild prompt for everyone who installed it; adapter settings never need
 adding (inherited). Results 2026-10-15: strict 5/65 exact, F1 73.8%; dated 39/65, F1 88.6% (dev 90.5%, holdout
-79.5%). Remaining misses are one-game fixes found at runtime (e.g. Vader's gl_error_clear, BlazeRush's GL settings).
+79.5%). Remaining misses are one-game fixes found at runtime (for example Vader's gl_error_clear, BlazeRush's GL settings).
 
 An evaluation writes JSON even when its headline has differences, then exits 1 for compatibility with the original
 script. It exits 0 when exact, or after producing a fit report.

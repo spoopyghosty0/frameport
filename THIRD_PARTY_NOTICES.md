@@ -25,6 +25,8 @@ FramePort's own native code (the FrameBridge adapter, GL/Vulkan/OpenXR shims, th
 | Eclipse Temurin JRE | api.adoptium.net | GPL-2.0 with Classpath Exception |
 | apksigner (Android build-tools) | dl.google.com Android repository | Apache-2.0 |
 | Revive (portable copy, only if Revive isn't installed) | github.com/LibreVR/Revive releases | GPL-3.0 |
+| Cpp2IL (only for Unity IL2CPP patches) | github.com/SamboyCoding/Cpp2IL releases | MIT |
+| APKEditor (only for app bundles with resource splits) | github.com/REAndroid/APKEditor releases | Apache-2.0 |
 
 Valve's Lepton, Proton and SteamVR, and Meta's software, are used on your devices as installed by Steam / Meta;
 FramePort doesn't distribute them.
