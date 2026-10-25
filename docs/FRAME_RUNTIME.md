@@ -1,6 +1,10 @@
-# Steam Frame runtime reference (SteamOS 0.3.0, build 20260922)
+# Steam Frame runtime reference
 
-## Setup from the project page (checked 2026-10-10, dev Frame, SteamOS build 20260922)
+Facts about the Steam Frame's runtime that FramePort relies on, checked on the device from SteamOS 0.3.0 (build
+20260922) onwards; each section says when and on which version where it matters. Symptoms and fixes per game are in
+[PLAYBOOK.md](PLAYBOOK.md), longer investigations in [DEVICE_NOTES.md](DEVICE_NOTES.md).
+
+## Setup from the project page (checked 2026-10-10, SteamOS build 20260922)
 
 - Factory Frames have no browser; Steam's taskbar **+** offers Chromium as a Flatpak (`org.chromium.Chromium`,
   flathub is configured as a system remote). It is the default handler for https links once installed.
@@ -9,8 +13,8 @@
 - avahi-daemon runs, but `avahi-browse` from an SSH session fails ("Daemon not running": no system D-Bus access
   there). A stdlib-Python mDNS query works when it listens on port 5353 in the 224.0.0.251 group (like avahi):
   replies to a random source port are dropped by the Frame's firewall. `bootstrap/setup.sh` does exactly that.
-- The Frame reaches the PC's port 8765 over the home Wi-Fi without any firewall change on the PC side here (WSL in
-  mirrored mode with the earlier FramePort rule state). The PC is also visible through the Frame's hotspot
+- The Frame reaches the PC's port 8765 over home Wi-Fi without a firewall change on the PC (tested with WSL in
+  mirrored mode). The PC is also visible through the Frame's hotspot
   (`wlanap`, 10.35.78.x): the script lists one PC once, by name and words.
 - Dolphin's "executable scripts" setting is the default (ask); `.sh` files open with a `bash.desktop` handler that
   runs them in a terminal. Not used by the setup (a pasted line is simpler and needs no download prompt).
@@ -40,7 +44,7 @@
   game path in Steam's UI (the in-headset frame menu, Quick Access, "exit the running game?" dialogs) is
   `SteamClient.Apps.TerminateApp(gameid, false)` in SharedJSContext's code (the menus are popups without scripts of
   their own; each popup window has its own `SteamClient` object, unused), and `SteamClient.Apps.TerminateApp` is a
-  writable property there. FramePort hooks it while a game runs (agent v121 `_exit_hook`, DEVICE_NOTES "Graceful
+  writable property there. FramePort hooks it while a game runs (launch.sh's `_exit_hook`, DEVICE_NOTES "Graceful
   stop"). CDP `Runtime.addBinding` works on Steam's CEF (calls arrive as `Runtime.bindingCalled` on the connection
   that added it; the function stays on the page after that connection closes, calls then go nowhere).
 - 64-bit only (no AArch32): 32-bit-only APKs run through FramePort's a32 bridge (`frame.a32_bridge`).
@@ -70,7 +74,7 @@
   changes when the files move.
 - The game's files (`lepton-app/`, `lepton-data/` = saves, `lepton-shaders/`, `settings.conf`, `launch.log`; PC VR:
   `game/`, `revive/`, `compatdata/` = Proton prefix; Linux: `app/`) live in `deployment.json["base"]`: the anchor
-  itself on internal storage, or `<mount>/FramePort/<pkg>` on another drive (GitHub #90, agent v63).
+  itself on internal storage, or `<mount>/FramePort/<pkg>` on another drive (GitHub #90).
 - SteamOS mounts removable drives (microSD) under `/run/media/<user>/<label or uuid>`; the agent's `drives` reads
   `/proc/mounts` (plus the drives of Steam library folders) and refuses vfat/exfat/ntfs (Lepton's data and Proton
   prefixes need Unix owners, permissions and symlinks) and read-only mounts. A drive that isn't mounted is an error for
@@ -82,21 +86,6 @@
   Moving a game whose Lepton data holds absolute paths, or a PC VR prefix, is not yet verified on the device.
 
 ## Room data
-
-Live floor coverage (agent v104) is enabled by default for manual and game-requested scans; the capture
-payload accepts `preview: false`, and `frameport frame room scan --no-preview` disables it. A world-locked,
-upward-facing 6 m square at floor height follows the current raw-to-STAGE calibration and stays centred on the
-scan's first recorded camera position. Every 16th depth vertex contributes to raw-space 10 cm voxels; at most once
-per second, newly occupied cells redraw a 256×256 RGBA map in one colour (FramePort's secondary blue), each cell a
-filled 10 cm square, only the opacity telling floor (<0.3 m, faint), raised surfaces (0.3–1.5 m) and tall surfaces
-(>1.5 m, strongest, the room's outline) apart; unseen transparent. Overlays have no depth (they draw over hands and
-passthrough), so the map stays faint; three colours in 3x3 blotches clashed in the owner's first run. It shows
-coverage, not a validated room boundary. IVROverlay_028 slots 1/3/20/22/33/43/62 (OpenVR 2.15.6 header)
-create/destroy/sort order (1, below the scan prompts' 10)/set width/set absolute STAGE transform/show/upload raw
-pixels. Each upload is 256 KiB (at most 256 KiB/s); timing for the first
-20 uploads and every tenth thereafter, plus failures, goes to `rooms/scans/scan-*.fprs.log` and the built room’s `scan.log`. Overlay errors or an
-upload taking over 50 ms disable the preview while capture continues; headset appearance and upload cost still
-need device validation.
 
 - SteamVR on the Frame has no Meta scene/anchor extensions. Its chaperone supplies only a 2D outline raised to
   2.43 m, without furniture, ceiling or a room mesh. Valve's default boundary is a 20-point circle of roughly 1 m
@@ -122,13 +111,30 @@ need device validation.
   it beside settings.conf before atomically writing `framebridge-scan-result` (`ok <id>` or `failed <id> <reason>`).
   A global `rooms/.scan.lock` excludes concurrent captures, including manual scans; `rooms/.lock` still protects
   room publication. Launcher exit cancels the scan; a 350-second deadline leaves time for the six-minute protocol timeout.
-- Frame → Room and `frameport frame room` manage rooms. `from-boundary` creates walls without furniture;
+- The Room tab and `frameport frame room` manage rooms. `from-boundary` creates walls without furniture;
   `import` / `export` transfer room files; `show` writes an SVG preview; `build <dump.fprs>` syncs the bundled
   `fp_roomscan` by SHA-256 and runs it on the Frame with `--offline`. `scan` = agent `room_capture`: records the
   RoomView meshes (`/xrservice/roomview3d/meshData` + `/meshLayout`, `IVRBlockQueue_005`) while in-headset prompts
   guide the player, then builds the room from that recording.
 
-## Save backups (Quest games, agent v101, discussion #352)
+### Scan preview
+
+Live floor coverage is shown by default for manual and game-requested scans; the capture
+payload accepts `preview: false`, and `frameport frame room scan --no-preview` disables it. A world-locked,
+upward-facing 6 m square at floor height follows the current raw-to-STAGE calibration and stays centred on the
+scan's first recorded camera position. Every 16th depth vertex contributes to raw-space 10 cm voxels; at most once
+per second, newly occupied cells redraw a 256×256 RGBA map in one colour (FramePort's secondary blue), each cell a
+filled 10 cm square, only the opacity telling floor (<0.3 m, faint), raised surfaces (0.3–1.5 m) and tall surfaces
+(>1.5 m, strongest, the room's outline) apart; unseen transparent. Overlays have no depth (they draw over hands and
+passthrough), so the map stays faint; three colours in 3x3 blotches clashed in the first headset test. It shows
+coverage, not a validated room boundary. IVROverlay_028 slots 1/3/20/22/33/43/62 (OpenVR 2.15.6 header)
+create/destroy/sort order (1, below the scan prompts' 10)/set width/set absolute STAGE transform/show/upload raw
+pixels. Each upload is 256 KiB (at most 256 KiB/s); timing for the first
+20 uploads and every tenth thereafter, plus failures, goes to `rooms/scans/scan-*.fprs.log` and the built room’s `scan.log`. Overlay errors or an
+upload taking over 50 ms disable the preview while capture continues; headset appearance and upload cost still
+need device validation.
+
+## Save backups (Quest games, discussion #352)
 - A Lepton game's saves are two folders of `<base>/lepton-data`: `internal/<pkg>` (= `/data/data/<pkg>`:
   `shared_prefs/`, `files/`, `databases/`; Unreal's `files/UE4Game|UnrealGame/.../Saved` often lives here) and
   `external/Android/data/<pkg>` (= `/sdcard/Android/data/<pkg>`: Unity's `files/`, Unreal's external `Saved`). On the
@@ -140,7 +146,7 @@ need device validation.
   exec channel's stdout, the result JSON on stderr. Left out: folders named cache/code_cache/no_backup/il2cpp/
   UnityShaderCache/(Vulkan)ProgramBinaryCache/GPUCache/… at any depth, Unreal `Saved/Logs|Crashes`, FrameBridge's
   `fb_snap_*`/`framebridge*` files, `.obb/.apk/.foz/.mp4/.mkv/.webm/.mov`, symlinks and special files, and files over
-  64 MiB (big downloaded content; e.g. BattleTalent's `files/Video`). More than 4 GiB of saves is refused.
+  64 MiB (big downloaded content; for example BattleTalent's `files/Video`). More than 4 GiB of saves is refused.
 - `_restore_saves '<json>'` reads the archive from stdin and treats it as untrusted: only regular files and folders
   under `internal/`/`external/` (no `..`, absolute paths, links, devices, duplicates), ≤1 GiB per file / 8 GiB in all,
   each file's sha256 must match the manifest, the manifest's package must be the game. Everything is staged in
@@ -217,7 +223,8 @@ and suggests a Frame binding translated from the game's Touch suggestions. Commo
 pose and haptic paths keep their Touch counterparts; thumbrest touch and system click are dropped, bumpers stay
 unbound. The player's SteamVR custom bindings can override suggestions. This works on both bridge ABIs, without
 the arm64-only extension shim. See [Controller buttons](CONTROLLERS.md) and the [mapping contract](input/QUEST_BUTTONS.md).
-Device verification of the new modes is pending integration with the native stream.
+The runtime accepts the suggested bindings in headless launches; the modes haven't been tried in the headset on
+many games yet.
 
 ## Lua native pointer compatibility
 
@@ -269,7 +276,7 @@ Lua error text. `Unknown Platform` also appears after this crash is fixed, so it
   That is the only way to reach the Vulkan side of OpenGL ES games (Zink creates the instance inside Mesa).
 - GL ES: Zink (Mesa GL on Vulkan). Strict GLSL (see PLAYBOOK) and occasional `DEVICE LOST` with MSAA render-to-texture.
 
-## Proton / Windows games (surveyed 2026-09-29; running a Rift game under it not yet verified)
+## Proton / Windows games (surveyed 2026-09-29)
 - Steam on the Frame registers ARM64 compat tools from the app **"Steam Frame ARM64 Compat List"** (appinfo
   `extended.compat_tools`, found dynamically by the agent): `proton_11-arm64` (4628740, needs
   `steamlinuxruntime_steamrt4-arm64` 4185400), `proton-experimental-arm64` (4427310), `fex` (3127680, FEX-Emu for
@@ -277,7 +284,8 @@ Lua error text. `Unknown Platform` also appears after this crash is fixed, so it
   SteamLinuxRuntime_4). None are installed by default.
 - `steam -ifrunning steam://install/<appid>` only opens a confirmation dialog in the headset. The agent's unattended
   mode writes an appmanifest stub (StateFlags 1026, installdir from appinfo) and restarts Steam, which then downloads it.
-- **x86_64 Linux apps (agent v61; verified on the device 2026-10-07: an x86_64 glibc test program installed + launch test RUNNING, "machine=x86_64 glibc=2.41"):**
+- **x86_64 Linux apps (verified on the device 2026-10-07: an x86_64 glibc test program installed + launch test
+  RUNNING, "machine=x86_64 glibc=2.41"):**
   FEX is Steam app 3127680 (`fex`, installs as `common/FEX-Emu`, ~6 MB, 21 s via the appmanifest-stub path:
   `install_proton` / `proton_status` with `kind: linux_x86`). Its toolmanifest commandline is
   `/fex-compat-tool %verb% --`, **no** require_tool_appid: it does not use the Steam Linux Runtime. fex-compat-tool
@@ -312,8 +320,12 @@ Lua error text. `Unknown Platform` also appears after this crash is fixed, so it
   `XR_API_LAYER_PATH` (it keeps `XR_ENABLE_API_LAYERS`), so the agent registers the layer as an explicit layer in
   `~/.local/share/openxr/1/api_layers/explicit.d/` (home is shared into the container) with an absolute library path.
 - Oculus Store builds that delay-load `LibOVRPlatform64_1.dll` (Platform SDK, for example Lies Beneath) crash with
-  `0xc06d007e` (delay-load module not found): that DLL comes with the Oculus app, which the Frame doesn't have. (No Oculus runtime DLLs or
-  registry keys are needed: Revive's LibOVRRT hook works once OpenXR does.)
+  `0xc06d007e` (delay-load module not found): that DLL comes with the Oculus app, which the Frame doesn't have.
+- Revive under Proton arm64: Revive's Detours hooks (LoadLibrary, WinVerifyTrust) don't take effect because Wine's
+  kernelbase is ARM64EC code. `pcvr.libovr_redirect` puts Revive's runtime where the game looks for `LibOVRRT*_1.dll`
+  (gets past `-3001`), but games that check the runtime's Oculus signature then stop at `-3021`
+  (`ovrError_LibSignCheck`), which FramePort doesn't bypass. So LibOVR games run only on the PC; OpenVR/OpenXR builds
+  (for example Rick and Morty, Vader Immortal) run directly under Proton. DEVICE_NOTES "Revive under Proton arm64".
 - Unreal's Oculus plugin (and LibOVR's `ovr_Detect`) first checks for the Windows event `OculusHMDConnected` (created
   by the Oculus service on a PC) and silently skips VR without it. Revive hooks `OpenEventW` for that — Lies Beneath
   got as far as OVRPlugin, so the hook evidently works there — but it depends on Detours patching Wine's kernelbase,
@@ -325,18 +337,20 @@ Lua error text. `Unknown Platform` also appears after this crash is fixed, so it
 - Non-Steam shortcut: binary `userdata/<id>/config/shortcuts.vdf`; appid = crc32(exe+title) | 0x80000000;
   artwork in `config/grid/<appid>p.*` (portrait), `<appid>.*` (landscape), `<appid>_hero.*`, `<appid>_logo.*`.
   KeyValues names are case-insensitive: Steam may save `Shortcuts` / `AppName` after a devkit registration
-  (GitHub #263). Agent v86 reads and updates keys case-insensitively, keeping Steam's spelling and existing appids.
+  (GitHub #263). The agent reads and updates keys case-insensitively, keeping Steam's spelling and existing appids.
   Steam reads the file only at start → stop steam.service, edit, start (FramePort does it once per batch).
-- Processes started from Steam (Konsole, SSH sessions?) share steam.service's cgroup: use `systemd-run --user`.
-- SSH: `sshd` must be enabled (`sudo systemctl enable --now sshd`), which needs a user password (`passwd`).
+- Processes started from Steam (Konsole, and SSH sessions started from it) share steam.service's cgroup and end with
+  Steam: run such work through `systemd-run --user`.
+- SSH: Developer Mode enables `sshd`; FramePort logs in with its own key (the setup adds it), so no user password is
+  needed.
 - mDNS: avahi-daemon runs by default; hostname `frame` → `frame.local`.
-- Desktop Mode menu entries (GitHub #84, agent v63): Linux apps get `~/.local/share/applications/frameport-<slug>.desktop`
+- Desktop Mode menu entries (GitHub #84): Linux apps get `~/.local/share/applications/frameport-<slug>.desktop`
   (+ an executable copy in `~/Desktop` when that folder exists; Plasma starts executable `.desktop` files there
   without a trust prompt), `Exec=env FRAMEPORT_DESKTOP=1 "<anchor>/launch.sh"`, marked `X-FramePort-Package=<pkg>`.
   Plasma's launcher exits right after starting the program, so with `FRAMEPORT_DESKTOP=1` the Linux launcher skips
   its "Steam parent gone → end the app" watchdog and keeps the desktop's DISPLAY/WAYLAND_DISPLAY instead of taking
   gamescope's from Steam. Not yet tried from the Frame's Desktop Mode.
-- Linux apps' own icons (GitHub #99, agent v64): finalize_linux (and every refresh of the menu entries) copies the
+- Linux apps' own icons (GitHub #99): finalize_linux (and every refresh of the menu entries) copies the
   app's icon to `<anchor>/artwork/app-icon.{png,svg}`: an AppImage's `squashfs-root/.DirIcon` (usually a symlink),
   else the `Icon=` of its top-level `.desktop` file (a folder app: the first `.desktop` within 3 levels) looked up
   next to it, in `(usr/)share/icons/hicolor/*/apps/` and `(usr/)share/pixmaps/`; the biggest PNG ≥128 px, else an
@@ -378,7 +392,7 @@ over Quest games.
   a utility client, live; the path is kept in `~/.config/openvr/config/appconfig.json` `manifest_paths`.
   `SetApplicationAutoLaunch` is accepted (GetApplicationAutoLaunch → true; vrserver has
   `CAppInfoManager::StartAutolaunchOverlays`) but on the dev Frame it never reached `steamvr.vrsettings` (no
-  autolaunch entry for `temporalreality.overlay` there, appconfig.json holds only manifest_paths) and the owner's
+  autolaunch entry for `temporalreality.overlay` there, appconfig.json holds only manifest_paths) and the
   watch didn't start by itself, so FramePort doesn't rely on it (see "Autostart" below). The linuxarm64 vrserver only reads
   **`binary_path_linux_arm`**: a manifest with `binary_path_linux` alone is skipped ("must specify binary_path for
   launch_type binary. Skipping"; Steam's own steamapps.vrmanifest entries are skipped the same way), so an app's
@@ -386,12 +400,12 @@ over Quest games.
   `LaunchApplication(key)` then starts the binary (Temporal Reality's launch.sh: process up, overlays created).
 - A Steam shortcut of an overlay app and a game shortcut run at the same time (Temporal Reality, then 4XVR, both
   through `steam://rungameid`: both "Game process added", both kept running).
-- FramePort (agent v75): `register_vr_overlay` writes `<anchor>/frameport-overlay.vrmanifest` (the app's own key,
+- FramePort: `register_vr_overlay` writes `<anchor>/frameport-overlay.vrmanifest` (the app's own key,
   name and image from its bundled manifest, binary = launch.sh in `binary_path_linux_arm` + `binary_path_linux`,
   absolute paths) and registers it; `unregister_vr_overlay`, uninstall and purge remove it; `ensure_host_fixes`
   registers ones SteamVR missed (it wasn't running). Overlay apps skip launch tests, the Linux launcher's
   Steam-parent watchdog (`FRAMEPORT_OVERLAY=1`) and don't count as a running game.
-- **Autostart (agent v76)**: the deployment's `overlay.autostart` is the source of truth (SetApplicationAutoLaunch
+- **Autostart**: the deployment's `overlay.autostart` is the source of truth (SetApplicationAutoLaunch
   is still set for SteamVR builds that honour it). While at least one installed overlay app has it on,
   `ensure_host_fixes` keeps the user service `frameport-vr-overlays.service` (`~/.config/systemd/user`, enabled for
   default.target, Restart=always) = `frameport_agent.py _vr_overlay_watch`: every 5 s it checks the vrserver it knows
@@ -413,7 +427,8 @@ over Quest games.
   `/opt/steamvr/bin/linuxarm64/v4l2cam --output=99`: it reads the compositor's "Headset View" (IVRHeadsetView) and
   writes it to a v4l2loopback webcam named **"SteamVR"** (`/dev/video99`, 1920x1080 RGB24, advertised 30 fps, frames
   arrive at the display rate). Nothing on the Frame reads it by default; idle it costs nothing, read ~0.2 core.
-  It shows what the wearer sees (SteamVR home, Steam's panels; a game's layers are expected but not yet seen in it).
+  It shows what the wearer sees: SteamVR home, Steam's panels and games (4XVR's theatre with an overlay on top,
+  2026-10-10).
   Black and ~1 fps (one frame per ~1.0 s) while the Frame sleeps (standby): a 30 fps stream then repeats each
   frame in bursts, which looks like a stall in a player. Its size follows SteamVR's headset view (v4l2cam has no size
   option), so the live view only scales down (360p/480p/720p/1080p) or sends it as is ("full").
@@ -479,7 +494,7 @@ over Quest games.
       sound about 1 s. Chrome keeps about 0.6 s of audio ahead and stalls below that, whatever the player does:
       1.1× catch-up gave 8 stalls per 30 s, no speed-up 1–2, same average lag; 50 ms fragments didn't help. So the
       player doesn't speed up while sound is on.
-  - Quality (owner's headset test, 2026-10-07): 3 Mbit/s CBR at 720p36 showed heavy compression artifacts. The
+  - Quality (headset test, 2026-10-07): 3 Mbit/s CBR at 720p36 showed heavy compression artifacts. The
     hardware path now uses VBR with a 1.5× peak (the encoder accepts BITRATE_MODE VBR + BITRATE_PEAK) and higher
     targets: 360p 1.5, 480p 2.5, 720p 5, 1080p 8, Full 10 Mbit/s. The x264 fallback keeps its rates.
   - The default sink is SUSPENDED while nothing plays; its monitor still delivers (silent) audio.
@@ -549,7 +564,7 @@ The inspected arm64 `libVkLayer_VALVE_fdm_injection.so` has these semantics (vir
   only when offsets are on). A game that submits a smaller or shifted rect (dynamic resolution,
   asymmetric eyes: AC Nexus rect=0,0 / 287,0 1726x1728 in 2016x1728, Asgard's Wrath 2 0,0 / 347,0
   2237x2256 in 2592x2256) gets the sharp area off its view's centre, and the eye's optical axis
-  (asymmetric FOV, e.g. -1.03/+0.88 rad) isn't the rect centre either. FramePort's
+  (asymmetric FOV, for example -1.03/+0.88 rad) isn't the rect centre either. FramePort's
   `VK_LAYER_FRAMEPORT_fdm_centre` (native/foveation/centre.h, below Valve's layer) rewrites the
   per-view offsets so the area sits on each eye.
 - Turnip (freedreno) applies a density map per GMEM **bin**: it reads the map on the CPU at the
@@ -607,6 +622,23 @@ Preset export/migration has configuration coverage. Headless device check of the
 Fixed, darkening test + FrameBridge `snapshot=N`, which also reads Vulkan eye images back): DEVICE_NOTES.md
 "Foveation: sharp area centre and size".
 
+### User preferences (discussion #365)
+
+Game settings → Picture provides Default / Eye-tracked / Fixed / Off, a runtime profile, and an advanced diagnostic switch.
+`set_settings` atomically rewrites just the managed launcher exports and records them in deployment.json;
+no APK rebuild, reinstall or live device intervention is needed. Changes apply at the next start. Default restores
+recipe/catalog launcher defaults; explicit preferences win. One-time library migration extracts old recipe choices
+and leaves internal APK compatibility support. Catalog defaults (including Climb 2 and Batman) still apply to new
+entries. Shared working configs omit `device.foveation` entirely.
+
+APK-side: adapter builds automatically prepare Batman's hash-verified allocation fix and Climb 2's
+renderer-guarded private bridge for verified builds, independently of the runtime choice. Unknown versions skip
+automatic compatibility edits; explicit catalog requests still fail validation rather than guessing offsets. FrameBridge
+builds include the dormant diagnostic layer (activated only by `FRAMEPORT_FOVEATION_TEST=1`), so future test toggles
+need only a launcher update. Existing builds need one normal update to acquire that support. Render resolution
+(supersampling) changes the game's render resolution: higher is sharper but slower. Climb 2 foveation still requires
+1.0 scale.
+
 ## Monitoring sources (probed 2026-10-07, SteamOS 0.4.3, kernel 6.18; used by the Monitor tab, agent `_monitor`)
 
 All readable by the steamos user without root; the agent reads them directly (no programs started per sample).
@@ -614,7 +646,7 @@ All readable by the steamos user without root; the agent reads them directly (no
 | Metric | Source | Notes |
 |---|---|---|
 | CPU | `/proc/stat` deltas; `cpufreq/policy{0,2,5,7}` | 8 cores in 4 clusters: 0-1 / 2-4 / 5-6 / 7 (max 2.27 / 3.15 / 2.96 / 3.05 GHz) |
-| GPU busy | Sum of `drm-engine-gpu` (ns) deltas in `/proc/<pid>/fdinfo/<fd>` over every render-node fd (msm DRM) | Gives GPU % per process too. A process can hold several render fds: add them all. Lepton games see the node as `/dev/kgsl-3d0` (bind mount of `/dev/dri/renderD128`). `drm-total-memory` reads 0. msm can report garbage engine time (SteamVR's vrcompositor: near 2^64, rising ~1000x faster than real time; idle Frame at 100 %, 2026-10-18): a per-fd delta longer than the interval falls back to `drm-cycles-gpu` / GPU clock (agent v102 `gpu_busy_ns`) |
+| GPU busy | Sum of `drm-engine-gpu` (ns) deltas in `/proc/<pid>/fdinfo/<fd>` over every render-node fd (msm DRM) | Gives GPU % per process too. A process can hold several render fds: add them all. Lepton games see the node as `/dev/kgsl-3d0` (bind mount of `/dev/dri/renderD128`). `drm-total-memory` reads 0. msm can report garbage engine time (SteamVR's vrcompositor: near 2^64, rising ~1000x faster than real time; idle Frame at 100 %, 2026-10-18): a per-fd delta longer than the interval falls back to `drm-cycles-gpu` / GPU clock (agent `gpu_busy_ns`) |
 | GPU clock | `/sys/class/devfreq/3d00000.gpu/{cur,max}_freq` | 231–903 MHz in 12 steps |
 | Memory / pressure | `/proc/meminfo`; `/proc/pressure/{cpu,memory,io}` (`some avg10`) | 16 GB RAM, 8 GB swap |
 | Temperatures | `/sys/class/thermal/thermal_zone*/{type,temp}` | 48 zones: `cpu*`/`cpuss*`, `gpuss-*`, `ddr`, `nsph*` (NPU), `pm8550*`/`pm8010*` (power ICs), `modem*`, `camera*`, `video`, `max1720x_bat*` |
@@ -630,26 +662,9 @@ game processes without one), temperatures every 2 s, the CPU-cluster power rails
 2-10 s, the stream measured ~10-13 ms CPU per 1 s tick on the device (idle clocks; idle or with 4XVR running) = about
 1 % of one core, ~0.15 % of the whole CPU. The I2C sensors (power monitors, battery gauge) are the slowest reads.
 
-### Foveation user preferences (discussion #365)
-
-Game settings → Picture provides Default / Eye-tracked / Fixed / Off, a runtime profile, and an advanced diagnostic switch.
-`set_settings` (agent 98) atomically rewrites just the managed launcher exports and records them in deployment.json;
-no APK rebuild, reinstall or live device intervention is needed. Changes apply at the next start. Default restores
-recipe/catalog launcher defaults; explicit preferences win. One-time library migration extracts old recipe choices
-and leaves internal APK compatibility support. Catalog defaults (including Climb 2 and Batman) still apply to new
-entries. Shared working configs omit `device.foveation` entirely.
-
-APK-side: adapter builds automatically prepare Batman's hash-verified allocation fix and Climb 2's
-renderer-guarded private bridge for verified builds, independently of the runtime choice. Unknown versions skip
-automatic compatibility edits; explicit catalog requests still fail validation rather than guessing offsets. FrameBridge
-builds include the dormant diagnostic layer (activated only by `FRAMEPORT_FOVEATION_TEST=1`), so future test toggles
-need only a launcher update. Existing builds need one normal update to acquire that support. Render resolution
-(supersampling) changes the game's render resolution: higher is sharper but slower. Climb 2 foveation still requires
-1.0 scale.
-
 ## Steam library scheduling
 
-Agent v99 holds automatic shortcut restarts while the local app's
+The agent holds automatic shortcut restarts while the local app's
 `~/.local/share/frameport-app/gui.alive` heartbeat is under ten seconds old, as well as while a game or Desktop Mode
 is open. Closed/crashed GUIs expire; the existing twelve-hour hold limit still applies.
 
