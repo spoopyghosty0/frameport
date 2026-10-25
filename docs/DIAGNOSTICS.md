@@ -1,18 +1,20 @@
 # Diagnostics and problem reports
 
-Two ways users feed results back, both without a GitHub token:
+FramePort sends results back in two ways, both without a GitHub account token:
 
-- **Share working recipe…** (game menu → Recipe, or the game page's recipe card; `frameport share-recipe <pkg>`): saves the recipe as a user catalog entry and
-  opens a prefilled issue from `.github/ISSUE_TEMPLATE/working-config.yml`. A maintainer checks it and adds the label
-  `catalog-accepted`. Then `.github/workflows/catalog-from-issue.yml` runs `scripts/catalog_from_issue.py`, which reads
-  only the YAML block, validates it, and writes `catalog/games/<pkg>.yaml`, and the workflow opens a PR.
-  - The PR step needs Settings → Actions → "Allow GitHub Actions to create and approve pull requests".
-  - Create the labels `working-config`, `catalog-accepted` and `bug` once.
 - **Report a problem…** / **Collect logs** (game menu → Troubleshoot, Settings, the failure pop-up,
-  `frameport diag report|collect`): writes
-  a redacted zip and opens a prefilled `bug-report.yml` issue.
-  - GitHub has no API for issue attachments, so the user drags the zip in (25 MB max; the bundle stays under 24 MB).
-  - Prefilled links are capped at about 7.5k characters. Free text is trimmed first; the recipe is never cut.
+  `frameport diag report|collect`) writes a zip of logs with personal data removed ([Redaction](#redaction)) and
+  opens a prefilled issue (`bug-report.yml`). You drag the zip into the issue: GitHub has no API for attachments.
+  The zip stays under GitHub's 25 MB limit. It holds no game files.
+- **Share working recipe…** (game menu → Recipe; `frameport share-recipe <pkg>`) saves the recipe as your own catalog
+  entry and opens a prefilled issue (`working-config.yml`).
+
+Prefilled links are capped at about 7.5k characters; free text is trimmed first, the recipe never.
+
+**For maintainers:** labelling a recipe issue `catalog-accepted` runs `.github/workflows/catalog-from-issue.yml`:
+`scripts/catalog_from_issue.py` reads only the YAML block, validates it, writes `catalog/games/<pkg>.yaml` and the
+workflow opens a PR. It needs Settings → Actions → "Allow GitHub Actions to create and approve pull requests" and the
+labels `working-config`, `catalog-accepted` and `bug`.
 
 Code: `src/frameport/diag/` (`redact.py`, `bundle.py`, `issue.py`), agent command `collect_diag`,
 `Target.collect_diag`, `core/applog.py` (app log + saved job logs).
@@ -63,11 +65,10 @@ after the logs were cut); OpenGL ES (no index): the newest modules (by time writ
 the kernel's `hangcheck detected gpu lockup` line (this-boot-kernel.txt). All modules stay in the game's storage on
 the Frame (`Android/data/<pkg>/files/fp_vk_shaders/`, Files tab → the game's storage).
 
-Display queries run only while collecting logs. The Windows event query has a five-second timeout and runs without
-a console window; the result distinguishes no matching events from a failed or timed-out query. Window visibility,
-focus and completed move/resize events are recorded in `app.log`, with UTC timestamps for comparison with Windows
-events. There is no display polling loop or change to display settings. Empty System event results do not rule out
-a rendering or monitor-link problem.
+Display queries run only while collecting logs (the Windows event query times out after 5 s and says whether it
+found nothing or failed). `app.log` records window visibility, focus and move/resize events with UTC times, to
+compare with Windows events. No display polling, no change to display settings. Empty System events don't rule out
+a display problem.
 
 ## Redaction
 `diag/redact.py` runs on every file and on the issue text.

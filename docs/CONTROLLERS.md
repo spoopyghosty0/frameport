@@ -1,25 +1,24 @@
 # Controller buttons
 
-> **Experimental.** The Frame's runtime accepts these bindings, but the modes haven't been tried in the headset on
-> many games yet. If buttons stop working in a game, set it back to **SteamVR default** (Game settings →
-> Controllers) and report it.
+> **Experimental.** The Frame's runtime accepts these bindings, but few games have been tried in the headset. If
+> buttons stop working in a game, set it back to **SteamVR default** (Game settings → Controllers) and report it.
 
-Quest games usually bind Quest Touch controllers. Steam Frame has a d-pad and View button on the left controller,
-and an A/B/X/Y diamond and Menu button on the right. Without a game's own Frame bindings, SteamVR maps Touch X/A
-to the bottom button and Touch Y/B to all three top buttons. View sends Touch Menu. The right X and Y therefore
-send Touch B, rather than the left-hand X and Y of a Quest controller.
+Quest games expect Quest Touch controllers. The Frame's left controller has a d-pad and a View button; the right one
+has an A/B/X/Y diamond and a Menu button. Without a game's own Frame bindings, SteamVR sends Touch X/A from the bottom
+button and Touch Y/B from all three top buttons, so the right X and Y both send Touch B. View sends Touch Menu.
 
-**Controller buttons** chooses an alternative for Quest games running through FrameBridge:
+**Controller buttons** offers other mappings for Quest games:
 
-- **SteamVR default (0)** leaves SteamVR's Touch remapping in place. This is the initial default.
-- **Mirror (1)** uses every face button. On each controller, bottom and outer send X/A; top and inner send Y/B, as on Quest controllers, whose second button sits up and toward the other hand.
-- **Quest pair (2)** uses two face buttons per controller, placed like Touch's: left X = d-pad down, Y = d-pad
-  right; right A = A, B = X. The other face buttons send no Touch input.
+- **SteamVR default (0):** SteamVR's mapping above. The initial default.
+- **Mirror (1):** uses every face button. Bottom and outer send X/A; top and inner send Y/B, as on a Quest
+  controller, whose second button sits up and toward the other hand.
+- **Quest pair (2):** two buttons per controller, placed like Touch's: left X = d-pad down, Y = d-pad right; right
+  A = A, B = X. The other face buttons send nothing.
 
 ![Quest Touch reference and the three Steam Frame button mappings](images/controllers/quest-buttons.svg)
 
-The small label identifies the physical button; the larger label is the Touch input the game receives. Blue is
-X/A, orange is Y/B or Menu, and a dash means no Touch input. Left and right refer to the hand holding the controller.
+The small label names the physical button, the large one the Touch input the game gets. Blue is X/A, orange is Y/B
+or Menu, a dash is no input.
 
 <!-- quest-buttons-table:start -->
 | Frame input | SteamVR default (0) | Mirror (1) | Quest pair (2) |
@@ -38,32 +37,24 @@ X/A, orange is Y/B or Menu, and a dash means no Touch input. Left and right refe
 | Right bumper | — | — | — |
 <!-- quest-buttons-table:end -->
 
-The table describes button clicks and face-button touches. View sends Menu click only. Triggers, grip pressure,
-thumbsticks, tracked poses and vibration keep their corresponding Touch bindings.
+Triggers, grips, thumbsticks, tracking and vibration keep their Touch bindings. View sends Menu click only.
 
 ## Choose a mode
 
-For one game, open its **Game settings → Controllers → Controller buttons**. Choose **Use global default** to
-follow Settings, or select a specific mode to keep an override for that game. An explicit **SteamVR default**
-keeps mode 0 even when the global choice is Mirror or Quest pair.
+- **One game:** **Game settings → Controllers → Controller buttons**. **Use global default** follows Settings; any
+  other choice stays for that game, including an explicit **SteamVR default**.
+- **All games:** **Settings → Controllers**. New installs and updates use it for games without their own choice.
+  **Apply to installed games now** sends it to installed Quest games that follow the default.
 
-For the library default, open **Settings → Controllers**. The diagram follows the selected mode. New installs
-and configuration updates use this default for games without an override. With a Frame connected, choose
-**Apply to installed games now** to send it to installed Quest games that follow the global default. Overrides
-are kept. Changing the default does not mark every game as needing an update.
+Changes apply at the **next launch**. Games installed before this feature need **Update on Frame** once.
 
-Changes take effect at the **next launch**. Close and relaunch a running game.
-Games installed before this feature need **Update on Frame** once for the mode to work.
-
-The CLI can change an installed game's runtime setting:
+Command line, for an installed game (writes the Frame's settings only):
 
 ```sh
 frameport settings <pkg> quest_buttons=2
 ```
 
-Use `0` for SteamVR default or `1` for Mirror. This command writes the installed settings directly; it does not
-save a per-game recipe override. To keep the value through later installs and global applies, also save it in
-the recipe, or use Game settings:
+To keep the value through later installs, also save it in the recipe (or use Game settings):
 
 ```sh
 frameport recipe <pkg> --set quest_buttons=2
@@ -71,23 +62,18 @@ frameport recipe <pkg> --set quest_buttons=2
 
 ## Limits
 
-- SteamVR's binding UI can still override these suggested bindings. Check custom bindings if the result differs
-  from the diagram.
-- The d-pad has a single touch sensor: a thumb resting on it touches X and Y together. The right controller's
-  face buttons sense touch one by one.
-- Bumpers have no Touch counterpart and are unbound. Thumbrest touch is dropped; the Frame profile has no
-  corresponding input. System buttons keep their runtime role.
-- Mirror and Quest pair require the Frame runtime's `XR_VALVE_frame_controller_interaction` extension. If it is
-  absent, FrameBridge logs that fact and leaves SteamVR's remap in place.
-- Games suggesting their own Frame Controller bindings keep those bindings and continue seeing the Frame
-  Controller profile, even if they also suggest Touch bindings. These modes do not replace the game's own mapping.
-- Touch suggestions using bare pose, trigger, squeeze or button paths are translated too; explicit components
-  such as `/pose`, `/value`, `/click` and `/touch` are also supported where the mapping provides them.
-- Finger proximity emulation (`proximity_emul`) continues to work with Mirror and Quest pair. Dropping the
-  unsupported thumbrest path does not disable proximity emulation from the other touch inputs.
-- The setting applies to Quest VR games, including 32-bit games through the bridge. It does not change PC VR or
-  flat Android Steam Input layouts.
+- Custom bindings in SteamVR's binding UI override these. Check them if the result differs from the diagram.
+- The d-pad has one touch sensor: a thumb resting on it touches X and Y together. The right face buttons sense touch
+  one by one.
+- Bumpers and thumbrest touch have no Touch counterpart and do nothing. System buttons keep their role.
+- Mirror and Quest pair need the runtime's `XR_VALVE_frame_controller_interaction` extension. Without it, FrameBridge
+  logs that and keeps SteamVR's mapping.
+- Games with their own Frame Controller bindings keep them; these modes don't replace a game's own mapping.
+- Touch bindings on bare pose, trigger, squeeze or button paths are translated too, as are `/pose`, `/value`,
+  `/click` and `/touch` where the mapping has them.
+- Finger proximity emulation (`proximity_emul`) keeps working with Mirror and Quest pair.
+- Applies to Quest VR games, including 32-bit games on the bridge. PC VR games and flat Android apps aren't changed.
 
 The mapping follows [Valve's Frame Controller input reference](https://partner.steamgames.com/doc/steamhardware/steamframe/input)
-and the [shared mapping data](input/quest_buttons.json). To regenerate the diagram, app illustrations and table,
-run `uv run python scripts/controller_diagram.py`; add `--check` to verify them without writing files.
+and the [shared mapping data](input/quest_buttons.json). `uv run python scripts/controller_diagram.py` regenerates
+the diagram, app illustrations and table (`--check` verifies them).

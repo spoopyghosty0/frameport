@@ -1,27 +1,24 @@
 # Themes
 
-FramePort comes with three color themes, all dark:
+FramePort has three color themes, all dark. Switch in **Settings → Appearance**; the change applies at once.
 
 | Theme | Look |
 |---|---|
-| **Portal** (default) | The logo's two portals: orange for actions and the current selection, blue for secondary actions, progress and the PC side. |
+| **Portal** (default) | The logo's colors: orange for actions and selection, blue for secondary actions, progress and the PC side. |
 | **Portal (OLED)** | Portal on true black, for OLED screens. |
 | **Original** | FramePort's first look, with a violet accent. |
 
-Switch in **Settings → Appearance**. The change applies at once.
-
 ## Your own theme
 
-A theme is a small JSON file. To make one:
+A theme is a small JSON file.
 
-1. In **Settings → Appearance**, pick the theme closest to what you want and click **Copy this theme as a file**.
+1. In **Settings → Appearance**, pick the closest theme and click **Copy this theme as a file**.
 2. Paste it into a text editor and save it as `something.json`.
-3. Change the name and the colors you want different. You can delete every color you keep: missing colors come
-   from the `base` theme.
-4. Back in **Settings → Appearance**, click **Install theme file…** and choose the file. FramePort checks it,
-   switches to it and keeps a copy in its data folder (`themes/`), so you can delete the original.
+3. Change the name and the colors you want. Delete the colors you keep: missing ones come from the `base` theme.
+4. Click **Install theme file…** and choose the file. FramePort checks it, switches to it and keeps a copy, so you
+   can delete the original.
 
-To remove an installed theme, click the bin icon on its card.
+The bin icon on a theme's card removes it.
 
 ### Format
 
@@ -56,6 +53,5 @@ To remove an installed theme, click the bin icon on its card.
 | `OK`, `WARN`, `ERROR`, `INFO` | Status: works, needs attention, failed, information |
 | `PC` | PC VR games and "on this PC" |
 
-FramePort refuses a theme file it can't show well, and says why: a light window background (FramePort is dark only),
-text that's hard to read on cards, an unknown color name or a value that isn't a color. An example is in
-[`themes/example-theme.json`](themes/example-theme.json).
+FramePort refuses a theme it can't show well and says why: a light background (FramePort is dark only), hard-to-read
+text, an unknown color name or a value that isn't a color. Example: [`themes/example-theme.json`](themes/example-theme.json).
