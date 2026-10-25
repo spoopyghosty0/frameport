@@ -34,7 +34,7 @@
   `tests/test_heuristics.py`.
 - **New game recipe**: `catalog/games/<package>.yaml` (or "Save as known-good" in the GUI, which writes to the user
   catalog). Installed apps fetch `catalog/games/` from GitHub `main` every 6 hours (`recommend/catalog.refresh_remote`),
-  so a merged recipe reaches users without a release. `FRAMEPORT_CATALOG_URL` points them at another folder that
+  so a merged recipe reaches users without a release; `catalog/triage.yaml` follows the same way. `FRAMEPORT_CATALOG_URL` points them at another folder that
   serves `index.json` + `<package>.yaml` instead.
 - **New target**: implement `targets/base.Target`; the pipeline and UI only use that interface.
 
@@ -87,7 +87,7 @@ update [--check] [--yes]`. CI runs `scripts/update_smoke.py` on every OS with th
 ## Dynamic data (fetched live, cached, bundled fallback)
 overport CLI release (Android-XR-Bridge/OVRPort, fallback ovrport/app) + patch list + titles, Temurin JRE (Adoptium
 API), apksigner (Google repository index), Cpp2IL and APKEditor (GitHub releases, on first use), store artwork,
-titles and details (overport image API, OculusDB, Steam), catalog recipes (GitHub `main`),
+titles and details (overport image API, OculusDB, Steam), catalog recipes and triage signatures (GitHub `main`),
 announcements, Lepton location/appid (Frame appmanifests), Steam user (Frame userdata).
 
 ## Built on
