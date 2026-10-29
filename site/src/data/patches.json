@@ -144,6 +144,11 @@
   "title": "Clear the game's GL errors (GLES)",
   "group": "Game settings"
  },
+ "adapter.gl_gamma_space": {
+  "anchor": "adapter-gl_gamma_space",
+  "title": "Gamma colour space (OpenGL ES)",
+  "group": "Game settings"
+ },
  "adapter.gl_hide_msrtt": {
   "anchor": "adapter-gl_hide_msrtt",
   "title": "Hide fast anti-aliasing (OpenGL ES)",

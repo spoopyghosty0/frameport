@@ -49,6 +49,17 @@ static int unreal;
 static int int_attribs;
 static char highp_markers[512];
 static void forget_program(GLuint prog);
+// gl_gamma_space=1: the Frame's runtime takes only sRGB eye-image formats, so FrameBridge (swapchain_fix) hands a game
+// GL_SRGB8_ALPHA8 images where it asked for GL_RGBA8. A game that renders in gamma colour space (Unity's Gamma setting,
+// e.g. PLAY'A VR) writes already gamma-encoded pixels and never calls glDisable(GL_FRAMEBUFFER_SRGB_EXT), since it
+// believes the target is linear: the framebuffer encodes them a second time and the picture is washed out, grey instead
+// of black. The shim then keeps GL_FRAMEBUFFER_SRGB_EXT (EXT_sRGB_write_control) off, so the pixels land unconverted in
+// the sRGB image and the compositor decodes them once.
+static int gamma_space;
+static void (*real_glBindFramebuffer)(GLenum, GLuint);
+static void (*real_glEnable)(GLenum);
+static void (*real_glDisable)(GLenum);
+static EGLBoolean (*real_eglMakeCurrent)(EGLDisplay, EGLSurface, EGLSurface, EGLContext);
 
 static void read_conf_file(const char *path) {
     FILE *f = fopen(path, "r");
@@ -58,6 +69,7 @@ static void read_conf_file(const char *path) {
         if (!strncmp(line, "gl_hide_multiview=", 18)) hide_multiview = atoi(line + 18);
         if (!strncmp(line, "gl_hide_msrtt=", 14)) hide_msrtt = atoi(line + 14);
         if (!strncmp(line, "gl_int_attribs=", 15)) int_attribs = atoi(line + 15);
+        if (!strncmp(line, "gl_gamma_space=", 15)) gamma_space = atoi(line + 15);
         if (!strncmp(line, "gl_highp_markers=", 17)) {
             snprintf(highp_markers, sizeof(highp_markers), "%s", line + 17);
             highp_markers[strcspn(highp_markers, "\r\n")] = 0;
@@ -585,6 +597,10 @@ static void init(void) {
     real_glGetStringi = gles ? dlsym(gles, "glGetStringi") : NULL;
     real_glGetIntegerv = gles ? dlsym(gles, "glGetIntegerv") : NULL;
     real_eglGetProcAddress = egl ? dlsym(egl, "eglGetProcAddress") : NULL;
+    real_glBindFramebuffer = gles ? dlsym(gles, "glBindFramebuffer") : NULL;
+    real_glEnable = gles ? dlsym(gles, "glEnable") : NULL;
+    real_glDisable = gles ? dlsym(gles, "glDisable") : NULL;
+    real_eglMakeCurrent = egl ? dlsym(egl, "eglMakeCurrent") : NULL;
 #define REAL(field, sym) d.field = gles ? dlsym(gles, sym) : NULL;
     REAL(ShaderSource, "glShaderSource") REAL(GetShaderiv, "glGetShaderiv") REAL(LinkProgram, "glLinkProgram")
     REAL(ProgramBinary, "glProgramBinary") REAL(DeleteProgram, "glDeleteProgram") REAL(GetProgramiv, "glGetProgramiv")
@@ -612,9 +628,37 @@ static void init(void) {
     unreal = unreal && hide_msrtt && !hide_multiview;  // only matters while MSRTT is hidden and multiview kept
     LOG("GL shim active: hide_multiview=%d hide_msrtt=%d%s", hide_multiview, hide_msrtt,
         unreal ? " (Unreal: multiview MSRTT kept, drawn single-sampled)" : "");
-    if (int_attribs || highp_markers[0])
-        LOG("GL shim per-game fixes: gl_int_attribs=%d gl_highp_markers=%s", int_attribs,
-            highp_markers[0] ? highp_markers : "(none)");
+    if (int_attribs || highp_markers[0] || gamma_space)
+        LOG("GL shim per-game fixes: gl_int_attribs=%d gl_highp_markers=%s gl_gamma_space=%d", int_attribs,
+            highp_markers[0] ? highp_markers : "(none)", gamma_space);
+}
+
+// gl_gamma_space: GL_FRAMEBUFFER_SRGB_EXT is context state that defaults to enabled, so it is switched off whenever
+// a context is made current (Unity imports eglMakeCurrent through this library, but loads its GL core functions with
+// dlsym on libGLESv2.so, so glBindFramebuffer below only reaches engines that import it) and after every framebuffer
+// bind that does come through here; the game's own glEnable of it is dropped. OVRPlugin's copies into the eye images
+// run on Unity's render thread, in the same context.
+#define GL_FRAMEBUFFER_SRGB_EXT 0x8DB9
+static int srgb_logged;
+static void srgb_conversion_off(void) {
+    if (real_glDisable) real_glDisable(GL_FRAMEBUFFER_SRGB_EXT);
+    if (!srgb_logged++) LOG("GL shim: no sRGB write conversion (gl_gamma_space=1)");
+}
+EXPORT void glBindFramebuffer(GLenum target, GLuint framebuffer) {
+    pthread_once(&once, init);
+    if (real_glBindFramebuffer) real_glBindFramebuffer(target, framebuffer);
+    if (gamma_space) srgb_conversion_off();
+}
+EXPORT void glEnable(GLenum cap) {
+    pthread_once(&once, init);
+    if (gamma_space && cap == GL_FRAMEBUFFER_SRGB_EXT) return;
+    if (real_glEnable) real_glEnable(cap);
+}
+EXPORT EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx) {
+    pthread_once(&once, init);
+    EGLBoolean ok = real_eglMakeCurrent ? real_eglMakeCurrent(dpy, draw, read, ctx) : EGL_FALSE;
+    if (ok && ctx != EGL_NO_CONTEXT && gamma_space) srgb_conversion_off();
+    return ok;
 }
 
 static int is_hidden(const char *name) {
@@ -799,6 +843,9 @@ __attribute__((visibility("default"))) __eglMustCastToProperFunctionPointerType 
     if (name && !strcmp(name, "glGetStringi")) return (__eglMustCastToProperFunctionPointerType)glGetStringi;
     if (name && !strcmp(name, "glGetString")) return (__eglMustCastToProperFunctionPointerType)glGetString;
     if (name && !strcmp(name, "glGetIntegerv")) return (__eglMustCastToProperFunctionPointerType)glGetIntegerv;
+    if (gamma_space && name && !strcmp(name, "glBindFramebuffer"))
+        return (__eglMustCastToProperFunctionPointerType)glBindFramebuffer;
+    if (gamma_space && name && !strcmp(name, "glEnable")) return (__eglMustCastToProperFunctionPointerType)glEnable;
     __eglMustCastToProperFunctionPointerType fn = real_eglGetProcAddress ? real_eglGetProcAddress(name) : NULL;
     if (!fn || !name) return fn;
 #define WRAP(sym, real, w) if (!strcmp(name, sym)) { real = (void *)fn; return (__eglMustCastToProperFunctionPointerType)w; }
