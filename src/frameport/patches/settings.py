@@ -291,6 +291,13 @@ SETTINGS = [
     ("gl_hide_msrtt", "int", 1, "GL shim: hide multisampled render-to-texture",
      "GL shim only: hide GL_EXT_multisampled_render_to_texture(2) (Zink crashes rendering Unity's runtime MSAA eye "
      "buffer through it, for example The Room VR)."),
+    ("gl_gamma_space", "int", 0, "GL shim: gamma colour space",
+     "GL shim (frame.gl_shim): keep sRGB write conversion (GL_FRAMEBUFFER_SRGB_EXT) off in every context the game "
+     "draws through. The Frame takes only sRGB eye images, so swapchain_fix hands a game GL_SRGB8_ALPHA8 where it "
+     "asked for GL_RGBA8; a game that renders in gamma colour space (Unity's Gamma setting, for example PLAY'A VR) "
+     "writes already gamma-encoded colours, which the sRGB image encodes a second time: the picture is washed out, "
+     "grey instead of black. Unity loads its GL functions with dlsym, so the shim acts on eglMakeCurrent, which Unity "
+     "imports through it."),
     ("vk_hide_fdm", "int", 0, "Vulkan shim: hide fragment density maps",
      "Vulkan shim (frame.vk_sanitize): the game doesn't see VK_EXT_fragment_density_map(2). Unreal Engine 5 turns on "
      "fragment-density-map foveation when the driver offers it and expects the density map from the headset, which the "
@@ -529,6 +536,9 @@ UI: dict[str, dict] = {
     "gl_hide_msrtt": dict(group="troubleshooting", level="advanced", label="Hide fast anti-aliasing (OpenGL ES)",
                 help="For Unity games that crash when they turn on anti-aliasing (for example The Room "
                      "VR).", control=("switch",)),
+    "gl_gamma_space": dict(group="troubleshooting", level="advanced", label="Gamma colour space (OpenGL ES)",
+                help="For games whose picture is washed out, grey instead of black (for example PLAY'A VR): their "
+                     "colours were converted to sRGB a second time.", control=("switch",)),
     "strip_color_bias": dict(group="troubleshooting", level="advanced", label="Drop layer color fades",
                 help="Diagnostics: removes layer color fades. Some fades no longer show.", control=("switch",)),
     "snapshot": dict(group="troubleshooting", level="advanced", label="Eye-image snapshots (diagnostics)",
@@ -689,6 +699,7 @@ class AdapterSetting(Patch):
             "swapchain_fix": ap.is_gles,
             "gl_hide_multiview": lambda a: a.direct_vrapi and ap.is_gles(a),
             "gl_hide_msrtt": ap.is_gles,
+            "gl_gamma_space": ap.is_gles,
             "gl_int_attribs": ap.is_gles,
             "gl_highp_markers": ap.is_gles,
             "gl_mv_debug": lambda a: bool((a.extra or {}).get("gl_multiview_libs")) and ap.is_gles(a),

@@ -281,6 +281,12 @@ signatures:
     severity: error
     diagnosis: The Frame rejected the game's image format. GLES games must use sRGB formats without MSAA.
     suggest: [adapter.swapchain_fix]
+  - id: gles-gamma-space
+    pattern: 'xrCreateSwapchain \d+x\d+ format=32856 .*result=-26'
+    unless: 'GL shim per-game fixes:.*gl_gamma_space=1'
+    severity: info
+    diagnosis: The game asked for linear (GL_RGBA8) eye images, which the Frame refuses, and draws into sRGB ones instead. If the picture is washed out, grey instead of black, the game renders in gamma colour space and its colours are converted to sRGB a second time.
+    suggest: [adapter.gl_gamma_space]
   - id: zink-shader-fix-mismatch
     pattern: 'shader fix layer: a \d+-byte module differs from fix'
     severity: warning

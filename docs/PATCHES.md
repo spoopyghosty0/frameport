@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 205 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 206 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -12,7 +12,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 
 - [Patches from OVRPort](#group-overport) (25)
 - [Steam Frame patches](#group-frame) (71)
-- [Game settings](#group-adapter) (84)
+- [Game settings](#group-adapter) (85)
 - [Files and settings on the Frame](#group-device) (12)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
 
@@ -145,6 +145,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Ignore focus dips up to](#adapter-focus_hold_ms) | `adapter.focus_hold_ms` | Game settings | 2 |
 | [Hide Quest foveation](#adapter-foveation_fix) | `adapter.foveation_fix` | Game settings |  |
 | [Clear the game's GL errors (GLES)](#adapter-gl_error_clear) | `adapter.gl_error_clear` | Game settings | 4 |
+| [Gamma colour space (OpenGL ES)](#adapter-gl_gamma_space) | `adapter.gl_gamma_space` | Game settings |  |
 | [Hide fast anti-aliasing (OpenGL ES)](#adapter-gl_hide_msrtt) | `adapter.gl_hide_msrtt` | Game settings | 1 |
 | [Draw each eye separately (OpenGL ES)](#adapter-gl_hide_multiview) | `adapter.gl_hide_multiview` | Game settings | 1 |
 | [GL shim: high-precision vertex shaders](#adapter-gl_highp_markers) | `adapter.gl_highp_markers` | Game settings | 1 |
@@ -1905,6 +1906,22 @@ For OpenGL ES games whose memory use keeps growing (e.g. Vader Immortal).
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Clears OpenGL errors the game left pending before FrameBridge calls the Frame's runtime. The runtime's GL code fails on any pending error; after one such failure at the start it allocated GPU memory every frame without freeing it (e.g. Vader Immortal, ~20 MB a second; QuestZDoom slowed to a crawl after a few minutes).
+
+### <a id="adapter-gl_gamma_space"></a>Gamma colour space (OpenGL ES)
+
+For games whose picture is washed out, grey instead of black (for example PLAY'A VR): their colours were converted to sRGB a second time.
+
+- `adapter.gl_gamma_space`
+- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:**
+  - Value: int, default `0`.
+  - Game settings → Troubleshooting → "Gamma colour space (OpenGL ES)" (advanced).
+- **Suggested by launch-test signatures:**
+  - `gles-gamma-space` (info): The game asked for linear (GL_RGBA8) eye images, which the Frame refuses, and draws into sRGB ones instead.
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> GL shim (frame.gl_shim): keep sRGB write conversion (GL_FRAMEBUFFER_SRGB_EXT) off in every context the game draws through. The Frame takes only sRGB eye images, so swapchain_fix hands a game GL_SRGB8_ALPHA8 where it asked for GL_RGBA8; a game that renders in gamma colour space (Unity's Gamma setting, for example PLAY'A VR) writes already gamma-encoded colours, which the sRGB image encodes a second time: the picture is washed out, grey instead of black. Unity loads its GL functions with dlsym, so the shim acts on eglMakeCurrent, which Unity imports through it.
 
 ### <a id="adapter-gl_hide_msrtt"></a>Hide fast anti-aliasing (OpenGL ES)
 
