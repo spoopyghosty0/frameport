@@ -108,6 +108,7 @@ SUMMARIES = {
                                "audio call).",
     "frame.photon_voice_audio_route": "Stops games with Photon Voice chat from crashing on the Frame when voice chat "
                                       "starts (an Android 12 audio call).",
+    "frame.unity_mic_ring": "Stops the microphone of Unity games cutting in and out for other players (voice chat).",
     "frame.unity_oculus_check": "Lets older Unity games start VR without Meta's system apps (they'd stay on a 2D "
                                 "screen).",
     "frame.unity_multipass": "Draws each eye separately. Try it when one eye shows a gray or broken picture.",

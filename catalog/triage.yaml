@@ -599,6 +599,15 @@ signatures:
     diagnosis: The game's Photon Voice microphone plugin calls Android 12 audio-routing methods (AudioManager communication devices) without checking the Android version; Lepton runs Android 11, so the app crashes when voice chat starts (for example Table Troopers at the tutorial). The patch makes Photon's audio-device pick return early (the microphone keeps the default route).
     suggest: [frame.photon_voice_audio_route]
     supersedes: [java-crash, audio-api31]
+  - id: mic-fast-capture-denied
+    # a recorder asked for Android's fast capture path (FAST, + RAW: 5/7) and Lepton's stereo 32-bit microphone
+    # stream can't give it; the line stays with the fix in the build
+    pattern: 'createRecordTrack_l\(\): mismatch between requested flags \(0000000[57]\) and input flags'
+    unless_patch: frame.unity_mic_ring
+    severity: info
+    diagnosis: The game records the microphone and Android gave it the normal capture path, which delivers the voice in bursts of about 40 ms. Unity's audio engine (FMOD) records into a ring of four short buffers and loses every burst that fills the whole ring, so voice chat cuts in and out for the other players (for example Bigscreen, where 13 % of the voice was sent). The patch gives FMOD's recorder 16 buffers.
+    question: Did other players hear your voice cut in and out?
+    suggest: [frame.unity_mic_ring]
   - id: audio-api31
     pattern: 'NoSuchMethodError: No virtual method \w*CommunicationDevice\w*\(.*Landroid/media/AudioManager'
     severity: fatal

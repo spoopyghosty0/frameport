@@ -1886,6 +1886,7 @@
  "Stops Meta's old VR library from closing the game at start (for example Jurassic World Aftermath).": "",
  "Stops some Unreal games from closing themselves right after starting.": "",
  "Stops strict debugging checks that make some games quit.": "",
+ "Stops the microphone of Unity games cutting in and out for other players (voice chat).": "",
  "Stops Unreal's crash reporter, which can block the game from starting.": "",
  "Storage": "",
  "Store details for {n} game": [
@@ -2105,6 +2106,7 @@
  "Unique controller action names": "",
  "Unity App UI: no Android 12 vibrator": "",
  "Unity frame loop: wait for skipped frames": "",
+ "Unity's audio engine (FMOD) records the microphone into a ring of only four short buffers and can't tell when a whole ring arrived at once. Lepton's microphone reaches games in bursts of about that size (Android denies the fast capture path because Lepton's microphone is a stereo 32-bit stream), so most of what the player says is overwritten before Unity reads it: voice chat cuts in and out for everyone else (Bigscreen sent 13 % of the audio). Gives FMOD's recorder 16 buffers in libunity.so (four instructions); sound output is unchanged.": "",
  "Unity's built-in Oculus frame loop (frame.unity_oculus_check): before each frame wait, wait up to 50 ms for the last waited frame to begin and skip the wait if it doesn't. Fixes a freeze at the first scene switch (for example Sniper Elite VR); in other games it can make loading screens stutter.": "",
  "Unity's built-in Oculus frame loop (frame.unity_oculus_check): don't pass Unity's physics-step pose update on, so the hands use the frame's display-time poses. Fixes hands trailing the controllers in some games (for example Sniper Elite VR); in others it makes the hands lag (for example BattleSisters).": "",
  "Unity's built-in Oculus support (Unity 2017–2019) only starts VR when Android has Meta's com.oculus.systemactivities package; without it the game runs as a 2D app (the Android home screen or a black window, for example Accounting+, BattleSisters). Points that package name in libunity.so at \"android\", which always exists. Games on Unity's built-in VR (2017–2018, and 2019 without the Oculus XR Plugin) also get the frame wait their legacy frame loop never makes (libfp_ovrp.so calls ovrp_WaitToBeginFrame before ovrp_Update2; without it no frame starts, the dashboard freezes or the GPU hangs). Per game, the settings ovrp_begin_gate (a freeze at the first scene switch) and ovrp_hold_physics (hands trailing the controllers) switch on two more frame-loop fixes (for example Sniper Elite VR). The shim also counts a newly pressed trigger or A/B/X/Y as a mouse click (Input.GetMouseButtonDown), which Go-era screens wait for (for example Accounting+'s motion warning) and which Lepton never delivers.": "",
@@ -2114,6 +2116,7 @@
  "Unity: disable MSAA": "",
  "Unity: headset always counts as worn": "",
  "Unity: keep MSAA off at runtime (OVRManager)": "",
+ "Unity: microphone without dropouts": "",
  "Unity: render each eye separately (no multiview)": "",
  "Unity: share thread keys (games that run out of them)": "",
  "Unity: skip Meta's player-in-room check": "",

@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 205 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 206 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -11,7 +11,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 ## Groups
 
 - [Patches from OVRPort](#group-overport) (25)
-- [Steam Frame patches](#group-frame) (71)
+- [Steam Frame patches](#group-frame) (72)
 - [Game settings](#group-adapter) (84)
 - [Files and settings on the Frame](#group-device) (12)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
@@ -90,6 +90,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Team Beef ports: treat the Frame as a Meta headset](#frame-tbxr_vendor) | `frame.tbxr_vendor` | Steam Frame patches | 3 |
 | [Unity App UI: no Android 12 vibrator](#frame-unity_appui_vibrator) | `frame.unity_appui_vibrator` | Steam Frame patches |  |
 | [GL shim for Unity (no multisampled render-to-texture)](#frame-unity_gl_shim) | `frame.unity_gl_shim` | Steam Frame patches | 28 |
+| [Unity: microphone without dropouts](#frame-unity_mic_ring) | `frame.unity_mic_ring` | Steam Frame patches |  |
 | [Unity: render each eye separately (no multiview)](#frame-unity_multipass) | `frame.unity_multipass` | Steam Frame patches | 2 |
 | [Unity: disable MSAA](#frame-unity_no_msaa) | `frame.unity_no_msaa` | Steam Frame patches | 11 |
 | [Unity: skip OVROverlay layers (fades, splash screens)](#frame-unity_no_overlay_copy) | `frame.unity_no_overlay_copy` | Steam Frame patches | 2 |
@@ -1124,6 +1125,19 @@ Stops a gray or frozen screen in Unity games that turn on anti-aliasing while ru
 - **Source:** [patches/frame/vrapi_bridge.py](../src/frameport/patches/frame/vrapi_bridge.py)
 
 > Loads the GL shim into a Unity GLES game and hides GL_EXT_multisampled_render_to_texture (and the multiview variant). Some Unity games switch their eye buffer to 4x MSAA at runtime; the Frame only gives single-sampled swapchains, Unity then renders through multisampled render-to-texture and Mesa/Zink crashes (SIGSEGV in libgallium_dri.so on the render thread: gray or frozen screen, for example The Room VR). Hidden, Unity uses an ordinary MSAA buffer and resolves it. Unity's multiview stays on (gl_hide_multiview defaults to 0 here).
+
+### <a id="frame-unity_mic_ring"></a>Unity: microphone without dropouts
+
+Stops the microphone of Unity games cutting in and out for other players (voice chat).
+
+- `frame.unity_mic_ring` · also for 2D apps
+- **Changes:** Changes the APK (a rebuild and reinstall apply it).
+- **Suggested (on):** Unity game that records the microphone: FMOD's 4-buffer recording ring loses most of the voice on the Frame (voice chat cuts in and out, for example Bigscreen).
+- **Suggested by launch-test signatures:**
+  - `mic-fast-capture-denied` (info): The game records the microphone and Android gave it the normal capture path, which delivers the voice in bursts of about 40 ms.
+- **Source:** [patches/frame/unity_mic_ring.py](../src/frameport/patches/frame/unity_mic_ring.py)
+
+> Unity's audio engine (FMOD) records the microphone into a ring of only four short buffers and can't tell when a whole ring arrived at once. Lepton's microphone reaches games in bursts of about that size (Android denies the fast capture path because Lepton's microphone is a stereo 32-bit stream), so most of what the player says is overwritten before Unity reads it: voice chat cuts in and out for everyone else (Bigscreen sent 13 % of the audio). Gives FMOD's recorder 16 buffers in libunity.so (four instructions); sound output is unchanged.
 
 ### <a id="frame-unity_multipass"></a>Unity: render each eye separately (no multiview)
 
