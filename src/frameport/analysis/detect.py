@@ -64,7 +64,9 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 #     frame.keep_system_libraries, GitHub #484) (2026-10)
 # 28: vr_activity counts an INFO activity as the start activity (a single MAIN + INFO + VR activity was taken for
 #     a VR part behind a flat launcher, GitHub #476) (2026-10)
-ANALYSIS_VERSION = 28  # (cortopia_org_id's TMNT layout, GitHub #422, needed no re-analysis: see the patch)
+# 29: fmod_record_ring (a Unity game that records the microphone through FMOD's 4-buffer OpenSL ring:
+#     frame.unity_mic_ring) (2026-10)
+ANALYSIS_VERSION = 29  # (cortopia_org_id's TMNT layout, GitHub #422, needed no re-analysis: see the patch)
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
@@ -342,6 +344,7 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
         media_codec = any(m in d for d in dexes for m in MEDIA_CODEC_MARKERS) or "libvlc.so" in libs
         # Google VR's Java side (GvrLayout / GvrView, the Cardboard SDK): a Daydream / Cardboard app (google_vr)
         gvr_java = any(m in d for d in dexes for m in GVR_DEX_MARKERS)
+        from ..patches.frame.unity_mic_ring import record_ring
         from ..patches.frame.unreal_obb_check import has_delivery_check
 
         # Includes obfuscated DownloaderActivity predicates; CRC verification is a separate manifest switch.
@@ -501,6 +504,10 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             "meta_depth_occlusion": (
                 bool(il2cpp_meta) and (b"HARD_OCCLUSION" in il2cpp_meta or b"SOFT_OCCLUSION" in il2cpp_meta)
             ),
+            # Unity's FMOD records the microphone into a 4-buffer OpenSL ring that Lepton's capture bursts lap
+            # (frame.unity_mic_ring); only games that ask for the microphone
+            "fmod_record_ring": ("android.permission.RECORD_AUDIO" in used_perms
+                                 and record_ring(lib_bytes.get("libunity.so", b"")) == "original"),
             # Unity's built-in Oculus support checks for Meta's system apps before VR (frame.unity_oculus_check)
             "unity_oculus_check": b"\0com.oculus.systemactivities\0" in lib_bytes.get("libunity.so", b""),
             # a 2D launcher activity that starts a separate VR activity (frame.start_activity)

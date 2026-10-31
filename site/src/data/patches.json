@@ -704,6 +704,11 @@
   "title": "GL shim for Unity (no multisampled render-to-texture)",
   "group": "Steam Frame patches"
  },
+ "frame.unity_mic_ring": {
+  "anchor": "frame-unity_mic_ring",
+  "title": "Unity: microphone without dropouts",
+  "group": "Steam Frame patches"
+ },
  "frame.unity_multipass": {
   "anchor": "frame-unity_multipass",
   "title": "Unity: render each eye separately (no multiview)",
