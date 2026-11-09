@@ -22,8 +22,12 @@ The folder's path is longer than vold's mount points, which changes who frees it
 (libfp_obbpath.so hands the string over from the right allocator; no game code is changed).
 
 Encrypted OBBs (jobb -k: PBKDF2 + Twofish, footer flag OBB_SALTED) are not supported; GRID's are plain FAT32 and the
-game passes no key. FAT is case-insensitive, the Frame's file systems are not: unpacked names keep the image's case
-(GRID's own index.txt uses the same spelling as its files).
+game passes no key. FAT is case-insensitive, the Frame's file systems are not: unpacked names keep the image's case,
+and a game that asks for another spelling finds nothing. GRID does: libgrid.so opens `<mount>/Index.txt`, while its
+images store `index.txt` (strace on the Frame, 2026-11-09: ENOENT for every DataSetN.obb/Index.txt, the game then
+stops loading; with an `Index.txt` link it ran). So the libraries this patch already routes (see NATIVE_IMPORTS) get
+their file name strings respelled to the images' spelling (INDEX_NAMES; an exact, whole NUL-terminated string in
+.rodata, same length, in place; more than one such string = unclear what each one is for → left alone and noted).
 """
 from __future__ import annotations
 
@@ -70,6 +74,30 @@ def route_mounted_path(data: bytes) -> tuple[bytes, list[str]]:
     return patched, renamed
 
 
+# File names the game library opens below the mount point, spelt differently from the files inside the images (FAT
+# doesn't care, the Frame's file systems do). Key: the library's spelling, value: the images' spelling (same length).
+INDEX_NAMES = {"Index.txt": "index.txt"}
+
+
+def _whole_rodata_strings(data: bytes, text: str) -> int:
+    """How many times `text` is a whole NUL-terminated string in .rodata (not the tail of a longer one)."""
+    return elf.replace_rodata_string(data, text, text)[1]
+
+
+def respell_names(data: bytes) -> tuple[bytes, list[str], list[str]]:
+    """The library with each INDEX_NAMES string respelt where it occurs exactly once; (data, respelt, unclear) —
+    unclear = names found more than once (each could be anything, so none is changed)."""
+    done, unclear = [], []
+    for old, new in INDEX_NAMES.items():
+        count = _whole_rodata_strings(data, old)
+        if count > 1:
+            unclear.append(old)
+        elif count == 1:
+            data, _n = elf.replace_rodata_string(data, old, new)
+            done.append(old)
+    return data, done, unclear
+
+
 def handler_classes(data: bytes) -> list[str]:
     """Known OBB-mounting handler classes in one dex's bytes (cheap byte check, for analysis)."""
     return [c for c in HANDLERS if c.encode() in data and b"mountObb" in data]
@@ -111,6 +139,7 @@ class ObbMountEmulation(Patch):
     order = 44
     needs_vr = False
     experimental = True
+    revision = 2  # 2: file names in the images' spelling (GRID's Index.txt)
 
     def applies(self, a):
         return bool((a.extra or {}).get("obb_mount"))
@@ -154,8 +183,15 @@ class ObbMountEmulation(Patch):
                 continue
             patched, renamed = route_mounted_path(data)
             if patched != data:
-                ws.put(ws.lib(lib), patched)
                 ctx.notes.append(f"{lib}: mounted OBB path through {HELPER} (its own allocator)")
+            patched, respelt, unclear = respell_names(patched)
+            for old in respelt:
+                ctx.notes.append(f"{lib}: opens {INDEX_NAMES[old]} instead of {old} below the mount point (the "
+                                 f"images' spelling; the Frame's file names are case-sensitive)")
+            for old in unclear:
+                ctx.notes.append(f"{lib}: {old} appears more than once, left as is (the game may not find it)")
+            if patched != data:
+                ws.put(ws.lib(lib), patched)
             changed = True
         if changed:
             helper = artifact(ws.abi, HELPER)
@@ -172,8 +208,18 @@ class ObbMountEmulation(Patch):
                and needs_mounted_path_helper(ws.read_lib(lib))]
         if not bad and not ws.has(ws.lib(HELPER)):
             return []
-        return [("Mounted OBB path from the game's allocator", not bad and ws.has(ws.lib(HELPER)),
-                 HELPER if not bad else f"still imported directly by {', '.join(bad)}")]
+        checks = [("Mounted OBB path from the game's allocator", not bad and ws.has(ws.lib(HELPER)),
+                   HELPER if not bad else f"still imported directly by {', '.join(bad)}")]
+        routed = [lib for lib in ws.libs() if lib != HELPER and HELPER.encode() in ws.read_lib(lib)
+                  and HELPER in elf.needed(ws.read_lib(lib))]
+        left = {lib: [old for old in INDEX_NAMES if _whole_rodata_strings(ws.read_lib(lib), old)] for lib in routed}
+        left = {lib: names for lib, names in left.items() if names}
+        if routed:
+            # warning only: a name found more than once is left alone on purpose (respell_names)
+            checks.append(("OBB file names in the images' spelling", None if left else True,
+                           "; ".join(f"{lib} still opens {', '.join(n)}" for lib, n in left.items())
+                           or ", ".join(routed)))
+        return checks
 
 
 register(ObbMountEmulation)

@@ -929,7 +929,7 @@ Stops strict debugging checks that make some games quit.
 
 Lets games whose data files are disk images start on the Frame (they'd quit with "Can't mount OBB"), for example GRID Legends. The images are unpacked on the Frame.
 
-- `frame.obb_mount_emul` · experimental · also for 2D apps
+- `frame.obb_mount_emul` · experimental · also for 2D apps · revision 2
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** The game mounts its OBB files as disk images, which Lepton can't do: unpack them on the Frame and let the game read the folders.
 - **Suggested by launch-test signatures:**

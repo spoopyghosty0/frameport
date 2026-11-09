@@ -23,6 +23,7 @@ from frameport.patches.frame.obb_mount import (
     handler_classes,
     needs_mounted_path_helper,
     patch_dex,
+    respell_names,
     route_mounted_path,
 )
 from frameport.validate.triage import triage
@@ -362,15 +363,43 @@ def test_interrupted_unpack_is_finished_or_dropped(monkeypatch, tmp_path):
 
 
 # ---------------------------------------------------------------------------------------------------- native side
-def _game_lib() -> bytes:
-    """A stand-in for libgrid.so: imports AndroidUtils::getMountedOBBFullPath and exports its own operator new. Made
-    from the helper (which imports that function, weakly) by renaming its one export to _Znwm in .dynstr."""
-    helper = artifact("arm64-v8a", HELPER)
-    sec = elf.dynstr_section(elf._elf(helper))
+def _in_section(data: bytes, name: str, old: bytes, new: bytes) -> bytes:
+    sec = elf._elf(data).get_section_by_name(name)
     start, end = sec["sh_offset"], sec["sh_offset"] + sec["sh_size"]
+    assert data[start:end].count(old) == 1 and len(new) == len(old)
+    return data[:start] + data[start:end].replace(old, new) + data[end:]
+
+
+def _game_lib(rodata=b"\0Index.txt\0\0\0") -> bytes:
+    """A stand-in for libgrid.so: imports AndroidUtils::getMountedOBBFullPath and exports its own operator new. Made
+    from the helper (which imports that function, weakly) by renaming its one export to _Znwm in .dynstr; its
+    "FrameBridge" string in .rodata becomes `rodata` (by default the index file name in libgrid's spelling)."""
+    helper = artifact("arm64-v8a", HELPER)
     old = b"\0fp_obb_mounted_path\0"
-    assert helper[start:end].count(old) == 1
-    return helper[:start] + helper[start:end].replace(old, b"\0_Znwm".ljust(len(old), b"\0")) + helper[end:]
+    game = _in_section(helper, ".dynstr", old, b"\0_Znwm".ljust(len(old), b"\0"))
+    return _in_section(game, ".rodata", b"\0FrameBridge\0", rodata)
+
+
+def test_index_name_takes_the_images_spelling():
+    game = _game_lib()
+    out, done, unclear = respell_names(game)
+    assert (done, unclear) == (["Index.txt"], []) and len(out) == len(game)
+    assert b"\0index.txt\0" in out and b"\0Index.txt\0" not in out
+    assert respell_names(out) == (out, [], [])  # already respelt
+    # only the whole string: a longer name ending in it stays
+    tail = _game_lib(b"\0XIndex.txt\0\0")
+    assert respell_names(tail) == (tail, [], [])
+
+
+def test_index_name_found_twice_is_left_alone():
+    twice = _game_lib()  # second copy in place of a log message
+    sec = elf._elf(twice).get_section_by_name(".rodata")
+    start = sec["sh_offset"]
+    msg = b"fp_obbpath: %s not found; no mounted path for %s\0"
+    i = twice.index(msg, start)
+    twice = twice[:i] + b"Index.txt\0".ljust(len(msg), b"\0") + twice[i + len(msg):]
+    out, done, unclear = respell_names(twice)
+    assert out == twice and done == [] and unclear == ["Index.txt"]
 
 
 def test_mounted_path_import_goes_to_the_helper():
@@ -413,7 +442,9 @@ def test_apply_routes_libraries_that_free_the_path_themselves(tmp_path, quest_ma
         ctx = base.ApkContext(ws, a, {}, Reporter(), {})
         assert p.apply(ctx)
         assert any("libgrid.so: mounted OBB path through" in n for n in ctx.notes)
-        assert p.validate(ctx) == [("Mounted OBB path from the game's allocator", True, HELPER)]
+        assert any("libgrid.so: opens index.txt instead of Index.txt" in n for n in ctx.notes)
+        assert p.validate(ctx) == [("Mounted OBB path from the game's allocator", True, HELPER),
+                                   ("OBB file names in the images' spelling", True, "libgrid.so")]
         assert ws.read_lib("libother.so") == helper
         first = ws.read_lib("libgrid.so")
         p.apply(base.ApkContext(ws, a, {}, Reporter(), {}))
@@ -446,3 +477,6 @@ def test_real_grid_legends():
     out, done = route_mounted_path(grid)
     assert done == list(NATIVE_IMPORTS) and elf.needed(out)[-1] == HELPER
     assert NATIVE_IMPORTS[done[0]] in elf.dyn_symbols(out, defined=False)
+    respelt, names, unclear = respell_names(out)
+    assert (names, unclear) == (["Index.txt"], []) and len(respelt) == len(out)
+    assert sum(a != b for a, b in zip(respelt, out)) == 1  # one byte: I -> i
