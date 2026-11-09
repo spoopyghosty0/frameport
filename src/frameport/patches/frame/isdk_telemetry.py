@@ -28,7 +28,8 @@ from ...analysis import elf
 from ..base import ApkContext, Patch, Suggestion, register
 
 LIB = "libInteractionSdk.so"
-INIT = "_ZN15interaction_sdk2v19telemetry19initializeTelemetryEv"  # interaction_sdk::v1::telemetry::initializeTelemetry()
+# interaction_sdk::v1::telemetry::initializeTelemetry()
+INIT = "_ZN15interaction_sdk2v19telemetry19initializeTelemetryEv"
 DISABLED = "_ZN15interaction_sdk2v19telemetry17telemetryDisabledE"  # ...::telemetryDisabled (bool)
 MOV_W16_1 = 0x52800030  # mov w16, #1
 STRB_W16 = 0x39000010   # strb w16, [xN]  (| N << 5)
