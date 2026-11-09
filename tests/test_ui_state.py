@@ -582,6 +582,35 @@ def test_serialize_survives_moved_flet_internals(monkeypatch, caplog):
         Session.patch_control, value_types.Prop.__set__ = original, original_set
 
 
+def test_events_for_removed_controls_are_dropped(monkeypatch):
+    """GitHub #484: a gesture event for a removed game's card reached Flet's _trigger_event, whose control.page
+    raised "Control must be added to the page first" and the window showed an error page. Such events are dropped;
+    events for mounted controls still run their handler."""
+    import asyncio
+
+    import flet as ft
+    from flet.controls.base_control import BaseControl
+
+    from frameport.ui import app
+
+    monkeypatch.setattr(BaseControl, "_trigger_event", BaseControl._trigger_event)  # restored after the test
+    app.drop_events_for_unmounted_controls()
+    app.drop_events_for_unmounted_controls()  # idempotent
+    assert getattr(BaseControl._trigger_event, "_drops_unmounted", False)
+    clicks = []
+    removed = ft.GestureDetector(on_tap=lambda e: clicks.append("removed"))
+    assert asyncio.run(removed._trigger_event("tap", None)) is None and not clicks  # no RuntimeError
+
+    async def original(self, event_name, *args, **kwargs):
+        clicks.append(event_name)
+    monkeypatch.setattr(BaseControl, "_trigger_event", original)
+    app.drop_events_for_unmounted_controls()
+    mounted = ft.GestureDetector()
+    monkeypatch.setattr(type(mounted), "page", property(lambda self: object()))
+    asyncio.run(mounted._trigger_event("tap", None))
+    assert clicks == ["tap"]
+
+
 def test_pop_dialog_closes_the_dialog_not_a_toast(monkeypatch):
     """An install link's question stayed open after "Download and install": its job's toast had appeared above it and
     page.pop_dialog() closed the toast instead."""

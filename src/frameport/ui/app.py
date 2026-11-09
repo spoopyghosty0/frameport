@@ -3304,6 +3304,35 @@ def serialize_flet_updates() -> None:
             Prop.__set__ = set_prop
     except (ImportError, AttributeError) as exc:
         applog.log.warning("Flet's property writes couldn't be serialized (another Flet version?): %s", exc)
+    drop_events_for_unmounted_controls()
+
+
+def drop_events_for_unmounted_controls() -> None:
+    """Drop an event for a control that is no longer on the page instead of showing Flet's error page.
+
+    Flutter can still send an event (a hover, a click) for a control Python has already removed, e.g. the card of a
+    game just removed from the library: Flet 1.0's `_trigger_event` reads `control.page`, which raises "Control must
+    be added to the page first", and the session shows that as "The application encountered an error" (GitHub #484).
+    Such an event has nothing left to act on. The check runs before the handler, so an error inside a handler is
+    still reported. Hooks Flet internals like serialize_flet_updates: skipped (logged) if a Flet version moves it."""
+    try:
+        from flet.controls.base_control import BaseControl
+
+        original = BaseControl._trigger_event  # noqa: SLF001
+        if getattr(original, "_drops_unmounted", False):
+            return
+
+        async def trigger_event(self, event_name, *args, **kwargs):
+            try:
+                self.page  # noqa: B018  raises for a control without a page
+            except RuntimeError:
+                applog.log.debug("dropped %s event for %s: no longer on the page", event_name, type(self).__name__)
+                return None
+            return await original(self, event_name, *args, **kwargs)
+        trigger_event._drops_unmounted = True
+        BaseControl._trigger_event = trigger_event  # noqa: SLF001
+    except (ImportError, AttributeError) as exc:
+        applog.log.warning("Flet's event dispatch couldn't be guarded (another Flet version?): %s", exc)
 
 
 def pop_dialog_skips_toasts() -> None:
