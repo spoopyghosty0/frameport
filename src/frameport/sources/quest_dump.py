@@ -8,6 +8,7 @@ Accepted layouts:
   <game>/apk/x.apk + <game>/obb/<files>                                        SideQuest backups with loose OBB + PAKs
   <folder>/x.apk + (main|patch).<versionCode>.<package>.obb anywhere nearby    found by file name (next to the APK,
                                                                                <package>/apk/ + <package>/obb/, ...)
+  <folder>/x.apk + loose asset files (*.bundle, *.pak, …)                      the folder's only APK: they're its data
   a single .apk file
   app bundles: .xapk / .apks / .apkm / .apkx files and folders of split APKs (base.apk + split_config.*.apk), unpacked
   into FramePort's data folder first (sources/bundles.py)
@@ -256,9 +257,11 @@ def obb_names(package: str, rels) -> list[ObbName]:
         kind, vc, rest = m.group(1).lower(), m.group(2), m.group(3)
         version = f"{vc}." if vc else ""
         rl = rest.lower()
-        if rl.endswith("." + low) and not vc:
-            # Unreal chunk files: <kind>.<chunk>.<package>.obb; only the spelling of the package/kind can be off
-            wanted = f"{kind}.{rest[:-len(pkg)]}{pkg}.obb"
+        if rl.endswith("." + low) and (not vc or rest[:-len(pkg) - 1].isdigit()):
+            # Unreal chunk files: <kind>.<chunk>.<package>.obb, and numbered patch files
+            # <kind>.<n>.<versionCode>.<package>.obb (Medal of Honor's patch.0.12297.com.Virtuos.R6DLM.obb … patch.20,
+            # GitHub #159): only the spelling of the package/kind can be off
+            wanted = f"{kind}.{version}{rest[:-len(pkg)]}{pkg}.obb"
             if wanted != name:
                 found.append((name, wanted, "case"))
             continue
@@ -346,6 +349,10 @@ def _named_obbs(d: Path, pkg: str) -> list[tuple[str, int | None, Path]]:
             out.append((m.group(1).lower(), int(m.group(2)) if m.group(2) else None, f))
         elif not m.group(2) and rest.endswith(suffix) and "." not in rest[:-len(suffix)]:
             out.append((m.group(1).lower() + "." + rest[:-len(suffix)], None, f))
+        elif m.group(2) and rest.endswith(suffix) and rest[:-len(suffix)].isdigit():
+            # numbered patch files <kind>.<n>.<versionCode>.<package>.obb: Medal of Honor has patch.0 … patch.20
+            # (~41 GB, GitHub #159), each a kind of its own ("patch.3") with the versionCode after the number
+            out.append((m.group(1).lower() + "." + m.group(2), int(rest[:-len(suffix)]), f))
     return out
 
 
@@ -408,18 +415,38 @@ def find_data(apk_dir: Path, pkg: str | None, version_code: int | None = None, *
         _STRICT_READS.reset(token)
 
 
+# Asset files a store install puts into Android/obb/<package>/ next to (or instead of) the OBBs, by kind: Unity asset
+# bundles (Ghost Town's localisation-translations_assets_all.bundle, GitHub #444), Unreal paks / IoStore containers,
+# FMOD banks. Lying loose next to a game's only APK they are that game's data; other files there (readme, images,
+# archives, other APKs) are not.
+LOOSE_DATA_EXTS = (".bundle", ".assetbundle", ".unity3d", ".pak", ".utoc", ".ucas", ".bank")
+
+
+def _loose_data(apk_dir: Path) -> list[str]:
+    """Names of the asset files lying next to the APK in apk_dir, when it is the folder's only game APK (a folder of
+    several APKs is a collection: whose files they are is unknown)."""
+    entries = [(p, is_dir) for p, is_dir in _list(apk_dir) if not is_dir]
+    apks = [p for p, _ in entries if p.suffix.lower() == ".apk" and ".alt-" not in p.name and not _axrb_patched(p)]
+    if len(apks) != 1:
+        return []
+    return [p.name for p, _ in entries if p.suffix.lower() in LOOSE_DATA_EXTS]
+
+
 def _find_data(apk_dir: Path, pkg: str | None, version_code: int | None) -> tuple[Path | None, list[str] | None]:
     data = _find_data_dir(apk_dir, pkg)
     if data is not None or not pkg:
         return data, None
     folders = _obb_folders(apk_dir, pkg)
+    loose = _loose_data(apk_dir)
     if not folders:
-        return None, None
+        return (apk_dir, loose) if loose else (None, None)
     d, obbs = next((f for f in folders if version_code is not None and any(vc == version_code for _, vc, _ in f[1])),
                   folders[0])
     files = _pick_obbs(obbs, version_code)
     everything = {p.name for p, _ in _list(d)}
     names = [f.name for f in files]
+    if d == apk_dir:
+        names += [n for n in loose if n not in names]
     if (apk_dir.name.lower() in APK_FOLDERS and d.parent == apk_dir.parent
             and d.name.lower() in OBB_FOLDERS and not _has_apks(d)):
         # Retain SideQuest's sibling-folder assets only after the version-aware OBB search has chosen it.

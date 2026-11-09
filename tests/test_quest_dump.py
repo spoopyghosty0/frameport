@@ -855,3 +855,72 @@ def test_install_picks_up_chunk_obbs_an_older_scan_skipped(tmp_path, monkeypatch
     gone = {**entry, "package": "com.y", "apk": str(game / "gone.apk")}
     monkeypatch.setattr(pipeline.library, "games", lambda: [entry, gone])
     assert pipeline.refresh_data_files() == 1
+
+
+@pytest.mark.parametrize("apk_folder,obb_folder", [("apk", "obb"), ("APKs", "OBBs")])
+def test_sidequest_backup_with_numbered_patch_files(tmp_path, apk_folder, obb_folder):
+    """GitHub #159: Medal of Honor's SideQuest backup holds main.12297.<package>.obb and patch.0 … patch.20.12297.
+    <package>.obb (~41 GB); only the main file was sent. Every file of the obb folder goes to the Frame."""
+    from frameport.install.installer import local_data_manifest
+
+    pkg = "com.Virtuos.R6DLM"
+    backup = tmp_path / "SideQuest Backups" / pkg / "2026-10-14T19-17-27-675Z"
+    a = apk(backup / apk_folder / f"{pkg}_12297.apk")
+    data = obb(backup / obb_folder, f"main.12297.{pkg}.obb")
+    patches = [f"patch.{n}.12297.{pkg}.obb" for n in range(21)]
+    for name in patches:
+        obb(data, name)
+    (data / "extra.pak").write_bytes(b"content")
+    for g in (quest_dump.from_path(a), *quest_dump.scan(tmp_path / "SideQuest Backups")):
+        assert g.data_dir == data and g.data_files is None
+        assert sorted(local_data_manifest(g.data_dir, g.data_files)) == sorted(
+            [f"main.12297.{pkg}.obb", *patches, "extra.pak"])
+
+
+def test_numbered_patch_files_next_to_the_apk(tmp_path):
+    """Numbered patch files picked by name: each number is a file of its own, chosen by its versionCode."""
+    pkg = "com.Virtuos.R6DLM"
+    game = tmp_path / "Medal of Honor"
+    apk(game / f"{pkg}_12297.apk")
+    for name in (f"main.12297.{pkg}.obb", f"patch.0.12297.{pkg}.obb", f"patch.1.12297.{pkg}.obb",
+                 f"patch.1.13000.{pkg}.obb", "patch.0.12297.com.y.other.obb"):
+        obb(game, name)
+    [g] = quest_dump.scan(tmp_path)
+    assert g.data_dir == game and sorted(g.data_files) == [
+        f"main.12297.{pkg}.obb", f"patch.0.12297.{pkg}.obb", f"patch.1.12297.{pkg}.obb"]
+
+
+def test_loose_asset_bundles_next_to_the_apk(tmp_path):
+    """GitHub #444: Ghost Town's store asset files (Unity *_assets_all.bundle / *_scenes_all.bundle) lie next to
+    base.apk without an OBB; the game reads them from Android/obb/<package>/. Other files there stay on the PC."""
+    from frameport.install.installer import local_data_manifest
+
+    pkg = "com.FireproofStudios.GhostTown"
+    game = tmp_path / "Ghost Town"
+    a = apk(game / "base.apk")
+    IDS["base.apk"] = (pkg, 101)
+    bundles = ["flt_scenes_all.bundle", "localisation-translations_assets_all.bundle",
+               "localization-assets-english(en)_assets_all.bundle",
+               "localization-assets-japanese(japan)(ja-jp)_assets_all.bundle", "shared_assets_all.bundle"]
+    for name in bundles:
+        (game / name).write_bytes(b"b")
+    (game / "readme.txt").write_bytes(b"r")
+    (game / "cover.jpg").write_bytes(b"c")
+    for g in (quest_dump.from_path(a), quest_dump.from_path(game), *quest_dump.scan(tmp_path)):
+        assert g.apk == a and g.data_dir == game and sorted(g.data_files) == sorted(bundles)
+        assert sorted(local_data_manifest(g.data_dir, g.data_files)) == sorted(bundles)
+    # with an OBB next to them: both
+    obb(game, f"main.101.{pkg}.obb")
+    assert sorted(quest_dump.from_path(a).data_files) == sorted([f"main.101.{pkg}.obb", *bundles])
+    # a package folder made by hand (the workaround from the thread) still wins
+    obb(game / pkg, "localisation-translations_assets_all.bundle")
+    assert quest_dump.from_path(a).data_dir == game / pkg
+
+
+def test_loose_bundles_in_a_folder_of_several_apks_are_nobodys(tmp_path):
+    """A collection of APKs: whose asset files lie next to them is unknown, so none are sent."""
+    d = tmp_path / "collection" / "games"
+    apk(d / "com.x.game.apk")
+    apk(d / "com.y.other.apk")
+    (d / "shared_assets_all.bundle").write_bytes(b"b")
+    assert quest_dump.from_path(d / "com.x.game.apk").data_dir is None

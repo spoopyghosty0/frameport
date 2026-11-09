@@ -224,3 +224,12 @@ def test_relink_on_the_frame_uses_the_pcs_name(tmp_path, monkeypatch):
     assert installer._relink_installed(frame, src, {"main.1.com.x.obb": 4}, str(root), Reporter(),
                                        {"main.1.com.x.obb": "main.1.com.x-003.obb"}) == 4
     assert os.path.samefile(root / "main.1.com.x.obb", src / "main.1.com.x-003.obb")
+
+
+def test_numbered_patch_files_are_the_games_own():
+    """#159: Medal of Honor's patch.<n>.<versionCode>.<package>.obb files aren't another app's; case is fixed."""
+    pkg = "com.Virtuos.R6DLM"
+    assert names(pkg, ["main.12297.com.Virtuos.R6DLM.obb", "patch.0.12297.com.Virtuos.R6DLM.obb",
+                       "patch.20.12297.com.Virtuos.R6DLM.obb"]) == {}
+    assert names(pkg, ["patch.3.12297.com.virtuos.r6dlm.obb"]) == {
+        "patch.3.12297.com.virtuos.r6dlm.obb": ("patch.3.12297.com.Virtuos.R6DLM.obb", True, "case")}
