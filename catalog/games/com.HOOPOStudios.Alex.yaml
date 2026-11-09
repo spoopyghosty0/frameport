@@ -1,0 +1,25 @@
+package: com.HOOPOStudios.Alex
+title: Alex
+status: issues
+notes: VR mode plays (about 35 fps reported). Mixed-reality mode doesn't work yet.
+tested_version: '0.37'
+engine: Unity
+xr: OpenXR
+frame:
+- frame.meta_permissions
+- frame.unity_text_input
+- frame.oculusos
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+  scene_emul: 1
+verified:
+  date: '2026-11-07'
+  known_good_sha256: 494a6948c8f30b46695241b61efbc0ad76c6134b911b1126d153efcf6ea66a8b
+  app: 1.3.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6150929'
+  agent: 109
+  issue: 588
+source_hint: Alex and the Jets

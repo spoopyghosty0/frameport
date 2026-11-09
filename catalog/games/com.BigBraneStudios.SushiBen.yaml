@@ -1,0 +1,27 @@
+package: com.BigBraneStudios.SushiBen
+title: Sushi Ben
+status: issues
+notes: From day 2 the frog's voice is very loud and distorted (tested with a higher render scale and Quest-pair
+  buttons).
+tested_version: 1.7.260727.2
+engine: Unreal
+xr: OpenXR
+alt_overport:
+- patch_remove_unreal_force_quit
+use_alt: true
+frame:
+- frame.unreal_skip_obb_check
+- frame.hw_video_decode
+- frame.unreal_noreserve
+adapter:
+  equirect_emul: 1
+  haptic_fix: 1
+verified:
+  date: '2026-11-07'
+  known_good_sha256: bc8a59e269c655b5d661081fb4f1483bb2d1a06a9f6eb5884383e842de74adea
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261106.6144341'
+  agent: 125
+  issue: 584
+source_hint: com.BigBraneStudios.SushiBen

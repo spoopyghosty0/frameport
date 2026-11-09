@@ -232,6 +232,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Zero Caliber 2 | Quest | ✅ Works |  |
 | ZombielandVR | Quest | ✅ Works |  |
 | AFFECTED: The Manor | Quest | ⚠️ Works with issues | Gear VR game (32-bit only), runs through FramePort's 32-bit bridge (experimental). |
+| Alex | Quest | ⚠️ Works with issues | VR mode plays (about 35 fps reported). |
 | Ancient_Dungeon | Quest | ⚠️ Works with issues | Multiplayer isn't available (offline). |
 | Arcsmith | Quest | ⚠️ Works with issues | Right eye distorts during movement (unresolved; swap, tracking, Valve layers, depth and pacing ruled out). |
 | BattleTalent | Quest | ⚠️ Works with issues | Plays normally. |
@@ -265,6 +266,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Silhouette | Quest | ⚠️ Works with issues | Hand-tracking game; the Frame synthesizes hands from controllers, so it is janky. |
 | SmartTube | Quest | ⚠️ Works with issues | Android's home screen shows for a few seconds while the app starts (normal for flat Android apps; longest on the first start after an install). |
 | Spunky Dungeon | Quest | ⚠️ Works with issues | Gear VR / Oculus Go game (32-bit only), runs through FramePort's 32-bit bridge (experimental). |
+| Sushi Ben | Quest | ⚠️ Works with issues | From day 2 the frog's voice is very loud and distorted (tested with a higher render scale and Quest-pair buttons). |
 | Swarm 2 | Quest | ⚠️ Works with issues | MSAA creates visible seams around edge geometry and also the skybox edge |
 | The 7th Guest VR | Quest | ⚠️ Works with issues | Runs and is playable. |
 | The Light Brigade | Quest | ⚠️ Works with issues | Judder in weapons |
