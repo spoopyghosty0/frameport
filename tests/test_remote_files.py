@@ -47,6 +47,10 @@ def paramiko_attr(st):
 class LocalFrame:
     sftp = LocalSFTP()
 
+    def mkdirs(self, dirs):
+        for d in dirs:
+            os.makedirs(d, exist_ok=True)
+
     def run(self, command, stdin=None, timeout=None):
         p = subprocess.run(["sh", "-c", command], capture_output=True, text=True)
         return p.returncode, p.stdout, p.stderr
@@ -112,3 +116,21 @@ def test_crumbs():
     assert crumbs("/h/Videos", "/h/Videos/a/b", "Videos") == [("Videos", "/h/Videos"), ("a", "/h/Videos/a"),
                                                               ("b", "/h/Videos/a/b")]
     assert crumbs("/h/Videos", "/h/Videos", "Videos") == [("Videos", "/h/Videos")]
+
+
+def test_upload_keeps_empty_folders(frame, tmp_path, monkeypatch):  # GitHub #532
+    from frameport.core.events import Reporter
+
+    sent = []
+    monkeypatch.setattr(installer, "upload_files", lambda xfer, items, remote, rep, total: sent.extend(items))
+    src = tmp_path / "pc/Mod"
+    (src / "saves/slot1").mkdir(parents=True)
+    (src / "maps").mkdir()
+    (src / "maps/a.map").write_text("m")
+    root = tmp_path / "Documents"
+    root.mkdir()
+    items, have, _ = files.upload(frame, [src], str(root), Reporter())
+    assert [i[1] for i in items] == ["Mod/maps/a.map"] and not have
+    assert (root / "Mod/saves/slot1").is_dir()
+    files.upload(frame, [tmp_path / "pc"], str(root / "Mod"), Reporter())  # an empty tree at the top too
+    assert (root / "Mod/pc/Mod/saves/slot1").is_dir()

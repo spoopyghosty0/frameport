@@ -43,6 +43,21 @@ def _items(paths: list[Path], subdir: str) -> list[tuple[Path, str, int]]:
     return items
 
 
+def _empty_dirs(paths: list[Path], subdir: str) -> list[str]:
+    """Relative remote paths of the uploaded folders with no file anywhere below them (GitHub #532: a game may need
+    an empty folder, and uploading files alone never creates it)."""
+    out = []
+    for p in paths:
+        p = Path(p)
+        if p.is_dir():
+            below = [x.relative_to(p) for x in p.rglob("*")]
+            full = {a for x in below if (p / x).is_file() for a in x.parents}  # folders with a file below them
+            for d in [Path("."), *sorted(x for x in below if (p / x).is_dir())]:
+                if d not in full:
+                    out.append(posixpath.normpath(posixpath.join(subdir, p.name, d.as_posix())))
+    return out
+
+
 def _remote_size(frame: Frame, path: str) -> int | None:
     try:
         return frame.sftp.stat(path).st_size
@@ -71,6 +86,10 @@ def upload(frame: Frame, paths: list[Path], remote_dir: str, reporter: Reporter)
         with installer.transfer_link(frame, reporter, total) as xfer:
             reporter.stage(f"Upload {len(items)} file(s)")
             installer.upload_files(xfer, items, remote_dir, reporter, max(total, 1))
+    empty = [inside(remote_dir, posixpath.join(remote_dir, rel)) for rel in _empty_dirs(paths, "")]
+    if empty:
+        frame.mkdirs(empty)
+        reporter.log(f"{len(empty)} empty folder(s) created")
     return items, have, total
 
 
