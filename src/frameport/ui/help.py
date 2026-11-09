@@ -220,7 +220,7 @@ HELP: dict[str, str] = _Translated({
     "reset_recipe": "Goes back to the recipe FramePort suggests for this game (the tested one if there is one). Your "
                     "own changes to patches and settings are lost; the Frame's copy changes at its next update.",
     "pick_recipe": "Uses the tested recipe of a game in FramePort's catalog for this one, also when it isn't this "
-                   "game's own entry (e.g. a copy with another package name). The recipe follows that entry's "
+                   "game's own entry (for example a copy with another package name). The recipe follows that entry's "
                    "later fixes; Reset to suggested recipe goes back to this game's own suggestion.",
     "save_recipe": "Keeps this recipe as a tested one on this PC: FramePort suggests it for this game from now on, "
                    "also after Reset to suggested recipe.",

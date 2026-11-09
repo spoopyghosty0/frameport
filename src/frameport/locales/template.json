@@ -2236,7 +2236,7 @@
  "Uses OVRPort, Revive (LibreVR), Valve's Lepton and Proton. Not affiliated with Valve or Meta.": "",
  "Uses the store title/icon (OVRPort image service) for the app label.": "",
  "Uses the store's name and icon for the game.": "",
- "Uses the tested recipe of a game in FramePort's catalog for this one, also when it isn't this game's own entry (e.g. a copy with another package name). The recipe follows that entry's later fixes; Reset to suggested recipe goes back to this game's own suggestion.": "",
+ "Uses the tested recipe of a game in FramePort's catalog for this one, also when it isn't this game's own entry (for example a copy with another package name). The recipe follows that entry's later fixes; Reset to suggested recipe goes back to this game's own suggestion.": "",
  "Using your play area; furniture is not included": "",
  "Valve's Android container on the Frame. Quest games run in it, one container per game. It needs Developer Mode.": "",
  "Valve's tool that runs Windows games. On the Frame it runs PC VR games; FramePort installs it when needed (Steam restarts once).": "",
