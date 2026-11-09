@@ -80,7 +80,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Platform compat (ovrMessageType_ToString)](#frame-ovrplatformcompat) | `frame.ovrplatformcompat` | Steam Frame patches | default |
 | [Stub missing Meta platform functions](#frame-ovrstubs) | `frame.ovrstubs` | Steam Frame patches | default |
 | [Unpaired pointer-authentication checks](#frame-pac_hints) | `frame.pac_hints` | Steam Frame patches | 1 |
-| [Photon Voice: skip Android 12 audio routing](#frame-photon_voice_audio_route) | `frame.photon_voice_audio_route` | Steam Frame patches | 6 |
+| [Photon Voice: skip Android 12 audio routing](#frame-photon_voice_audio_route) | `frame.photon_voice_audio_route` | Steam Frame patches | 7 |
 | [QuestCraft: count the Frame's network as online](#frame-pojlib_connection) | `frame.pojlib_connection` | Steam Frame patches | 1 |
 | [SDL apps: start without a clipboard service](#frame-sdl_clipboard) | `frame.sdl_clipboard` | Steam Frame patches | 9 |
 | [Stress Level Zero: let Unity start Vulkan itself](#frame-slz_vulkan_hooks) | `frame.slz_vulkan_hooks` | Steam Frame patches | 1 |
@@ -96,7 +96,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Unity: start VR without Meta's system apps](#frame-unity_oculus_check) | `frame.unity_oculus_check` | Steam Frame patches | 16 |
 | [Unity: keep MSAA off at runtime (OVRManager)](#frame-unity_runtime_msaa_off) | `frame.unity_runtime_msaa_off` | Steam Frame patches | 40 |
 | [Unity: skip Meta's player-in-room check](#frame-unity_scene_active_rooms) | `frame.unity_scene_active_rooms` | Steam Frame patches | 1 |
-| [Make Unity text fields work](#frame-unity_text_input) | `frame.unity_text_input` | Steam Frame patches | 156 |
+| [Make Unity text fields work](#frame-unity_text_input) | `frame.unity_text_input` | Steam Frame patches | 157 |
 | [Unity: share thread keys (games that run out of them)](#frame-unity_tls_key_pool) | `frame.unity_tls_key_pool` | Steam Frame patches | 1 |
 | [Unity: headset always counts as worn](#frame-unity_user_presence) | `frame.unity_user_presence` | Steam Frame patches | 1 |
 | [GL shim for Unreal (no multisampled render-to-texture)](#frame-unreal_gl_shim) | `frame.unreal_gl_shim` | Steam Frame patches | 1 |
@@ -211,7 +211,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Extra Lepton settings](#device-lepton_env) | `device.lepton_env` | Files and settings on the Frame | 3 |
 | [Share a folder with another game](#device-shared_folder) | `device.shared_folder` | Files and settings on the Frame |  |
 | [Controllers as a gamepad (Steam Input)](#device-steam_gamepad) | `device.steam_gamepad` | Files and settings on the Frame | 2 |
-| [Show the app's Android window (for typing)](#device-text_input_window) | `device.text_input_window` | Files and settings on the Frame | 156 |
+| [Show the app's Android window (for typing)](#device-text_input_window) | `device.text_input_window` | Files and settings on the Frame | 157 |
 | [Launch options (SteamVR or OpenXR)](#pcvr-launch_args) | `pcvr.launch_args` | PC VR (Proton and Revive) | 2 |
 | [Provide the Oculus runtime from Revive (Frame)](#pcvr-libovr_redirect) | `pcvr.libovr_redirect` | PC VR (Proton and Revive) |  |
 | [No Unreal crash reporter](#pcvr-no_crash_reporter) | `pcvr.no_crash_reporter` | PC VR (Proton and Revive) |  |
@@ -998,7 +998,7 @@ Stops games with Photon Voice chat from crashing on the Frame when voice chat st
 - `frame.photon_voice_audio_route` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Photon Voice calls Android 12 audio methods, which Lepton (Android 11) lacks, and crashes when voice chat starts.
-- **Catalog games (6):** Aqua Glide, Crisis Brigade 2 reloaded, Crisis Brigade 2 reloaded (App Lab), Deisim, Table Troopers, UNDERDOGS.
+- **Catalog games (7):** Aqua Glide, Crefty VR, Crisis Brigade 2 reloaded, Crisis Brigade 2 reloaded (App Lab), Deisim, Table Troopers, UNDERDOGS.
 - **Suggested by launch-test signatures:**
   - `photon-voice-api31` (fatal): The game's Photon Voice microphone plugin calls Android 12 audio-routing methods (AudioManager communication devices) without checking the Android version; Lepton runs Android 11, so the app crashes when voice chat starts (for example Table Troopers at the tutorial).
 - **Source:** [patches/frame/photon_voice_audio_route.py](../src/frameport/patches/frame/photon_voice_audio_route.py)
@@ -1217,7 +1217,7 @@ Lets you type into this app's text fields on the Frame (they'd close at once).
 - `frame.unity_text_input` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Unity app with text fields (…): they close at once on the Frame because it has no system keyboard.
-- **Catalog games (156):** 10 Seconds, &lt;RUNNER&gt;, AgeOfJoy, AimAssault, AJAX ALL POWERFUL, AllInOneSports, Among Giants, Ancient_Dungeon and 148 more.
+- **Catalog games (157):** 10 Seconds, &lt;RUNNER&gt;, AgeOfJoy, AimAssault, AJAX ALL POWERFUL, AllInOneSports, Among Giants, Ancient_Dungeon and 149 more.
 - **Source:** [patches/frame/unity_text_input.py](../src/frameport/patches/frame/unity_text_input.py)
 
 > Unity's TMP_InputField / InputField wait for Android's on-screen keyboard and close themselves a frame later when there is none (Lepton has no on-screen keyboard; Meta's system keyboard does this on a Quest), so a selected text field only flashes a caret. Rewrites TouchScreenKeyboardShouldBeUsed -&gt; false and isKeyboardUsingEvents (TMP) / InPlaceEditing (uGUI) -&gt; true in libil2cpp.so, found per game with Cpp2IL (downloaded on first use), so fields stay selected and take key presses: Steam's keyboard (with "Show the app window") or Type on Frame from the PC.
@@ -2896,7 +2896,7 @@ Lets typing reach this app from Steam's on-screen keyboard or your PC's keyboard
 - **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
 - **Suggested (on):** The app opens a flat launcher that starts its VR part (…): Lepton runs VR apps headless, so the launcher is only seen in a shown Android window.
 - **Suggested (on):** App with text fields: key presses only reach a shown Android window.
-- **Catalog games (156):** 10 Seconds, &lt;RUNNER&gt;, AFFECTED: The Manor, AgeOfJoy, AimAssault, AJAX ALL POWERFUL, AllInOneSports, Among Giants and 148 more.
+- **Catalog games (157):** 10 Seconds, &lt;RUNNER&gt;, AFFECTED: The Manor, AgeOfJoy, AimAssault, AJAX ALL POWERFUL, AllInOneSports, Among Giants and 149 more.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Lepton runs VR apps headless: their Android window is never shown, so it never gets keyboard focus and no key press (Steam's on-screen keyboard, a USB/Bluetooth keyboard, Type on Frame) reaches the app's text fields. With Lepton's lepton-show-flatscreen marker the window is shown (behind the VR view, which keeps working) and Steam's keyboard opens for a selected text field. Steam lists the shown window as "Gamescope" (the Frame's compositor). While the game runs, FramePort turns off SteamVR's automatic theater mode for game windows: it put the Android window in front of the player with the controllers as a mouse pointer, and the game got no controller input. The window stays a page of the game in the dashboard. Pairs with "Make Unity text fields work without a system keyboard". Apps that open a flat launcher before their VR part (for example Xelee or WiiCompiled, whose launchers pick the game) need the window too: headless, the launcher is never seen and the VR part never starts. For those, theater mode stays on, so the launcher is in front of you; once the VR part runs, close the dashboard with the controller's button if it opened on the window.

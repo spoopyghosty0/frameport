@@ -234,6 +234,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Ancient_Dungeon | Quest | ⚠️ Works with issues | Multiplayer isn't available (offline). |
 | Arcsmith | Quest | ⚠️ Works with issues | Right eye distorts during movement (unresolved; swap, tracking, Valve layers, depth and pacing ruled out). |
 | BattleTalent | Quest | ⚠️ Works with issues | Plays normally. |
+| Crefty VR | Quest | ⚠️ Works with issues | Add-ons don't load (they need Meta's servers). |
 | Does it Stack? | Quest | ⚠️ Works with issues | Mixed reality mode does not work (works on Demeo), everything else seems to be OK |
 | Dungeons of Eternity | Quest | ⚠️ Works with issues | It can not connect to servers |
 | End Space | Quest | ⚠️ Works with issues | Controls stop responding after the first mission loads. |

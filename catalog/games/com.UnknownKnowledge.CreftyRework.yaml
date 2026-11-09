@@ -1,0 +1,21 @@
+package: com.UnknownKnowledge.CreftyRework
+title: Crefty VR
+status: issues
+notes: Add-ons don't load (they need Meta's servers). Hosting a multiplayer server works.
+tested_version: '0.139'
+engine: Unity
+xr: OpenXR
+frame:
+- frame.photon_voice_audio_route
+- frame.unity_text_input
+device:
+- device.text_input_window
+verified:
+  date: '2026-10-30'
+  known_good_sha256: ef4d4208260c75b888762d9cba8dd14b7ec66f4cbf46a8b746c813d58738a057
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6150929'
+  agent: 125
+  issue: 542
+source_hint: com.UnknownKnowledge.CreftyRework
