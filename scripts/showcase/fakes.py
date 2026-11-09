@@ -321,6 +321,44 @@ class FakeFS:
                 os.utime(os.path.join(root, name), (t, t))
         self.shots = self._screenshots()
         self.room = FakeRoom(self.home)
+        # GitHub #532: the Frame's /tmp (served from a folder here: never this computer's own /tmp) and games' storage
+        self.tmp = os.path.join(self.home, ".fake-tmp")
+        for name, size in (("frameport-install-1a2b/", 0), ("Mods.zip", 312_000_000),
+                           ("game-install.apk", 1_400_000_000), ("steam-logs.txt", 48_000)):
+            path = os.path.join(self.tmp, name)
+            os.makedirs(path if name.endswith("/") else self.tmp, exist_ok=True)
+            if not name.endswith("/"):
+                with open(path, "wb") as f:
+                    f.truncate(size)
+
+    def real(self, path: str) -> str:
+        """Where a Frame path is here (only /tmp moves)."""
+        path = str(path)
+        if (path == "/tmp" or path.startswith("/tmp/")) and not path.startswith(self.home):
+            return self.tmp + path[4:]
+        return path
+
+    def _game_storage(self, pkg: str, internal: bool = False) -> str:
+        """A pretend game's /sdcard (Lepton's links to the shared folders, Android/data) or its internal storage."""
+        base = os.path.join(self.home, "Applications/quest-frame", pkg, "lepton-data")
+        if internal:
+            root = os.path.join(base, "internal", pkg)
+            if not os.path.isdir(root):
+                for rel, size in (("files/UnrealGame/Saved/SaveGames/Slot1.sav", 184_000),
+                                  ("files/UnrealGame/Saved/SaveGames/Slot2.sav", 176_000),
+                                  ("files/UnrealGame/Saved/Config/Android/GameUserSettings.ini", 2_300),
+                                  ("shared_prefs/" + pkg + ".v2.playerprefs.xml", 4_100),
+                                  ("databases/progress.db", 64_000)):
+                    os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+                    with open(os.path.join(root, rel), "wb") as f:
+                        f.truncate(size)
+            return root
+        root = os.path.join(base, "external")
+        if not os.path.isdir(root):
+            os.makedirs(os.path.join(root, "Android/data", pkg, "files"), exist_ok=True)
+            for home_name, android in (("Videos", "Movies"), ("Downloads", "Download"), ("Documents", "Documents")):
+                os.symlink(os.path.join(self.home, home_name), os.path.join(root, android))
+        return root
 
     def run(self, cmd: str):
         """Only the room uploads' folder (rooms._upload_dir: mkdir -p / rm -rf below the room store)."""
@@ -412,9 +450,25 @@ class FakeFS:
 
     def agent(self, command, **args):
         if command == "storage_targets":
-            return {"targets": [{"id": n.lower(), "path": os.path.join(self.home, n), "android": a, "shared": True}
-                                for n, a in (("Videos", "/sdcard/Movies"), ("Downloads", "/sdcard/Download"),
-                                             ("Documents", "/sdcard/Documents"))]}
+            shared = [{"id": n.lower(), "path": os.path.join(self.home, n), "android": a, "shared": True}
+                      for n, a in (("Videos", "/sdcard/Movies"), ("Downloads", "/sdcard/Download"),
+                                   ("Documents", "/sdcard/Documents"))]
+            if args.get("package"):
+                shared.append({"id": "app", "path": self._game_storage(args["package"]), "android": "/sdcard",
+                               "shared": False})
+            return {"targets": shared}
+        if command == "saves_files":  # GitHub #532: a game's internal storage (saves) in the Files tab
+            root = self._game_storage(args["package"], internal=True)
+            if args.get("op") == "info":
+                return {"root": root, "android": f"/data/data/{args['package']}", "exists": True, "running": False}
+            if args.get("op") == "list":
+                out = []
+                for name in sorted(os.listdir(args["path"])):
+                    full = os.path.join(args["path"], name)
+                    st = os.stat(full)
+                    out.append({"name": name, "path": full, "is_dir": os.path.isdir(full), "size": st.st_size,
+                                "mtime": st.st_mtime, "link": False})
+                return {"entries": out}
         if command == "list_screenshots":
             want = args.get("package")
             shots = [s for s in self.shots if want is None or (s["package"] or "") == want]
@@ -436,17 +490,19 @@ class FakeFS:
     def sftp(self):
         import paramiko
 
+        real = self.real
+
         class SFTP:
             def listdir_attr(self, path):
                 out = []
-                for name in sorted(os.listdir(path)):
-                    a = paramiko.SFTPAttributes.from_stat(os.lstat(os.path.join(path, name)))
+                for name in sorted(os.listdir(real(path))):
+                    a = paramiko.SFTPAttributes.from_stat(os.lstat(os.path.join(real(path), name)))
                     a.filename = name
                     out.append(a)
                 return out
 
             def stat(self, path):
-                return paramiko.SFTPAttributes.from_stat(os.stat(path))
+                return paramiko.SFTPAttributes.from_stat(os.stat(real(path)))
 
             def get(self, remote, local, callback=None):
                 import shutil

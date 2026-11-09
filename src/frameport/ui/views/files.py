@@ -1,9 +1,10 @@
 """Files: browse and manage files on the Steam Frame (instead of a separate file-transfer app).
 
 Locations are the folders Quest games see (Videos / Downloads / Documents, shared by every game as /sdcard/Movies,
-/sdcard/Download, /sdcard/Documents), each installed Quest game's own storage, PC VR/Linux install folders, extra
-drives, and the Frame's home folder. Everything runs over the app's SSH connection (SFTP); uploads and downloads
-are jobs in the Activity panel. Persistent like the
+/sdcard/Download, /sdcard/Documents), each installed Quest game's own storage and its saves (internal storage,
+through the agent in podman's namespace), PC VR/Linux install folders, extra drives, the Frame's home folder and
+/tmp. Everything runs over the app's SSH connection (SFTP, the agent for saves and moves); uploads, downloads and
+moves are jobs in the Activity panel. Persistent like the
 Library: the chosen location and folder survive switching tabs.
 """
 from __future__ import annotations
@@ -112,6 +113,8 @@ class FilesView:
         self.locations = ft.Column(spacing=T.px(2), scroll=ft.ScrollMode.AUTO, expand=True)
         self.crumb_row = ft.Row(spacing=T.px(2), wrap=True)
         self.where = C.meta("")
+        self.notice = ft.Container(visible=False)  # what's special about the location (/tmp, a game's saves)
+        self.saves_running: dict[str, bool] = {}  # package -> the game ran when its saves were opened
         self.listing = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO, expand=True, on_scroll=self._remember_scroll,
                                  scroll_interval=100)
         self.scrolled: dict[str, float] = {}  # folder -> scroll offset, restored when going back to it (GitHub #411)
@@ -135,6 +138,7 @@ class FilesView:
         self.sel_bar = ft.Container(ft.Row([
             self.sel_label, ft.Container(expand=True),
             C.secondary(tr("Download…"), ft.Icons.DOWNLOAD_ROUNDED, self._download_selected),
+            C.ghost(tr("Move to…"), ft.Icons.DRIVE_FILE_MOVE_OUTLINED, lambda e: self._move_selected()),
             C.ghost(tr("Delete…"), ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self._delete_selected()),
             C.ghost(tr("Clear"), ft.Icons.CLOSE_ROUNDED, lambda e: self._clear_selection()),
         ], spacing=T.S2), padding=ft.Padding(T.S3, T.px(6), T.S2, T.px(6)), border_radius=T.RADIUS_SM,
@@ -172,6 +176,7 @@ class FilesView:
                     C.card(ft.Column([C.meta(tr("Locations").upper()), self.locations], spacing=T.S2, expand=True),
                            padding=T.S3, width=T.px(260), expand=False),
                     ft.Column([
+                        self.notice,
                         # the folder path on its own line: next to the buttons a narrow window squeezed it
                         self.crumb_row,
                         self.toolbar,
@@ -222,17 +227,17 @@ class FilesView:
         C.selected_style(box, selected, ic, label)  # like the sidebar: the portal fade with a white icon
         return box
 
-    def _render_locations(self) -> None:
-        rows = [self._location_row(loc_, SHARED_ICONS.get(loc_["id"], ft.Icons.FOLDER_OUTLINED), loc_["android"])
-                for loc_ in self.shared]
+    def location_groups(self) -> list[tuple[str | None, list[tuple[dict, str, str]]]]:
+        """[(heading, [(location, icon, subtitle)])]: the Locations column, and the Move to… picker's list."""
+        groups = [(None, [(loc, SHARED_ICONS.get(loc["id"], ft.Icons.FOLDER_OUTLINED), loc["android"])
+                          for loc in self.shared])]
         if self.drives:
             from ...install.drives import free_text
 
-            rows.append(ft.Container(C.meta(tr("Drives").upper()), padding=ft.Padding(T.S2, T.S3, 0, T.px(2))))
-            rows.extend(self._location_row(loc, ft.Icons.STORAGE_OUTLINED,
-                                          " · ".join(filter(None, [free_text(loc),
-                                                                 tr("Read-only") if loc.get("read_only") else ""])))
-                        for loc in self.drives)
+            groups.append((tr("Drives"), [(loc, ft.Icons.STORAGE_OUTLINED,
+                                           " · ".join(filter(None, [free_text(loc), tr("Read-only")
+                                                                    if loc.get("read_only") else ""])))
+                                          for loc in self.drives]))
         kinds = {d["package"]: d.get("kind") for d in (self.app.frame_info or {}).get("installed", [])}
         installed = self._installed_games()
         for section, heading, icon in (("quest", tr("Game storage"), ft.Icons.SPORTS_ESPORTS_OUTLINED),
@@ -241,16 +246,40 @@ class FilesView:
             games = [g for g in installed if game_section(kinds.get(g[0])) == section]
             if not games:
                 continue
-            rows.append(ft.Container(C.meta(heading.upper()), padding=ft.Padding(T.S2, T.S3, 0, T.px(2))))
+            rows = []
             for pkg, title in games:
-                loc = self.game_locs.get(pkg) or self._game_location(pkg, title)
-                rows.append(self._location_row(loc, icon))
-        rows.append(ft.Container(C.meta(tr("Advanced").upper()), padding=ft.Padding(T.S2, T.S3, 0, T.px(2))))
+                rows.append((self.game_locs.get(pkg) or self._game_location(pkg, title), icon, ""))
+                if section == "quest":  # its internal storage (saves) right below its /sdcard
+                    rows.append((self.game_locs.get(f"saves:{pkg}") or self._saves_location(pkg, title),
+                                 ft.Icons.SAVE_OUTLINED, tr("internal storage")))
+            groups.append((heading, rows))
         home = {"id": "home", "label": tr("Home folder"), "path": self.app.target.frame.home, "android": "",
                 "shared": False}
-        rows.append(self._location_row(home, ft.Icons.HOME_OUTLINED, tr("everything in ~ (not seen by games)")))
+        groups.append((tr("Advanced"), [
+            (home, ft.Icons.HOME_OUTLINED, tr("everything in ~ (not seen by games)")),
+            (self._tmp_location(), ft.Icons.HOURGLASS_EMPTY_ROUNDED, tr("/tmp · emptied at every restart"))]))
+        return groups
+
+    def _render_locations(self) -> None:
+        rows = []
+        for heading, entries in self.location_groups():
+            if heading:
+                rows.append(ft.Container(C.meta(heading.upper()), padding=ft.Padding(T.S2, T.S3, 0, T.px(2))))
+            rows.extend(self._location_row(loc, icon, sub) for loc, icon, sub in entries)
         self.locations.controls = rows
         C.update(self.locations)
+
+    @staticmethod
+    def _tmp_location() -> dict:
+        from ...install.files import tmp_location
+
+        return {**tmp_location(), "label": tr("Temporary files")}
+
+    @staticmethod
+    def _saves_location(package: str, title: str) -> dict:
+        from ...install.files import saves_location
+
+        return {**saves_location(package), "label": tr("{title} — saves").format(title=title), "title": title}
 
     def _installed_games(self) -> list[tuple[str, str]]:
         from ...core import library
@@ -304,28 +333,68 @@ class FilesView:
         elif self.loc is not None:
             self.load()
 
+    def resolve(self, loc: dict) -> dict:
+        """The location with its folder on the Frame (a game's storage and saves are asked for when first opened;
+        blocking: call from a background thread). Raises when the Frame can't say."""
+        from ...install import files
+
+        frame = self.app.target.frame
+        if loc.get("saves"):  # asked every time: whether the game runs now
+            info = files.saves_info(frame, loc["saves"])
+            self.saves_running[loc["saves"]] = bool(info.get("running"))
+            loc = {**loc, "path": info["root"], "android": info.get("android") or "", "shared": False}
+            self.game_locs[loc["id"]] = loc
+            return loc
+        if loc.get("path"):
+            return loc
+        t = {x["id"]: x for x in files.storage_targets(frame, loc["package"])}["app"]
+        loc = {**loc, "path": t["path"], "android": t["android"], "shared": False}
+        self.game_locs[loc["package"]] = loc
+        return loc
+
     def open_location(self, loc: dict) -> None:
         def work():
             nonlocal loc
-            if loc.get("package") and not loc.get("path"):
-                from ...install import files
-
-                try:
-                    t = {x["id"]: x for x in files.storage_targets(self.app.target.frame, loc["package"])}["app"]
-                except Exception as exc:  # noqa: BLE001
-                    self.app.toast(tr("Couldn't open the game's storage: {exc}").format(exc=explain(exc)), error=True)
-                    return
-                loc = {**loc, "path": t["path"], "android": t["android"], "shared": False}
-                self.game_locs[loc["package"]] = loc
+            try:
+                loc = self.resolve(loc)
+            except Exception as exc:  # noqa: BLE001
+                self.app.toast((tr("Couldn't open the game's saves: {exc}") if loc.get("saves") else
+                                tr("Couldn't open the game's storage: {exc}")).format(exc=explain(exc)), error=True)
+                return
             self.loc, self.path = loc, loc["path"]
             self.selected.clear()
             for control in self.toolbar.controls[:3]:
                 control.disabled = not self._writable()
-            self.sel_bar.content.controls[3].disabled = not self._writable()
+            for control in self.sel_bar.content.controls[3:5]:  # Move to…, Delete…
+                control.disabled = not self._writable()
             C.update(self.toolbar)
+            self._render_notice()
             self._render_locations()
             self.load()
         self.app.run_bg(work)
+
+    def _render_notice(self) -> None:
+        """A callout above the folder for locations with rules of their own: /tmp is emptied at every restart; a
+        game's saves can't change while it runs, and a backup first is a good idea."""
+        loc = self.loc or {}
+        content = None
+        if loc.get("tmp"):
+            content = C.callout(tr("The Frame empties this folder at every restart. Files that belong to other "
+                                   "users can't be opened or changed here."))
+        elif loc.get("saves"):
+            pkg, title = loc["saves"], loc.get("title") or loc["saves"]
+            text = (tr("{title} is running: close it to change its saves.").format(title=title)
+                    if self.saves_running.get(pkg) else
+                    tr("{title} keeps its saves and settings here. Changes are refused while the game runs; back "
+                       "up the saves before you edit them.").format(title=title))
+            content = C.callout(ft.Row([ft.Container(C.body(text, T.TEXT), expand=True),
+                                        C.secondary(tr("Back up saves"), ft.Icons.SAVE_ALT_ROUNDED,
+                                                    lambda e: self.app.backup_saves(pkg))],
+                                       spacing=T.S3, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                                kind="warn")
+        self.notice.content = content
+        self.notice.visible = content is not None
+        C.update(self.notice)
 
     def load(self) -> None:
         if not self.loc:
@@ -338,7 +407,7 @@ class FilesView:
             from ...install import files
 
             try:
-                entries = files.list_dir(self.app.target.frame, loc["path"], path, hidden=self.hidden)
+                entries = files.loc_list(self.app.target.frame, loc, path, hidden=self.hidden)
             except Exception as exc:  # noqa: BLE001
                 self.status.value = tr("Couldn't list {path}: {exc}").format(path=path, exc=explain(exc))
                 C.update(self.status)
@@ -401,6 +470,8 @@ class FilesView:
         if self._writable() and not self._protected(e):
             actions += [C.icon_btn(ft.Icons.DRIVE_FILE_RENAME_OUTLINE_OUTLINED, tr("Rename…"),
                                    lambda ev, x=e: self.rename(x)),
+                        C.icon_btn(ft.Icons.DRIVE_FILE_MOVE_OUTLINED, tr("Move to…"),
+                                   lambda ev, x=e: self.move_to([x])),
                         C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Delete…"), lambda ev, x=e: self.delete([x]))]
         check = ft.Checkbox(value=e.path in self.selected, active_color=T.ACCENT, check_color=T.ON_ACCENT,
                             on_change=lambda ev, p=e.path: self._toggle(p, ev.control.value),
@@ -464,8 +535,10 @@ class FilesView:
                         ft.Icons.CHECK_BOX_OUTLINE_BLANK_ROUNDED if on else ft.Icons.CHECK_BOX_OUTLINED,
                         lambda ev: self._toggle(e.path, not on)))
         if deletable:
-            out += [None, (tr("Delete {n} items…").format(n=len(deletable)) if len(deletable) > 1 else tr("Delete…"),
-                           ft.Icons.DELETE_OUTLINE_ROUNDED, lambda ev: self.delete(deletable))]
+            out += [None, (tr("Move {n} items to…").format(n=len(deletable)) if len(deletable) > 1 else tr("Move to…"),
+                           ft.Icons.DRIVE_FILE_MOVE_OUTLINED, lambda ev: self.move_to(deletable)),
+                    (tr("Delete {n} items…").format(n=len(deletable)) if len(deletable) > 1 else tr("Delete…"),
+                     ft.Icons.DELETE_OUTLINE_ROUNDED, lambda ev: self.delete(deletable))]
         return out
 
     def open_menu(self, e, position=None) -> None:
@@ -591,6 +664,11 @@ class FilesView:
         if self.selected:
             await self.download(self._chosen())
 
+    def _move_selected(self) -> None:
+        items = [x for x in self._chosen() if not self._protected(x)]
+        if items:
+            self.move_to(items)
+
     def _delete_selected(self) -> None:
         items = [x for x in self._chosen() if not self._protected(x)]
         if items:
@@ -621,7 +699,7 @@ class FilesView:
         def run(job):
             from ...install import files
 
-            sent, skipped, total = files.upload(app.target.frame, paths, dest, job.reporter)
+            sent, skipped, total = files.loc_upload(app.target.frame, loc, paths, dest, job.reporter)
             return (tr_n("Uploaded {n} file", "Uploaded {n} files", len(sent))
                     + (tr_n(", {n} already there", ", {n} already there", len(skipped)) if skipped else ""))
         app.submit(tr("Upload to {label}").format(label=loc['label']), run, loc.get("package"), kind="tool-frame",
@@ -631,12 +709,14 @@ class FilesView:
         folder = await C.pick_dir(self.app.page, dialog_title=tr("Download to which folder on this PC?"))
         if not folder:
             return
-        app, root = self.app, self.loc["path"]
+        app, loc = self.app, self.loc
+        expected = sum(x.size for x in items if not x.is_dir)
 
         def run(job):
             from ...install import files
 
-            r = files.download(app.target.frame, root, [x.path for x in items], Path(folder), job.reporter)
+            r = files.loc_download(app.target.frame, loc, [x.path for x in items], Path(folder), job.reporter,
+                                   expected=expected)
             return tr_n("Downloaded {n} file to {folder}", "Downloaded {n} files to {folder}", r["files"],
                         folder=r["folder"])
         more = tr_n(" and {n} more", " and {n} more", len(items) - 1) if len(items) > 1 else ""
@@ -647,14 +727,14 @@ class FilesView:
         if not self._writable():
             return
         self._ask_name(tr("New folder"), tr("Folder name"), "", tr("Create"), lambda name: self._fs(
-            lambda files, frame: files.make_dir(frame, self.loc["path"], self.path, name)))
+            lambda files, frame: files.loc_make_dir(frame, self.loc, self.path, name)))
 
     def rename(self, e) -> None:
         if not self._writable():
             return
         self._ask_name(tr("Rename {name}").format(name=e.name), tr("New name"), e.name, tr("Rename"),
                        lambda name: self._fs(
-                           lambda files, frame: files.rename(frame, self.loc["path"], e.path, name)))
+                           lambda files, frame: files.loc_rename(frame, self.loc, e.path, name)))
 
     def delete(self, items: list) -> None:
         if not self._writable():
@@ -664,9 +744,33 @@ class FilesView:
         C.confirm(self.app.page, tr("Delete {names}?").format(names=names),
                   tr("This deletes the {what} on the Frame. It can't be undone.").format(what=what),
                   tr("Delete"), lambda: (self.selected.difference_update(x.path for x in items),
-                                     self._fs(lambda files, frame: files.delete(frame, self.loc["path"],
-                                                                                [x.path for x in items]))),
+                                     self._fs(lambda files, frame: files.loc_delete(frame, self.loc,
+                                                                                    [x.path for x in items]))),
                   danger=True)
+
+    def move_to(self, items: list) -> None:
+        """Move to…: pick a folder in any location (views/files_move.py); the move is a job (it may copy)."""
+        items = [x for x in items if not self._protected(x)]
+        if not self._writable() or not items:
+            return
+        from .files_move import MovePicker
+
+        MovePicker(self, self.loc, items).show()
+
+    def start_move(self, src: dict, items: list, dest: dict, folder: str) -> None:
+        app = self.app
+
+        def run(job):
+            from ...install import files
+
+            r = files.move(app.target.frame, src, [x.path for x in items], dest, folder, job.reporter)
+            self.selected.difference_update(x.path for x in items)
+            self.load()
+            return tr_n("Moved {n} item to {label}", "Moved {n} items to {label}", r["moved"],
+                        label=dest.get("label") or folder)
+        more = tr_n(" and {n} more", " and {n} more", len(items) - 1) if len(items) > 1 else ""
+        app.submit(tr("Move {name}").format(name=items[0].name) + more, run,
+                   src.get("package") or dest.get("package"), kind="tool-frame", open_panel=True)
 
     def _fs(self, op) -> None:
         """A quick file operation in the background, then reload the folder (errors become a toast)."""

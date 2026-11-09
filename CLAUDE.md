@@ -29,10 +29,17 @@ Detailed device findings per game/issue: docs/DEVICE_NOTES.md (read before debug
     (library: search/filters/tags/sort as pure tested helpers; game: hero + one-click install, patches under
     "Customize"; frame: device + readiness + installed, or connect wizard; files: the Frame's file manager (persistent
     like the library; locations = Videos/Downloads/Documents from agent `storage_targets`, each installed Quest game's
-    storage, the home folder; SFTP via `install/files.py` list_dir/upload/download/make_dir/rename/delete, all
-    confined to the location by `files.inside`; Lepton's links in a game's storage can't be renamed/deleted; replaced
+    storage, the home folder, /tmp ("Temporary files"; #532); SFTP via `install/files.py` list_dir/upload/download/
+    make_dir/rename/delete, all confined to the location by `files.inside`; each Quest game's saves = its internal
+    storage `<base>/lepton-data/internal/<pkg>` (`files.loc_*` dispatch → agent v127 `saves_files` info/list/mkdir/
+    rename/delete, `_saves_get`/`_saves_put` tar streams, all in podman's namespace like save backups, realpath-
+    confined; changes refused while the game runs, launch lock held; warn callout + "Back up saves"); "Move to…"
+    (row, right-click, selection bar) = `views/files_move.py` picker over `location_groups()` → job `files.move`
+    (`check_move` both ends) → agent `_files_move` (rename on one file system, else copy with progress lines + delete,
+    a cut-off copy removed; nothing overwritten; Lepton's links refused; saves ends in the namespace, chowned to the
+    destination folder's owner); Lepton's links in a game's storage can't be renamed/deleted/moved; replaced
     the "Send files" dialog, game menu → "Add videos & files…" = `go("files", pkg)`; multi-select bar (download/
-    delete); drag-and-drop from the OS via the `flet-dropzone` extension (Apache-2.0, Flutter `desktop_drop`), which
+    move/delete); `ui_smoke.py --fake-frame --files-places` renders the new locations + picker; drag-and-drop from the OS via the `flet-dropzone` extension (Apache-2.0, Flutter `desktop_drop`), which
     only a `flet build` bundle contains: `files.dropzone_available()` keeps it out of source runs and the PyInstaller
     fallback, which would show an unknown control); screenshots (Steam screenshots on the Frame, `install/screenshots.py`
     + agent v46 `list_screenshots`/`delete_screenshots`: the Frame files every headset shot under SteamVR 250820, so

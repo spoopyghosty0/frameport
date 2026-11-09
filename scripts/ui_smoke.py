@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import posixpath
 import sys
 import threading
 import time
@@ -212,6 +213,8 @@ def main() -> int:
                     "(positions for --viewport 1440x900)")
     ap.add_argument("--files-scroll", action="store_true", help="with --fake-frame: scroll a long Files folder, "
                     "right-click and select in it: the list must stay where it was scrolled (GitHub #411)")
+    ap.add_argument("--files-places", action="store_true", help="with --fake-frame: the Files tab's Temporary files "
+                    "and game saves locations, and the Move to… picker (GitHub #532)")
     ap.add_argument("--only", default=None, help="comma-separated step names to keep (e.g. monitor,monitor-details)")
     ap.add_argument("--linux", action="store_true", help="add two pretend arm64 Linux apps and render their pages")
     ap.add_argument("--links", action="store_true", help="install links: the Add games menu, the paste dialog, the "
@@ -397,6 +400,36 @@ def main() -> int:
                  # the grid's first row (below the "On your Frame" shelf)
                  "library": drag((360, 560), (560, 560), (760, 560)),        # 3 cards, select mode on
                  "library-dragged": drag((560, 560), (760, 560))}             # from a selected card: deselects 2
+    if args.files_places:  # GitHub #532: /tmp and each game's saves as locations, Move to…
+        def location(a, test):
+            v = a.files_view
+            for _heading, entries in v.location_groups():
+                for loc, _icon, _sub in entries:
+                    if test(loc):
+                        v.open_location(loc)
+                        return loc
+            ERRORS.append("files-places: no such location")
+
+        def move_picker(a):
+            location(a, lambda loc: loc["id"] == "downloads")
+            time.sleep(2)
+            v = a.files_view
+            v.move_to([e for e in v.entries if e.name in ("Mods", "readme.txt")])
+
+        def scroll_locations(page):
+            page.mouse.move(vw * 0.25, vh * 0.6)  # over the Locations column
+            page.mouse.wheel(0, 3000)
+            time.sleep(1.5)
+            return None
+        steps = [("files-locations", lambda a: a.go("files")),
+                 ("files-tmp", lambda a: location(a, lambda loc: loc.get("tmp"))),
+                 ("files-saves", lambda a: location(a, lambda loc: bool(loc.get("saves")))),
+                 ("files-saves-deeper", lambda a: a.files_view.cd(posixpath.join(a.files_view.loc["path"],
+                                                                                 "files/UnrealGame/Saved"))),
+                 ("files-move", move_picker),
+                 ("files-move-dest", lambda a: a.files_view.move_picker.open(
+                     next(x for _h, e in a.files_view.location_groups() for x, _i, _s in e if x["id"] == "documents")))]
+        mouse = {"files-locations": scroll_locations}
     if args.files_scroll:  # GitHub #411: a right-click or a selection keeps the Files list where it was scrolled
         def long_folder(a):
             videos = os.path.join(a.target.frame.home, "Videos")

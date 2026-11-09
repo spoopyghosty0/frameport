@@ -131,3 +131,50 @@ def test_back_to_a_folder_restores_its_scroll_and_backspace_goes_up(monkeypatch)
     v.cd("/sd")  # a crumb two levels up
     assert loaded[-1] == ("/sd", 640.0)
     assert not v.go_up()  # the location's top
+
+
+def test_tmp_and_saves_locations_and_move_actions(monkeypatch):  # GitHub #532
+    from frameport.core import library
+    from frameport.ui.views.files_move import destinations
+
+    monkeypatch.setattr(library, "game", lambda pkg: None)
+    app = SimpleNamespace(target=SimpleNamespace(frame=SimpleNamespace(home="/home/x")), frame_info={"installed": [
+        {"package": "q", "kind": "quest", "title": "Quest Game"}, {"package": "pc", "kind": "pcvr", "title": "PC"}]})
+    v = FilesView(app)
+    v.drives = [{"id": "drive:/ro", "label": "RO", "path": "/ro", "read_only": True}]
+    groups = dict(v.location_groups())
+    assert [x[0]["id"] for x in groups["Game storage"]] == ["app:q", "saves:q"]  # saves right below the storage
+    assert groups["Game storage"][1][0]["label"] == "Quest Game — saves"
+    assert [x[0]["id"] for x in groups["PC VR games"]] == ["app:pc"]  # no saves location for PC VR games
+    adv = [x[0] for x in groups["Advanced"]]
+    assert adv[1]["id"] == "tmp" and adv[1]["path"] == "/tmp" and adv[1]["label"] == "Temporary files"
+    assert "Drives" not in dict(destinations(v.location_groups()))  # read-only drives can't take a move
+    v.loc, v.path = adv[1], "/tmp"
+    e = files.Entry("a.apk", "/tmp/a.apk", False, 1, 0)
+    v.entries = [e]
+    assert "Move to…" in [a[0] for a in v.menu_actions(e) if a]
+    v.loc = {"id": "app:q", "path": "/sd", "android": "/sdcard"}
+    link = files.Entry("Movies", "/sd/Movies", True, 0, 0, link=True)
+    v.entries = [link]
+    assert "Move to…" not in [a[0] for a in v.menu_actions(link) if a]  # Lepton's link stays where it is
+
+
+def test_saves_and_tmp_notices():
+    shown = []
+    v = FilesView(SimpleNamespace(backup_saves=shown.append))
+    v.loc = {"id": "tmp", "path": "/tmp", "tmp": True}
+    v._render_notice()
+    assert v.notice.visible
+    v.loc = {"id": "saves:q", "saves": "q", "title": "Quest Game", "path": "/x"}
+    v.saves_running["q"] = False
+    v._render_notice()
+    row = v.notice.content.content.controls[1].content
+    assert "back up the saves" in row.controls[0].content.value
+    row.controls[1].on_click(None)
+    assert shown == ["q"]
+    v.saves_running["q"] = True
+    v._render_notice()
+    assert "is running" in v.notice.content.content.controls[1].content.controls[0].content.value
+    v.loc = {"id": "videos", "path": "/home/x/Videos"}
+    v._render_notice()
+    assert not v.notice.visible
