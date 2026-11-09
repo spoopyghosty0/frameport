@@ -5,9 +5,17 @@ notes: 'The app opens a flat launcher (MeleeActivity) that starts the VR part (M
   Android window" is on so that launcher can be seen in the headset; without it Lepton runs the app headless, the
   launcher waits invisibly and OpenXR never starts. Keep the Vulkan library rename disabled: the engine (Aurora/Dawn
   WebGPU) builds the name libvulkan.so from two pieces, so the rename made it ask for "libfp_vkn.so" (GitHub #475).
-  The VR part is not yet checked on the Frame.'
-details: 'Vulkan (Dawn) loads and precompiles all 6080 pipelines in about 34 s with the rename off; the launch then
-  stays in the 2D launcher, so no OpenXR call is made (GitHub #475).'
+  The VR part keeps its own process (":xr", as on Quest; "Start the game in the app''s main process" off): both parts
+  are SDL apps, and SDL ends a process whose SDL main already finished when another SDL activity starts in it, so in
+  the main process the hand-over to the VR part closed the game ("SDL main() finished", "activity finished",
+  System.exit). Lepton starts the launcher in the main process, which stays alive while the VR part runs. The VR part
+  is not yet checked on the Frame. A disc picked in the launcher is remembered as a document link whose read
+  permission did not survive (Permission Denial ... ACTION_OPEN_DOCUMENT): pick the disc again.'
+details: 'Vulkan (Dawn) loads and precompiles all 6080 pipelines in about 34 s with the rename off. With the launcher
+  shown, picking the disc reached "xr: launching the immersive game", then the app exited in the hand-over because
+  frame.main_process had moved MeleeXrActivity into the launcher''s process (GitHub #475). Fallback if the separate
+  process doesn''t work in Lepton: frame.main_process on + lepton_env SDL_ANDROID_ALLOW_RECREATE_ACTIVITY=1 (SDL 3.5
+  in libmelee.so has nativeAllowRecreateActivity; then SDL main runs a second time in the same process).'
 tested_version: 0.1.0-beta
 engine: Other
 xr: OpenXR
@@ -16,9 +24,10 @@ frame:
 - frame.sdl_clipboard
 frame_remove:
 - frame.vk_sanitize
+- frame.main_process
 device:
 - device.text_input_window
 adapter:
   scene_emul: 1
-updated: '2026-10-24'
+updated: '2026-11-08'
 source_hint: Xelee-Quest-arm64

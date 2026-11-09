@@ -263,6 +263,13 @@ signatures:
     severity: fatal
     diagnosis: The game looks up a Quest-only system class and aborts. The lookup comes from Quest telemetry (Meta XR Audio or native code).
     suggest: [frame.metaxr_telemetry, frame.oculusos]
+  - id: sdl-second-activity-exit
+    # GitHub #475 (Xelee): SDLActivity.onCreate in a process whose SDL main already returned calls System.exit(0)
+    pattern: 'SDL main\(\) finished[\s\S]{0,600}?activity finished'
+    severity: fatal
+    diagnosis: The app ended itself when it opened its next SDL activity (for example a flat launcher handing over to the VR part). SDL closes a process whose SDL main already finished; on Quest that activity runs in a process of its own. If this build runs it in the main process ("Start the game in the app's main process"), turn that patch off for this game and update it on the Frame.
+    suggest: []
+    supersedes: [force-quit]
   - id: checkjni-abort
     pattern: 'JNI DETECTED ERROR IN APPLICATION|GetStringUTFChars.*NULL|CheckJNI'
     severity: fatal

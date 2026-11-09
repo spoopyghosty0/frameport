@@ -708,3 +708,14 @@ def test_decoder_held_by_steam_is_named():
     assert "video-decoder-held-by-steam" in [f.id for f in triage(log, package="com.camouflaj.manta").findings]
     assert "video-decoder-held-by-steam" not in [f.id for f in triage(log.replace("steamwebhelper(2953)", ""),
                                                                       package="com.camouflaj.manta").findings]
+
+
+def test_sdl_second_activity_exit():
+    """GitHub #475 (Xelee): the VR activity, moved into the launcher's process, starts after SDL main finished."""
+    log = ("10-25 19:07:34.039  1220  1252 V SDL     : Finished main function\n"
+           "10-25 19:07:34.069  1220  1220 V SDL     : onCreate()\n"
+           "10-25 19:07:34.069  1220  1220 V SDL     : SDL main() finished\n"
+           "10-25 19:07:34.069  1220  1220 V SDL     : activity finished\n"
+           "10-25 19:07:34.069  1220  1220 I dev.melee.game: System.exit called, status: 0\n")
+    ids = [f.id for f in triage(log, "EXITED", "dev.melee.game").findings]
+    assert "sdl-second-activity-exit" in ids and "force-quit" not in ids

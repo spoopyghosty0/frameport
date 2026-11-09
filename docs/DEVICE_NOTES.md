@@ -1507,3 +1507,34 @@ instance, submitting frames at 72 fps (pass). Uninstalled afterwards (no saves k
 1.4.9 downloaded and merged the same base + arm64 split in 4 s (split attributes gone, unsigned output); a real
 language/density split merge through APKEditor wasn't tried on the device (no such bundle in the dumps).
 
+## Interaction SDK telemetry (#546, Ghost Signal)
+
+Ghost Signal: A Stellaris Game (Unity 2020.3, `libInteractionSdk.so` BuildId 435c0234…) crashes before the title
+screen: `ISDK:Telemetry: Attempting to initialize telemetry sender...`, `E OsSdkLoader: libossdk not found`, SIGSEGV
+in `TelemetrySender::TelemetrySender(TelemetryCache&, float)+192` from `initializeTelemetry()+140`. Quest's OS SDK
+(libossdk) provides the telemetry handler; the constructor uses it without a null check. The library has an exported
+off switch, `interaction_sdk::v1::telemetry::telemetryDisabled` (bss byte): `initializeTelemetry()` returns -2 when it
+is set, `incrementValue` -5, `getValue` -4, `send` -6, all without touching the sender (`send()` would otherwise call
+`TelemetrySender::send` on a null sender, so making only `initializeTelemetry()` return early isn't enough).
+`frame.isdk_telemetry` (default on with libInteractionSdk.so) rewrites the switch test at the top of
+`initializeTelemetry()` (`ldrb wM,[xN]; cbz wM` → `mov w16,#1; strb w16,[xN]`), found by the exported symbols, the
+function's adrp/ldr/ldrb/cbz/`mov w0,#-k` shape and the GOT slot's RELATIVE/GLOB_DAT relocation = telemetryDisabled.
+Checked against Ghost Signal's library offline (two instructions at 0x9aa20); not yet run on the Frame.
+
+## Xelee: SDL launcher hands over to a VR process (#475)
+
+Xelee (dev.melee.game, SDL 3.5 statically in libmelee.so, Aurora/Dawn) starts in a flat launcher (`MeleeActivity`,
+main process) that starts `MeleeXrActivity` (`android:process=":xr"`) with the picked disc's content URI and returns
+from SDL main. `frame.main_process` (default on for any activity with its own process) had moved `MeleeXrActivity`
+into the main process, where `SDLActivity.onCreate` finds the static `mSDLMainFinished` set and, without the hint
+`SDL_ANDROID_ALLOW_RECREATE_ACTIVITY`, logs `SDL main() finished` / `activity finished` and calls `System.exit(0)`:
+the app ended at the hand-over. Unlike Halo CE VR (#178, Lepton started the separate-process activity itself), Lepton
+starts Xelee's launcher in the main process (`Target process (dev.melee.game) found`), which stays alive as a cached
+process after the launcher finishes, so the catalog keeps the VR part in `:xr` (`frame_remove: frame.main_process`).
+Unverified: whether Lepton keeps running while only the `:xr` process has an activity. Fallback: main process +
+lepton_env `SDL_ANDROID_ALLOW_RECREATE_ACTIVITY=1` (SDL main runs a second time with the process's static C state).
+Separate problem: the remembered disc (`content://com.android.externalstorage.documents/...`) fails at the next start
+with `Permission Denial ... requires that you obtain access using ACTION_OPEN_DOCUMENT`: the persisted URI grant lives
+on Android's system side and wasn't there at the next start (a reinstall drops it; Lepton may not keep it at all).
+FramePort can't restore such a grant; picking the disc again works for that start.
+

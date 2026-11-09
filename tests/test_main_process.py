@@ -72,3 +72,23 @@ def test_patch_is_offered_only_when_detected():
     assert patch.applies(A()) and patch.detect(A()).recommended
     A.extra = {}
     assert not patch.applies(A()) and patch.detect(A()) is None
+
+
+def test_xelee_keeps_its_vr_process():
+    """GitHub #475: Xelee's launcher (MeleeActivity, main process) starts MeleeXrActivity (":xr"); both are SDL
+    activities, and in one process SDL ends the app at the hand-over ("SDL main() finished", System.exit). Lepton
+    starts the launcher in the main process, so the catalog keeps the VR part in its own process, as on Quest."""
+    from frameport.core.models import Analysis
+    from frameport.recommend import catalog, engine
+
+    entry = catalog.lookup("dev.melee.game")
+    assert entry and "frame.main_process" in entry.frame_remove
+    a = Analysis(package="dev.melee.game", version="0.1.0-beta", label="Xelee", abis=["arm64-v8a"], engine="Other",
+                 xr="OpenXR", graphics="Vulkan", direct_vrapi=False, libs=["libmelee.so", "libopenxr_loader.so"],
+                 launcher_activity="dev.melee.MeleeActivity", has_info_category=False, meta_permissions=[],
+                 uses_glad_gl=False, unity_msaa_levels=0, oculus_os_classes=False, is_overport_output=False,
+                 debuggable=False, extra={"size": 1, "separate_process": ["dev.melee.MeleeXrActivity"],
+                                          "vr_activity": "dev.melee.MeleeXrActivity"})
+    assert base.get("frame.main_process").detect(a).recommended  # other apps with this layout still get it
+    r = engine.suggest(a)
+    assert "frame.main_process" not in r.patches and "device.text_input_window" in r.patches
