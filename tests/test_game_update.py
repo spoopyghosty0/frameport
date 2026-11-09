@@ -44,6 +44,24 @@ def test_runtime_parameter_change_and_removal_do_not_rebuild():
     assert not plan_update(game, dep).changed
 
 
+def test_gl_hide_multiview_is_left_to_the_shim_unless_a_recipe_sets_it():
+    """settings.conf carries every default; -1 lets the GL shim pick by engine (Unity/Unreal keep multiview), a
+    recipe's explicit value still wins, and the build's settings library doesn't get the key (no rebuild)."""
+    from frameport.patches.frame.adapter import settings_text
+
+    game, dep = game_and_dep()
+    assert configuration(game["recipe"], PKG)["settings"]["gl_hide_multiview"] == -1
+    assert b"gl_hide_multiview" not in settings_text(game["recipe"]["patches"])
+    for value in (0, 1):
+        recipe = {**game["recipe"], "patches": {**game["recipe"]["patches"],
+                                                 "adapter.gl_hide_multiview": {"value": value}}}
+        assert configuration(recipe, PKG)["settings"]["gl_hide_multiview"] == value
+        assert f"gl_hide_multiview={value}".encode() in settings_text(recipe["patches"])
+        assert apk_recipe_fingerprint(recipe, PKG) == game["build"]["apk_recipe_fp"]  # settings.conf only
+    blank = {**game["recipe"], "patches": {**game["recipe"]["patches"], "adapter.gl_hide_multiview": {}}}
+    assert configuration(blank, PKG)["settings"]["gl_hide_multiview"] == -1
+
+
 @pytest.mark.parametrize("patch", ["frame.unity_text_input", "device.foveation", "adapter.controller_models",
                                    "adapter.surface_native", "adapter.zink_shader_dump"])
 def test_apk_support_changes_require_rebuild(patch):

@@ -354,9 +354,11 @@ SETTINGS = [
      "Unity's built-in Oculus frame loop (frame.unity_oculus_check): don't pass Unity's physics-step pose update on, "
      "so the hands use the frame's display-time poses. Fixes hands trailing the controllers in some games (for "
      "example Sniper Elite VR); in others it makes the hands lag (for example BattleSisters)."),
-    ("gl_hide_multiview", "int", 1, "GL shim: hide multiview",
+    ("gl_hide_multiview", "int", -1, "GL shim: hide multiview",
      "GL shim only: hide GL_OVR_multiview so all passes use single-view shaders. For GLES games whose multiview "
-     "shaders fail on single-view render targets (for example Path of the Warrior)."),
+     "shaders fail on single-view render targets (for example Path of the Warrior). -1 (default) = the shim decides: "
+     "Unity and Unreal keep multiview (they render it themselves), other engines get it hidden; 1 = always hide, "
+     "0 = never."),
     ("gl_int_attribs", "int", 0, "GL shim: integer vertex inputs",
      "GL shim (frame.gl_shim): shader inputs declared as integers (int/uint, ivecN/uvecN) whose vertex data the game "
      "set up with glVertexAttribPointer (as floats) are set up again with glVertexAttribIPointer before each draw. "
@@ -547,7 +549,9 @@ UI: dict[str, dict] = {
                 help="Skips picture layers the Frame would refuse. Leave it on.", control=("switch",)),
     "gl_hide_multiview": dict(group="troubleshooting", level="advanced", label="Draw each eye separately (OpenGL ES)",
                 help="For older games whose picture stays black on the Frame (for example Path of the "
-                     "Warrior).", control=("switch",)),
+                     "Warrior). Automatic: on for most engines, off for Unity and Unreal, which draw both eyes "
+                     "at once themselves.",
+                control=("choice", [(-1, "Automatic"), (1, "On"), (0, "Off")])),
     "mutable_fix": dict(group="troubleshooting", level="advanced", label="Vulkan format workaround",
                 help="Experimental. Leave it off unless asked to test it.", control=("switch",)),
     "flip_quads": dict(group="troubleshooting", level="advanced", label="Rotate panels 180°",

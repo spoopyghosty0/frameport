@@ -2034,18 +2034,18 @@ For Unity games that crash when they turn on anti-aliasing (for example The Room
 
 ### <a id="adapter-gl_hide_multiview"></a>Draw each eye separately (OpenGL ES)
 
-For older games whose picture stays black on the Frame (for example Path of the Warrior).
+For older games whose picture stays black on the Frame (for example Path of the Warrior). Automatic: on for most engines, off for Unity and Unreal, which draw both eyes at once themselves.
 
 - `adapter.gl_hide_multiview`
 - **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
 - **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
 - **Options:**
-  - Value: int, default `1`.
-  - Game settings → Troubleshooting → "Draw each eye separately (OpenGL ES)" (advanced).
+  - Value: int, default `-1`.
+  - Game settings → Troubleshooting → "Draw each eye separately (OpenGL ES)" (advanced): Automatic (`-1`), On (`1`), Off (`0`).
 - **Catalog games (1):** BlazeRush.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
-> GL shim only: hide GL_OVR_multiview so all passes use single-view shaders. For GLES games whose multiview shaders fail on single-view render targets (for example Path of the Warrior).
+> GL shim only: hide GL_OVR_multiview so all passes use single-view shaders. For GLES games whose multiview shaders fail on single-view render targets (for example Path of the Warrior). -1 (default) = the shim decides: Unity and Unreal keep multiview (they render it themselves), other engines get it hidden; 1 = always hide, 0 = never.
 
 ### <a id="adapter-gl_highp_markers"></a>GL shim: high-precision vertex shaders
 
