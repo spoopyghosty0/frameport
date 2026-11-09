@@ -85,3 +85,81 @@ def test_recommendation_wrapper(tmp_path):
                     "-Wno-missing-field-initializers", "-I", str(inc),
                     "-I", str(ROOT / "native/adapter"), str(unit), "-o", str(exe)], check=True)
     subprocess.run([str(exe)], check=True)
+
+
+def _unity_workspace(tmp_path, quest_manifest, lib):
+    import zipfile
+
+    from frameport.apk.workspace import ApkWorkspace
+    from frameport.patches.frame.unity_text_input import METADATA
+    apk = tmp_path / "in.apk"
+    with zipfile.ZipFile(apk, "w") as z:
+        z.writestr("AndroidManifest.xml", quest_manifest)
+        z.writestr("classes.dex", b"dex\n035\0")
+        z.writestr("lib/arm64-v8a/libopenxr_loader_generic.so", b"\x7fELF-original-loader")
+        z.writestr("lib/arm64-v8a/libil2cpp.so", lib)
+        z.writestr(METADATA, b"metadata")
+    return ApkWorkspace(apk)
+
+
+@pytest.mark.parametrize("on, engine", [(1, "Unity"), (0, "Unity"), (1, "Unreal")])
+def test_unity_viewport_setters_pinned_with_the_setting(tmp_path, quest_manifest, monkeypatch, on, engine):
+    """#574: a Unity game's own scaler (Rogue Piñatas) reaches the picture through XRSettings.renderViewportScale and
+    ScalableBufferManager.ResizeBuffers; with fixed_resolution both return at once, without it nothing changes."""
+    from frameport.analysis import il2cpp
+    from frameport.core.events import Reporter
+    from frameport.patches.frame import unity_fixed_viewport as V
+    from frameport.patches.frame import unity_text_input as U
+
+    lib = sorted((ROOT / "tests/fixtures").glob("libfake*_arm64.so"))[0].read_bytes()
+    lo, _hi = U._executable(lib)[0]
+    a, b = (lo + 0x40) & ~3, (lo + 0x80) & ~3
+    calls = []
+
+    def find_methods(lib_bytes, metadata, version, wanted, **kw):
+        calls.append(wanted)
+        assert set(V.UnityFixedViewport.targets) <= set(wanted)  # one shared Cpp2IL lookup
+        return {V.XR_SETTINGS: {"set_renderViewportScale": (a, 0xB0)},
+                V.BUFFER_MANAGER: {"ResizeBuffers": (b, 0x40)}}
+    monkeypatch.setattr(il2cpp, "find_methods", find_methods)
+    base.load_all()
+    recipe = {"frame.adapter": {}, "adapter.fixed_resolution": {"value": on}}
+    analysis = _analysis(engine=engine, libs=["libil2cpp.so", "libunity.so", "libOVRPlugin.so"],
+                         extra={"size": 1, "unity_version": "2022.3.52f1"})
+    with _unity_workspace(tmp_path, quest_manifest, lib) as ws:
+        ctx = base.ApkContext(ws, analysis, {}, Reporter(), recipe)
+        assert base.get("frame.adapter").apply(ctx)
+        out = ws.read_lib("libil2cpp.so")
+    if on and engine == "Unity":
+        assert out[a:a + 8] == V.RET_VOID and out[b:b + 8] == V.RET_VOID and len(calls) == 1
+        assert any("XRSettings.set_renderViewportScale" in n for n in ctx.notes)
+        assert any("ScalableBufferManager.ResizeBuffers" in n for n in ctx.notes)
+    else:
+        assert out == lib and not calls
+
+
+def test_setting_is_an_apk_setting():
+    """Switched on in Game settings, the setting has to rebuild the APK (xrshim + Unity setters), not only reach
+    settings.conf: #574's build had neither."""
+    from frameport.game_update import APK_SETTINGS, apk_recipe_fingerprint
+
+    assert "adapter.fixed_resolution" in APK_SETTINGS
+    off = {"patches": {"frame.adapter": {}}}
+    on = {"patches": {"frame.adapter": {}, "adapter.fixed_resolution": {"value": 1}}}
+    assert apk_recipe_fingerprint(off, "com.NerdNinjas.fiesta") != apk_recipe_fingerprint(on, "com.NerdNinjas.fiesta")
+
+
+def test_triage_spots_a_shrinking_eye_rect():
+    from frameport.validate.triage import triage
+    log = ("FrameBridge: projection view 0 rect change: swapchain=0xfffe7579d180 rect=0,0 4048x4048 array=0\n"
+           "FrameBridge: projection view 1 rect change: swapchain=0xfffe7579d180 rect=0,0 4048x4048 array=1\n"
+           "FrameBridge: projection view 0 rect change: swapchain=0xfffe7579d180 rect=0,0 1504x1504 array=0\n")
+    found = [f for f in triage(log).findings if f.id == "dynamic-resolution-shrink"]
+    assert found and found[0].suggest == ["adapter.fixed_resolution"] and found[0].question
+    # another swapchain (a recreated eye buffer) or the same size again is no shrink
+    other = log.replace("swapchain=0xfffe7579d180 rect=0,0 1504", "swapchain=0xfffe75457280 rect=0,0 1504")
+    assert not any(f.id == "dynamic-resolution-shrink" for f in triage(other).findings)
+    same = log.replace("1504x1504", "4048x4048")
+    assert not any(f.id == "dynamic-resolution-shrink" for f in triage(same).findings)
+    fixed = log + "FrameBridge: fixed_resolution: recommended 1504x1504 -> 4048x4048 (runtime=0, layer)\n"
+    assert not any(f.id == "dynamic-resolution-shrink" for f in triage(fixed).findings)

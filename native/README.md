@@ -59,6 +59,9 @@ resolution at tracked full swapchain size. Both adapter GIPA and xrshim's existi
 extension entry point serve it; the setting adds OVRPlugin shim routing. The extension
 stays visible, avoiding dependence on a plugin fallback. No adapter revision bump for
 this opt-in fix. See DEVICE_NOTES "Fixed layer resolution / Batman" for verification.
+An eye (projection) layer whose swapchains the size table doesn't know gets the last submitted eye layer's
+swapchain size (#574, `fixed_resolution.h`); other unsized layers keep the runtime's answer, logged as
+`fixed_resolution: layer type N not sized`.
 
 FrameBridge fixes of November 2026 (no adapter revision bump: all are read from settings.conf at start or are
 on by default in every build): `perf_settings.c` answers `xrPerfSettingsSetPerformanceLevelEXT` with XR_SUCCESS

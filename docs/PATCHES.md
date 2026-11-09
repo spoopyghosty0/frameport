@@ -1883,10 +1883,10 @@ Only if the full-resolution area of Valve's foveation sits off-centre in this ga
 
 ### <a id="adapter-fixed_resolution"></a>Keep full resolution (no dynamic resolution)
 
-Prevents dynamic resolution from moving Valve foveation off-centre or leaving a white edge line. May increase GPU load. Used at the next launch.
+Stops dynamic resolution from lowering the picture (for example Rogue Piñatas) or moving Valve foveation off-centre. May increase GPU load. Needs a rebuild (Update on Frame).
 
 - `adapter.fixed_resolution`
-- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Changes:** Game setting, stored in the build: needs a rebuild.
 - **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
 - **Options:**
   - Value: int, default `0`.
@@ -1894,9 +1894,10 @@ Prevents dynamic resolution from moving Valve foveation off-centre or leaving a 
 - **Catalog games (2):** Batman: Arkham Shadow, Zero Caliber 2.
 - **Suggested by launch-test signatures:**
   - `dynamic-resolution-foveation` (info): The game submits an offset projection viewport.
+  - `dynamic-resolution-shrink` (info): The game lowers its own render resolution while it runs (dynamic resolution), inside an unchanged eye buffer, so the picture can turn soft or grainy whatever the resolution scale is.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
-> Keeps OpenXR layer recommendations at the full swapchain size. Prevents dynamic resolution from moving Valve foveation off-centre or leaving a coarse white edge line. May increase GPU load.
+> Keeps OpenXR layer recommendations at the full swapchain size and, in Unity (IL2CPP) games, makes Unity's dynamic-resolution setters (XRSettings.renderViewportScale, ScalableBufferManager.ResizeBuffers) do nothing, so neither OVRManager nor the game's own frame-time scaler shrinks the eye image. Prevents dynamic resolution from lowering the picture or moving Valve foveation off-centre / leaving a coarse white edge line. May increase GPU load. Needs a rebuild.
 
 ### <a id="adapter-flip_dump"></a>Upside-down panel images (diagnostics)
 

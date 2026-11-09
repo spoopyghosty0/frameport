@@ -17,8 +17,11 @@ BASE_SETTINGS = {"scale": 1.0, "foveation_fix": 1, "controller_fix": 1}
 # key, kind, default, title, description
 SETTINGS = [
     ("fixed_resolution", "int", 0, "Keep full resolution (no dynamic resolution)",
-     "Keeps OpenXR layer recommendations at the full swapchain size. Prevents dynamic resolution from moving "
-     "Valve foveation off-centre or leaving a coarse white edge line. May increase GPU load."),
+     "Keeps OpenXR layer recommendations at the full swapchain size and, in Unity (IL2CPP) games, makes Unity's "
+     "dynamic-resolution setters (XRSettings.renderViewportScale, ScalableBufferManager.ResizeBuffers) do nothing, "
+     "so neither OVRManager nor the game's own frame-time scaler shrinks the eye image. Prevents dynamic resolution "
+     "from lowering the picture or moving Valve foveation off-centre / leaving a coarse white edge line. May "
+     "increase GPU load. Needs a rebuild."),
     ("scale", "float", 1.0, "Resolution scale",
      "Multiplies the recommended eye-buffer width and height (0.5–2.0). 1.5 ≈ 2.25× pixels."),
     ("foveation_fix", "int", 1, "Hide Quest foveation", "Hides Quest foveation extensions the Frame runtime lacks."),
@@ -395,8 +398,9 @@ FOVEATION_UI = {
 
 UI: dict[str, dict] = {
     "fixed_resolution": dict(group="picture", level="advanced", label="Keep full resolution (no dynamic resolution)",
-                help="Prevents dynamic resolution from moving Valve foveation off-centre or leaving a white edge line. "
-                     "May increase GPU load. Used at the next launch.", control=("switch",)),
+                help="Stops dynamic resolution from lowering the picture (for example Rogue Piñatas) or moving Valve "
+                     "foveation off-centre. May increase GPU load. Needs a rebuild (Update on Frame).",
+                control=("switch",)),
     "scale": dict(group="picture", level="common", label="Render resolution (supersampling)",
                   help="Changes the game's render resolution. Higher is sharper but slower; 1.0× is the game's own "
                        "resolution.",

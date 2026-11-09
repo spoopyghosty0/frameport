@@ -69,6 +69,11 @@ class FrameBridgeAdapter(Patch):
             changed = True
         if needs_xrshim(ctx.recipe_patches) and ws.abi == "arm64-v8a":
             changed |= add_xrshim(ctx)
+        if fixed_resolution(ctx.recipe_patches):
+            # FrameBridge answers the layer recommendation; a Unity game's own scaler (#574) only stops at Unity's
+            # viewport setters
+            from .unity_fixed_viewport import pin_unity_viewport
+            changed |= pin_unity_viewport(ctx)
         # The decoder now lives in the agent's shared, versioned codec store (frame.hw_video_decode selects it per
         # game). Remove old embedded payloads without changing any game/video assets.
         for name in ("libstagefrighthw.so", "media_codecs_frameport.xml", "podman.py", "manifest.json",
@@ -102,6 +107,13 @@ def needs_xrshim(recipe_patches: dict) -> bool:
 
     s = adapter_settings(recipe_patches)
     return any(s.get(key) for key in XRSHIM_SETTINGS)
+
+
+def fixed_resolution(recipe_patches: dict) -> bool:
+    """adapter.fixed_resolution: also an APK change (xrshim + Unity's viewport setters, unity_fixed_viewport.py)."""
+    from ..settings import adapter_settings
+
+    return bool(adapter_settings(recipe_patches).get("fixed_resolution"))
 
 
 def add_xrshim(ctx: ApkContext) -> bool:

@@ -31,6 +31,16 @@ signatures:
     diagnosis: The game submits an offset projection viewport. With Valve foveation, dynamic resolution can move the sharp centre or expose a white edge. A rebuilt APK (Update on Frame) puts the sharp area back on each eye; keeping full resolution may also help for the white edge, increases GPU load and needs the updated adapter and OVRPlugin shim in a rebuilt APK.
     question: With foveated rendering enabled, was the sharp centre misplaced or was there a white line at the picture edge?
     suggest: [adapter.fixed_resolution]
+  - id: dynamic-resolution-shrink
+    # the same eye swapchain submitted with a rect of another size later: the game scales its viewport at runtime
+    # (Rogue Piñatas: 4048 -> 1504 within seconds, #574); rect changes are logged at most once a second per eye
+    pattern: 'projection view 0 rect change: swapchain=(0x[0-9a-f]+) rect=\d+,\d+ (\d+)x\d+ [\s\S]*?projection view 0 rect change: swapchain=\1 rect=\d+,\d+ (?!\2x)\d+x'
+    unless: 'fixed_resolution: recommended'
+    updated: '2026-11-09'
+    severity: info
+    diagnosis: The game lowers its own render resolution while it runs (dynamic resolution), inside an unchanged eye buffer, so the picture can turn soft or grainy whatever the resolution scale is. Keep full resolution (adapter.fixed_resolution) holds the eye image at full size and needs a rebuild (Update on Frame); it can raise GPU load, so a lower resolution scale may be needed for a steady frame rate.
+    question: Did the picture turn soft or grainy a few seconds after the game started, or in busy scenes?
+    suggest: [adapter.fixed_resolution]
   - id: static-openxr-loader-bypass
     pattern: 'RuntimeManifestFile::FindManifestFiles - using global runtime file /[^\r\n]*etc/openxr/1/active_runtime(?:\.[A-Za-z0-9_-]+)?\.json'
     unless: 'FrameBridge[: ]|fp_xrruntime[: ]'

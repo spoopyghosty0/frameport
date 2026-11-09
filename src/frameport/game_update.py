@@ -14,8 +14,10 @@ def fingerprint(value) -> str:
 
 # These settings select APK support as well as runtime behaviour. Keep their revisions too: a newer shim can
 # be needed even though the value did not change. Foveation remains an APK patch, including all its parameters.
+# fixed_resolution: the xrshim and Unity's viewport setters (#574: switched on in Game settings, it reached only
+# settings.conf, so OVRPlugin's lookups and the game's scaler never saw it)
 APK_SETTINGS = {"adapter.haptic_fix", "adapter.controller_models", "adapter.surface_native",
-                "adapter.zink_shader_fix", "adapter.zink_shader_dump"}
+                "adapter.zink_shader_fix", "adapter.zink_shader_dump", "adapter.fixed_resolution"}
 
 
 def apk_recipe_fingerprint(recipe: dict, package: str = "", superseded=None) -> str:

@@ -41,5 +41,28 @@ int main(void) {
     assert(fixed_recommended_resolution(XR_NULL_HANDLE,&info,&out)==XR_ERROR_FUNCTION_UNSUPPORTED);
     assert(fixed_recommended_resolution(XR_NULL_HANDLE,NULL,&out)==XR_ERROR_VALIDATION_FAILURE);
     assert(fixed_recommended_resolution(XR_NULL_HANDLE,&info,NULL)==XR_ERROR_VALIDATION_FAILURE);
+
+    // #574: an eye layer whose swapchains aren't in the table falls back to the last submitted eye layer's size
+    XrCompositionLayerProjectionView views[2]={{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},
+                                               {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
+    XrCompositionLayerProjection eye={XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+    eye.viewCount=2; eye.views=views;
+    info.layer=(void *)&eye;
+    missing=0; valid_size=0;
+    fixed_note_projection((void *)&eye);  // unsized: nothing noted
+    assert(fixed_recommended_resolution(XR_NULL_HANDLE,&info,&out)==XR_SUCCESS);
+    assert(out.recommendedImageDimensions.width==2704 && !out.isValid);  // nothing submitted yet: the runtime's
+    valid_size=1;
+    fixed_note_projection((void *)&layer);  // quads are never the eye size
+    fixed_note_projection((void *)&eye);
+    valid_size=0;
+    assert(fixed_recommended_resolution(XR_NULL_HANDLE,&info,&out)==XR_SUCCESS);
+    assert(out.isValid==XR_TRUE && out.recommendedImageDimensions.width==2768 &&
+           out.recommendedImageDimensions.height==2768);
+    missing=1;  // also without a runtime function
+    assert(fixed_recommended_resolution(XR_NULL_HANDLE,&info,&out)==XR_SUCCESS && out.isValid);
+    info.layer=(void *)&layer; missing=0;  // a quad still keeps the runtime's answer
+    assert(fixed_recommended_resolution(XR_NULL_HANDLE,&info,&out)==XR_SUCCESS);
+    assert(out.recommendedImageDimensions.width==2704 && !out.isValid);
     return 0;
 }

@@ -1111,6 +1111,46 @@ This is separate from #303's `foveation_storage_fix` (clearing SUBSAMPLED alloca
 see PLAYBOOK and FRAME_RUNTIME), which fixes black/coarse storage corruption. It also leaves
 #394's `FOVE_LEVEL=lo/med/hi` presets intact (commits 01ad5e6b, d7f0d514): those select the
 full-swapchain density pattern, not the game's dynamic viewport.
+
+### Rogue Piñatas: a Unity game's own scaler (#574)
+
+Rogue Piñatas VRmageddon (`com.NerdNinjas.fiesta` 1.1.0, Unity 2022.3.52f1 IL2CPP, OVRPlugin 1.103, GLES)
+creates a 4048² eye swapchain (its `S_DynamicResolutionAndFFR.OnCreate` sets
+`XRSettings.eyeTextureResolutionScale` 1.8: 1.8 × 2246 with `scale` 1.3) and then submits 4016, 3984, 3952 … 3248,
+2096, 1504 within ~3 s and stays at 1504, with `scale` 1.3 and `fixed_resolution=1` in settings.conf. Cpp2IL +
+disassembly of its ECS system `NerdNinjas.Fiesta.S_DynamicResolutionAndFFR.OnUpdate` (statics from the class
+constructor):
+`OVRPlugin.GetEyeLayerRecommendedResolution` (→ `ovrp_GetEyeLayerRecommendedResolution` →
+`xrGetRecommendedLayerResolutionMETA` with OVRPlugin's own copy of its eye layer; false = no change at all), then
+with `AdaptiveMaximumResolution` (on) the width is capped at `(r / 1.8) × eyeTextureWidth`, where `r` moves (up
+0.1/s, down 1.0/s) towards `DynamicPerfSettings{Strength 1, Max 1.8, Min 0.6, Start 1/72 s, End 1/60 s}.GetValue`
+of the averaged frame time; the width moves at most 32 px (`_pixelStepPerFrame`) a frame from
+`eyeTextureWidth × renderViewportScale`, the scale is clamped to [Min/Max, 1], and it goes to
+`XRSettings.set_renderViewportScale` and `ScalableBufferManager.ResizeBuffers`. The 32 px steps match the log
+(1150 px/s while the game ran at 36 fps); the rect then stayed at 1504 for 13 s at a locked 72 fps, while the
+frame-time cap would have grown again by ~225 px/s (unless the system skipped that step), so most likely the recommendation itself answered ~1504.
+
+The reporter's build had no xrshim (no `extension shim:` line) and no `fixed_resolution: recommended` line: the
+setting had been switched on in Game settings, which only rewrote settings.conf (fixed_resolution wasn't one of
+`game_update.APK_SETTINGS`), so OVRPlugin's lookup went through OVRPort's dispatcher and the answer never came from
+FrameBridge (or FrameBridge's wrapper fell back to the runtime silently because it couldn't size the layer).
+
+Fix (no adapter revision bump, opt-in): `fixed_resolution` is an APK setting now (Update on Frame after switching it
+on); FrameBridge also answers an eye-layer request whose swapchains it can't size with the last submitted eye layer's
+swapchain size and logs `fixed_resolution: layer type N not sized, runtime recommendation kept` otherwise; in IL2CPP
+Unity games the build makes `XRSettings.set_renderViewportScale` and `ScalableBufferManager.ResizeBuffers` return at
+once (`patches/frame/unity_fixed_viewport.py`, found by name with Cpp2IL), so no scaler (OVRManager's, the game's)
+can shrink the viewport: it stays at Unity's default 1.0. Mono Unity games and other engines keep only the
+recommendation part. The full 4048² per eye costs GPU time (the lobby ran at ~69 fps): a lower `scale` gives a
+smaller eye texture at a steady rate. Triage `dynamic-resolution-shrink` = the same swapchain logged with a rect of
+another size.
+
+Headless check (Frame pass pending): rebuild with `fixed_resolution` 1, launch, wait 30 s:
+`projection view 0 rect change` lines (if any) keep `rect=0,0 4048x4048` (the swapchain size of the eye
+`xrCreateSwapchain` line), `extension shim: overport xrGetInstanceProcAddr OK`, and either
+`fixed_resolution: recommended ... -> 4048x4048` or no recommendation line (the setters alone hold the viewport).
+The build log notes `XRSettings.set_renderViewportScale -> false/0` and `ScalableBufferManager.ResizeBuffers ->
+false/0`.
 ## Embedded Khronos OpenXR loaders (GitHub #254)
 
 PrimedGun v2 (`org.primedgun.v2`, 2.0.0-alpha.4) embeds the Khronos loader in

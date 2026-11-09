@@ -20,3 +20,23 @@ static int fixed_layer_size(const XrCompositionLayerBaseHeader *layer, XrExtent2
     full->width = (int32_t)w; full->height = (int32_t)h;
     return 1;
 }
+
+// Full size of the projection layer the app submitted last (one size for every view), packed as w << 32 | h.
+// OVRPlugin asks for its eye layer's recommendation with a layer it built itself; when that layer's swapchains
+// aren't in the size table (an unknown handle, or one already destroyed because the game recreated its eye
+// swapchain), the submitted eye layer still says what "full" is (#574). Written by xrEndFrame, read by the wrapper.
+static uint64_t fixed_last_eye;
+
+static inline void fixed_note_projection(const XrCompositionLayerBaseHeader *layer) {
+    XrExtent2Di full;
+    if (!layer || layer->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION || !fixed_layer_size(layer, &full)) return;
+    __atomic_store_n(&fixed_last_eye, (uint64_t)(uint32_t)full.width << 32 | (uint32_t)full.height, __ATOMIC_RELAXED);
+}
+
+static inline int fixed_last_eye_size(XrExtent2Di *full) {
+    uint64_t packed = __atomic_load_n(&fixed_last_eye, __ATOMIC_RELAXED);
+    if (!packed) return 0;
+    full->width = (int32_t)(packed >> 32);
+    full->height = (int32_t)(packed & 0xffffffffu);
+    return 1;
+}

@@ -653,16 +653,26 @@ static XRAPI_ATTR XrResult XRAPI_CALL fixed_recommended_resolution(XrSession ses
         lookup(active_instance, "xrGetRecommendedLayerResolutionMETA");
     if (!info || !out) return XR_ERROR_VALIDATION_FAILURE;
     XrExtent2Di full;
-    if (!fixed_layer_size(info->layer, &full))
-        return fn ? fn(session, info, out) : XR_ERROR_FUNCTION_UNSUPPORTED;
+    const char *from = "layer";
+    if (!fixed_layer_size(info->layer, &full)) {
+        // An eye layer FrameBridge can't size (#574): the last submitted eye layer's swapchain is the full size.
+        // Other layers keep the runtime's answer; say so, a silent fallback looked like the setting did nothing.
+        if (!info->layer || info->layer->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION || !fixed_last_eye_size(&full)) {
+            static unsigned kept;
+            if (kept++ < 5) LOG("fixed_resolution: layer type %d not sized, runtime recommendation kept",
+                info->layer ? (int)info->layer->type : 0);
+            return fn ? fn(session, info, out) : XR_ERROR_FUNCTION_UNSUPPORTED;
+        }
+        from = "last eye layer";
+    }
     // Read the runtime recommendation only for diagnostics. The override also works
     // when the runtime lacks this function (OVRPort advertises it itself).
     XrRecommendedLayerResolutionMETA old = {XR_TYPE_RECOMMENDED_LAYER_RESOLUTION_META};
     XrResult result = fn ? fn(session, info, &old) : XR_ERROR_FUNCTION_UNSUPPORTED;
     static unsigned logged;
-    if (logged++ < 5) LOG("fixed_resolution: recommended %dx%d -> %dx%d (runtime=%d)",
+    if (logged++ < 5) LOG("fixed_resolution: recommended %dx%d -> %dx%d (runtime=%d, %s)",
         old.recommendedImageDimensions.width, old.recommendedImageDimensions.height,
-        full.width, full.height, result);
+        full.width, full.height, result, from);
     out->recommendedImageDimensions = full;
     out->isValid = XR_TRUE;
     return XR_SUCCESS;
@@ -2388,6 +2398,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(XrSession session, const XrFrameEndInf
     for (uint32_t i = 0; i < info->layerCount; ++i) {
         const XrCompositionLayerBaseHeader *l = info->layers[i];
         if (!l || l->type != XR_TYPE_COMPOSITION_LAYER_PROJECTION) continue;
+        if (fixed_resolution) fixed_note_projection(l);
         const XrCompositionLayerProjection *p = (const XrCompositionLayerProjection *)l;
         for (uint32_t v = 0; v < p->viewCount && v < 2; ++v) {
             const XrSwapchainSubImage *sub = &p->views[v].subImage;
