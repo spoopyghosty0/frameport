@@ -1,0 +1,12 @@
+package: com.BigBoxVR.PopulationONE
+title: 'Population: ONE'
+tested_version: 1.2.44906
+engine: Unity
+xr: OpenXR
+status: unsupported
+notes: Online-only. Signs in to its servers with a Meta account proof that only Meta's services can issue, so the
+  login fails ("no Internet").
+pcvr_alternative: 'Population: ONE on Steam (PC VR).'
+verified:
+  date: '2026-11-08'
+  issue: 521

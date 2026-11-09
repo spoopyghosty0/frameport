@@ -278,5 +278,6 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | GOLF+ | Quest | ❌ Doesn't run | Black screen. |
 | HITMAN 3 VR: Reloaded | Quest | ❌ Doesn't run | Vulkan driver crash (freedreno), even without Valve layers. |
 | PianoVision | Quest | ❌ Doesn't run | Starts, but needs camera hand tracking (Android games on the Frame only get hands built from the controllers) and USB MIDI from a piano, which the Frame's An… |
+| Population: ONE | Quest | ❌ Doesn't run | Online-only. |
 | Roblox | Quest | ❌ Doesn't run | Crashes on its first VR frame on the Frame. |
 | Thief Simulator | Quest | ❌ Doesn't run | Quits at start with the game's own "installed from unknown source" message. |
