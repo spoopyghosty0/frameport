@@ -817,6 +817,22 @@ def uses_libraries(manifest: bytes) -> list[str]:
     return out
 
 
+def horizonos_supplements(manifest: bytes) -> list[str]:
+    """The Horizon OS supplements the manifest's <horizonos:uses-horizonos-supplement> entries name, in file order,
+    each once. Meta's Horizon Platform SDK (com.meta.xr.sdk.platform 2xx) declares horizonos-supplement-
+    hzplatformclientcore: on Android its Oculus.Platform calls go through that supplement's Java classes
+    (horizonos.supplement.hzplatformclientcore.HorizonPlatformCore), not through libovrplatformloader.so, so OVRPort's
+    platform library never sees them (GitHub #511, TMNT: Empire City 1.0.9)."""
+    x = Axml(manifest)
+    out: list[str] = []
+    for el in x.elements():
+        if el.name == "uses-horizonos-supplement":
+            name = x.attr_str(el, "name")
+            if name and name not in out:
+                out.append(name)
+    return out
+
+
 def add_uses_libraries(manifest: bytes, libraries: list[str]) -> bytes | None:
     """Declare each of `libraries` the manifest doesn't name yet as `<uses-library android:name=… android:required=
     "false"/>` at the start of <application> (never required: a library the device lacks must not block the

@@ -105,6 +105,19 @@ signatures:
       services; FramePort can't provide those.
     suggest: []
     supersedes: [native-crash]
+  - id: horizon-platform-core-missing
+    # Meta's Horizon Platform SDK (com.meta.xr.sdk.platform 2xx, manifest uses-horizonos-supplement
+    # hzplatformclientcore): Oculus.Platform's AndroidClient.InitAsync can't create HorizonPlatformCore, a class of a
+    # Horizon OS system component, so Core.AsyncInitialize answers with an error (TMNT: Empire City 1.0.9, #511)
+    pattern: 'Failed to initialize HorizonPlatformCore: java\.lang\.(ClassNotFoundException|NoClassDefFoundError)'
+    severity: error
+    diagnosis: The game uses Meta's newer Horizon Platform SDK, which reaches Meta's services (sign-in, licence
+      check, user) through a Horizon OS system component (hzplatformclientcore) instead of the platform library
+      OVRPort replaces. The Frame doesn't have that component, so the game's Meta platform start fails; games that
+      wait for it stay on their loading screen. No fix is available yet. A version of the game built with the older
+      Meta Platform SDK may work.
+    suggest: []
+    updated: '2026-11-09'
   - id: lua-lightuserdata-pointer
     pattern: 'bad light userdata pointer'
     severity: fatal

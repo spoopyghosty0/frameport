@@ -500,6 +500,9 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             "browser_query": axml.queries_browser(manifest),
             # shared Java libraries the original manifest asks for (OVRPort drops them): frame.keep_system_libraries
             "uses_libraries": axml.uses_libraries(manifest),
+            # Horizon OS supplements (Meta's Horizon Platform SDK: hzplatformclientcore, GitHub #511); added without
+            # an ANALYSIS_VERSION bump: absent in older analyses = not known
+            "horizonos_supplements": axml.horizonos_supplements(manifest),
             "oculus_xr_plugin": bool(il2cpp_meta) and b"\0m_StereoRenderingModeAndroid\0" in il2cpp_meta,
             "meta_depth_occlusion": (
                 bool(il2cpp_meta) and (b"HARD_OCCLUSION" in il2cpp_meta or b"SOFT_OCCLUSION" in il2cpp_meta)
