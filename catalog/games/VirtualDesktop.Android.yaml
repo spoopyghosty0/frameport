@@ -1,0 +1,10 @@
+package: VirtualDesktop.Android
+title: Virtual Desktop
+tested_version: 1.34.12.0
+engine: Other
+xr: OpenXR
+status: unsupported
+notes: Checks a Meta entitlement at start and needs its PC streamer. The Frame streams PC VR through Steam Link.
+verified:
+  date: '2026-11-08'
+  issue: 556

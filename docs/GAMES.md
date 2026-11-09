@@ -281,3 +281,4 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Population: ONE | Quest | ❌ Doesn't run | Online-only. |
 | Roblox | Quest | ❌ Doesn't run | Crashes on its first VR frame on the Frame. |
 | Thief Simulator | Quest | ❌ Doesn't run | Quits at start with the game's own "installed from unknown source" message. |
+| Virtual Desktop | Quest | ❌ Doesn't run | Checks a Meta entitlement at start and needs its PC streamer. |
