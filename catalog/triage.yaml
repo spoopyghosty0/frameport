@@ -903,6 +903,55 @@ signatures:
       the video was decoded in software instead, which is slow for 4K/8K. Turn off hardware video decoding in Steam's
       settings, restart Steam, then start the game again.
     suggest: []
+  - id: perf-settings-unsupported
+    # GitHub #336/#400: OVRPort offers XR_EXT_performance_settings, the Frame's runtime has no
+    # xrPerfSettingsSetPerformanceLevelEXT: -7. OutRun Quest VR quits ("CPU performance: -7"), flycast logs it.
+    pattern: '(?:(?:CPU|GPU) performance|PerfSettings\w*|setPerformanceLevel|PERF_SETTINGS)[^\r\n]{0,160}(?:[,:]\s*-7\b|XR_ERROR_FUNCTION_UNSUPPORTED)'
+    unless: 'perf_settings: \w+ level'
+    severity: error
+    diagnosis: The game asked the headset for a CPU/GPU performance level (XR_EXT_performance_settings), which the
+      Frame's runtime doesn't have; some games quit when the request fails (for example OutRun Quest VR). FrameBridge
+      can accept the request without doing anything (the Frame manages its clocks itself).
+    suggest: [adapter.perf_settings_emul]
+  - id: no-rgba8-swapchain-format
+    # GitHub #400: flycast (HOTD2 VR) looks for GL_RGBA8 among the swapchain formats; the Frame lists only sRGB ones
+    pattern: '(?i)no (?:suitable |supported |usable )?(?:RGBA8|R8G8B8A8(?:_UNORM)?|GL_RGBA8)[^\r\n]{0,20}swapchain format'
+    unless: 'unorm_formats: listed'
+    severity: error
+    diagnosis: The app found no plain RGBA8 picture format, because the Frame's runtime lists only sRGB ones, and
+      gave up on VR (for example flycast's flat window instead of the headset view). FrameBridge can list the plain
+      formats too and create them as sRGB; colours may then look brighter.
+    suggest: [adapter.unorm_formats]
+  - id: projection-views-same-pose
+    # GitHub #527: Lambda1VR (TBXR) submits the head pose for both eyes; FrameBridge logs the first frames' views
+    pattern: 'projection view 0: [^\r\n]* pos=(-?[\d.]+,-?[\d.]+,-?[\d.]+) fov[^\r\n]*\r?\n[^\r\n]*projection view 1: [^\r\n]* pos=\1 fov'
+    unless: 'eye_pose_fix: both projection views'
+    severity: warning
+    diagnosis: The game sends both eyes' pictures with one and the same pose (the head's), although each eye is
+      rendered from its own position, so the headset shifts both pictures towards the middle (wrong depth, eye
+      strain; for example Lambda1VR). FrameBridge can give each eye its own pose.
+    suggest: [adapter.eye_pose_fix]
+  - id: sync-actions-path-unsupported
+    # GitHub #476: PadelVR Training (Unity 6, OVRPlugin 1.207): every xrSyncActions failed from focus on, right after
+    # FrameBridge left Meta's detached-controller paths out of the actions
+    pattern: 'xrSyncActions[^\r\n]*(?:XR_ERROR_PATH_UNSUPPORTED|failed -19\b)|XR_ERROR_PATH_UNSUPPORTED[^\r\n]*xrSyncActions'
+    severity: error
+    diagnosis: The runtime refuses every controller update (xrSyncActions, XR_ERROR_PATH_UNSUPPORTED), so the game
+      gets no input. Meta's detached controllers (a controller put down while hand tracking runs) don't exist on the
+      Frame; with "Treat newer Quest controllers as Touch" on, FrameBridge leaves their entries out of the update, and
+      FrameBridge logs what it changed (lines starting with profile_remap and xrSyncActions).
+    suggest: [adapter.profile_remap]
+    report: true
+  - id: wait-frame-stale
+    # GitHub #135: FNaF Help Wanted (Unreal + OVRPlugin) waits for a new frame in its splash screen while the frame it
+    # waited for before was never begun; SteamVR's xrWaitFrame then blocks forever (hang at the logo, no frames)
+    pattern: 'CompositorOpenXR::Update called for frame \d+ outside of frame bounds'
+    unless: 'FrameBridge\s*: pacing:|wait_balance: xrWaitFrame'
+    severity: fatal
+    diagnosis: The game stops at its logo without ever showing frames. Its splash screen waits for a new frame while
+      the frame it waited for before was never started, and the Frame's runtime then waits forever (a Quest's
+      doesn't). FrameBridge can close the forgotten frame itself (on by default since this was found).
+    suggest: [adapter.wait_balance]
 # Launch tests run without a worn headset. Some parts give up on tracking after a while and end the VR session; what
 # the game does after that (often a crash in the GPU driver while its renderer tears down) never happens in the
 # headset. In a launch test that already had paced frames before such a line, a later exit or crash still passes,

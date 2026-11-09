@@ -3,15 +3,19 @@ title: Lambda1VR
 status: works
 notes: 'Needs the game data: upload the release''s xash folder to the game''s storage (Files tab) and set --msaa
   1 in xash/commandline.txt. Owner''s headset test, 2026-10-06.'
+details: The game submits both eyes' pictures with the head pose, so the compositor shifted both towards the middle
+  (GitHub issue 527); FrameBridge eye_pose_fix gives each view its eye's offset (not yet confirmed in the headset).
 tested_version: 1.7.3
 engine: Other
 xr: OpenXR
 frame:
 - frame.tbxr_vendor
+adapter:
+  eye_pose_fix: 1
 verified:
   date: '2026-10-06'
   known_good_sha256: 10bbccceb8d9a84ff3bcc9a21fd59db52784ff7742998bbe5b30d938dd7b97d2
   app: 0.12.0
-updated: '2026-10-06'
+updated: '2026-11-09'
 min_app: 0.12.0
 source_hint: Lambda1VR

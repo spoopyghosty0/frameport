@@ -84,6 +84,11 @@
   "title": "Per-eye diagnostics (log)",
   "group": "Game settings"
  },
+ "adapter.eye_pose_fix": {
+  "anchor": "adapter-eye_pose_fix",
+  "title": "Fix eyes looking cross-eyed",
+  "group": "Game settings"
+ },
  "adapter.fade_quad": {
   "anchor": "adapter-fade_quad",
   "title": "Draw fades over the picture",
@@ -229,6 +234,11 @@
   "title": "See your room",
   "group": "Game settings"
  },
+ "adapter.perf_settings_emul": {
+  "anchor": "adapter-perf_settings_emul",
+  "title": "Accept performance requests",
+  "group": "Game settings"
+ },
  "adapter.pose_consistency": {
   "anchor": "adapter-pose_consistency",
   "title": "Steadier head tracking",
@@ -369,6 +379,11 @@
   "title": "Steady controller input after focus",
   "group": "Game settings"
  },
+ "adapter.unorm_formats": {
+  "anchor": "adapter-unorm_formats",
+  "title": "Offer plain picture formats",
+  "group": "Game settings"
+ },
  "adapter.vk_hide_fdm": {
   "anchor": "adapter-vk_hide_fdm",
   "title": "Hide Vulkan foveation",
@@ -412,6 +427,11 @@
  "adapter.vk_validation": {
   "anchor": "adapter-vk_validation",
   "title": "Vulkan error checks (log)",
+  "group": "Game settings"
+ },
+ "adapter.wait_balance": {
+  "anchor": "adapter-wait_balance",
+  "title": "Unstick games at their logo",
   "group": "Game settings"
  },
  "adapter.zink_shader_dump": {
@@ -647,6 +667,11 @@
  "frame.ovr_trace": {
   "anchor": "frame-ovr_trace",
   "title": "Trace Meta platform requests (diagnostics)",
+  "group": "Steam Frame patches"
+ },
+ "frame.ovrp_controller_battery": {
+  "anchor": "frame-ovrp_controller_battery",
+  "title": "Report full controller batteries to OVRPlugin games",
   "group": "Steam Frame patches"
  },
  "frame.ovrplatformcompat": {

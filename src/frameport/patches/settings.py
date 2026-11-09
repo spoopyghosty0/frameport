@@ -238,6 +238,29 @@ SETTINGS = [
      "The Frame's runtime accepts duplicate names but then can't load the game's input manifest and treats the game "
      "as closed: black, then the home environment while the game keeps running with sound (for example Scared By "
      "Squares, whose Unreal project has an action and an axis both called Turn; GitHub #323)."),
+    ("perf_settings_emul", "int", 1, "Accept performance level requests",
+     "OVRPort offers XR_EXT_performance_settings to every game, but the Frame's runtime lacks it, so "
+     "xrPerfSettingsSetPerformanceLevelEXT answered XR_ERROR_FUNCTION_UNSUPPORTED (-7). Most games go on; some quit "
+     "(OutRun Quest VR: \"CPU performance: -7\", GitHub #336). FrameBridge accepts the request (XR_SUCCESS) without "
+     "doing anything: the Frame manages its clocks itself. A runtime that has the function still gets the call."),
+    ("unorm_formats", "int", 0, "List plain RGBA8 picture formats",
+     "The Frame's runtime lists only sRGB colour formats (GL_SRGB8_ALPHA8, VK_FORMAT_R8G8B8A8_SRGB). Apps that look "
+     "for plain 8-bit RGBA find none and show a flat window instead of VR (for example flycast: \"XR: no RGBA8 "
+     "swapchain format\", GitHub #400). Lists GL_RGBA8 (Vulkan: R8G8B8A8_UNORM / B8G8R8A8_UNORM) after the runtime's "
+     "own formats, so apps that take the first format keep sRGB; such a swapchain is created in its sRGB twin "
+     "(swapchain_fix), so an app that writes gamma-encoded colours can look brighter. Needs swapchain_fix."),
+    ("eye_pose_fix", "int", 0, "Per-eye poses for one-pose games",
+     "For games that submit both eyes' pictures with the same (head) pose although each eye was rendered from its "
+     "own position: the compositor then shifts both pictures towards the middle (wrong depth, eye strain; for "
+     "example Lambda1VR, GitHub #527). When both views of a projection layer have the identical pose, each gets that "
+     "pose plus its eye's offset from the latest xrLocateViews; the field of view stays as submitted."),
+    ("wait_balance", "int", 1, "Close frames nobody begins",
+     "OpenXR lets xrWaitFrame block until the frame waited before it has begun; the Frame's runtime does, forever. "
+     "Unreal's Oculus splash screen waits for a new frame while the one waited before was never begun (OVRPlugin: "
+     "\"CompositorOpenXR::Update called for frame N outside of frame bounds\"), and the game hung at its logo (for "
+     "example FNaF Help Wanted, GitHub #135). When no thread begins that frame within 100 ms, FrameBridge begins it and "
+     "ends it without layers, then lets the wait go on; the game's own late xrBeginFrame/xrEndFrame for it are "
+     "answered without the runtime. Acts only in a state that would otherwise hang."),
     ("swap_eyes", "int", 0, "Swap eyes", "Swap left/right views (diagnostic)."),
     ("strip_depth", "int", 0, "Strip depth layers", "Remove XR_KHR_composition_layer_depth chains (diagnostic)."),
     ("mutable_fix", "int", 0, "Mutable swapchain fix", "Experimental Vulkan mutable-format workaround."),
@@ -539,6 +562,18 @@ UI: dict[str, dict] = {
                 help="Stops games from dropping back to the home environment at start because two of their "
                      "controller actions share a name (for example Scared By Squares). Leave it on.",
                 control=("switch",)),
+    "perf_settings_emul": dict(group="troubleshooting", level="advanced", label="Accept performance requests",
+                help="Stops games from quitting at start because the headset refused their CPU/GPU performance "
+                     "request (for example OutRun Quest VR). Leave it on.", control=("switch",)),
+    "unorm_formats": dict(group="troubleshooting", level="advanced", label="Offer plain picture formats",
+                help="For apps that show a flat window instead of VR because they found no plain RGBA8 picture "
+                     "format (for example flycast). Colours can look brighter.", control=("switch",)),
+    "wait_balance": dict(group="troubleshooting", level="advanced", label="Unstick games at their logo",
+                help="Stops games from hanging at their logo because they wait for a new frame without finishing "
+                     "the last one (for example FNaF Help Wanted). Leave it on.", control=("switch",)),
+    "eye_pose_fix": dict(group="picture", level="advanced", label="Fix eyes looking cross-eyed",
+                help="For games whose 3D looks wrong or strains the eyes because they send both eyes' pictures "
+                     "from the middle of the head (for example Lambda1VR).", control=("switch",)),
     "gl_hide_msrtt": dict(group="troubleshooting", level="advanced", label="Hide fast anti-aliasing (OpenGL ES)",
                 help="For Unity games that crash when they turn on anti-aliasing (for example The Room "
                      "VR).", control=("switch",)),
@@ -700,6 +735,8 @@ class AdapterSetting(Patch):
             "flip_quads": ap.is_vulkan,
             "mutable_fix": ap.is_vulkan,
             "swapchain_fix": ap.is_gles,
+            "unorm_formats": lambda a: a.xr == "OpenXR",
+            "perf_settings_emul": lambda a: a.xr == "OpenXR" or "libOVRPlugin.so" in a.libs,
             "gl_hide_multiview": lambda a: a.direct_vrapi and ap.is_gles(a),
             "gl_hide_msrtt": ap.is_gles,
             "gl_int_attribs": ap.is_gles,

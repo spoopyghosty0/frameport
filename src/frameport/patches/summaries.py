@@ -127,7 +127,9 @@ SUMMARIES = {
     "frame.keep_system_libraries": "Lets apps start that need one of Android's optional libraries (for example "
                                    "YouTube VR).",
     "frame.cortopia_org_id": "Gets Cortopia games (for example Escaping Wonderland) past their loading screen.",
-    "frame.ovr_org_scoped_id": "Answers Meta's request for your org-scoped user id, which games such as Eleven Table "
+    "frame.ovrp_controller_battery": "Stops games from warning that your controllers are empty (for example In "
+                                     "Death: Unchained): they get a full battery level instead of 0 %.",
+    "frame.ovr_org_scoped_id":"Answers Meta's request for your org-scoped user id, which games such as Eleven Table "
                                "Tennis wait for on their loading screen.",
     "frame.luajit_pointers": "Lets games with a verified older Lua engine get past a startup crash on the Frame.",
     "frame.avatar_stub": "Lets games start that would stop at Meta's avatars (for example BlazeRush). No Meta "

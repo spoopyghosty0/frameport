@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 208 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 213 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -11,8 +11,8 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 ## Groups
 
 - [Patches from OVRPort](#group-overport) (25)
-- [Steam Frame patches](#group-frame) (73)
-- [Game settings](#group-adapter) (85)
+- [Steam Frame patches](#group-frame) (74)
+- [Game settings](#group-adapter) (89)
 - [Files and settings on the Frame](#group-device) (12)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
 
@@ -78,6 +78,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Answer Meta's org-scoped user id request](#frame-ovr_org_scoped_id) | `frame.ovr_org_scoped_id` | Steam Frame patches | default |
 | [Keep the same Meta user between starts](#frame-ovr_stable_user) | `frame.ovr_stable_user` | Steam Frame patches | default |
 | [Trace Meta platform requests (diagnostics)](#frame-ovr_trace) | `frame.ovr_trace` | Steam Frame patches |  |
+| [Report full controller batteries to OVRPlugin games](#frame-ovrp_controller_battery) | `frame.ovrp_controller_battery` | Steam Frame patches |  |
 | [Platform compat (ovrMessageType_ToString)](#frame-ovrplatformcompat) | `frame.ovrplatformcompat` | Steam Frame patches | default |
 | [Stub missing Meta platform functions](#frame-ovrstubs) | `frame.ovrstubs` | Steam Frame patches | default |
 | [Unpaired pointer-authentication checks](#frame-pac_hints) | `frame.pac_hints` | Steam Frame patches | 1 |
@@ -135,6 +136,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [360° sharpness](#adapter-equirect_res) | `adapter.equirect_res` | Game settings |  |
 | [360° 3D](#adapter-equirect_stereo) | `adapter.equirect_stereo` | Game settings |  |
 | [Per-eye diagnostics (log)](#adapter-eye_debug) | `adapter.eye_debug` | Game settings |  |
+| [Fix eyes looking cross-eyed](#adapter-eye_pose_fix) | `adapter.eye_pose_fix` | Game settings | 1 |
 | [Draw fades over the picture](#adapter-fade_quad) | `adapter.fade_quad` | Game settings | 2 |
 | [Colour space support](#adapter-fb_color_space) | `adapter.fb_color_space` | Game settings | 1 |
 | [Foveation bin height](#adapter-fdm_bin_h) | `adapter.fdm_bin_h` | Game settings |  |
@@ -164,6 +166,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Unity frame loop: wait for skipped frames](#adapter-ovrp_begin_gate) | `adapter.ovrp_begin_gate` | Game settings | 1 |
 | [Steadier hands (older Unity)](#adapter-ovrp_hold_physics) | `adapter.ovrp_hold_physics` | Game settings | 1 |
 | [See your room](#adapter-passthrough_emul) | `adapter.passthrough_emul` | Game settings | 2 |
+| [Accept performance requests](#adapter-perf_settings_emul) | `adapter.perf_settings_emul` | Game settings |  |
 | [Steadier head tracking](#adapter-pose_consistency) | `adapter.pose_consistency` | Game settings | 2 |
 | [Pose timing diagnostics (log)](#adapter-pose_debug) | `adapter.pose_debug` | Game settings |  |
 | [Fix hands lagging behind controllers](#adapter-pose_time_fix) | `adapter.pose_time_fix` | Game settings | 19 |
@@ -192,6 +195,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Retry refused picture formats](#adapter-swapchain_fix) | `adapter.swapchain_fix` | Game settings |  |
 | [Share panel images (swapchain limit)](#adapter-swapchain_pool) | `adapter.swapchain_pool` | Game settings | 2 |
 | [Steady controller input after focus](#adapter-sync_guard) | `adapter.sync_guard` | Game settings | 4 |
+| [Offer plain picture formats](#adapter-unorm_formats) | `adapter.unorm_formats` | Game settings |  |
 | [Hide Vulkan foveation](#adapter-vk_hide_fdm) | `adapter.vk_hide_fdm` | Game settings | 1 |
 | [Without Steam's shader cache layer](#adapter-vk_no_fossilize) | `adapter.vk_no_fossilize` | Game settings | 1 |
 | [Skip refused graphics](#adapter-vk_pipeline_fallback) | `adapter.vk_pipeline_fallback` | Game settings | 1 |
@@ -201,6 +205,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Vulkan shader fixes](#adapter-vk_shader_fix) | `adapter.vk_shader_fix` | Game settings | 1 |
 | [Fix depth flicker (Unreal Vulkan)](#adapter-vk_spec_fixes) | `adapter.vk_spec_fixes` | Game settings | 2 |
 | [Vulkan error checks (log)](#adapter-vk_validation) | `adapter.vk_validation` | Game settings |  |
+| [Unstick games at their logo](#adapter-wait_balance) | `adapter.wait_balance` | Game settings |  |
 | [OpenGL ES shader dump (diagnostics)](#adapter-zink_shader_dump) | `adapter.zink_shader_dump` | Game settings |  |
 | [OpenGL ES shader fixes](#adapter-zink_shader_fix) | `adapter.zink_shader_fix` | Game settings | 2 |
 | [Keep the game's saved resolution in step](#device-config_sync) | `device.config_sync` | Files and settings on the Frame | 1 |
@@ -966,6 +971,17 @@ For troubleshooting: records the game's requests to Meta's online services.
 - **Source:** [patches/frame/ovr_trace.py](../src/frameport/patches/frame/ovr_trace.py)
 
 > Logs every Meta Platform SDK request the game makes (user, entitlement, cloud saves, ...) and the messages that answer them, and every 10 s the requests that never got an answer (logcat tag fp_ovrtrace, in launch.log). For games that wait forever on a loading screen (for example Vader Immortal after its intro). Changes nothing: every call goes to the real function.
+
+### <a id="frame-ovrp_controller_battery"></a>Report full controller batteries to OVRPlugin games
+
+Stops games from warning that your controllers are empty (for example In Death: Unchained): they get a full battery level instead of 0 %.
+
+- `frame.ovrp_controller_battery`
+- **Changes:** Changes the APK (a rebuild and reinstall apply it).
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Source:** [patches/frame/ovrp_battery.py](../src/frameport/patches/frame/ovrp_battery.py)
+
+> OVRPort's OVRPlugin reports 0 % battery for both controllers on the Frame, so games that show or check the level warn about empty controllers all the time (for example In Death: Unchained). Adds a small library to libOVRPlugin.so that reports 100 % for a connected controller whose level reads 0 (ovrp_GetControllerState4/5/6); every other value passes unchanged.
 
 ### <a id="frame-ovrplatformcompat"></a>Platform compat (ovrMessageType_ToString)
 
@@ -1757,6 +1773,23 @@ Logs details when one eye looks wrong. No effect on the game.
 
 > For one eye looking wrong (for example a jittering right eye): logs each eye's submitted pose against a fresh one, the eye-to-eye relation and when each eye's image was released, also into framebridge.log in the game's storage (some games stop Android's log early). No effect on the game.
 
+### <a id="adapter-eye_pose_fix"></a>Fix eyes looking cross-eyed
+
+For games whose 3D looks wrong or strains the eyes because they send both eyes' pictures from the middle of the head (for example Lambda1VR).
+
+- `adapter.eye_pose_fix`
+- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:**
+  - Value: int, default `0`.
+  - Game settings → Picture → "Fix eyes looking cross-eyed" (advanced).
+- **Catalog games (1):** Lambda1VR.
+- **Suggested by launch-test signatures:**
+  - `projection-views-same-pose` (warning): The game sends both eyes' pictures with one and the same pose (the head's), although each eye is rendered from its own position, so the headset shifts both pictures towards the middle (wrong depth, eye strain; for example Lambda1VR).
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> For games that submit both eyes' pictures with the same (head) pose although each eye was rendered from its own position: the compositor then shifts both pictures towards the middle (wrong depth, eye strain; for example Lambda1VR, GitHub #527). When both views of a projection layer have the identical pose, each gets that pose plus its eye's offset from the latest xrLocateViews; the field of view stays as submitted.
+
 ### <a id="adapter-fade_quad"></a>Draw fades over the picture
 
 For games whose fades to black don't show, so you see the level loading (for example Batman: Arkham Shadow).
@@ -2190,6 +2223,22 @@ Shows the Frame's cameras where the game expects passthrough.
 
 > XR_FB_passthrough via ALPHA_BLEND (Frame grayscale cameras).
 
+### <a id="adapter-perf_settings_emul"></a>Accept performance requests
+
+Stops games from quitting at start because the headset refused their CPU/GPU performance request (for example OutRun Quest VR). Leave it on.
+
+- `adapter.perf_settings_emul`
+- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:**
+  - Value: int, default `1`.
+  - Game settings → Troubleshooting → "Accept performance requests" (advanced).
+- **Suggested by launch-test signatures:**
+  - `perf-settings-unsupported` (error): The game asked the headset for a CPU/GPU performance level (XR_EXT_performance_settings), which the Frame's runtime doesn't have; some games quit when the request fails (for example OutRun Quest VR).
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> OVRPort offers XR_EXT_performance_settings to every game, but the Frame's runtime lacks it, so xrPerfSettingsSetPerformanceLevelEXT answered XR_ERROR_FUNCTION_UNSUPPORTED (-7). Most games go on; some quit (OutRun Quest VR: "CPU performance: -7", GitHub #336). FrameBridge accepts the request (XR_SUCCESS) without doing anything: the Frame manages its clocks itself. A runtime that has the function still gets the call.
+
 ### <a id="adapter-pose_consistency"></a>Steadier head tracking
 
 For games that judder or shimmer while you hold your head still (for example I Am Cat).
@@ -2245,6 +2294,8 @@ For apps that only know Quest 3/Pro controllers: without it they get no buttons.
 - **Options:**
   - Value: int, default `1`.
   - Game settings → Controllers → "Treat newer Quest controllers as Touch" (advanced).
+- **Suggested by launch-test signatures:**
+  - `sync-actions-path-unsupported` (error): The runtime refuses every controller update (xrSyncActions, XR_ERROR_PATH_UNSUPPORTED), so the game gets no input.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Apps that suggest controller bindings only for Meta's newer profiles (Touch Plus, Touch Pro), which the Frame's runtime rejects (XR_ERROR_PATH_UNSUPPORTED), get the same bindings as oculus/touch_controller instead (components Touch lacks are dropped), and the runtime's answer for each hand is reported to them as their own profile (Unity's OpenXR input only connects controllers of a profile it knows). Meta's detached-controller paths (XR_META_detached_controllers, which the Frame lacks) are left out of the app's actions and bindings: one such path made Unity attach no controller input at all. Without it such apps get no controller input.
@@ -2605,6 +2656,22 @@ For games that crash right after you return to them (for example after the Steam
 
 > Runs xrSyncActions one at a time with xrPollEvent and skips it for 250 ms after focus returns. For games that crash in the runtime's input code right after focus comes back (SIGSEGV in vrclient.so UpdateActionStateInternal / xrSyncActions, for example Myst).
 
+### <a id="adapter-unorm_formats"></a>Offer plain picture formats
+
+For apps that show a flat window instead of VR because they found no plain RGBA8 picture format (for example flycast). Colours can look brighter.
+
+- `adapter.unorm_formats`
+- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:**
+  - Value: int, default `0`.
+  - Game settings → Troubleshooting → "Offer plain picture formats" (advanced).
+- **Suggested by launch-test signatures:**
+  - `no-rgba8-swapchain-format` (error): The app found no plain RGBA8 picture format, because the Frame's runtime lists only sRGB ones, and gave up on VR (for example flycast's flat window instead of the headset view).
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> The Frame's runtime lists only sRGB colour formats (GL_SRGB8_ALPHA8, VK_FORMAT_R8G8B8A8_SRGB). Apps that look for plain 8-bit RGBA find none and show a flat window instead of VR (for example flycast: "XR: no RGBA8 swapchain format", GitHub #400). Lists GL_RGBA8 (Vulkan: R8G8B8A8_UNORM / B8G8R8A8_UNORM) after the runtime's own formats, so apps that take the first format keep sRGB; such a swapchain is created in its sRGB twin (swapchain_fix), so an app that writes gamma-encoded colours can look brighter. Needs swapchain_fix.
+
 ### <a id="adapter-vk_hide_fdm"></a>Hide Vulkan foveation
 
 For Unreal Engine 5 games that crash on the Frame (for example Metro Awakening).
@@ -2746,6 +2813,22 @@ Logs Vulkan mistakes the game makes. Needs a special test build.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Diagnostics: the Vulkan shim (frame.vk_sanitize) adds Khronos' validation layer to the game's instance; its findings go to launch.log. The layer library (libVkLayer_khronos_validation.so) must be in the APK.
+
+### <a id="adapter-wait_balance"></a>Unstick games at their logo
+
+Stops games from hanging at their logo because they wait for a new frame without finishing the last one (for example FNaF Help Wanted). Leave it on.
+
+- `adapter.wait_balance`
+- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:**
+  - Value: int, default `1`.
+  - Game settings → Troubleshooting → "Unstick games at their logo" (advanced).
+- **Suggested by launch-test signatures:**
+  - `wait-frame-stale` (fatal): The game stops at its logo without ever showing frames.
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> OpenXR lets xrWaitFrame block until the frame waited before it has begun; the Frame's runtime does, forever. Unreal's Oculus splash screen waits for a new frame while the one waited before was never begun (OVRPlugin: "CompositorOpenXR::Update called for frame N outside of frame bounds"), and the game hung at its logo (for example FNaF Help Wanted, GitHub #135). When no thread begins that frame within 100 ms, FrameBridge begins it and ends it without layers, then lets the wait go on; the game's own late xrBeginFrame/xrEndFrame for it are answered without the runtime. Acts only in a state that would otherwise hang.
 
 ### <a id="adapter-zink_shader_dump"></a>OpenGL ES shader dump (diagnostics)
 

@@ -143,6 +143,10 @@ static int fixed_resolution;
 static int swapchain_pool = 0;
 static int fb_color_space;  // fb_color_space: offer XR_FB_color_space when the runtime lacks it (#336)
 static int action_dedup = 1;  // rename duplicate action names in a set (session_fixes.c; GitHub #323)
+static int perf_settings_emul = 1;  // xrPerfSettingsSetPerformanceLevelEXT succeeds without the runtime (perf_settings.c)
+static int unorm_formats;  // list GL_RGBA8 / VK R8G8B8A8_UNORM after the runtime's formats (swapchain_formats.h)
+static int eye_pose_fix;   // both projection views with one (head) pose: each eye gets its own offset (eye_pose_fix.c)
+static int wait_balance = 1;  // close a waited frame nobody begins before the next xrWaitFrame (wait_balance.c)
 static int pose_consistency = 0;  // repeat xrLocateViews queries for one display time get the same poses (GitHub #8)  // clamp submitted image rects to their swapchain (SteamVR rejects a 1 px overrun)
 static int pose_time_fix;   // poses asked for at CLOCK_MONOTONIC "now" or far in the past: at XrTime "now" (pose_time.c)
 static int pose_debug;      // diagnostics: requested pose times vs the predicted display time (pose_time.c)
@@ -229,6 +233,10 @@ static void read_settings(const char *path) {
         if (sscanf(line, "swapchain_pool=%f", &value) == 1) swapchain_pool = value != 0;
         if (sscanf(line, "fb_color_space=%f", &value) == 1) fb_color_space = value != 0;
         if (sscanf(line, "action_dedup=%f", &value) == 1) action_dedup = value != 0;
+        if (sscanf(line, "perf_settings_emul=%f", &value) == 1) perf_settings_emul = value != 0;
+        if (sscanf(line, "unorm_formats=%f", &value) == 1) unorm_formats = value != 0;
+        if (sscanf(line, "eye_pose_fix=%f", &value) == 1) eye_pose_fix = value != 0;
+        if (sscanf(line, "wait_balance=%f", &value) == 1) wait_balance = value != 0;
         if (sscanf(line, "pose_consistency=%f", &value) == 1) pose_consistency = value != 0;
         if (sscanf(line, "pose_debug=%f", &value) == 1) pose_debug = value != 0;
         if (sscanf(line, "pose_time_fix=%f", &value) == 1) pose_time_fix = value != 0;
@@ -1225,6 +1233,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpace(XrSpace space) {
 
 #include "input_diag.c"
 #include "session_fixes.c"
+#include "perf_settings.c"
+#include "eye_pose_fix.c"
+#include "haptic_log.c"
+#include "wait_balance.c"
 #include "layer_emul_gl.c"
 #include "swapchain_pool.c"
 #include "cube_standin.c"
@@ -1432,6 +1444,7 @@ static XrResult apply_haptics(XrSession session, const XrHapticActionInfo *info,
     PFN_xrApplyHapticFeedback fn = (PFN_xrApplyHapticFeedback)lookup(active_instance, "xrApplyHapticFeedback");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
     if (!feedback) return fn(session, info, feedback);
+    haptic_summary_note(info, feedback);  // session-long summary (haptic_log.c, GitHub #567)
     if (feedback->type == XR_TYPE_HAPTIC_VIBRATION) {
         XrHapticVibration v = *(const XrHapticVibration *)feedback;
         if (haptics_logged++ < 8)
@@ -1493,12 +1506,44 @@ XRAPI_ATTR XrResult XRAPI_CALL xrApplyHapticFeedback(XrSession session, const Xr
 
 #include "hide_foveation_images.h"
 
+#include "swapchain_formats.h"
+
 // space_warp_emul lists the formats space warp asks for (space_warp.c); else the runtime's list unchanged.
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(XrSession session, uint32_t capacity, uint32_t *count,
-        int64_t *formats) {
+static XrResult enumerate_formats_inner(XrSession session, uint32_t capacity, uint32_t *count, int64_t *formats) {
     if (space_warp_emul) return sw_enumerate_formats(session, capacity, count, formats);
     PFN_xrEnumerateSwapchainFormats fn = (PFN_xrEnumerateSwapchainFormats)lookup(active_instance, "xrEnumerateSwapchainFormats");
     return fn ? fn(session, capacity, count, formats) : XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+// unorm_formats (with swapchain_fix, which turns them into their sRGB twins at creation): plain 8-bit RGBA formats
+// appended after the list (swapchain_formats.h, GitHub #400).
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(XrSession session, uint32_t capacity, uint32_t *count,
+        int64_t *formats) {
+    if (!unorm_formats || !swapchain_fix) return enumerate_formats_inner(session, capacity, count, formats);
+    if (!count || (capacity && !formats)) return XR_ERROR_VALIDATION_FAILURE;
+    uint32_t total = 0;
+    XrResult r = enumerate_formats_inner(session, 0, &total, NULL);
+    if (XR_FAILED(r)) return r;
+    int64_t *all = calloc((size_t)total + SF_MAX_APPENDED, sizeof *all);
+    if (!all) return XR_ERROR_OUT_OF_MEMORY;
+    if (total && XR_FAILED(r = enumerate_formats_inner(session, total, &total, all))) { free(all); return r; }
+    uint32_t n = sf_append_unorm(all, total, gles_session);
+    static int logged;
+    if (!logged++ && n > total) {
+        char list[160] = "";
+        for (uint32_t i = total; i < n; ++i) {
+            size_t used = strlen(list);
+            snprintf(list + used, sizeof list - used, " %lld", (long long)all[i]);
+        }
+        LOG("unorm_formats: listed after the runtime's %u format(s):%s (created as their sRGB twins)", total, list);
+    }
+    *count = n;
+    if (capacity) {
+        if (capacity < n) { free(all); return XR_ERROR_SIZE_INSUFFICIENT; }
+        memcpy(formats, all, n * sizeof *all);
+    }
+    free(all);
+    return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(XrSwapchain swapchain, uint32_t capacity, uint32_t *count,
@@ -1707,7 +1752,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(XrSession session, const X
 XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(XrSession session, const XrFrameWaitInfo *info, XrFrameState *state) {
     PFN_xrWaitFrame fn = (PFN_xrWaitFrame)lookup(active_instance, "xrWaitFrame");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
+    wb_before_wait(session);  // a waited frame nobody begins would block this wait forever (GitHub #135)
     XrResult result = fn(session, info, state);
+    wb_after_wait(session, result, state ? state->predictedDisplayTime : 0);
     if (XR_SUCCEEDED(result) && state) {
         last_predicted_time = state->predictedDisplayTime;
         struct timespec now;
@@ -1805,6 +1852,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(XrSession session, const XrViewLoca
     if (cacheable && pose_cache_lookup(session, info, state, capacity, count, views)) return XR_SUCCESS;
     XrResult result = fn(session, info, state, capacity, count, views);
     if (cacheable && result == XR_SUCCESS) pose_cache_store(session, info, state, *count, views);
+    if (eye_pose_fix && result == XR_SUCCESS && count) eye_pose_note_views(state, *count < capacity ? *count : capacity, views);
     if(surface_native && surface_emul && XR_SUCCEEDED(result) && count)
         surf_views_record(session,info,state,*count<capacity?*count:capacity,views);
     if (equirect_emul && XR_SUCCEEDED(result) && info && count && views && state &&
@@ -1858,6 +1906,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(XrSession session, const XrFrameBegi
     PFN_xrBeginFrame fn = (PFN_xrBeginFrame)lookup(active_instance, "xrBeginFrame");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
     clear_gl_errors("xrBeginFrame");
+    if (wb_begin_swallow(session)) return XR_SUCCESS;  // its frame was closed by wait_balance
     if (frame_open && frame_balance) {
         PFN_xrEndFrame end = (PFN_xrEndFrame)lookup(active_instance, "xrEndFrame");
         XrFrameEndInfo empty = {XR_TYPE_FRAME_END_INFO, NULL, last_begin_display_time ? last_begin_display_time
@@ -1869,6 +1918,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(XrSession session, const XrFrameBegi
         __atomic_add_fetch(&frame_balanced, 1, __ATOMIC_RELAXED);
     }
     XrResult result = fn(session, info);
+    wb_after_begin(session, result);
     __atomic_add_fetch(&frame_begins, 1, __ATOMIC_RELAXED);
     if (result == XR_FRAME_DISCARDED) __atomic_add_fetch(&frame_discarded, 1, __ATOMIC_RELAXED);
     if (XR_SUCCEEDED(result)) {
@@ -1881,6 +1931,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(XrSession session, const XrFrameBegi
 XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(XrSession session, const XrFrameEndInfo *info) {
     PFN_xrEndFrame fn = (PFN_xrEndFrame)lookup(active_instance, "xrEndFrame");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
+    if (wb_end_swallow()) { frame_open = 0; return XR_SUCCESS; }  // ends a frame wait_balance closed already
+    info = eye_pose_frame(info);  // eye_pose_fix: one head pose in both views -> per-eye poses (GitHub #527)
     frame_open = 0;
     clear_gl_errors("xrEndFrame");
     __atomic_add_fetch(&frame_ends, 1, __ATOMIC_RELAXED);
@@ -2668,6 +2720,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance instance, const 
     }
     HOOK(xrGetSystemProperties)
     HOOK(xrApplyHapticFeedback)
+    if (!strcmp(name, "xrStopHapticFeedback")) {  // counted for the haptics summary (haptic_log.c)
+        *function = (PFN_xrVoidFunction)hook_stop_haptics;
+        return XR_SUCCESS;
+    }
     HOOK(xrCreateReferenceSpace)
     HOOK(xrLocateViews)
     HOOK(xrPollEvent)
@@ -2691,6 +2747,21 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance instance, const 
     HOOK(xrEnumerateInstanceExtensionProperties)
     // Per-game hooks: only installed when their setting is on, so other games run through exactly the same calls.
 #define HOOK_AS(fn, impl) if (!strcmp(name, #fn)) { *function = (PFN_xrVoidFunction)impl; return XR_SUCCESS; }
+    if (profile_remap && !strcmp(name, "xrSyncActions")) {
+        // detached controllers' active-set entries left out (detached_controllers.c, GitHub #476), in front of
+        // whichever xrSyncActions hook (or the runtime) the other settings pick
+        static __thread int resolving;
+        if (!resolving) {
+            PFN_xrVoidFunction inner = NULL;
+            resolving = 1;
+            XrResult r = xrGetInstanceProcAddr(instance, name, &inner);
+            resolving = 0;
+            if (XR_FAILED(r) || !inner) return r;
+            detached_sync_next = (PFN_xrSyncActions)inner;
+            *function = (PFN_xrVoidFunction)detached_hook_xrSyncActions;
+            return XR_SUCCESS;
+        }
+    }
     if (space_warp_emul) {
         // FrameBridge's space-warp images: wait/release succeed at once, in front of whichever hook (or the runtime)
         // the other settings pick for every other swapchain
@@ -2709,6 +2780,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance instance, const 
         HOOK(xrEnumerateSwapchainFormats)
         HOOK_AS(xrDestroySession, hook_xrDestroySession)
     }
+    if (unorm_formats && swapchain_fix) HOOK(xrEnumerateSwapchainFormats)  // + plain RGBA8 formats (GitHub #400)
     if (surface_native) {
         HOOK(xrGetVulkanGraphicsDeviceKHR)
         HOOK(xrGetVulkanDeviceExtensionsKHR)
@@ -2734,6 +2806,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance instance, const 
     if (instance != XR_NULL_HANDLE) {
         HOOK_AS(xrGetDisplayRefreshRateFB, hook_get_refresh_rate)
         HOOK_AS(xrRequestDisplayRefreshRateFB, hook_request_refresh_rate)
+        if (perf_settings_emul) HOOK_AS(xrPerfSettingsSetPerformanceLevelEXT, hook_perf_settings_level)  // GitHub #336
     }
     if (surface_emul) HOOK_AS(xrCreateSwapchainAndroidSurfaceKHR, hook_xrCreateSwapchainAndroidSurfaceKHR)
     if (eye_debug || release_wait) HOOK_AS(xrReleaseSwapchainImage, eye_hook_xrReleaseSwapchainImage)

@@ -10,7 +10,7 @@ timefix OpenXR layer for Proton games (linux-arm64, glibc; the NDK's clang build
 OculusHMDConnected helper for Rift games under Proton (win-x64 PE; the NDK's clang + lld-link, no Windows SDK), the
 live view's hardware H.264 encoder fp_venc (linux-arm64-bin, static freestanding executable), and rewrites artifacts/SHA256SUMS. Run `frameport parity` afterwards to see which games change.
 
-    python native/build.py [--only adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,handoff,xrlayer,oculushmd,xrruntime,xrshim,vkshim,zinkfix,foveation,ovrpshim,tlskeys,vrsettings,venc,vroverlay_probe] [--ndk PATH]
+    python native/build.py [--only adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,handoff,xrlayer,oculushmd,xrruntime,xrshim,vkshim,zinkfix,foveation,ovrpshim,ovrpbattery,tlskeys,vrsettings,venc,vroverlay_probe] [--ndk PATH]
 """
 from __future__ import annotations
 
@@ -395,6 +395,15 @@ def build_ovrpshim(tc: Path):
          "-llog", "-o", ART / "arm64-v8a/libfp_ovrp.so"], cwd=src)
 
 
+def build_ovrpbattery(tc: Path):
+    """Controller battery for OVRPlugin games (see ovrpbattery/ovrpbattery.c, patch frame.ovrp_controller_battery)."""
+    src = HERE / "ovrpbattery"
+    run([exe(tc, "aarch64-linux-android29-clang"), "-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror",
+         "-fvisibility=hidden", f"-ffile-prefix-map={HERE}=native", "-Wl,--no-undefined",
+         "-Wl,-soname,libfp_ovrpbattery.so", "-Wl,-z,max-page-size=16384", "ovrpbattery.c", "-ldl", "-llog",
+         "-o", ART / "arm64-v8a/libfp_ovrpbattery.so"], cwd=src)
+
+
 def build_tlskeys(tc: Path):
     """Thread-key pool for Unity (see tlskeys/tlskeys.c, patch frame.unity_tls_key_pool)."""
     src = HERE / "tlskeys"
@@ -489,7 +498,7 @@ def write_sums():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", default="adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrruntime,xrshim,vkshim,zinkfix,foveation,ovrpshim,tlskeys,luajit,vrsettings,venc,roomscan,a32,handoff")
+    ap.add_argument("--only", default="adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrruntime,xrshim,vkshim,zinkfix,foveation,ovrpshim,ovrpbattery,tlskeys,luajit,vrsettings,venc,roomscan,a32,handoff")
     ap.add_argument("--ndk")
     args = ap.parse_args()
     parts = set(args.only.split(","))
@@ -502,12 +511,12 @@ def main():
              "oculushmd": lambda: build_oculushmd(tc), "vkshim": lambda: build_vkshim(tc),
              "zinkfix": lambda: build_zinkfix(tc),
              "foveation": lambda: build_foveation(tc),
-             "ovrpshim": lambda: build_ovrpshim(tc), "tlskeys": lambda: build_tlskeys(tc),
+             "ovrpshim": lambda: build_ovrpshim(tc), "ovrpbattery": lambda: build_ovrpbattery(tc), "tlskeys": lambda: build_tlskeys(tc),
              "luajit": lambda: build_luajit(tc),
              "vrsettings": lambda: build_vrsettings(tc), "venc": lambda: build_venc(tc),
              "roomscan": lambda: build_roomscan(tc),
              "vroverlay_probe": lambda: build_vroverlay_probe(tc), "a32": lambda: build_a32(tc)}
-    for name in ("adapter", "bridge", "compat", "langpack", "glshim", "eglfmt", "glmv", "ovrtrace", "xrruntime", "xrshim", "vkshim", "zinkfix", "foveation", "ovrpshim", "tlskeys", "luajit", "dex", "handoff", "xrlayer", "oculushmd", "vrsettings", "venc",
+    for name in ("adapter", "bridge", "compat", "langpack", "glshim", "eglfmt", "glmv", "ovrtrace", "xrruntime", "xrshim", "vkshim", "zinkfix", "foveation", "ovrpshim", "ovrpbattery", "tlskeys", "luajit", "dex", "handoff", "xrlayer", "oculushmd", "vrsettings", "venc",
                  "roomscan", "vroverlay_probe", "a32"):
         if name in parts:
             log(f"build {name}")

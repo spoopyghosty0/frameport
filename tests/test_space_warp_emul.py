@@ -63,7 +63,9 @@ def test_adapter_routes_space_warp_swapchains():
     assert sw_block < gipa.index("if (surface_native) {")
     assert "HOOK(xrEnumerateSwapchainFormats)" in gipa
     formats = src.split("XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(", 1)[1].split("\n}\n", 1)[0]
-    assert "if (space_warp_emul) return sw_enumerate_formats(" in formats  # exported: dlsym callers get it too
+    assert "enumerate_formats_inner(session, capacity, count, formats)" in formats  # exported: dlsym callers too
+    inner = src.split("static XrResult enumerate_formats_inner(", 1)[1].split("\n}\n", 1)[0]
+    assert "if (space_warp_emul) return sw_enumerate_formats(" in inner  # (+ unorm_formats' twins after it, #400)
     assert "sw_session_destroy(session)" in (ROOT / "native/adapter/layer_emul_gl.c").read_text()
 
 
