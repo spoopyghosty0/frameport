@@ -379,3 +379,17 @@ def test_box_sizes_keep_thin_sizes_readable():
 
     assert metres(0.03) == "0.03" and metres(0.07) == "0.07" and metres(0.5) == "0.5" and metres(2.05) == "2.0"
     assert size_text(1.6, 1.1, 0.03) == "1.6×1.1×0.03 m"
+
+
+def test_slider_range_keeps_its_value_inside():  # GitHub #559
+    import flet as ft
+    from frameport.ui.views.room_edit import set_range
+
+    s = ft.Slider(min=-5, max=5, value=0)
+    set_range(s, 0.333, 4.2, 0.01)  # a room whose outline starts past 0 m
+    assert (s.min, s.max, s.value) == (0.33, 4.2, 0.33) and s.divisions == 387
+    set_range(s, -3, -1, 0.01)
+    assert s.value == -1
+    s.value = None
+    set_range(s, 1, 2, 0.01)
+    assert s.value == 1

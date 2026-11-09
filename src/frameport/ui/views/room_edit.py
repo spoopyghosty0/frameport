@@ -111,6 +111,15 @@ def _slider(lo, hi, step, value, on_change, width=None) -> ft.Slider:
 
 
 
+def set_range(s: ft.Slider, lo: float, hi: float, step: float) -> None:
+    """A new range for `s`, its value kept inside it: Flet refuses a value outside min..max when the slider is next
+    sent (GitHub #559: a room whose outline started past 0 m left the hidden box sliders at 0, and the next page
+    switch crashed with "value (0) must be greater than or equal to min (0.33)")."""
+    s.min, s.max = round(lo, 2), round(max(lo, hi), 2)
+    s.divisions = max(1, round((s.max - s.min) / step))
+    s.value = min(max(s.value if s.value is not None else s.min, s.min), s.max)
+
+
 def _full(control: ft.Control) -> ft.Row:
     """`control` across the whole content width (a full segmented() track)."""
     return ft.Row([ft.Container(control, expand=True)])
@@ -505,9 +514,7 @@ class FurnitureEditor:
             zs = [z for _, z in self.room.outline]
             for attr, lo, hi in (("cx", min(xs) - 1, max(xs) + 1), ("cz", min(zs) - 1, max(zs) + 1),
                                  ("top_y", self.room.floor, self.room.floor + 3)):
-                s = self.box_sliders[attr]
-                s.min, s.max = round(lo, 2), round(hi, 2)
-                s.divisions = max(1, round((s.max - s.min) / 0.01))
+                set_range(self.box_sliders[attr], lo, hi, 0.01)
             self.plane_wall.options = [
                 ft.DropdownOption(key=str(i), text=(tr("Wall {n} ({length} m, unseen)") if w.label ==
                                                     "INVISIBLE_WALL_FACE" else tr("Wall {n} ({length} m)")).format(
