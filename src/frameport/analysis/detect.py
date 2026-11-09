@@ -68,7 +68,9 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 #     frame.unity_mic_ring) (2026-10)
 # 30: horizonos_supplements (the manifest's Horizon OS supplements; hzplatformclientcore = Meta's Horizon Platform SDK:
 #     frame.horizon_platform_stub, GitHub #511) (2026-11)
-ANALYSIS_VERSION = 30  # (cortopia_org_id's TMNT layout, GitHub #422, needed no re-analysis: see the patch)
+# 31: obb_mount (the game mounts its OBBs as disk images through StorageManager.mountObb, which Lepton can't:
+#     frame.obb_mount_emul, GitHub #308) (2026-11)
+ANALYSIS_VERSION = 31  # (cortopia_org_id's TMNT layout, GitHub #422, needed no re-analysis: see the patch)
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)
@@ -346,7 +348,13 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
         media_codec = any(m in d for d in dexes for m in MEDIA_CODEC_MARKERS) or "libvlc.so" in libs
         # Google VR's Java side (GvrLayout / GvrView, the Cardboard SDK): a Daydream / Cardboard app (google_vr)
         gvr_java = any(m in d for d in dexes for m in GVR_DEX_MARKERS)
+        from ..patches.frame.obb_mount import handler_classes
         from ..patches.frame.unity_mic_ring import record_ring
+
+        # OBBs mounted as disk images (StorageManager.mountObb; Lepton has no loop devices): frame.obb_mount_emul
+        obb_mount =sorted({c for d in dexes for c in handler_classes(d)}) or (
+            ["other"] if any(b"Landroid/os/storage/StorageManager;" in d and b"\x08mountObb\0" in d for d in dexes)
+            else [])
         from ..patches.frame.unreal_obb_check import has_delivery_check
 
         # Includes obfuscated DownloaderActivity predicates; CRC verification is a separate manifest switch.
@@ -492,6 +500,7 @@ def analyze(path: Path, deep: bool = True, data_bytes: int | None = None) -> Ana
             "unity_appui_vibrator": unity_appui_vibrator,
             "gms_folded_sdk_checks": gms_folded_sdk_checks,
             "usb_midi_watcher": usb_midi_watcher,
+            "obb_mount": obb_mount,
             "eos_keychain": eos_keychain,
             "bhaptics_permission": bhaptics_permission,
             "pojlib_connection": pojlib_connection,

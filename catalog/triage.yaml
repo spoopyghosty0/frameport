@@ -684,6 +684,12 @@ signatures:
     diagnosis: Code in the game (often a voice-chat SDK) calls Android 12 audio-routing methods (AudioManager communication devices) without checking the Android version; Lepton runs Android 11, so the app crashes. FramePort has fixes for Vivox and Photon Voice; this one comes from another library, so please report it with the log.
     report: true
     supersedes: [java-crash]
+  - id: obb-mount-failed
+    pattern: "Can't mount OBB \\S+ \\(state=2[015]\\)|StorageManagerService: Couldn't mount OBB"
+    severity: fatal
+    diagnosis: The game mounts its OBB files as disk images (Android's StorageManager.mountObb, for example GRID Legends). Lepton has no loop devices, so the mount fails and the game quits. The patch unpacks the images on the Frame after the install and makes the game read those folders instead of mounting (known OBB helpers only; others need support in FramePort).
+    suggest: [frame.obb_mount_emul]
+    supersedes: [java-crash]
   - id: lepton-data-link-failed
     pattern: "ln: cannot create symbolic link from '[^']*' to '/data/data/|Couldn't create directory for SharedPreferences file /data/user/0/"
     severity: fatal

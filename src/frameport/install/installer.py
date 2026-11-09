@@ -118,13 +118,35 @@ def update_existing(frame: Frame, entry: dict, deployment: dict, plan, recipe: R
         args.update(obb_manifest=manifest, existing_only=True, consume_artwork=False,
                     apk_name=deployment.get("apk", "game.apk"))
         reporter.stage("Finalize game data")
-        return frame.agent("finalize", **args)
+        result = frame.agent("finalize", **args)
+        unpack_obb_images(frame, entry["package"], recipe, reporter)
+        return result
     reporter.stage("Apply game configuration")
     result = frame.agent("configure", **args)
     if result.get("deployment", {}).get("configuration_fp") != args["configuration_fp"]:
         raise RuntimeError("the Frame did not confirm the applied configuration")
     reporter.check("Game configuration", True, "applied; used from the game's next start")
+    unpack_obb_images(frame, entry["package"], recipe, reporter)
     return result
+
+
+OBB_IMAGE_PATCH = "frame.obb_mount_emul"
+
+
+def unpack_obb_images(frame: Frame, package: str, recipe: Recipe, reporter: Reporter) -> int:
+    """frame.obb_mount_emul: the game's OBB disk images are unpacked on the Frame (agent unpack_obb), one call per
+    image (each takes a while: ~2 GB of reading and writing). Returns how many were unpacked."""
+    if OBB_IMAGE_PATCH not in recipe.patches:
+        return 0
+    pending = frame.agent("unpack_obb", package=package).get("pending") or []
+    for i, image in enumerate(pending, 1):
+        reporter.check_cancel()
+        reporter.stage(f"Unpack game data {i}/{len(pending)}")
+        reporter.progress((i - 1) / len(pending), f"Unpacking {image}")
+        done = frame.agent("unpack_obb", package=package, image=image, timeout=None)
+        reporter.log(f"unpacked {image}: {done['files']} files, {done['bytes'] / 2**30:.2f} GiB in "
+                     f"{done['seconds']} s")
+    return len(pending)
 
 
 def local_data_manifest(data_dir: Path | None, files: list[str] | None = None) -> dict[str, int]:
@@ -179,8 +201,10 @@ def install(frame: Frame, plan: InstallPlan, reporter: Reporter) -> dict:
     _relink_installed(frame, plan.data_dir, {r: s for r, s in manifest.items() if r not in to_send},
                       posixpath.join(prep["base"], "lepton-app", "obb"), reporter, source)
     need = sum(manifest[r] for r in to_send) + (0 if prep["same_apk"] else plan.apk.stat().st_size)
-    if need > prep["free_bytes"] - (1 << 30):
-        raise RuntimeError(f"not enough space on the Frame: need {need / 2**30:.1f} GiB + 1 GiB headroom, "
+    # unpacking OBB disk images (frame.obb_mount_emul) holds one image twice for a while
+    space = need + (max(manifest[r] for r in to_send) if OBB_IMAGE_PATCH in plan.recipe.patches and to_send else 0)
+    if space > prep["free_bytes"] - (1 << 30):
+        raise RuntimeError(f"not enough space on the Frame: need {space / 2**30:.1f} GiB + 1 GiB headroom, "
                            f"have {prep['free_bytes'] / 2**30:.1f} GiB")
     total = max(need, 1)
     sent = 0
@@ -229,6 +253,7 @@ def install(frame: Frame, plan: InstallPlan, reporter: Reporter) -> dict:
         preserve_data=plan.apk_only, consume_artwork=artwork_manifest is not None, **config,
     )
     reporter.log(f"installed at {result['base']} (Steam shortcut id {result['appid']})")
+    unpack_obb_images(frame, plan.package, plan.recipe, reporter)
     log_controller_models(result.get("controller_models"), reporter)
     log_config_sync(result.get("config_sync"), reporter)
     sync_room_scanner(frame, ctx.adapter_settings, reporter)

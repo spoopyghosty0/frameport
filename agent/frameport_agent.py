@@ -3458,12 +3458,7 @@ def cmd_prepare(args):
     incoming = os.path.join(base, "incoming")
     os.makedirs(os.path.join(incoming, "obb"), exist_ok=True)
     app = os.path.join(base, "lepton-app")
-    existing = {}
-    obb = os.path.join(app, "obb")
-    for root, _, files in os.walk(obb):
-        for name in files:
-            p = os.path.join(root, name)
-            existing[os.path.relpath(p, obb)] = os.path.getsize(p)
+    existing = obb_manifest(os.path.join(app, "obb"))  # an unpacked OBB image counts as the image (unpack_obb)
     existing.update(tree_manifest(os.path.join(incoming, "obb")))  # uploaded before an interruption
     apk = os.path.join(app, "game.apk")
     want_sha = args.get("apk_sha256")
@@ -6557,13 +6552,7 @@ def cmd_finalize(args):
     inc_obb = os.path.join(incoming, "obb")
     expected = args.get("obb_manifest")  # rel path -> size
     if expected:  # check the data as it will be after the move, before replacing anything (a failure keeps the old)
-        have = {}
-        for top in (os.path.join(app, "obb"), inc_obb):
-            for root, _, files in os.walk(top):
-                for name in files:
-                    if not name.endswith(".part"):
-                        p = os.path.join(root, name)
-                        have[os.path.relpath(p, top)] = os.path.getsize(p)
+        have = {**obb_manifest(os.path.join(app, "obb")), **obb_manifest(inc_obb)}
         bad = [k for k, v in expected.items() if have.get(k) != v]
         if bad:
             raise AgentError(f"{len(bad)} data file(s) missing or incomplete, e.g. {bad[0]}")
@@ -6592,6 +6581,8 @@ def cmd_finalize(args):
                     continue  # an older interrupted upload is not part of this install
                 dst = os.path.join(app, "obb", rel)
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if os.path.isdir(dst) and obb_unpacked_size(dst) is not None:
+                    shutil.rmtree(dst)  # a new version of an unpacked OBB image (unpacked again: unpack_obb)
                 os.replace(src, dst)
                 moved += 1
         shutil.rmtree(incoming, ignore_errors=True)
@@ -7063,6 +7054,326 @@ def tree_manifest(root):
                 rel = rel[:-len(".disabled")]
             out[rel] = os.path.getsize(p)
     return out
+
+
+# ------------------------------------------------------------------------------- OBB disk images (frame.obb_mount_emul)
+# Some games mount their OBBs as FAT disk images (StorageManager.mountObb; jobb-made, e.g. GRID Legends, GitHub #308).
+# Lepton has no loop devices, so with the patch the game reads a folder with the image's name instead: each image is
+# unpacked here into `obb/<name>/` (a marker file inside keeps the image's size, so the PC's "already on the Frame"
+# check and finalize's data check still see `<name>` = that size) and the image file is removed.
+OBB_IMAGE_PATCH = "frame.obb_mount_emul"
+OBB_MARKER = ".frameport-obb-image.json"
+OBB_UNPACKING = ".fp-unpack"
+OBB_FOOTER_SIG = 0x01059983  # Android ObbFile footer signature (last 4 bytes), jobb
+OBB_SALTED = 1  # footer flag: the image is encrypted (jobb -k: PBKDF2 + Twofish), not supported
+
+
+class FatImage:
+    """Read-only FAT12/16/32 reader for OBB images (stdlib only; the image is untrusted: names are checked, cluster
+    chains are bounded and loop-checked)."""
+
+    def __init__(self, path):
+        self.f = open(path, "rb")
+        try:
+            self._parse()
+        except Exception:
+            self.f.close()
+            raise
+
+    def _parse(self):
+        self.f.seek(0, 2)
+        size = self.f.tell()
+        self.f.seek(0)
+        bs = self.f.read(512)
+        if len(bs) < 512 or bs[510:512] != b"\x55\xaa":
+            raise ValueError("not a FAT image (no boot sector signature)")
+        bps, spc, res, nfat, root_n, tot16, _media, fat16 = struct.unpack_from("<HBHBHHBH", bs, 11)
+        tot32, fat32 = struct.unpack_from("<I", bs, 32)[0], struct.unpack_from("<I", bs, 36)[0]
+        if bps not in (512, 1024, 2048, 4096) or spc == 0 or spc & (spc - 1) or not res or not nfat:
+            raise ValueError("not a FAT image (bad BIOS parameter block)")
+        fat_sectors = fat16 or fat32
+        total = tot16 or tot32
+        root_sectors = (root_n * 32 + bps - 1) // bps
+        self.data_off = (res + nfat * fat_sectors + root_sectors) * bps
+        self.cluster = bps * spc
+        clusters = (total * bps - self.data_off) // self.cluster
+        if fat_sectors == 0 or total * bps > size + bps or clusters <= 0:
+            raise ValueError("not a FAT image (sizes don't fit the file)")
+        self.bits = 12 if clusters < 4085 else 16 if clusters < 65525 else 32
+        self.max_cluster = clusters + 1
+        self.f.seek(res * bps)
+        self.fat = self.f.read(fat_sectors * bps)
+        if self.bits == 32:
+            self.root = struct.unpack_from("<I", bs, 44)[0]
+            self.root_region = None
+        else:
+            self.root = 0
+            self.root_region = ((res + nfat * fat_sectors) * bps, root_sectors * bps)
+
+    def close(self):
+        self.f.close()
+
+    def next_cluster(self, c):
+        if self.bits == 32:
+            return struct.unpack_from("<I", self.fat, 4 * c)[0] & 0x0FFFFFFF if 4 * c + 4 <= len(self.fat) else None
+        if self.bits == 16:
+            return struct.unpack_from("<H", self.fat, 2 * c)[0] if 2 * c + 2 <= len(self.fat) else None
+        off = c + c // 2
+        if off + 2 > len(self.fat):
+            return None
+        v = struct.unpack_from("<H", self.fat, off)[0]
+        return v >> 4 if c & 1 else v & 0xFFF
+
+    def chain(self, first, limit):
+        """Clusters of a chain, at most `limit` (loops and out-of-range links are errors)."""
+        end = {12: 0xFF8, 16: 0xFFF8, 32: 0x0FFFFFF8}[self.bits]
+        out, seen, c = [], set(), first
+        while 2 <= c < end and len(out) < limit:
+            if c > self.max_cluster or c in seen:
+                raise ValueError(f"broken cluster chain at {c}")
+            seen.add(c)
+            out.append(c)
+            c = self.next_cluster(c)
+            if c is None:
+                raise ValueError("cluster chain runs past the FAT")
+        return out
+
+    def runs(self, first, size):
+        """(image offset, length) of the contiguous pieces holding `size` bytes from cluster `first`."""
+        need = (size + self.cluster - 1) // self.cluster
+        clusters = self.chain(first, need) if size else []
+        if len(clusters) < need:
+            raise ValueError("a file is longer than its cluster chain")
+        runs = []
+        for c in clusters:
+            off = self.data_off + (c - 2) * self.cluster
+            if runs and runs[-1][0] + runs[-1][1] == off:
+                runs[-1][1] += self.cluster
+            else:
+                runs.append([off, self.cluster])
+        left, out = size, []
+        for off, n in runs:
+            out.append((off, min(n, left)))
+            left -= min(n, left)
+        return out
+
+    def read_dir(self, first):
+        if first == 0 and self.root_region:
+            self.f.seek(self.root_region[0])
+            return self.f.read(self.root_region[1])
+        data = bytearray()
+        for off, n in self.runs(first, len(self.chain(first, 1 << 16)) * self.cluster):
+            self.f.seek(off)
+            data += self.f.read(n)
+        return bytes(data)
+
+    def entries(self, first):
+        """(name, is_dir, first cluster, size) of a directory's entries (long names preferred; volume labels,
+        deleted entries, '.' and '..' skipped)."""
+        data, lfn = self.read_dir(first), []
+        for i in range(0, len(data) - 31, 32):
+            e = data[i:i + 32]
+            if e[0] == 0:
+                break
+            if e[0] == 0xE5:
+                lfn = []
+                continue
+            if e[11] == 0x0F:
+                lfn.insert(0, e[1:11] + e[14:26] + e[28:32])
+                continue
+            if lfn:
+                name = b"".join(lfn).decode("utf-16-le", "replace").split("\0")[0]
+            else:
+                base = e[0:8].replace(b"\x05", b"\xe5", 1).decode("latin-1").rstrip()
+                ext = e[8:11].decode("latin-1").rstrip()
+                if e[12] & 0x08:
+                    base = base.lower()
+                if e[12] & 0x10:
+                    ext = ext.lower()
+                name = base + ("." + ext if ext else "")
+            lfn = []
+            if e[11] & 0x08 or name in (".", ".."):
+                continue
+            cl = struct.unpack_from("<H", e, 20)[0] << 16 | struct.unpack_from("<H", e, 26)[0]
+            if self.bits != 32:
+                cl &= 0xFFFF
+            yield name, bool(e[11] & 0x10), cl, struct.unpack_from("<I", e, 28)[0]
+
+    def walk(self, first=None, prefix="", depth=0):
+        """(relative path, is_dir, first cluster, size) of every entry, parents before children."""
+        if depth > 64:
+            raise ValueError("directories nested too deep")
+        for name, is_dir, cl, size in self.entries(self.root if first is None else first):
+            if not name or any(c in name for c in "/\\\0") or name.strip(". ") == "":
+                raise ValueError(f"unsafe file name in the image: {name!r}")
+            rel = prefix + name
+            yield rel, is_dir, cl, size
+            if is_dir:
+                if cl < 2 or cl == self.root:
+                    raise ValueError(f"directory {rel} points back at the root")
+                yield from self.walk(cl, rel + "/", depth + 1)
+
+
+def obb_footer(path):
+    """Android's OBB footer (jobb): {package, version, flags}, or None (an image without one is unpacked too)."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            if size < 41:
+                return None
+            f.seek(size - 8)
+            n, sig = struct.unpack("<II", f.read(8))
+            if sig != OBB_FOOTER_SIG or not 33 <= n <= min(size - 8, 4096):
+                return None
+            f.seek(size - 8 - n)
+            ft = f.read(n)
+        _ver, pkg_ver, flags = struct.unpack_from("<III", ft, 0)
+        name_len = struct.unpack_from("<I", ft, 20)[0]
+        return {"version": pkg_ver, "flags": flags, "package": ft[24:24 + name_len].decode("utf-8", "replace")}
+    except (OSError, struct.error):
+        return None
+
+
+def is_obb_image(path):
+    """A FAT disk image (what StorageManager.mountObb mounts), not an archive or asset file the game reads itself."""
+    try:
+        with open(path, "rb") as f:
+            bs = f.read(512)
+    except OSError:
+        return False
+    return (len(bs) == 512 and bs[510:512] == b"\x55\xaa" and bs[0] in (0xEB, 0xE9)
+            and (bs[54:59] in (b"FAT12", b"FAT16") or bs[82:87] == b"FAT32"))
+
+
+def unpack_obb_image(path, dest):
+    """Unpack the FAT image `path` into the new folder `dest`; returns (files, bytes)."""
+    footer = obb_footer(path)
+    if footer and footer["flags"] & OBB_SALTED:
+        raise AgentError(f"{os.path.basename(path)} is an encrypted OBB image; FramePort can't unpack it")
+    files = total = 0
+    try:
+        fs = FatImage(path)
+    except ValueError as exc:
+        raise AgentError(f"{os.path.basename(path)}: {exc}") from None
+    try:
+        os.makedirs(dest)
+        real_dest = os.path.realpath(dest)
+        for rel, is_dir, cl, size in fs.walk():
+            target = os.path.join(dest, *rel.split("/"))
+            if not os.path.realpath(target).startswith(real_dest + os.sep):
+                raise AgentError(f"refusing a path outside the folder: {rel}")
+            if is_dir:
+                os.makedirs(target, exist_ok=True)
+                continue
+            with open(target, "xb") as out:
+                for off, n in fs.runs(cl, size):
+                    fs.f.seek(off)
+                    while n:
+                        chunk = fs.f.read(min(n, 8 << 20))
+                        if not chunk:
+                            raise AgentError(f"{os.path.basename(path)} ends inside {rel}")
+                        out.write(chunk)
+                        n -= len(chunk)
+            files += 1
+            total += size
+    except ValueError as exc:
+        raise AgentError(f"{os.path.basename(path)}: {exc}") from None
+    finally:
+        fs.close()
+    return files, total
+
+
+def obb_unpacked_size(folder):
+    """The image size recorded in an unpacked image's folder, else None."""
+    try:
+        with open(os.path.join(folder, OBB_MARKER)) as f:
+            size = json.load(f).get("size")
+        return size if isinstance(size, int) else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def obb_manifest(top):
+    """rel path -> size of the game data in an obb folder; an unpacked image's folder counts as the image file."""
+    out = {}
+    for root, dirs, files in os.walk(top):
+        keep = []
+        for d in dirs:
+            p = os.path.join(root, d)
+            size = obb_unpacked_size(p)
+            if size is not None and not d.endswith(OBB_UNPACKING):
+                out[os.path.relpath(p, top)] = size
+            elif size is None and not d.endswith(OBB_UNPACKING):
+                keep.append(d)
+        dirs[:] = keep
+        for name in files:
+            if not name.endswith(".part"):
+                p = os.path.join(root, name)
+                out[os.path.relpath(p, top)] = os.path.getsize(p)
+    return out
+
+
+def finish_obb_unpacks(obb):
+    """An unpack interrupted after its image was removed only needs its folder's final name; others are dropped."""
+    for root, dirs, _files in os.walk(obb):
+        for d in list(dirs):
+            tmp = os.path.join(root, d)
+            if not d.endswith(OBB_UNPACKING):
+                if obb_unpacked_size(tmp) is not None:
+                    dirs.remove(d)
+                continue
+            dirs.remove(d)
+            final = tmp[:-len(OBB_UNPACKING)]
+            if obb_unpacked_size(tmp) is not None and not os.path.exists(final):
+                os.rename(tmp, final)
+            else:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+
+def cmd_unpack_obb(args):
+    """frame.obb_mount_emul: without `image`, the game's OBB disk images still to unpack ({pending: [rel, ...]});
+    with `image` (one of them), unpack it into a folder of the same name and remove the image."""
+    pkg = check_pkg(args["package"])
+    dep = deployment(pkg)
+    if not dep:
+        raise AgentError(f"{pkg} is not installed")
+    obb = os.path.join(dep["base"], "lepton-app", "obb")
+    finish_obb_unpacks(obb)
+    pending = []
+    for root, dirs, files in os.walk(obb):
+        dirs[:] = [d for d in dirs if obb_unpacked_size(os.path.join(root, d)) is None]
+        for name in files:
+            p = os.path.join(root, name)
+            if name.lower().endswith(".obb") and is_obb_image(p):
+                pending.append(os.path.relpath(p, obb))
+    image = args.get("image")
+    if image is None:
+        return {"pending": sorted(pending)}
+    if image not in pending:
+        raise AgentError(f"{image} is not an OBB disk image waiting to be unpacked")
+    if container_running(dep["appid"]):
+        raise AgentError(f"{dep.get('title', pkg)} is running on the Frame. Close it first.")
+    src = os.path.join(obb, image)
+    tmp = src + OBB_UNPACKING
+    shutil.rmtree(tmp, ignore_errors=True)
+    size = os.path.getsize(src)
+    if shutil.disk_usage(obb).free < size + (512 << 20):
+        raise AgentError(f"not enough space on the Frame to unpack {image} ({size / 2**30:.1f} GiB needed)")
+    started = time.time()
+    try:
+        files, total = unpack_obb_image(src, tmp)
+        with open(os.path.join(tmp, OBB_MARKER), "w") as f:
+            json.dump({"size": size, "footer": obb_footer(src), "files": files, "bytes": total,
+                       "time": time.time()}, f)
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    os.remove(src)
+    os.rename(tmp, src)
+    return {"image": image, "files": files, "bytes": total, "seconds": round(time.time() - started, 1)}
+
+
 
 
 def pcvr_pids(base):

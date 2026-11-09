@@ -73,6 +73,17 @@ class Dex:
         cls, typ, name = struct.unpack_from("<HHI", self.data, fields_off + 8 * idx)
         return self.type_name(cls), self.type_name(typ), self.string(name)
 
+    def shorty(self, idx: int) -> str:
+        """The method's shorty descriptor (return type + parameter types, one letter each: "VIL" = void f(int, Obj))."""
+        proto = struct.unpack_from("<HHI", self.data, self.methods_off + 8 * idx)[1]
+        protos_off = struct.unpack_from("<I", self.data, 76)[0]
+        return self.string(struct.unpack_from("<I", self.data, protos_off + 12 * proto)[0])
+
+    def code_header(self, code_off: int) -> tuple[int, int, int]:
+        """(registers_size, ins_size, insns_size) of a code item; the ins are the last registers."""
+        regs, ins = struct.unpack_from("<2H", self.data, code_off)
+        return regs, ins, struct.unpack_from("<I", self.data, code_off + 12)[0]
+
     def return_type(self, idx: int) -> str:
         proto = struct.unpack_from("<HHI", self.data, self.methods_off + 8 * idx)[1]
         protos_off = struct.unpack_from("<I", self.data, 76)[0]
@@ -206,6 +217,12 @@ class Dex:
             new = [CONST_STRING_V0, 0, RETURN_OBJECT_V0]  # string ids are sorted: "" is always the first
         else:
             return False
+        return self.rewrite_start(code_off, new)
+
+    def rewrite_start(self, code_off: int, new: list[int]) -> bool:
+        """Replace a method's first instruction(s) with `new` (code units ending in a return, so the rest of the
+        method becomes unreachable), padded with nops to the next instruction boundary. Nothing moves. False if the
+        method already starts with `new` or its first instructions can't be decoded / are shorter than `new`."""
         start = code_off + 16
         insns_n = struct.unpack_from("<I", self.data, code_off + 12)[0]
         if list(struct.unpack_from(f"<{min(len(new), insns_n)}H", self.data, start)) == new:
@@ -219,6 +236,14 @@ class Dex:
             return False
         struct.pack_into(f"<{width}H", self.data, start, *new, *([0] * (width - len(new))))
         return True
+
+    @staticmethod
+    def invoke_static(method: int, regs: list[int]) -> list[int]:
+        """invoke-static {regs}, method@ (format 35c: up to 5 registers, each v0-v15)."""
+        if len(regs) > 5 or any(not 0 <= r < 16 for r in regs):
+            raise ValueError("invoke-static needs at most 5 registers below v16")
+        r = list(regs) + [0] * (5 - len(regs))
+        return [(len(regs) << 12) | (r[4] << 8) | 0x71, method, r[0] | (r[1] << 4) | (r[2] << 8) | (r[3] << 12)]
 
     def finish(self) -> bytes:
         self.data[12:32] = hashlib.sha1(bytes(self.data[32:])).digest()

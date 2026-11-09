@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 218 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 219 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -11,7 +11,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 ## Groups
 
 - [Patches from OVRPort](#group-overport) (25)
-- [Steam Frame patches](#group-frame) (76)
+- [Steam Frame patches](#group-frame) (77)
 - [Game settings](#group-adapter) (90)
 - [Files and settings on the Frame](#group-device) (14)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
@@ -74,6 +74,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Declare Meta-only permissions](#frame-meta_permissions) | `frame.meta_permissions` | Steam Frame patches | 17 |
 | [Meta XR Audio: skip Quest telemetry class](#frame-metaxr_telemetry) | `frame.metaxr_telemetry` | Steam Frame patches | default |
 | [Clear android:debuggable](#frame-nodebug) | `frame.nodebug` | Steam Frame patches | 3 |
+| [OBB disk images: unpack instead of mounting](#frame-obb_mount_emul) | `frame.obb_mount_emul` | Steam Frame patches |  |
 | [Oculus OS telemetry class stubs](#frame-oculusos) | `frame.oculusos` | Steam Frame patches | 20 |
 | [Fix crash when the game prepares the microphone](#frame-ovr_microphone) | `frame.ovr_microphone` | Steam Frame patches | 1 |
 | [Answer Meta's org-scoped user id request](#frame-ovr_org_scoped_id) | `frame.ovr_org_scoped_id` | Steam Frame patches | default |
@@ -923,6 +924,19 @@ Stops strict debugging checks that make some games quit.
 - **Source:** [patches/frame/manifest_fixes.py](../src/frameport/patches/frame/manifest_fixes.py)
 
 > OVRPort marks apps debuggable; that turns on CheckJNI, which aborts some Unreal games on sloppy JNI calls ('JNI DETECTED ERROR', for example 'GetStringUTFChars ... NULL' in Time Stall). Clear it for those.
+
+### <a id="frame-obb_mount_emul"></a>OBB disk images: unpack instead of mounting
+
+Lets games whose data files are disk images start on the Frame (they'd quit with "Can't mount OBB"), for example GRID Legends. The images are unpacked on the Frame.
+
+- `frame.obb_mount_emul` · experimental · also for 2D apps
+- **Changes:** Changes the APK (a rebuild and reinstall apply it).
+- **Suggested (on):** The game mounts its OBB files as disk images, which Lepton can't do: unpack them on the Frame and let the game read the folders.
+- **Suggested by launch-test signatures:**
+  - `obb-mount-failed` (fatal): The game mounts its OBB files as disk images (Android's StorageManager.mountObb, for example GRID Legends).
+- **Source:** [patches/frame/obb_mount.py](../src/frameport/patches/frame/obb_mount.py)
+
+> Some games keep their data in OBB files that Android mounts as disk images (for example GRID Legends). Lepton can't mount disk images, so these games quit at start ("Can't mount OBB"). FramePort unpacks the images on the Frame after the install (into folders with the same names, so the data takes its space only once) and changes the game's OBB code so it uses those folders instead of mounting.
 
 ### <a id="frame-oculusos"></a>Oculus OS telemetry class stubs
 

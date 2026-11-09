@@ -664,6 +664,11 @@
   "title": "Clear android:debuggable",
   "group": "Steam Frame patches"
  },
+ "frame.obb_mount_emul": {
+  "anchor": "frame-obb_mount_emul",
+  "title": "OBB disk images: unpack instead of mounting",
+  "group": "Steam Frame patches"
+ },
  "frame.oculusos": {
   "anchor": "frame-oculusos",
   "title": "Oculus OS telemetry class stubs",

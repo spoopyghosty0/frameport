@@ -106,6 +106,8 @@ SUMMARIES = {
                                "would never finish starting).",
     "frame.unity_tls_key_pool": "Lets Unity 6 games with many native libraries start when they run out of thread keys "
                                  "(they'd abort with \"cannot create thread specific key\"), for example Wander.",
+    "frame.obb_mount_emul": "Lets games whose data files are disk images start on the Frame (they'd quit with "
+                            "\"Can't mount OBB\"), for example GRID Legends. The images are unpacked on the Frame.",
     "frame.vivox_audio_route": "Lets games with Vivox voice chat start on the Frame (they'd crash on an Android 12 "
                                "audio call).",
     "frame.photon_voice_audio_route": "Stops games with Photon Voice chat from crashing on the Frame when voice chat "
