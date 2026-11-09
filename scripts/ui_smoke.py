@@ -423,12 +423,20 @@ def main() -> int:
             return None
         steps = [("files-locations", lambda a: a.go("files")),
                  ("files-tmp", lambda a: location(a, lambda loc: loc.get("tmp"))),
-                 ("files-saves", lambda a: location(a, lambda loc: bool(loc.get("saves")))),
+                 # a Quest game's storage: its saves are the link-like entry at the top
+                 ("files-game-storage", lambda a: location(a, lambda loc: loc["id"].startswith("app:")
+                                                           and not loc.get("path"))),
+                 ("files-saves", lambda a: a.files_view.open_saves()),
                  ("files-saves-deeper", lambda a: a.files_view.cd(posixpath.join(a.files_view.loc["path"],
                                                                                  "files/UnrealGame/Saved"))),
                  ("files-move", move_picker),
                  ("files-move-dest", lambda a: a.files_view.move_picker.open(
-                     next(x for _h, e in a.files_view.location_groups() for x, _i, _s in e if x["id"] == "documents")))]
+                     next(x for _h, e in a.files_view.location_groups() for x, _i, _s in e if x["id"] == "documents"))),
+                 ("files-move-game", lambda a: a.files_view.move_picker.open(
+                     next(x for _h, e in a.files_view.location_groups() for x, _i, _s in e
+                          if x["id"].startswith("app:") and (x.get("android") == "/sdcard" or not x.get("path"))))),
+                 ("files-move-saves", lambda a: a.files_view.move_picker.open(
+                     a.files_view.saves_location(a.files_view.move_picker.loc)))]
         mouse = {"files-locations": scroll_locations}
     if args.files_scroll:  # GitHub #411: a right-click or a selection keeps the Files list where it was scrolled
         def long_folder(a):

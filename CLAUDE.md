@@ -31,7 +31,10 @@ Detailed device findings per game/issue: docs/DEVICE_NOTES.md (read before debug
     like the library; locations = Videos/Downloads/Documents from agent `storage_targets`, each installed Quest game's
     storage, the home folder, /tmp ("Temporary files"; #532); SFTP via `install/files.py` list_dir/upload/download/
     make_dir/rename/delete, all confined to the location by `files.inside`; each Quest game's saves = its internal
-    storage `<base>/lepton-data/internal/<pkg>` (`files.loc_*` dispatch → agent v127 `saves_files` info/list/mkdir/
+    storage `<base>/lepton-data/internal/<pkg>`, no location row of its own (owner: don't clog the list) but a
+    link-like "Saves (internal storage)" entry at the top of the game's storage (`Entry.saves`, `saves_entry`; can't
+    be selected/renamed/moved/deleted) that opens a sub-location with `parent` = the storage (crumbs `nav_crumbs`:
+    storage › Saves (internal storage) › …, ".."/Backspace at its top go back; `files.loc_*` dispatch → agent v127 `saves_files` info/list/mkdir/
     rename/delete, `_saves_get`/`_saves_put` tar streams, all in podman's namespace like save backups, realpath-
     confined; changes refused while the game runs, launch lock held; warn callout + "Back up saves"); "Move to…"
     (row, right-click, selection bar) = `views/files_move.py` picker over `location_groups()` → job `files.move`

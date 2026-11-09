@@ -1,11 +1,11 @@
 """Files: browse and manage files on the Steam Frame (instead of a separate file-transfer app).
 
 Locations are the folders Quest games see (Videos / Downloads / Documents, shared by every game as /sdcard/Movies,
-/sdcard/Download, /sdcard/Documents), each installed Quest game's own storage and its saves (internal storage,
-through the agent in podman's namespace), PC VR/Linux install folders, extra drives, the Frame's home folder and
-/tmp. Everything runs over the app's SSH connection (SFTP, the agent for saves and moves); uploads, downloads and
-moves are jobs in the Activity panel. Persistent like the
-Library: the chosen location and folder survive switching tabs.
+/sdcard/Download, /sdcard/Documents), each installed Quest game's own storage (with its saves = internal storage
+as a link-like "Saves (internal storage)" entry at the top, through the agent in podman's namespace), PC VR/Linux
+install folders, extra drives, the Frame's home folder and /tmp. Everything runs over the app's SSH connection
+(SFTP, the agent for saves and moves); uploads, downloads and moves are jobs in the Activity panel. Persistent like
+the Library: the chosen location and folder survive switching tabs.
 """
 from __future__ import annotations
 
@@ -217,7 +217,7 @@ class FilesView:
         return ftd.Dropzone(content=content, expand=True, on_entered=entered, on_exited=exited, on_dropped=dropped)
 
     def _location_row(self, loc: dict, icon: str, sub: str = "") -> ft.Control:
-        selected = self.loc is not None and self.loc["id"] == loc["id"]
+        selected = self.loc is not None and loc["id"] in (self.loc["id"], (self.loc.get("parent") or {}).get("id"))
         ic = ft.Icon(icon, size=T.px(18))
         label = C.body(loc["label"], weight=ft.FontWeight.W_500)
         box = ft.Container(
@@ -246,13 +246,8 @@ class FilesView:
             games = [g for g in installed if game_section(kinds.get(g[0])) == section]
             if not games:
                 continue
-            rows = []
-            for pkg, title in games:
-                rows.append((self.game_locs.get(pkg) or self._game_location(pkg, title), icon, ""))
-                if section == "quest":  # its internal storage (saves) right below its /sdcard
-                    rows.append((self.game_locs.get(f"saves:{pkg}") or self._saves_location(pkg, title),
-                                 ft.Icons.SAVE_OUTLINED, tr("internal storage")))
-            groups.append((heading, rows))
+            groups.append((heading, [(self.game_locs.get(pkg) or self._game_location(pkg, title), icon, "")
+                                     for pkg, title in games]))
         home = {"id": "home", "label": tr("Home folder"), "path": self.app.target.frame.home, "android": "",
                 "shared": False}
         groups.append((tr("Advanced"), [
@@ -275,11 +270,33 @@ class FilesView:
 
         return {**tmp_location(), "label": tr("Temporary files")}
 
-    @staticmethod
-    def _saves_location(package: str, title: str) -> dict:
+    def saves_location(self, storage: dict) -> dict:
+        """A Quest game's internal storage (its saves), entered from its storage's "Saves (internal storage)" entry:
+        a location of its own (the agent serves it) whose crumbs start at the game's storage (`parent`)."""
         from ...install.files import saves_location
 
-        return {**saves_location(package), "label": tr("{title} — saves").format(title=title), "title": title}
+        pkg = storage["package"]
+        return {**saves_location(pkg), **(self.game_locs.get(f"saves:{pkg}") or {}),
+                "label": tr("Saves (internal storage)"), "title": storage.get("label") or pkg, "parent": storage}
+
+    @staticmethod
+    def has_saves_entry(loc: dict | None, path: str) -> bool:
+        """The top of a Quest game's storage (its /sdcard) lists its saves as a link-like entry."""
+        return bool(loc) and loc["id"].startswith("app:") and loc.get("android") == "/sdcard" \
+            and path == loc.get("path")
+
+    def saves_entry(self, storage: dict):
+        from ...install.files import Entry
+
+        return Entry(tr("Saves (internal storage)"), f"saves://{storage['package']}", True, 0, 0.0, link=True,
+                     saves=storage["package"])
+
+    def nav_crumbs(self, loc: dict, path: str) -> list[tuple[str, dict, str]]:
+        """(label, location, path) from the location's top to `path`; inside a game's saves: from its storage."""
+        parent = loc.get("parent")
+        out = [(label, parent, p) for label, p in crumbs(parent["path"], parent["path"], parent["label"])] \
+            if parent else []
+        return out + [(label, loc, p) for label, p in crumbs(loc["path"], path, loc["label"])]
 
     def _installed_games(self) -> list[tuple[str, str]]:
         from ...core import library
@@ -352,7 +369,7 @@ class FilesView:
         self.game_locs[loc["package"]] = loc
         return loc
 
-    def open_location(self, loc: dict) -> None:
+    def open_location(self, loc: dict, path: str | None = None) -> None:
         def work():
             nonlocal loc
             try:
@@ -361,7 +378,7 @@ class FilesView:
                 self.app.toast((tr("Couldn't open the game's saves: {exc}") if loc.get("saves") else
                                 tr("Couldn't open the game's storage: {exc}")).format(exc=explain(exc)), error=True)
                 return
-            self.loc, self.path = loc, loc["path"]
+            self.loc, self.path = loc, path or loc["path"]
             self.selected.clear()
             for control in self.toolbar.controls[:3]:
                 control.disabled = not self._writable()
@@ -414,6 +431,8 @@ class FilesView:
                 return
             if (self.loc, self.path) != (loc, path):
                 return  # the user moved on meanwhile
+            if self.has_saves_entry(loc, path):  # the game's saves, shown like Lepton's links
+                entries = [self.saves_entry(loc), *entries]
             self.entries = entries
             self.selected &= {e.path for e in entries}
             self._render_listing()
@@ -423,11 +442,11 @@ class FilesView:
     def _render_listing(self) -> None:
         loc = self.loc
         self.crumb_row.controls = []
-        for i, (label, p) in enumerate(crumbs(loc["path"], self.path, loc["label"])):
+        for i, (label, cloc, p) in enumerate(self.nav_crumbs(loc, self.path)):
             if i:
                 self.crumb_row.controls.append(ft.Icon(ft.Icons.CHEVRON_RIGHT_ROUNDED, size=T.px(16), color=T.TEXT_3))
-            self.crumb_row.controls.append(C.ghost(label, on_click=lambda e, p=p: self.cd(p),
-                                                   color=T.TEXT if p == self.path else T.TEXT_2))
+            self.crumb_row.controls.append(C.ghost(label, on_click=lambda e, c=cloc, p=p: self._crumb(c, p),
+                                                   color=T.TEXT if cloc is loc and p == self.path else T.TEXT_2))
         android = loc.get("android")
         rel = posixpath.relpath(self.path, loc["path"]) if self.path != loc["path"] else ""
         self.where.value = (tr("Games see this folder as {value}")
@@ -435,7 +454,7 @@ class FilesView:
                             if android else self.path)
         rows = []
         self.checks, self.rows, self.hot = {}, {}, set()
-        if self.path != loc["path"]:
+        if self.path != loc["path"] or loc.get("parent"):
             rows.append(self._row(None))
         rows += [self._row(e) for e in self.entries]
         if not self.entries:
@@ -461,7 +480,9 @@ class FilesView:
             return ft.Container(ft.Row([ft.Icon(ft.Icons.ARROW_UPWARD_ROUNDED, size=T.px(20), color=T.TEXT_2),
                                         C.body("..", T.TEXT_2)], spacing=T.S3),
                                 padding=ft.Padding(T.S3, T.px(8), T.S3, T.px(8)), border_radius=T.RADIUS_SM, ink=True,
-                                on_click=lambda ev: self.cd(posixpath.dirname(self.path)))
+                                on_click=lambda ev: self.go_up())
+        if e.saves:  # the game's internal storage: opens like a folder, can't be changed itself (like Lepton's links)
+            return self._saves_row(e)
         when = time.strftime("%Y-%m-%d %H:%M", time.localtime(e.mtime)) if e.mtime else ""
         info = ((tr("folder") if e.is_dir else human(e.size)) + (tr(" · link") if e.link else "")
                 + (f" · {when}" if when else ""))
@@ -496,6 +517,36 @@ class FilesView:
         return ft.GestureDetector(content=row, on_secondary_tap_down=lambda ev, x=e: self.open_menu(x,
                                                                                                     ev.global_position))
 
+    def _saves_row(self, e) -> ft.Control:
+        row = ft.Container(
+            ft.Row([ft.Container(width=T.px(40)),  # where other rows have their checkbox
+                    ft.Icon(ft.Icons.SAVE_OUTLINED, size=T.px(20), color=T.ACCENT),
+                    ft.Column([C.body(e.name, T.TEXT, weight=ft.FontWeight.W_500, max_lines=1,
+                                      overflow=ft.TextOverflow.ELLIPSIS),
+                               C.meta(tr("link → the game's internal storage (/data/data/{package}): saves and "
+                                         "settings").format(package=e.saves))], spacing=0, expand=True)],
+                   spacing=T.S3),
+            padding=ft.Padding(T.S3, T.px(6), T.S2, T.px(6)), border_radius=T.RADIUS_SM, ink=True,
+            tooltip=tr("Open the game's saves"), on_click=lambda ev: self.open_saves())
+        return ft.GestureDetector(content=row, on_secondary_tap_down=lambda ev, x=e: self.open_menu(x,
+                                                                                                    ev.global_position))
+
+    def open_saves(self) -> None:
+        """Into the game's internal storage (from its storage's "Saves (internal storage)" entry)."""
+        if self.loc and self.loc["id"].startswith("app:"):
+            self.open_location(self.saves_location(self.loc))
+
+    def _crumb(self, loc: dict, path: str) -> None:
+        if loc is self.loc:
+            self.cd(path)
+        else:  # from inside a game's saves up to its storage
+            self.open_location(loc, path)
+
+    @staticmethod
+    def loc_name(loc: dict) -> str:
+        """A location's name for job titles: "<game> › Saves (internal storage)" inside a game's saves."""
+        return f"{loc['title']} › {loc['label']}" if loc.get("parent") else loc.get("label") or loc.get("path", "")
+
     # ---------------------------------------------------------------- right-click menu
     def menu_actions(self, e) -> list[tuple | None]:
         """[(label, icon, handler) | None] for a right-click on entry `e` (None = on the folder's empty space). With
@@ -511,6 +562,8 @@ class FilesView:
                     (tr("Copy folder path"), ft.Icons.CONTENT_COPY_ROUNDED,
                      lambda ev: self.app.copy(self._shown_path(self.path))),
                     (tr("Refresh"), ft.Icons.REFRESH_ROUNDED, lambda ev: self.load())]
+        if e.saves:
+            return [(tr("Open"), ft.Icons.FOLDER_OPEN_ROUNDED, lambda ev: self.open_saves())]
         by_path = {x.path: x for x in self.entries}
         items = [by_path[p] for p in C.menu_targets(e.path, [x.path for x in self.entries if x.path in self.selected])]
         several = len(items) > 1
@@ -562,6 +615,9 @@ class FilesView:
     def cd(self, path: str) -> None:
         from ...install.files import inside
 
+        if path.startswith("saves://"):
+            self.open_saves()
+            return
         new = inside(self.loc["path"], path)
         # going back up (the ".." row, a crumb, Backspace) returns to where that folder's list was scrolled
         going_up = new != self.path and (self.path + "/").startswith(new.rstrip("/") + "/")
@@ -574,8 +630,13 @@ class FilesView:
 
     def go_up(self) -> bool:
         """Backspace: the folder above, inside the location. False at the location's top."""
-        if not self.loc or self.path == self.loc["path"]:
+        if not self.loc:
             return False
+        if self.path == self.loc["path"]:
+            if not self.loc.get("parent"):
+                return False
+            self.open_location(self.loc["parent"])  # from a game's saves back to its storage
+            return True
         self.cd(posixpath.dirname(self.path))
         return True
 
@@ -637,7 +698,10 @@ class FilesView:
         return bool(self.loc) and not self.loc.get("read_only", False)
 
     def _protected(self, e) -> bool:
-        """Lepton's links at the top of a game's storage (Movies → ~/Videos, …): renaming/deleting them breaks them."""
+        """Lepton's links at the top of a game's storage (Movies → ~/Videos, …): renaming/deleting them breaks them;
+        the game's saves entry isn't a real file at all."""
+        if e.saves:
+            return True
         return (self.loc["id"].startswith("app:") and self.loc.get("android") == "/sdcard"
                 and e.link and posixpath.dirname(e.path) == posixpath.normpath(self.loc["path"]))
 
@@ -702,7 +766,7 @@ class FilesView:
             sent, skipped, total = files.loc_upload(app.target.frame, loc, paths, dest, job.reporter)
             return (tr_n("Uploaded {n} file", "Uploaded {n} files", len(sent))
                     + (tr_n(", {n} already there", ", {n} already there", len(skipped)) if skipped else ""))
-        app.submit(tr("Upload to {label}").format(label=loc['label']), run, loc.get("package"), kind="tool-frame",
+        app.submit(tr("Upload to {label}").format(label=self.loc_name(loc)), run, loc.get("package"), kind="tool-frame",
                    open_panel=True)
 
     async def download(self, items: list) -> None:
@@ -767,7 +831,7 @@ class FilesView:
             self.selected.difference_update(x.path for x in items)
             self.load()
             return tr_n("Moved {n} item to {label}", "Moved {n} items to {label}", r["moved"],
-                        label=dest.get("label") or folder)
+                        label=self.loc_name(dest) or folder)
         more = tr_n(" and {n} more", " and {n} more", len(items) - 1) if len(items) > 1 else ""
         app.submit(tr("Move {name}").format(name=items[0].name) + more, run,
                    src.get("package") or dest.get("package"), kind="tool-frame", open_panel=True)

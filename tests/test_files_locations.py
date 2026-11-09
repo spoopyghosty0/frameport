@@ -143,9 +143,8 @@ def test_tmp_and_saves_locations_and_move_actions(monkeypatch):  # GitHub #532
     v = FilesView(app)
     v.drives = [{"id": "drive:/ro", "label": "RO", "path": "/ro", "read_only": True}]
     groups = dict(v.location_groups())
-    assert [x[0]["id"] for x in groups["Game storage"]] == ["app:q", "saves:q"]  # saves right below the storage
-    assert groups["Game storage"][1][0]["label"] == "Quest Game — saves"
-    assert [x[0]["id"] for x in groups["PC VR games"]] == ["app:pc"]  # no saves location for PC VR games
+    assert [x[0]["id"] for x in groups["Game storage"]] == ["app:q"]  # saves are inside it, not another row
+    assert [x[0]["id"] for x in groups["PC VR games"]] == ["app:pc"]
     adv = [x[0] for x in groups["Advanced"]]
     assert adv[1]["id"] == "tmp" and adv[1]["path"] == "/tmp" and adv[1]["label"] == "Temporary files"
     assert "Drives" not in dict(destinations(v.location_groups()))  # read-only drives can't take a move
@@ -157,6 +156,35 @@ def test_tmp_and_saves_locations_and_move_actions(monkeypatch):  # GitHub #532
     link = files.Entry("Movies", "/sd/Movies", True, 0, 0, link=True)
     v.entries = [link]
     assert "Move to…" not in [a[0] for a in v.menu_actions(link) if a]  # Lepton's link stays where it is
+
+
+def test_saves_are_a_link_like_entry_inside_the_game_storage(monkeypatch):  # GitHub #532
+    v = FilesView(SimpleNamespace(run_bg=lambda fn, *a: fn(*a)))
+    storage = {"id": "app:q", "package": "q", "label": "Quest Game", "path": "/g/external", "android": "/sdcard"}
+    assert v.has_saves_entry(storage, "/g/external")
+    assert not v.has_saves_entry(storage, "/g/external/Android")  # only at the top
+    assert not v.has_saves_entry({**storage, "id": "app:pc", "android": ""}, "/g/external")  # PC VR / Linux
+    entry = v.saves_entry(storage)
+    assert entry.saves == "q" and entry.is_dir and entry.link
+    v.loc, v.path, v.entries = storage, storage["path"], [entry]
+    assert v._protected(entry) and not v._selectable(entry)
+    assert [a[0] for a in v.menu_actions(entry) if a] == ["Open"]  # no rename, delete, move or download
+    opened = []
+    monkeypatch.setattr(v, "open_location", lambda loc, path=None: opened.append((loc, path)))
+    v.cd(entry.path)  # clicking it opens the saves location, its crumbs starting at the game's storage
+    saves = opened[-1][0]
+    assert saves["saves"] == "q" and saves["parent"] is storage and saves["title"] == "Quest Game"
+    saves = {**saves, "path": "/g/internal/q"}
+    assert [(label, c["id"], p) for label, c, p in v.nav_crumbs(saves, "/g/internal/q/files")] == [
+        ("Quest Game", "app:q", "/g/external"), ("Saves (internal storage)", "saves:q", "/g/internal/q"),
+        ("files", "saves:q", "/g/internal/q/files")]
+    assert v.loc_name(saves) == "Quest Game › Saves (internal storage)"
+    v.loc, v.path = saves, saves["path"]
+    loaded = []
+    monkeypatch.setattr(v, "load", lambda: loaded.append(v.path))
+    v.cd("/g/internal/q/files")
+    assert v.go_up() and loaded[-1] == "/g/internal/q"
+    assert v.go_up() and opened[-1] == (storage, None)  # from the saves' top back to the game's storage
 
 
 def test_saves_and_tmp_notices():

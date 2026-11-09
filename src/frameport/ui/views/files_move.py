@@ -12,7 +12,6 @@ from ...errors import explain
 from ...i18n import tr, tr_n
 from .. import components as C
 from .. import theme as T
-from .files import crumbs
 
 if TYPE_CHECKING:
     from .files import FilesView
@@ -66,7 +65,8 @@ class MovePicker:
             if heading:
                 rows.append(ft.Container(C.meta(heading.upper()), padding=ft.Padding(T.S2, T.S2, 0, T.px(2))))
             for loc, icon, _sub in entries:
-                selected = self.loc is not None and self.loc["id"] == loc["id"]
+                selected = self.loc is not None and loc["id"] in (self.loc["id"],
+                                                                  (self.loc.get("parent") or {}).get("id"))
                 ic = ft.Icon(icon, size=T.px(16))
                 label = C.body(loc["label"], weight=ft.FontWeight.W_500, max_lines=1,
                                overflow=ft.TextOverflow.ELLIPSIS)
@@ -116,38 +116,45 @@ class MovePicker:
     def _render_folders(self, folders: list) -> None:
         loc, path = self.loc, self.path
         self.crumb_row.controls = []
-        for i, (label, p) in enumerate(crumbs(loc["path"], path, loc["label"])):
+        for i, (label, cloc, p) in enumerate(self.view.nav_crumbs(loc, path)):
             if i:
                 self.crumb_row.controls.append(ft.Icon(ft.Icons.CHEVRON_RIGHT_ROUNDED, size=T.px(16), color=T.TEXT_3))
-            self.crumb_row.controls.append(C.ghost(label, on_click=lambda e, p=p: self.cd(p),
-                                                   color=T.TEXT if p == path else T.TEXT_2))
+            self.crumb_row.controls.append(C.ghost(label, on_click=lambda e, c=cloc, p=p: (
+                self.cd(p) if c is self.loc else self.open(c, p)), color=T.TEXT if cloc is loc and p == path
+                else T.TEXT_2))
         moving = {x.path for x in self.items}
         rows = []
         if path != loc["path"]:
             rows.append(self._folder_row("..", ft.Icons.ARROW_UPWARD_ROUNDED, posixpath.dirname(path)))
+        elif loc.get("parent"):  # from a game's saves back to its storage
+            rows.append(self._folder_row("..", ft.Icons.ARROW_UPWARD_ROUNDED, "",
+                                         on_click=lambda e, c=loc["parent"]: self.open(c)))
+        if self.view.has_saves_entry(loc, path):  # into the game's saves, like the Files list
+            rows.append(self._folder_row(tr("Saves (internal storage)"), ft.Icons.SAVE_OUTLINED, "", link=True,
+                                         on_click=lambda e: self.open(self.view.saves_location(loc))))
         for e in folders:
             if e.path in moving:  # never into itself
                 continue
             rows.append(self._folder_row(e.name, ft.Icons.FOLDER_OUTLINED, e.path, link=e.link))
-        if not folders:
+        if not folders and not self.view.has_saves_entry(loc, path):
             rows.append(ft.Container(C.meta(tr("No folders here: the files go into this folder.")), padding=T.S3))
         self.folders.controls = rows
         problem = self._problem()
         self.go.disabled = problem is not None
         n = len(self.items)
-        where = posixpath.join(loc["label"], posixpath.relpath(path, loc["path"])) if path != loc["path"] \
-            else loc["label"]
+        name = self.view.loc_name(loc)
+        where = posixpath.join(name, posixpath.relpath(path, loc["path"])) if path != loc["path"] else name
         self.hint.value = problem or tr_n("{n} item goes into {where}", "{n} items go into {where}", n, where=where)
         for c in (self.crumb_row, self.folders, self.go, self.hint):
             C.update(c)
 
-    def _folder_row(self, name: str, icon: str, path: str, link: bool = False) -> ft.Control:
+    def _folder_row(self, name: str, icon: str, path: str, link: bool = False, on_click=None) -> ft.Control:
         return ft.Container(ft.Row([ft.Icon(icon, size=T.px(18), color=T.ACCENT if name != ".." else T.TEXT_2),
                                     C.body(name, T.TEXT if name != ".." else T.TEXT_2, max_lines=1,
                                            overflow=ft.TextOverflow.ELLIPSIS, expand=True),
                                     *([C.meta(tr("link"))] if link else [])], spacing=T.S3),
                             padding=ft.Padding(T.S3, T.px(7), T.S3, T.px(7)), border_radius=T.RADIUS_SM, ink=True,
-                            on_click=lambda e: self.cd(path))
+                            on_click=on_click or (lambda e: self.cd(path)))
 
     def _problem(self) -> str | None:
         """Why this folder can't take the items (None = it can)."""

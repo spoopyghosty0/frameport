@@ -135,6 +135,7 @@ class Entry:
     size: int
     mtime: float
     link: bool = False  # a symbolic link (e.g. Lepton's /sdcard/Movies → ~/Videos in a game's storage)
+    saves: str = ""  # the Files tab's entry for a Quest game's internal storage (its package; not a real file)
 
 
 def inside(root: str, path: str) -> str:
