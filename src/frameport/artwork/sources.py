@@ -5,6 +5,7 @@ Order (all lookups cached for 30 days; only exact title matches are used, so no 
   2. OculusDB (community database of the Oculus store): the Rift app's square cover
   3. the Steam store (games also sold on Steam): portrait, hero, landscape and logo
   4. the game's own program icon
+The artwork picker (search/pick) also offers SideQuest and, with the user's key, SteamGridDB results (stores.py).
 """
 from __future__ import annotations
 
@@ -149,14 +150,21 @@ def apply_oculusdb(package: str, app: dict, folder: Path | None = None) -> bool:
     return False
 
 
-def apply_steam(package: str, appid: int | str) -> bool:
-    if not steam_details(appid):
+def apply_steam(package: str, appid: int | str, folder: Path | None = None, replace: bool = True,
+                check: bool = True) -> bool:
+    """Steam's library art of an app (cover, hero, header, logo) into the game's art folder (or `folder`); without
+    `replace` only missing kinds. `check`: only an app whose store details are readable and not adult-only (callers
+    that matched through steam_details already did that)."""
+    from . import stores
+
+    if check and not steam_details(appid):
         return False
+    d = folder or fetch.artwork_dir(package)
     got = False
     for kind, file in STEAM_FILES.items():
-        data = _get(STEAM_CDN.format(id=appid, file=file))
-        if data:
-            _save(package, kind, data)
+        if not replace and any(d.glob(f"{kind}.*")):
+            continue
+        if stores.save(d, kind, _get(STEAM_CDN.format(id=appid, file=file)), replace=True):
             got = True
     return got
 
@@ -235,17 +243,81 @@ def search(term: str) -> list[dict]:
                         file="header.jpg"), "id": i["id"]})
     except Exception:  # noqa: BLE001
         pass
+    out += sidequest_candidates(term)
+    out += steamgriddb_candidates(term)
+    want = norm(term)
+    return sorted(out, key=lambda r: norm(r.get("name") or "") != want)  # exact names first (each source's own order)
+
+
+def sidequest_candidates(term: str, limit: int = 8) -> list[dict]:
+    """SideQuest listings for the picker (a banner each; store titles are synced from Meta's store)."""
+    from . import stores
+
+    out = []
+    try:
+        for r in stores.sidequest_search(term):
+            banner = stores.sidequest_banner(r)
+            if banner and r.get("apps_id") and r.get("supports_quest", True):
+                out.append({"source": "SideQuest", "name": r.get("name"), "preview": banner, "id": r["apps_id"]})
+            if len(out) >= limit:
+                break
+    except Exception:  # noqa: BLE001 - offline
+        pass
     return out
 
 
-ART_STEMS = frozenset(fetch.KINDS.values()) | frozenset(fetch.EXTRA_KINDS)
+def steamgriddb_candidates(term: str, limit: int = 4) -> list[dict]:
+    """SteamGridDB games for the picker (only with the user's API key): each one's best cover as the preview."""
+    from . import stores
+
+    key = stores.sgdb_key()
+    out: list[dict] = []
+    if not key:
+        return out
+    try:
+        for g in stores.sgdb_search(term, key)[:limit]:
+            imgs = stores.sgdb_images(g["id"], "portrait", key) or stores.sgdb_images(g["id"], "hero", key)
+            if imgs:
+                out.append({"source": "SteamGridDB", "name": g.get("name"),
+                            "preview": imgs[0].get("thumb") or imgs[0]["url"], "id": g["id"]})
+    except Exception:  # noqa: BLE001 - offline, rate limit, a rejected key
+        pass
+    return out
 
 
-def apply_choice(package: str, choice: dict) -> bool:
+ART_STEMS = fetch.ART_STEMS
+
+
+class PickFailure:
+    """Why a picker result gave no artwork: `source` (as the picker shows it) and `reason`: 'http' (the server
+    answered `status`), 'offline' (no answer), 'not_image' (a web page instead of an image: the service is down) or
+    'no_cover' (the result has no cover image)."""
+
+    def __init__(self, source: str, reason: str, status: int | None = None):
+        self.source, self.reason, self.status = source, reason, status
+
+    def __repr__(self) -> str:
+        return f"PickFailure({self.source!r}, {self.reason!r}, {self.status!r})"
+
+
+def _preview_failure(choice: dict) -> PickFailure:
+    """What happened to the picture the picker showed (asked once more, to say why it didn't come)."""
+    from . import stores
+
+    url = choice.get("preview")
+    got = stores.download(url) if url else None
+    if got is None or not got.reason:
+        return PickFailure(choice.get("source") or "?", "no_cover")
+    return PickFailure(choice.get("source") or "?", got.reason, got.status)
+
+
+def pick(package: str, choice: dict) -> PickFailure | None:
     """Store the artwork of a picker result, replacing the current art. It's downloaded into a staging folder first:
     when the result yields no cover (dead store image, no art for that package) the current art stays and this
-    returns False. Screenshots and the stored title are kept either way."""
+    says why (None = done). Screenshots and the stored title are kept either way."""
     import shutil
+
+    from . import stores
 
     tmp = f".pick.{package}"
     stage = fetch.artwork_dir(tmp)
@@ -254,6 +326,14 @@ def apply_choice(package: str, choice: dict) -> bool:
     try:
         if choice["source"] == "Steam":
             apply_steam(tmp, choice["id"])
+        elif choice["source"] == "SideQuest":
+            app = stores.sidequest_app(choice["id"]) or {}
+            banner = stores.sidequest_banner(app) or choice.get("preview")
+            stores.save(stage, "landscape", stores.download(banner).data if banner else None)
+            fetch.cover_from_wide(stage)
+        elif choice["source"] == "SteamGridDB":
+            stores.apply_sgdb(stage, choice["id"], stores.SGDB_KINDS, replace=True)
+            fetch.cover_from_wide(stage)
         elif choice.get("package"):
             # the picture the picker showed (OculusDB) is the cover; the store service by package adds the logo
             # and icon. Its covers can differ from the picked picture (e.g. a "dogfooding" placeholder), so they're
@@ -267,7 +347,7 @@ def apply_choice(package: str, choice: dict) -> bool:
         else:
             apply_oculusdb(tmp, choice["app"])
         if not has_art(tmp):
-            return False
+            return _preview_failure(choice)
         d = fetch.artwork_dir(package)
         for f in d.iterdir():  # the old art and its thumbnails (screenshot thumbnails are t_shot_*)
             if f.is_file() and (f.stem in ART_STEMS or f.name.startswith("t_") and not f.name.startswith("t_shot_")):
@@ -276,9 +356,14 @@ def apply_choice(package: str, choice: dict) -> bool:
             if f.is_file() and f.stem in ART_STEMS:
                 f.replace(d / f.name)
         (d / fetch.PICKED).write_text(choice.get("source", ""), encoding="utf-8")  # keep it through installs
-        return True
+        return None
     finally:
         shutil.rmtree(stage, ignore_errors=True)
+
+
+def apply_choice(package: str, choice: dict) -> bool:
+    """pick() as True/False (CLI and older callers)."""
+    return pick(package, choice) is None
 
 
 # The user's own images (Artwork dialog → "Your own images"), for games whose art can't be found automatically.

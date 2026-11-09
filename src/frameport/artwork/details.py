@@ -4,9 +4,12 @@ and screenshots.
 Sources (cached 30 days; exact title matches only, like the artwork):
   - OculusDB (Meta/Oculus store data): long description, genres, publisher, website — found by Quest package or by
     the Rift app match; covers Quest and Rift games, including Oculus exclusives
+  - SideQuest, only when OculusDB has nothing for a Quest game (it is down at times, GitHub #510): its listing with
+    exactly the game's name (store titles are synced from Meta's store): description, tags as genres, publisher,
+    website, the Meta store link and screenshots (when Steam has none)
   - the Steam store (games also sold there): short description, genres, developers, publishers, release date and
     screenshots
-Meta's own store pages refuse automated requests, so Oculus-exclusive games get no screenshots.
+Meta's own store pages refuse automated requests: Oculus-exclusive games get screenshots only from SideQuest.
 Screenshots are saved as artwork/<pkg>/shot_<n>.jpg; the rest goes into the library entry's `details`.
 """
 from __future__ import annotations
@@ -17,7 +20,7 @@ import time
 import urllib.parse
 
 from ..core import cache
-from . import fetch, sources
+from . import fetch, sources, stores
 
 MAX_SHOTS = 6
 
@@ -101,8 +104,24 @@ def fetch_details(entry: dict, screenshots: bool = True) -> dict:
             out["website"] = app["website_url"]
         if app.get("id"):
             out["store_url"] = f"https://www.meta.com/experiences/{app['id']}/"
+    sq = None
+    if not app and entry.get("kind") not in ("rift", "linux"):
+        sq = sidequest_app(entry, title)
+    if sq:
+        out.setdefault("matches", {})["sidequest"] = {"by": "title", "key": sq.get("name") or title}
+        out["sources"].append("sidequest")
+        out["description"] = _text(sq.get("description") or sq.get("summary"))
+        out["genres"] = stores.sidequest_tags(sq)
+        if sq.get("oculus_auto_generated_creator"):
+            out["publisher"] = sq["oculus_auto_generated_creator"]
+        if str(sq.get("website") or "").startswith(("https://", "http://")):
+            out["website"] = sq["website"]
+        meta_id = re.search(r"/experiences/(?:quest/)?(\d+)", sq.get("labrador_url") or "")
+        if meta_id:
+            out["store_url"] = f"https://www.meta.com/experiences/{meta_id.group(1)}/"
+        out["store_url_sidequest"] = f"https://sidequestvr.com/app/{int(sq['apps_id'])}"
     try:
-        st = steam_app(title, app)
+        st = steam_app(title, app or ({"publisher_name": sq.get("oculus_auto_generated_creator")} if sq else None))
     except Exception:  # noqa: BLE001
         st = None
     if st:
@@ -125,7 +144,18 @@ def fetch_details(entry: dict, screenshots: bool = True) -> dict:
         if screenshots:
             out["screenshots"] = save_screenshots(entry["package"], [s.get("path_full") for s in
                                                                      st.get("screenshots") or []])
+    if sq and screenshots and not out.get("screenshots"):
+        out["screenshots"] = save_screenshots(entry["package"], stores.sidequest_screenshots(sq))
     return {k: v for k, v in out.items() if v not in (None, "", [])}
+
+
+def sidequest_app(entry: dict, title: str) -> dict | None:
+    """SideQuest's listing of a Quest game when OculusDB has nothing (it's down at times, GitHub #510): by exact
+    name only (fetch.names), never another app's listing (stores.match_sidequest)."""
+    try:
+        return stores.match_sidequest(fetch.names(entry["package"], title), entry["package"])
+    except Exception:  # noqa: BLE001 - offline
+        return None
 
 
 def title_matched(entry: dict) -> bool:
@@ -158,7 +188,7 @@ def save_screenshots(package: str, urls: list[str]) -> list[str]:
                 r = cache.http_get(url, timeout=30)
                 if r.status_code != 200 or len(r.content) < 1000:
                     continue
-                path.write_bytes(r.content)
+                path.write_bytes(_jpeg(r.content))
             except Exception:  # noqa: BLE001
                 continue
         saved.append(path.name)
@@ -166,6 +196,23 @@ def save_screenshots(package: str, urls: list[str]) -> list[str]:
         if old.name not in saved:
             old.unlink()
     return saved
+
+
+def _jpeg(data: bytes) -> bytes:
+    """Screenshots are stored as .jpg: other formats (SideQuest's are WebP) are re-encoded; JPEG stays as it is."""
+    if data[:3] == b"\xff\xd8\xff":
+        return data
+    import io
+
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            out = io.BytesIO()
+            im.convert("RGB").save(out, "JPEG", quality=90)
+            return out.getvalue()
+    except (OSError, UnidentifiedImageError, Image.DecompressionBombError, ValueError):
+        raise ValueError("not an image") from None
 
 
 def screenshot_files(package: str) -> list:
@@ -189,6 +236,8 @@ def store_links(details: dict) -> list[tuple[str, str]]:
         out.append(("Meta store", details["store_url"]))
     if details.get("store_url_steam"):
         out.append(("Steam store", details["store_url_steam"]))
+    if details.get("store_url_sidequest"):
+        out.append(("SideQuest", details["store_url_sidequest"]))
     if details.get("website"):
         out.append((urllib.parse.urlparse(details["website"]).netloc or "Website", details["website"]))
     return out

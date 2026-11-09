@@ -496,7 +496,10 @@ def test_steam_details_need_a_vr_app_or_the_same_company(monkeypatch):
         "oculusdb", "steam"]
     _steam_match(monkeypatch, {**other, "developers": ["Crytek GmbH"], "publishers": ["Crytek"]})
     assert "steam" in details.fetch_details({"package": "com.crytek.climb", "title": "The Climb"})["sources"]
-    # OculusDB unreachable: only a VR app on Steam is taken
+    # OculusDB unreachable (and SideQuest has nothing): only a VR app on Steam is taken
+    from frameport.artwork import stores
+
     monkeypatch.setattr(sources, "oculusdb_search", lambda *a, **k: [])
+    monkeypatch.setattr(stores, "sidequest_search", lambda term: [])
     _steam_match(monkeypatch, other)
     assert not details.fetch_details({"package": "com.crytek.climb", "title": "The Climb"}).get("sources")

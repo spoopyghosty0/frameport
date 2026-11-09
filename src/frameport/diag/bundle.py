@@ -399,7 +399,8 @@ def collect(packages: list[str] | None, target=None, reporter: Reporter | None =
         origins: dict[str, int] = {}
         for e in entries.values():
             origins[e.origin] = origins.get(e.origin, 0) + 1
-        w.json("app/settings.json", {"settings": library.load().get("settings", {}), "catalog": origins,
+        w.json("app/settings.json", {"settings": redact.scrub_settings(library.load().get("settings", {})),
+                                     "catalog": origins,
                                      "games": len(library.games())})
     except Exception as exc:  # noqa: BLE001
         w.warnings.append(f"settings: {exc}")

@@ -1,5 +1,5 @@
-"""'Find artwork' — search the Meta/Oculus store (via OculusDB) and Steam, pick a result, fetch automatically, or
-choose your own image files."""
+"""'Find artwork' — search the Meta/Oculus store (via OculusDB), Steam, SideQuest and (with the user's API key)
+SteamGridDB, pick a result, fetch automatically, or choose your own image files."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -28,9 +28,9 @@ def show_art_dialog(app: FramePortApp, package: str) -> None:
         app.page.pop_dialog()
 
         def work():
-            if not sources.apply_choice(package, choice):
-                app.toast(tr("Couldn't download artwork from that {source} result. Try another one.")
-                          .format(source=choice['source']), error=True)
+            failed = sources.pick(package, choice)
+            if failed:
+                app.toast(pick_failure_text(failed), error=True)
                 return
             thumbs.prewarm(package)
             installed = C.install_state(library.game(package), app.frame_info) in ("installed", "outdated")
@@ -70,31 +70,60 @@ def show_art_dialog(app: FramePortApp, package: str) -> None:
         def work():
             found = pipeline.fetch_art(package)
             thumbs.prewarm(package)  # regenerate the thumbnails the cards/hero use, or the view shows the old art
-            src = found.get("source")
+            raw = found.get("source")
+            src = {"meta": "Meta store", "oculusdb": "Meta store (OculusDB)", "steam": "Steam store",
+                   "sidequest": "SideQuest", "steamgriddb": "SteamGridDB", "icon": tr("the app's icon"),
+                   "none": tr("none found")}.get(raw, raw)
             installed = C.install_state(library.game(package), app.frame_info) in ("installed", "outdated")
-            if src and src != "none" and installed:
+            if raw and raw != "none" and installed:
                 library.upsert_game(package, steam_art_stale=True)
             app.refresh_view()
-            if src and src != "none" and installed:
+            if raw and raw != "none" and installed:
                 app.toast(tr("Artwork updated ({src}). The Frame's Steam library still shows the old art.")
                           .format(src=src),
                           action=tr("Update art on Frame"), on_action=lambda e: app.update_steam_art(package))
             else:
-                app.toast(tr("Artwork: {value}").format(value=src or 'none found'))
+                app.toast(tr("Artwork: {value}").format(value=src or tr("none found")))
         app.run_bg(work)
 
+    def key_settings(e):
+        app.page.pop_dialog()
+        app.go("settings")
+        if app.settings_view is not None:
+            app.page.run_task(app.settings_view.show_section, "artwork")
+
+    from ...artwork import stores
+
+    hint = [] if stores.sgdb_key() else [ft.Row([
+        C.meta(tr("More covers, banners and logos: add a free SteamGridDB API key."), expand=True),
+        C.ghost(tr("Artwork settings"), ft.Icons.KEY_ROUNDED, key_settings),
+    ], spacing=T.S2)]
     term.on_submit = search
     app.page.show_dialog(C.dialog(
         tr("Artwork for {get}").format(get=g.get('title')),
         ft.Column([
             ft.Row([term, C.secondary(tr("Search"), ft.Icons.SEARCH_ROUNDED, search)], spacing=T.S2),
-            status, results,
+            status, results, *hint,
         ], spacing=T.S3, tight=True),
         actions=[C.ghost(tr("Use your own artwork…"), ft.Icons.UPLOAD_FILE_OUTLINED,
                          lambda e: (app.page.pop_dialog(), show_custom_art_dialog(app, package))),
                  C.ghost(tr("Find automatically"), ft.Icons.AUTO_AWESOME_ROUNDED, auto),
                  C.ghost(tr("Close"), on_click=lambda e: app.page.pop_dialog())]))
     search()
+
+
+def pick_failure_text(failed: sources.PickFailure) -> str:
+    """Why a picked result gave no artwork, naming the source (GitHub #510: a TMNT result whose image was gone only
+    said "couldn't download")."""
+    why = {
+        "http": tr("its server answered with error {status}, so the image is gone or the service is down")
+        .format(status=failed.status or "?"),
+        "offline": tr("its server didn't answer (no internet connection, or the service is down)"),
+        "not_image": tr("its server sent a web page instead of the image (the service is probably down)"),
+        "no_cover": tr("that result has no cover image"),
+    }.get(failed.reason, failed.reason)
+    return tr("Couldn't get the artwork from {source}: {why}. Your current artwork stays. Try another result, or use "
+              "your own artwork.").format(source=failed.source, why=why)
 
 
 def custom_slots() -> tuple[tuple[str, str, str], ...]:

@@ -155,7 +155,33 @@ def default(frame_info: dict | None = None) -> Redactor:
         known["host"].append(frame_info.get("hostname", ""))
         known["steam-id"] += [str(u) for u in frame_info.get("steam_users") or []]
     known["steam-id"].append(pc_steam_user() or "")
+    known["secret"] = secret_values()
     return Redactor(known)
+
+
+# settings that hold secrets (the user's own API keys): never in a diagnostics bundle or an issue text
+SECRET_SETTINGS = ("art.steamgriddb_key",)
+
+
+def secret_values() -> list[str]:
+    """The secrets set in this PC's settings (replaced by "<secret>" wherever they appear)."""
+    try:
+        from ..core import library
+
+        settings = library.load().get("settings", {}) or {}
+    except Exception:  # noqa: BLE001
+        return []
+    return [str(settings[k]).strip() for k in SECRET_SETTINGS if str(settings.get(k) or "").strip()]
+
+
+def scrub_settings(settings: dict) -> dict:
+    """A copy of the settings with secret values replaced by "<secret>" (an empty one stays empty: whether a key is
+    set has debug value, the key itself never)."""
+    out = dict(settings or {})
+    for k in SECRET_SETTINGS:
+        if out.get(k):
+            out[k] = "<secret>"
+    return out
 
 
 @lru_cache(maxsize=1)

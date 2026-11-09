@@ -438,8 +438,13 @@ def fetch_art(package: str, reporter: Reporter | None = None) -> dict:
     (artwork.artwork_dir(package) / artwork.PICKED).unlink(missing_ok=True)  # "find automatically" replaces a pick
     if entry.get("kind") == "rift":
         return _rift_art(entry, reporter)
-    artwork.fetch(package, Path(entry["apk"]) if entry.get("apk") else None, refresh=True)
-    return {"source": "meta"}
+    out, _ = artwork.fetch(package, Path(entry["apk"]) if entry.get("apk") else None, refresh=True)
+    found = artwork.source(package).split(",")[0]
+    if not found:
+        found = "icon" if any(out.glob("icon.*")) else "none"
+    if found not in ("icon", "none"):
+        library.upsert_game(package, art_source=found)
+    return {"source": found}
 
 
 def fetch_details(package: str, reporter: Reporter | None = None) -> dict:
