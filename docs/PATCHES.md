@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 216 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 217 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -11,7 +11,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 ## Groups
 
 - [Patches from OVRPort](#group-overport) (25)
-- [Steam Frame patches](#group-frame) (74)
+- [Steam Frame patches](#group-frame) (75)
 - [Game settings](#group-adapter) (90)
 - [Files and settings on the Frame](#group-device) (14)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
@@ -86,6 +86,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [QuestCraft: count the Frame's network as online](#frame-pojlib_connection) | `frame.pojlib_connection` | Steam Frame patches | 1 |
 | [SDL apps: start without a clipboard service](#frame-sdl_clipboard) | `frame.sdl_clipboard` | Steam Frame patches | 9 |
 | [Stress Level Zero: let Unity start Vulkan itself](#frame-slz_vulkan_hooks) | `frame.slz_vulkan_hooks` | Steam Frame patches | 1 |
+| [Keep the same Android device id between starts](#frame-stable_android_id) | `frame.stable_android_id` | Steam Frame patches |  |
 | [Start straight in VR (skip the 2D launcher)](#frame-start_activity) | `frame.start_activity` | Steam Frame patches |  |
 | [Embedded OpenXR loader: use FrameBridge](#frame-static_openxr_loader) | `frame.static_openxr_loader` | Steam Frame patches |  |
 | [Allow swapchains larger than 4096 px](#frame-swapchain_limit) | `frame.swapchain_limit` | Steam Frame patches | default |
@@ -1081,6 +1082,19 @@ Stops a start-up crash in Stress Level Zero games (for example BONELAB).
 - **Source:** [patches/frame/slz_vulkan_hooks.py](../src/frameport/patches/frame/slz_vulkan_hooks.py)
 
 > Stress Level Zero's graphics plugin (libSLZQuestNative.so, for example BONELAB 1.2974) hooks Unity's Vulkan start-up and its texture samplers. On the Frame the hook calls an invalid function while Vulkan starts, and the game crashes or hangs before the first frame. The plugin's two hooks are switched off, so Unity starts Vulkan itself. Its pipeline cache isn't used: the first start spends about half a minute prewarming shaders.
+
+### <a id="frame-stable_android_id"></a>Keep the same Android device id between starts
+
+Keeps saves readable in games that lock or file them under the device id (for example RUNNER).
+
+- `frame.stable_android_id` · also for 2D apps
+- **Changes:** Changes the APK (a rebuild and reinstall apply it).
+- **Suggested (on):** Unity game: Unity's device id comes from Android's app-specific id, which Lepton makes up anew at every start; saves or logins tied to it break.
+- **Suggested by launch-test signatures:**
+  - `save-decrypt-device-id` (error): The game can't decrypt its own saved data.
+- **Source:** [patches/frame/stable_android_id.py](../src/frameport/patches/frame/stable_android_id.py)
+
+> Lepton throws the container's /data away at every exit, so Android makes up a new app-specific device id (ANDROID_ID, which Unity's SystemInfo.deviceUniqueIdentifier comes from) at every start. Games that encrypt or file their saves with it can't read them at the next start (for example RUNNER: 'CryptographicException: Padding is invalid'). Gives the game a fixed id instead, different for each game and each FramePort user: libunity.so and the app's Java code read Settings.Secure through a small forwarding class (an extra classes.dex) that answers android_id with it.
 
 ### <a id="frame-start_activity"></a>Start straight in VR (skip the 2D launcher)
 

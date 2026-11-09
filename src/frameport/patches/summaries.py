@@ -124,6 +124,8 @@ SUMMARIES = {
                          "seasons).",
     "frame.ovr_microphone": "Stops a crash a few seconds after the logo in games with voice chat.",
     "frame.ovr_stable_user": "Keeps your progress in games that file their saves under your Meta user.",
+    "frame.stable_android_id": "Keeps saves readable in games that lock or file them under the device id "
+                               "(for example RUNNER).",
     "frame.keep_system_libraries": "Lets apps start that need one of Android's optional libraries (for example "
                                    "YouTube VR).",
     "frame.cortopia_org_id": "Gets Cortopia games (for example Escaping Wonderland) past their loading screen.",

@@ -724,6 +724,11 @@
   "title": "Stress Level Zero: let Unity start Vulkan itself",
   "group": "Steam Frame patches"
  },
+ "frame.stable_android_id": {
+  "anchor": "frame-stable_android_id",
+  "title": "Keep the same Android device id between starts",
+  "group": "Steam Frame patches"
+ },
  "frame.start_activity": {
   "anchor": "frame-start_activity",
   "title": "Start straight in VR (skip the 2D launcher)",

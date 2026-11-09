@@ -331,7 +331,7 @@ def test_which_patches_work_on_the_bridge():
     ok = {p.id for p in base.all_patches() if base.works_on_a32(p)}
     assert {p for p in ok if base.get(p).category in ("overport", "frame")} == {
         "frame.a32_bridge", "frame.adapter", "frame.launcher", "frame.main_process",
-        "frame.browser_handoff"}  # manifest edits (+ Java): any ABI
+        "frame.browser_handoff", "frame.stable_android_id"}  # manifest edits / Java / strings: any ABI
     assert "adapter.scale" in ok and "device.text_input_window" in ok
     assert not {f"adapter.{k}" for k in XRSHIM_SETTINGS} & ok
     a = _analysis()

@@ -626,6 +626,15 @@ signatures:
     diagnosis: The game's own graphics plugin crashes or hangs it before the first frame (for example BONELAB 1.2974). Stress Level Zero's plugin (libSLZQuestNative.so) hooks Unity's Vulkan start-up and calls an invalid function there on the Frame.
     suggest: [frame.slz_vulkan_hooks]
     supersedes: [java-crash, native-crash]
+  - id: save-decrypt-device-id
+    # a Unity game's save decrypts with a key from the device id, which Lepton makes up anew at every start (RUNNER,
+    # #420); the first start with the fix still meets the save written under the old id, so not with the patch built in
+    pattern: 'CryptographicException: Padding is invalid[^\n]*(?:\n[^\n]*\sat [^\n]*){0,12}?\n[^\n]*\sat (?!System\.)[^\n]*(?:[Ll]oad|[Ss]ave|[Ss]erializ|DataManager|[Pp]rofile|[Pp]refs)'
+    unless_patch: frame.stable_android_id
+    severity: error
+    diagnosis: The game can't decrypt its own saved data. Such games often derive the key from the Android device id, and Lepton gives the game a new one at every start (Android keeps an app's id in /data, which Lepton deletes when the game exits), so a save written in one session can't be read in the next (for example RUNNER). The patch gives the game the same device id at every start. A save written before the fix stays unreadable; delete it once (or start a new game).
+    suggest: [frame.stable_android_id]
+    supersedes: [java-crash]
   - id: vivox-api31
     pattern: 'NoSuchMethodError: No virtual method \w*CommunicationDevice\w*\(.*Landroid/media/AudioManager[^\n]*(?:\n[^\n]*\sat [^\n]*){0,12}?\n[^\n]*\sat com\.vivox\.'
     severity: fatal
