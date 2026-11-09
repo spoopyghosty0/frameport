@@ -1,0 +1,11 @@
+package: com.TrassGames.Yeeps
+title: Yeeps
+tested_version: 2.32.2
+engine: Unity
+xr: OpenXR
+status: unsupported
+notes: Its anti-tamper library (Talsec) calls an Android 12 method the Frame's Android 11 lacks, and it also checks the
+  app's signature, which every FramePort build changes. FramePort doesn't change anti-tamper code.
+verified:
+  date: '2026-11-08'
+  issue: 575

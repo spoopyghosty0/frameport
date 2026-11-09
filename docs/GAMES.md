@@ -286,3 +286,4 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Roblox | Quest | ❌ Doesn't run | Crashes on its first VR frame on the Frame. |
 | Thief Simulator | Quest | ❌ Doesn't run | Quits at start with the game's own "installed from unknown source" message. |
 | Virtual Desktop | Quest | ❌ Doesn't run | Checks a Meta entitlement at start and needs its PC streamer. |
+| Yeeps | Quest | ❌ Doesn't run | Its anti-tamper library (Talsec) calls an Android 12 method the Frame's Android 11 lacks, and it also checks the app's signature, which every FramePort build… |
