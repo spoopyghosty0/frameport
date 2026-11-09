@@ -1,0 +1,14 @@
+package: com.miamivr.quest.frame
+title: Vice City VR
+status: issues
+notes: The mod author's own Steam Frame build. New games work; loading a save can hang on a black screen.
+tested_version: 0.2.1-frame
+engine: Other
+xr: OpenXR
+verified:
+  date: '2026-11-02'
+  known_good_sha256: 4155bd9d4e26dc8e35cfa40ef860b304ebfcb5270ae4647b0451e8ac59dcf391
+  app: 1.4.0
+  overport_cli: 1.2.5
+  issue: 573
+source_hint: ViceCityVR
