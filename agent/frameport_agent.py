@@ -50,7 +50,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 128
+AGENT_VERSION = 129
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -104,21 +104,15 @@ GAMEPAD_LINE = ('[[ "${FRAMEPORT_NO_GAMEPAD:-0}" != 0 ]] || { export FRAMEPORT_G
 PAD_DIR = "/dev/fp-input"  # the host's /dev/input inside the container
 # "Ignore the laser pointer" (device.steam_gamepad's ignore_pointer, GitHub #162): pointing SteamVR's laser at a 2D
 # app's window sends pointer events into Android through Waydroid's pipe /dev/input/wl_pointer_events (EventHub device
-# "wayland_pointer", written by Lepton's hwcomposer.waydroid.so), and SDL games then flip between gamepad and mouse
-# prompts. The launcher exports FRAMEPORT_GAMEPAD_IGNORE_POINTER=1; the Podman wrapper mounts an excluded-input-devices
-# file naming that device (Android's input reader leaves listed device names out: InputManagerService reads
-# <ANDROID_ROOT>/etc/excluded-input-devices.xml at boot; Lepton's image has none), and _gamepad_links keeps the pipe
-# open for reading inside the container (POINTER_DRAIN), so the hwcomposer finds a reader and doesn't log "Failed to
-# open pipe to InputFlinger" for every pointer event.
+# "wayland_pointer"), and SDL games then flip between gamepad and mouse prompts. Lepton's hwcomposer.waydroid.so makes
+# that pipe (mkfifo, errors ignored; reopened per event when its end is gone) and Waydroid's patched EventHub
+# (libinputreader.so) opens it by its fixed path, before and without Android's excluded-device names (an
+# excluded-input-devices.xml naming wayland_pointer was read but didn't drop it). The launcher exports
+# FRAMEPORT_GAMEPAD_IGNORE_POINTER=1 and the Podman wrapper binds /dev/null at the pipe's path: the hwcomposer's
+# mkfifo fails (exists), its writes go to /dev/null, and EventHub can't poll /dev/null (epoll_ctl EPERM: "Could not
+# add input device fd to epoll"), so it drops the device. Touch, keyboard and the pads stay.
 POINTER_ENV = "FRAMEPORT_GAMEPAD_IGNORE_POINTER"
-POINTER_DEVICE = "wayland_pointer"
 POINTER_PIPE = "/dev/input/wl_pointer_events"
-EXCLUDED_TARGET = "/system/etc/excluded-input-devices.xml"
-EXCLUDED_DEVICES = ('<?xml version="1.0" encoding="utf-8"?>\n'
-                    "<!-- Written by FramePort (device.steam_gamepad: ignore the laser pointer). -->\n"
-                    f'<devices>\n    <device name="{POINTER_DEVICE}" />\n</devices>\n')
-# read-write open: never blocks and never sees end-of-file when the hwcomposer closes its end
-POINTER_DRAIN = f"[ -e {POINTER_PIPE} ] && exec cat 0<>{POINTER_PIPE} >/dev/null"
 # System features for a game's Android (patch device.hybrid_app, per game, GitHub #484): Horizon OS "hybrid apps"
 # (YouTube) only leave their 2D panel for VR when the system has oculus.software.vr.app.hybrid. The launcher exports
 # FRAMEPORT_FEATURES (the patch's env) and puts the Podman wrapper on PATH; the wrapper mounts a permissions file that
@@ -4522,9 +4516,10 @@ def gamepad_mounts(env, taken, sys_root="/sys", dev_root="/dev"):
         target = f"/system/usr/keylayout/Vendor_28de_Product_{product}.kl"
         if layout and target not in taken and re.fullmatch(r"[0-9a-f]{4}", product):
             extra += ["--mount", f"type=bind,source={layout},destination={target},ro"]
-    if ignore_pointer(env) and EXCLUDED_TARGET not in taken:
-        extra += ["--mount", f"type=bind,source={excluded_devices_file()},destination={EXCLUDED_TARGET},ro"]
-        print(f"FramePort gamepad: the laser pointer ({POINTER_DEVICE}) is ignored in this container", file=sys.stderr)
+    if ignore_pointer(env) and POINTER_PIPE not in taken:
+        extra += ["--mount", f"type=bind,source={os.path.join(dev_root, 'null')},destination={POINTER_PIPE}"]
+        print(f"FramePort gamepad: the laser pointer is ignored in this container (/dev/null at {POINTER_PIPE})",
+              file=sys.stderr)
     names = ", ".join(f"{p['event']} ({p['name']}, 28de:{p['product']})" for p in pads) or "none"
     print(f"FramePort gamepad: Steam Input virtual gamepads for this container: {names}", file=sys.stderr)
     return extra
@@ -4533,23 +4528,6 @@ def gamepad_mounts(env, taken, sys_root="/sys", dev_root="/dev"):
 def ignore_pointer(env):
     """Whether the launcher asked to leave the laser pointer out of the container (POINTER_ENV)."""
     return str(env.get(POINTER_ENV, "")) == "1"
-
-
-def excluded_devices_file():
-    """The excluded-input-devices file (EXCLUDED_DEVICES), next to the Podman wrapper."""
-    path = os.path.join(os.path.dirname(PODMAN_BIN), "excluded-input-devices.xml")
-    try:
-        with open(path) as f:
-            if f.read() == EXCLUDED_DEVICES:
-                return path
-    except OSError:
-        pass
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = f"{path}.{os.getpid()}.tmp"
-    with open(tmp, "w") as f:
-        f.write(EXCLUDED_DEVICES)
-    os.replace(tmp, path)
-    return path
 
 
 def system_features(value):
@@ -4597,45 +4575,23 @@ def gamepad_link_script(want, linked):
     return "; ".join(parts) or "true"
 
 
-def gamepad_links(appid, parent, poll=1.0, refresh=15.0, exec_=None, pads=steam_gamepads, alive=pid_alive,
-                  drain=None, retry=2.0):
+def gamepad_links(appid, parent, poll=1.0, refresh=15.0, exec_=None, pads=steam_gamepads, alive=pid_alive):
     """While the launcher (parent) runs: keep the game's container's /dev/input links in step with Steam's virtual
     pads (made when the Frame's controllers wake up, gone when they sleep). Re-applied every `refresh` s, so a
-    container Lepton started again gets them too. With the laser pointer ignored (POINTER_ENV; `drain` = a function
-    that starts the reader and returns a Popen-like object): the pointer pipe's reader (POINTER_DRAIN) runs in the
-    container, started again `retry` s after it ended (container not up yet, or started again) and ended with the
-    worker; the container's end ends it too."""
+    container Lepton started again gets them too."""
     container = f"lepton-steamlaunch-{int(appid)}"
     exec_ = exec_ or (lambda script: run(["podman", "exec", container, "sh", "-c", script], timeout=20))
-    if drain is None and ignore_pointer(os.environ):
-        def drain():
-            return subprocess.Popen(["podman", "exec", container, "sh", "-c", POINTER_DRAIN],
-                                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     linked, last = set(), 0.0
-    reader, reader_at = None, None
-    try:
-        while alive(int(parent)):
-            want = {p["event"] for p in pads()}
-            now = time.monotonic()
-            if want != linked or (want and now - last >= refresh):
-                r = exec_(gamepad_link_script(want, linked))
-                if r.returncode == 0:
-                    if want != linked:
-                        print(f"{time.strftime('%H:%M:%S')} pads: {', '.join(sorted(want)) or 'none'}", flush=True)
-                    linked, last = want, now
-            if drain and (reader is None or reader.poll() is not None) and \
-                    (reader_at is None or now - reader_at >= retry):
-                if reader is None:
-                    print(f"{time.strftime('%H:%M:%S')} laser pointer ignored: reading {POINTER_PIPE}", flush=True)
-                try:
-                    reader, reader_at = drain(), now
-                except OSError as exc:
-                    reader, reader_at = None, now
-                    print(f"{time.strftime('%H:%M:%S')} pointer reader not started: {exc}", flush=True)
-            time.sleep(poll)
-    finally:
-        if reader is not None and reader.poll() is None:
-            reader.terminate()
+    while alive(int(parent)):
+        want = {p["event"] for p in pads()}
+        now = time.monotonic()
+        if want != linked or (want and now - last >= refresh):
+            r = exec_(gamepad_link_script(want, linked))
+            if r.returncode == 0:
+                if want != linked:
+                    print(f"{time.strftime('%H:%M:%S')} pads: {', '.join(sorted(want)) or 'none'}", flush=True)
+                linked, last = want, now
+        time.sleep(poll)
 
 
 def gamepad_layout_file(text=GAMEPAD_KL):

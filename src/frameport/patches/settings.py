@@ -1111,7 +1111,7 @@ class SteamGamepad(Patch):
         if lines:
             ctx.env["FRAMEPORT_GAMEPAD_KEYS"] = "; ".join(lines)
         if ctx.params.get("ignore_pointer"):
-            # agent: the wrapper mounts excluded-input-devices.xml (wayland_pointer); _gamepad_links reads the pipe
+            # agent: the wrapper binds /dev/null at the pointer pipe (/dev/input/wl_pointer_events)
             ctx.env["FRAMEPORT_GAMEPAD_IGNORE_POINTER"] = "1"
 
 
