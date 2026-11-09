@@ -23,6 +23,9 @@ On first start FramePort downloads the tools it uses (listed in Settings → Too
 FramePort isn't signed with a paid certificate, so the first start shows a warning:
 
 - **Windows:** "Windows protected your PC" → **More info** → **Run anyway**.
+- **Windows with Smart App Control on** ("Bad Image", error 0xc0e90002): Smart App Control has no "Run anyway" and
+  blocks self-signed apps. Turn it off in Windows Security → App & browser control → Smart App Control (Windows can
+  only turn it back on with a reset), or [run FramePort on the Frame](#running-frameport-on-the-frame-experimental).
 - **macOS:** right-click `FramePort.app` → **Open** → **Open** (once).
 - **Linux:** `tar xzf FramePort-linux-x64.tar.gz && ./FramePort/FramePort`. Arch Linux: `yay -S frameport-bin`.
 

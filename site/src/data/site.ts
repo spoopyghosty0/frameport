@@ -9,7 +9,7 @@ export const REPORT_PROBLEM = `${ISSUES}bug-report.yml`;
 export interface Download { os: 'windows' | 'macos' | 'linux' | 'linux-arm64'; label: string; detail: string; asset: string; first: string }
 export const DOWNLOADS: Download[] = [
   { os: 'windows', label: 'Windows', detail: 'Intel/AMD · zip', asset: 'FramePort-windows-x64.zip',
-    first: 'open FramePort.exe. If Windows says "Windows protected your PC", choose More info → Run anyway.' },
+    first: 'open FramePort.exe. If Windows says "Windows protected your PC", choose More info → Run anyway. With Smart App Control on, turn it off first (see the install guide).' },
   { os: 'macos', label: 'macOS', detail: 'Apple Silicon · zip', asset: 'FramePort-macos-arm64.zip',
     first: 'right-click FramePort.app → Open → Open. macOS asks this once.' },
   { os: 'linux', label: 'Linux', detail: 'Intel/AMD · tar.gz', asset: 'FramePort-linux-x64.tar.gz', first: 'run FramePort/FramePort from the unpacked folder.' },
