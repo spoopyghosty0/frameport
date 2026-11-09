@@ -100,6 +100,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | In Death: Unchained | Quest | ✅ Works |  |
 | Into The Radius 2 | Quest | ✅ Works |  |
 | Invasion | Quest | ✅ Works |  |
+| JKXR | Quest | ✅ Works |  |
 | Job Simulator | Quest | ✅ Works |  |
 | Journey of the Gods | Quest | ✅ Works |  |
 | Jurassic World Aftermath Collection | Quest | ✅ Works |  |
@@ -246,7 +247,6 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | GoldenEye VR | Quest | ⚠️ Works with issues | Sound works (from the second start on some setups). |
 | HardBullet | Quest | ⚠️ Works with issues | Loading screens (a cube overlay) are missing or corrupted up to FramePort 1.2.1; cube_quads (next release) shows them as six panels, not confirmed in the hea… |
 | Homeworld: Vast Reaches | Quest | ⚠️ Works with issues | The game starts but after selecting to start a new game it seems to crash. |
-| JKXR | Quest | ⚠️ Works with issues | Tested in the early part of Jedi Outcast. |
 | Lawn Mowing Simulator VR | Quest | ⚠️ Works with issues | Left eye textures flicker only when mowing in specific areas. |
 | MacacoVR | Quest | ⚠️ Works with issues | 2d loading screens are glitchy, otherwise main gameplay is fine |
 | Majora's Mask VR | Quest | ⚠️ Works with issues | Audio on the file select screen sounds crunchy. |

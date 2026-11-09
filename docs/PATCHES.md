@@ -150,7 +150,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Don't pause on short interruptions](#adapter-focus_hold) | `adapter.focus_hold` | Game settings | 4 |
 | [Ignore focus dips up to](#adapter-focus_hold_ms) | `adapter.focus_hold_ms` | Game settings | 2 |
 | [Hide Quest foveation](#adapter-foveation_fix) | `adapter.foveation_fix` | Game settings |  |
-| [Clear the game's GL errors (GLES)](#adapter-gl_error_clear) | `adapter.gl_error_clear` | Game settings | 4 |
+| [Clear the game's GL errors (GLES)](#adapter-gl_error_clear) | `adapter.gl_error_clear` | Game settings | 5 |
 | [Hide fast anti-aliasing (OpenGL ES)](#adapter-gl_hide_msrtt) | `adapter.gl_hide_msrtt` | Game settings | 1 |
 | [Draw each eye separately (OpenGL ES)](#adapter-gl_hide_multiview) | `adapter.gl_hide_multiview` | Game settings | 1 |
 | [GL shim: high-precision vertex shaders](#adapter-gl_highp_markers) | `adapter.gl_highp_markers` | Game settings | 1 |
@@ -1996,7 +1996,7 @@ For OpenGL ES games whose memory use keeps growing (e.g. Vader Immortal).
 - **Options:**
   - Value: int, default `0`.
   - Game settings → Troubleshooting → "Clear the game's GL errors (GLES)" (advanced).
-- **Catalog games (4):** QuestZDoom, Vader Immortal: Episode I, Vader Immortal: Episode II, Vader Immortal: Episode III.
+- **Catalog games (5):** JKXR, QuestZDoom, Vader Immortal: Episode I, Vader Immortal: Episode II, Vader Immortal: Episode III.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Clears OpenGL errors the game left pending before FrameBridge calls the Frame's runtime. The runtime's GL code fails on any pending error; after one such failure at the start it allocated GPU memory every frame without freeing it (e.g. Vader Immortal, ~20 MB a second; QuestZDoom slowed to a crawl after a few minutes).

@@ -1,8 +1,8 @@
 package: com.drbeef.jkxr
 title: JKXR
-status: issues
-notes: Tested in the early part of Jedi Outcast. Two players report stutters and freezes after 3-15 minutes of play
-  (under investigation in issue 441).
+status: works
+notes: Runs smoothly with gl_error_clear (stutters and freezes after a few minutes without it; issues 441, 502).
+  Cinematics need FramePort's GL state guard (in builds after 1.4.0); before that they play black.
 tested_version: 1.1.28
 engine: Other
 xr: OpenXR
@@ -17,3 +17,6 @@ verified:
   agent: 109
   issue: 441
 source_hint: QuestAPKs
+adapter:
+  gl_error_clear: 1
+updated: '2026-11-09'
