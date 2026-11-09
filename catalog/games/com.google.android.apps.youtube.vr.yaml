@@ -1,0 +1,11 @@
+package: com.google.android.apps.youtube.vr
+title: YouTube VR (Daydream/Cardboard)
+tested_version: 1.28.63
+engine: Other
+xr: '?'
+status: unsupported
+notes: The Daydream/Cardboard build draws through Google VR's Cardboard renderer, which never reaches the headset (sound
+  only). The Quest build is com.google.android.apps.youtube.vr.oculus.
+verified:
+  date: '2026-11-09'
+  issue: 507
