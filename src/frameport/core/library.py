@@ -94,10 +94,11 @@ def _follow_catalog(data: dict) -> bool:
             changed |= data_refreshed
         if not isinstance(r, dict) or not isinstance(a, dict):
             continue
+        pick = r.get("recipe_source") or ""  # a recipe the user chose from another game's catalog entry (#508)
         if r.get("source") == "user":
             # the user's own recipe isn't replaced, but a changed catalog entry is offered on the game page (GitHub
             # #10: a VR4 fix never reached a recipe whose Game settings had been saved once)
-            entry = catalog.lookup(pkg)
+            entry = catalog.lookup(pick or pkg)
             offer = entry.rev() if entry is not None and r.get("catalog_rev") not in (None, entry.rev()) else None
             if g.get("catalog_update") != offer:
                 if offer:
@@ -108,11 +109,13 @@ def _follow_catalog(data: dict) -> bool:
             continue
         if g.pop("catalog_update", None) is not None:  # no longer the user's recipe (reset): nothing to offer
             changed = True
-        entry = catalog.lookup(pkg)
-        if not app_updated and not data_refreshed and (entry is None or r.get("catalog_rev") == entry.rev()):
+        entry = catalog.lookup(pick or pkg)
+        if not app_updated and not data_refreshed and (entry is None or r.get("catalog_rev") == entry.rev()) \
+                and not (pick and entry is None):  # a picked entry gone from the catalog: back to the suggestion
             continue
         try:
-            g["recipe"] = recipe_to_dict(engine.suggest(analysis_from_dict(a)))
+            # a picked recipe follows the entry it came from (its fixes reach this game too)
+            g["recipe"] = recipe_to_dict(engine.suggest(analysis_from_dict(a), pick=pick))
         except Exception:  # noqa: BLE001 - a malformed entry keeps its recipe
             continue
         changed = True
@@ -519,6 +522,12 @@ def update_setting(key: str, fn: Callable, default=None):
         settings = data.setdefault("settings", {})
         settings[key] = value = fn(settings.get(key, default))
     return value
+
+
+def recipe_pick(g: dict | None) -> str:
+    """The package of the catalog entry the user chose for this game's recipe ("Use a recipe from the catalog…",
+    GitHub #508), or "" (the game's own catalog entry or FramePort's suggestion)."""
+    return str(((g or {}).get("recipe") or {}).get("recipe_source") or "")
 
 
 def recipe_to_dict(r: Recipe) -> dict:

@@ -14,8 +14,14 @@ from .catalog import TOGGLED_DEVICE
 FLAT_WINDOWS_PATCHES = ("pcvr.proton_tool", "pcvr.proton_env", "pcvr.proton_log", "pcvr.no_crash_reporter")
 
 
-def suggest(analysis: Analysis, use_catalog: bool = True) -> Recipe:
-    entry = catalog.lookup(analysis.package) if use_catalog else None
+def suggest(analysis: Analysis, use_catalog: bool = True, pick: str = "") -> Recipe:
+    """`pick` = the package of another game's catalog entry the user chose for this game (recipe picker, GitHub
+    #508): that entry's recipe is used as if it were this game's, without the patches that can't apply to this build.
+    A pick that is no longer in the catalog (or is this game's own entry) falls back to the normal suggestion."""
+    picked = catalog.lookup(pick) if use_catalog and pick and pick != analysis.package else None
+    if picked is not None and (picked.kind or "quest") != ((analysis.extra or {}).get("kind") or "quest"):
+        picked = None  # a PC VR recipe can't run a Quest game (and the other way round)
+    entry = picked or (catalog.lookup(analysis.package) if use_catalog else None)
     recipe = Recipe(analysis.package, title=analysis.label, catalog_rev=entry.rev() if entry else "")
     # 1. heuristics / defaults from every patch module
     rift = (analysis.extra or {}).get("kind") == "rift"
@@ -39,6 +45,8 @@ def suggest(analysis: Analysis, use_catalog: bool = True) -> Recipe:
         recipe.source = f"catalog ({entry.origin})"
         recipe.status, recipe.notes, recipe.title = entry.status, entry.notes, entry.title or recipe.title
         recipe.as_is = entry.as_is
+        if picked is not None:
+            _picked_header(recipe, analysis, picked)
         why = f"Known-good recipe for {entry.title} (tested {entry.verified.get('date', '?')})."
         for pid in entry.overport_remove:
             recipe.patches.pop(pid, None)
@@ -105,6 +113,8 @@ def suggest(analysis: Analysis, use_catalog: bool = True) -> Recipe:
             recipe.notes = f"No 64-bit ARM code ({', '.join(analysis.abis)}): the Steam Frame can't run it."
         if not rift:
             _static_blockers(analysis, recipe)
+    if picked is not None:
+        drop_inapplicable(analysis, recipe)
     if not rift and (not entry or analysis.vr_kind == "none"):
         # Saved recipes still need the flat-app build rules: no OVRPort, and APK fixes only when needed (#271).
         _non_quest(analysis, recipe)
@@ -122,6 +132,56 @@ def suggest(analysis: Analysis, use_catalog: bool = True) -> Recipe:
                 recipe.patches[req] = {}
                 recipe.reasons[req] = f"Needed by '{base.get(pid).title}'."
     return recipe
+
+
+def _picked_header(recipe: Recipe, analysis: Analysis, entry) -> None:
+    """A recipe picked from another game's catalog entry: it keeps this game's name, and its status says it hasn't
+    been tried with this build (a verdict that it can't run stays)."""
+    recipe.recipe_source = entry.package
+    recipe.source = f"catalog pick ({entry.origin})"
+    recipe.title = analysis.label
+    tested = {"works": "works", "issues": "works with issues", "unsupported": "doesn't run"}.get(entry.status)
+    head = (f"Recipe of {entry.title} ({entry.package}) from the catalog, chosen by hand"
+            + (f": with that build it {tested}." if tested else "."))
+    recipe.notes = f"{head} {entry.notes}".strip() if entry.notes else head
+    if entry.status != "unsupported":
+        recipe.status = "unknown"
+
+
+def drop_inapplicable(analysis: Analysis, recipe: Recipe) -> list[str]:
+    """Patches of a recipe chosen for another game that can't matter for this one (patch.applies(): another engine,
+    XR or graphics API, a library this build doesn't have): removed. Returns their ids."""
+    dropped = []
+    for pid in list(recipe.patches):
+        p = base.REGISTRY.get(pid)
+        if p is None or (not p.default_on and not p.applies(analysis)):
+            recipe.patches.pop(pid)
+            recipe.reasons.pop(pid, None)
+            dropped.append(pid)
+    return dropped
+
+
+def pick_warnings(analysis: Analysis, entry) -> list[str]:
+    """What differs between this game and the catalog entry the user is about to take a recipe from: shown before the
+    recipe is applied (a Unity recipe on an Unreal game rarely makes sense)."""
+    out = []
+    kind = (analysis.extra or {}).get("kind") or "quest"
+    if (entry.kind or "quest") != kind:
+        return [f"{entry.title} is a {'PC VR' if entry.kind == 'rift' else 'Quest'} game: its recipe can't be used "
+                "for this one."]
+    mine, theirs = (analysis.engine or "").strip(), (entry.engine or "").strip()
+    if mine and theirs and "?" not in (mine, theirs) and mine.split()[0].lower() != theirs.split()[0].lower():
+        out.append(f"Different engine: this game is made with {mine}, {entry.title} with {theirs}.")
+    if kind == "quest" and _xr_set(analysis.xr) and _xr_set(entry.xr) and _xr_set(analysis.xr) != _xr_set(entry.xr):
+        out.append(f"Different VR interface: this game uses {analysis.xr}, {entry.title} uses {entry.xr}.")
+    if kind == "quest" and entry.headset in ("gearvr", "go") and not analysis.only_32bit:
+        out.append(f"{entry.title} is a 32-bit game; this one isn't.")
+    elif kind == "quest" and analysis.only_32bit and entry.headset not in ("gearvr", "go") \
+            and "frame.a32_bridge" not in entry.frame:
+        out.append(f"This game is 32-bit; {entry.title}'s recipe is for a 64-bit game.")
+    if entry.status == "unsupported":
+        out.append(f"The catalog says {entry.title} doesn't run on the Frame.")
+    return out
 
 
 LAUNCH_PATCHES = ("pcvr.repack_launcher", "pcvr.launch_args")  # how a Rift game starts (from its files)
@@ -143,6 +203,8 @@ def _rift_recipe(analysis: Analysis, recipe: Recipe, entry) -> None:
     if entry:
         recipe.source = f"catalog ({entry.origin})"
         recipe.status, recipe.notes, recipe.title = entry.status, entry.notes, entry.title or recipe.title
+        if entry.package != analysis.package:  # picked by hand
+            _picked_header(recipe, analysis, entry)
         why = f"Known-good recipe for {entry.title} (tested {entry.verified.get('date', '?')})."
         other_build = _other_build(entry, analysis)
         for pid in entry.pcvr:

@@ -96,6 +96,9 @@ class Recipe:
     overport: bool = True  # False: an ordinary Android app: no VR translation (overport) and no FrameBridge adapter
     reasons: dict[str, str] = field(default_factory=dict)  # patch id -> why it was suggested
     catalog_rev: str = ""  # CatalogEntry.rev() it was derived from: a changed catalog entry re-derives the recipe
+    # package of another game's catalog entry the user picked for this game ("Use a recipe from the catalog…", e.g. a
+    # repack with its own package id, GitHub #508): the recipe is derived from that entry and follows its updates
+    recipe_source: str = ""
 
     def enabled(self, patch_id: str) -> bool:
         return patch_id in self.patches

@@ -376,6 +376,97 @@ def lookup(package: str) -> CatalogEntry | None:
     return load().get(package)
 
 
+# words that say nothing about which game it is
+_NOISE = {"the", "vr", "quest", "meta", "oculus", "edition", "a", "of", "and"}
+
+
+def _norm(text: str) -> str:
+    """Lowercase letters and digits, everything else one space ("Batman™: Arkham Shadow" → "batman arkham shadow")."""
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).split())
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in _norm(text).split() if w not in _NOISE] or _norm(text).split()
+
+
+def _package_core(package: str) -> str:
+    """A package id without its first (country/company type) part: a repack's "ru.camouflaj.manta" and the store's
+    "com.camouflaj.manta" have the same core."""
+    parts = (package or "").lower().split(".")
+    return ".".join(parts[1:]) if len(parts) > 2 else ".".join(parts)
+
+
+def _text_score(query: str, title: str) -> float:
+    """How well a typed query matches a title, 0..1: whole matches and every query word found first, then typos."""
+    from difflib import SequenceMatcher
+
+    q, t = _norm(query), _norm(title)
+    if not q or not t:
+        return 0.0
+    if q == t:
+        return 1.0
+    qw, tw = _words(query), _words(title)
+
+    def match(w: str, words: list[str]) -> float:
+        """1 when a word starts with `w` (or `w` with most of a word), else its closest spelling (typos)."""
+        if any(x.startswith(w) or (len(x) >= 4 and w.startswith(x) and len(x) >= 0.75 * len(w)) for x in words):
+            return 1.0
+        best = max((SequenceMatcher(None, w, x).ratio() for x in words), default=0.0)
+        return best if best >= 0.75 else 0.0
+    words = sum(match(w, tw) for w in qw) / len(qw) if qw else 0.0
+    # titles that hold more than what was asked rank a little lower ("Batman" → "Batman: Arkham Shadow" before a
+    # longer one): covering the title's words counts too
+    covered = sum(match(x, qw) for x in tw) / len(tw) if tw else 0.0
+    whole = 0.85 * SequenceMatcher(None, q, t).ratio()  # short titles match anything a little: weighed down
+    contains = 0.9 if (q in t or t in q) else 0.0
+    return max(whole, contains, 0.75 * words + 0.2 * covered)
+
+
+def _package_score(a: str, b: str) -> float:
+    from difflib import SequenceMatcher
+
+    a, b = a.lower(), b.lower()
+    if not a or not b:
+        return 0.0
+    if a == b:
+        return 1.0
+    ca, cb = _package_core(a), _package_core(b)
+    if ca == cb:
+        return 0.98
+    return 0.9 * SequenceMatcher(None, ca, cb).ratio()
+
+
+def search(query: str = "", package: str = "", kind: str = "quest", limit: int = 30,
+           entries: dict[str, CatalogEntry] | None = None) -> list[tuple[float, CatalogEntry]]:
+    """Catalog entries for a typed query, closest first (the recipe picker, GitHub #508): matched by title and by
+    package id, typos and extra words allowed. `package` = the game's own package id: entries with the same id core
+    (another build or a repack of the game, e.g. ru.camouflaj.manta ↔ com.camouflaj.manta) rank first. Only entries
+    of the same kind (Quest/Android vs PC VR) can be applied to a game. An empty query lists every entry by title."""
+    entries = load() if entries is None else entries
+    scored = []
+    looks_like_package = "." in (query or "") and " " not in (query or "").strip()
+    for e in entries.values():
+        if (e.kind or "quest") != (kind or "quest"):
+            continue
+        score = 0.0
+        if query.strip():
+            score = _text_score(query, e.title)
+            if looks_like_package:
+                score = max(score, _package_score(query.strip(), e.package))
+            else:
+                score = max(score, 0.85 * _text_score(query, e.package.replace(".", " ").replace("_", " ")))
+        own = _package_score(package, e.package) if package else 0.0
+        if own >= 0.9:  # the same game under another id: first, whatever was typed
+            score = max(score, own) + 0.05
+        elif not query.strip():
+            score = 0.0
+        if query.strip() and score < 0.5:
+            continue
+        scored.append((round(score, 4), e))
+    scored.sort(key=lambda se: (-se[0], _norm(se[1].title), se[1].package))
+    return scored[:limit] if limit else scored
+
+
 def save_user_entry(entry: CatalogEntry) -> Path:
     path = user_catalog_dir() / f"{entry.package}.yaml"
     path.write_text(to_yaml(entry), encoding="utf-8")

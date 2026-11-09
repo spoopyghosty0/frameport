@@ -23,7 +23,8 @@ from .core.events import Reporter
 from .core.models import Recipe, SourceGame
 from .core.paths import output_dir
 from .patches import upstream
-from .recommend import engine
+from .recommend import catalog, engine
+from .recommend.catalog import CatalogEntry
 from .sources import quest_dump, rift_dump
 from .targets.base import PC_LABEL, Target
 
@@ -380,7 +381,8 @@ def add_rift_game(folder: Path, reporter: Reporter | None = None, tree=None, exe
                   origin=str(folder.parent), quest_package=quest, analysis=a.to_dict(),
                   suggested=library.recipe_to_dict(recipe))
     if not old or (old.get("recipe") or {}).get("source") != "user":
-        fields.update(recipe=library.recipe_to_dict(recipe), status=recipe.status)
+        own = engine.suggest(a, pick=library.recipe_pick(old)) if library.recipe_pick(old) else recipe
+        fields.update(recipe=library.recipe_to_dict(own), status=own.status)
     if replace is not None:
         pass  # a newer version of the game: its name stays
     elif not old or not (old.get("title_locked") or old.get("art_source") in ("oculusdb", "meta", "steam")):
@@ -954,8 +956,10 @@ def add_game(src: SourceGame, reporter: Reporter | None = None) -> dict:
     names = {"auto_title": recipe.title or a.label} if old.get("title_locked") else {"title": recipe.title or a.label}
     # a recipe the user edited stays when the game is scanned again (only the suggestion is refreshed, like Analyze
     # again); a derived one follows the new analysis
+    pick = library.recipe_pick(old)  # a recipe chosen from the catalog stays chosen (#508)
+    mine = engine.suggest(a, pick=pick) if pick else recipe
     own = {} if (old.get("recipe") or {}).get("source") == "user" else \
-        {"recipe": library.recipe_to_dict(recipe), "status": recipe.status}
+        {"recipe": library.recipe_to_dict(mine), "status": mine.status}
     return library.upsert_game(
         a.package, **names, name=src.name, apk=str(src.apk),
         data_dir=str(src.data_dir) if src.data_dir else None, data_files=src.data_files,
@@ -1119,8 +1123,10 @@ def _store_analysis(package: str, a) -> dict:
         g.pop("analysis_failed", None)
         # checked under the library lock: the user may have saved a recipe while the APK was read
         if library.recipe_from_dict(g.get("recipe") or {"package": package}).source != "user":
-            g["recipe"] = library.recipe_to_dict(suggested)
-            g["status"] = suggested.status
+            pick = library.recipe_pick(g)  # a recipe chosen from the catalog stays chosen (#508)
+            mine = engine.suggest(a, pick=pick) if pick else suggested
+            g["recipe"] = library.recipe_to_dict(mine)
+            g["status"] = mine.status
     return library.update_game(package, change)
 
 
@@ -1238,7 +1244,8 @@ def set_recipe(package: str, recipe: Recipe) -> None:
 
 
 def reset_recipe(package: str) -> Recipe:
-    """Back to the suggested recipe (catalog or heuristics) for the game's analysis (Quest and Rift alike)."""
+    """Back to the suggested recipe (catalog or heuristics) for the game's analysis (Quest and Rift alike). A recipe
+    chosen from another game's catalog entry is let go too."""
     entry = library.game(package)
     recipe = engine.suggest(library.analysis_from_dict(entry["analysis"]))
     set_recipe(package, recipe)
@@ -1250,7 +1257,7 @@ def apply_catalog_update(package: str) -> Recipe:
     config" offer): derived again from the catalog, keeping the user's FrameBridge settings the catalog doesn't set."""
     entry = library.game(package)
     old = library.recipe_from_dict(entry["recipe"])
-    recipe = engine.suggest(library.analysis_from_dict(entry["analysis"]))
+    recipe = engine.suggest(library.analysis_from_dict(entry["analysis"]), pick=old.recipe_source)
     for pid, params in old.patches.items():
         if pid.startswith("adapter.") and pid not in recipe.patches:
             recipe.patches[pid] = params
@@ -1260,6 +1267,62 @@ def apply_catalog_update(package: str) -> Recipe:
     with library.edit() as data:
         data["games"].get(package, {}).pop("catalog_update", None)
     return recipe
+
+
+def catalog_choices(package: str, query: str | None = None, limit: int = 30) -> list[tuple[float, CatalogEntry]]:
+    """Catalog entries whose recipe this game could use ("Use a recipe from the catalog…", GitHub #508): fuzzy
+    matches of `query` (default: the game's name) by title and package, entries of the game's kind only, the same
+    package core (another build or a repack, e.g. ru.camouflaj.manta) first."""
+    g = library.game(package) or {}
+    kind = "rift" if is_rift(g) else "quest"
+    title = g.get("title") or ((g.get("analysis") or {}).get("label")) or ""
+    return catalog.search(title if query is None else query, package=package, kind=kind, limit=limit)
+
+
+@dataclasses.dataclass
+class RecipePick:
+    """What applying another catalog entry's recipe to a game would do (shown before it is applied)."""
+    entry: CatalogEntry
+    recipe: Recipe
+    dropped: list[str]  # patches of that recipe that can't apply to this game (another engine, API, library…)
+    warnings: list[str]  # differences between the two games (engine, VR interface, 32-bit, "doesn't run")
+    blocked: bool = False  # can't be used at all (a PC VR recipe for a Quest game)
+
+
+def preview_catalog_recipe(package: str, from_package: str) -> RecipePick:
+    """The recipe `from_package`'s catalog entry would give this game, without saving it."""
+    g = library.game(package)
+    if not g or g.get("kind") == "linux" or not g.get("analysis"):
+        raise ValueError(f"{package} has no recipe to replace")
+    entry = catalog.lookup(from_package)
+    if entry is None:
+        raise ValueError(f"{from_package} isn't in the catalog")
+    analysis = library.analysis_from_dict(g["analysis"])
+    kind = "rift" if is_rift(g) else "quest"
+    if (entry.kind or "quest") != kind:
+        return RecipePick(entry, library.recipe_from_dict(g["recipe"]), [], engine.pick_warnings(analysis, entry),
+                          blocked=True)
+    recipe = engine.suggest(analysis, pick=from_package)
+    chosen = [*entry.overport_extra, *entry.frame, *entry.device, *entry.pcvr,
+              *(f"adapter.{k}" for k in entry.adapter)]
+    dropped = list(dict.fromkeys(p for p in chosen if p not in recipe.patches))
+    return RecipePick(entry, recipe, dropped, engine.pick_warnings(analysis, entry))
+
+
+def apply_catalog_recipe(package: str, from_package: str) -> RecipePick:
+    """Use another game's catalog recipe for this one (GitHub #508: a repack's own package id never matched the
+    catalog). Stored as a derived recipe that remembers its entry (`Recipe.recipe_source`): rescans and re-analyses
+    keep it and it follows that entry's later changes like a matched catalog recipe does (library._follow_catalog);
+    the game's own entry ("Reset to suggested recipe") ends it. Picking the game's own entry is a reset."""
+    if from_package == package:
+        recipe = reset_recipe(package)
+        return RecipePick(catalog.lookup(package), recipe, [], [])
+    pick = preview_catalog_recipe(package, from_package)
+    if pick.blocked:
+        raise ValueError(pick.warnings[0] if pick.warnings else f"{from_package}'s recipe can't be used here")
+    set_recipe(package, pick.recipe)
+    library.update_game(package, lambda g: (g.pop("catalog_update", None), g.update(status=pick.recipe.status)))
+    return pick
 
 
 def prepare_rift(package: str, reporter: Reporter) -> dict:

@@ -546,9 +546,29 @@ def recipe(package: str, enable: list[str] = typer.Option([], "--enable", help="
            use_alt: Optional[bool] = typer.Option(None, "--use-alt/--no-alt", help="install the alternate build"),
            reset: bool = typer.Option(False, help="start again from the suggested recipe"),
            as_is: Optional[bool] = typer.Option(None, "--as-is/--patch", help="install unchanged (already patched)"),
-           exe: Optional[str] = typer.Option(None, help="PC VR games: the program that starts the game (relative)")):
+           exe: Optional[str] = typer.Option(None, help="PC VR games: the program that starts the game (relative)"),
+           from_: Optional[str] = typer.Option(None, "--from", help="use this catalog entry's recipe (its package "
+                                               "id), e.g. for a repack with another package id"),
+           find: Optional[str] = typer.Option(None, help="list catalog recipes matching a name or package id (\"\" = "
+                                              "the game's name), for --from")):
     """Change a game's patch selection."""
     [pkg] = _pkgs(package, False)
+    if find is not None:
+        matches = pipeline.catalog_choices(pkg, find or None, limit=15)
+        if not matches:
+            typer.echo("No catalog recipe matches.")
+        for _, e in matches:
+            typer.echo(f"{e.package:44} {e.status:11} {e.engine or '?':8} {e.tested_version or '':14} {e.title}")
+        return
+    if from_:
+        try:
+            pick = pipeline.apply_catalog_recipe(pkg, from_)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from None
+        for w in pick.warnings:
+            typer.echo(f"Heads-up: {w}", err=True)
+        if pick.dropped:
+            typer.echo(f"Left out (can't apply to this game): {', '.join(pick.dropped)}", err=True)
     r = pipeline.reset_recipe(pkg) if reset else library.recipe_from_dict(library.game(pkg)["recipe"])
     for pid in enable:
         base.get(pid)
