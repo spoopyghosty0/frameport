@@ -15,7 +15,7 @@ static void quest_buttons_setting(const char *line) {
     float value;
     char extra;
     if (sscanf(line, "quest_buttons=%f %c", &value, &extra) == 1 &&
-        (value == 0 || value == 1 || value == 2)) quest_buttons = (int)value;
+        (value == 0 || value == 1 || value == 2 || value == 3)) quest_buttons = (int)value;
     else {
         quest_buttons = 0;
         LOG("quest_buttons: invalid setting; using 0");

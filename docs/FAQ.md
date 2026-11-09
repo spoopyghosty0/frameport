@@ -186,7 +186,7 @@ In **Game settings…**:
 - **No controllers, or only hands:** turn on **Use controllers**.
 - **Can't aim at menus:** adjust **Pointer angle**.
 - **Vibration too strong:** lower **Vibration strength**.
-- **Buttons repeat or do the wrong thing:** **Controller buttons** → **Mirror** or **Quest pair**
+- **Buttons repeat or do the wrong thing:** **Controller buttons** → **Mirror**, **Quest pair** or **One hand** (all four face buttons on the right controller)
   ([Controller buttons](CONTROLLERS.md)).
 
 ## The Frame turns off or gets hot during a game

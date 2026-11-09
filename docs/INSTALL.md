@@ -138,8 +138,8 @@ Proton can still restart Steam.
 
 ### Controller buttons
 
-Buttons repeat or do the wrong thing? **Game settings → Controllers → Controller buttons** picks **Mirror** or
-**Quest pair** for one game. **Settings → Controllers** sets the default; **Apply to installed games now** sends the
+Buttons repeat or do the wrong thing? **Game settings → Controllers → Controller buttons** picks **Mirror**,
+**Quest pair** or **One hand** for one game. **Settings → Controllers** sets the default; **Apply to installed games now** sends the
 default to games without their own choice. Details: [Controller buttons](CONTROLLERS.md).
 
 ### Android apps and Windows programs

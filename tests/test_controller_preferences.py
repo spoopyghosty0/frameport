@@ -81,7 +81,7 @@ def test_pure_defaults_and_global_changes_do_not_mark_games_outdated(monkeypatch
     game, dep = game_and_dep()
     before = base.recipe_fingerprint(game["recipe"])
     config = configuration_fingerprint(game["recipe"])
-    for mode in (1, 2, 0):
+    for mode in (1, 2, 3, 0):
         library.set_setting("input.quest_buttons", mode)
         assert base.recipe_fingerprint(game["recipe"]) == before
         assert configuration_fingerprint(game["recipe"]) == config
@@ -109,7 +109,7 @@ def test_agent_live_default_write_does_not_mark_inherited_game_outdated(monkeypa
     record.update(configuration=configuration(game["recipe"], package),
                   configuration_fp=configuration_fingerprint(game["recipe"], package))
     agent.write_deployment(package, record)
-    for mode in (1, 2, 0):
+    for mode in (1, 2, 3, 0):
         agent.cmd_set_settings({"package": package, "settings": {"quest_buttons": mode}})
         deployed = agent.deployment(package)
         assert not plan_update(game, deployed).changed

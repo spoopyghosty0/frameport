@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 206 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 207 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -12,7 +12,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 
 - [Patches from OVRPort](#group-overport) (25)
 - [Steam Frame patches](#group-frame) (72)
-- [Game settings](#group-adapter) (84)
+- [Game settings](#group-adapter) (85)
 - [Files and settings on the Frame](#group-device) (12)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
 
@@ -151,6 +151,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [GL shim: high-precision vertex shaders](#adapter-gl_highp_markers) | `adapter.gl_highp_markers` | Game settings | 1 |
 | [GL shim: integer vertex inputs](#adapter-gl_int_attribs) | `adapter.gl_int_attribs` | Game settings | 1 |
 | [Flat panel diagnostics (log)](#adapter-gl_mv_debug) | `adapter.gl_mv_debug` | Game settings |  |
+| [Stop buzzing during loading screens](#adapter-haptic_cap) | `adapter.haptic_cap` | Game settings |  |
 | [Fix freezes when controllers vibrate](#adapter-haptic_fix) | `adapter.haptic_fix` | Game settings | 147 |
 | [Vibration strength](#adapter-haptic_scale) | `adapter.haptic_scale` | Game settings |  |
 | [Turn off Quest Vulkan foveation](#adapter-hide_fb_foveation) | `adapter.hide_fb_foveation` | Game settings |  |
@@ -1996,6 +1997,20 @@ Logs details when flat panels stay black. No effect on the game.
 
 > Diagnostics for frame.gl_multiview_fbo: checks for GL errors after every single-view draw of a multiview shader and logs counters every 5 seconds (tag GLMV in launch.log). 2 (frameport settings) also checks every draw and logs the draw state, failed texture uploads and shader compiles and, for idTech 4 engines, the game clock.
 
+### <a id="adapter-haptic_cap"></a>Stop buzzing during loading screens
+
+Stops the controllers from buzzing on while a game is loading (for example Five Nights at Freddy's: Help Wanted 2). Leave it on.
+
+- `adapter.haptic_cap`
+- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:**
+  - Value: int, default `1`.
+  - Game settings → Controllers → "Stop buzzing during loading screens" (advanced).
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> OVRPlugin games ask for ~2 s vibrations and renew them every frame; while the game stalls (a loading screen) no renewal or stop comes and the controller buzzes for the full 2 s (for example Five Nights at Freddy's: Help Wanted 2, GitHub #547). Once a hand's vibration has been renewed three times in a row (each within 250 ms), each one is cut to four renewal intervals (at least 100 ms): it feels the same while renewed and stops soon after the game stalls. Single long rumbles keep their duration. On by default; 0 = the game's durations.
+
 ### <a id="adapter-haptic_fix"></a>Fix freezes when controllers vibrate
 
 For games that freeze the Frame when a controller vibrates (for example Lucky's Tale). Needs a rebuild.
@@ -2243,10 +2258,10 @@ Choose which Quest Touch buttons the Frame's face buttons send. Takes effect at 
 - **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
 - **Options:**
   - Value: int, default `0`.
-  - Game settings → Controllers → "Controller buttons": SteamVR default (`0`), Mirror (`1`), Quest pair (`2`).
+  - Game settings → Controllers → "Controller buttons": SteamVR default (`0`), Mirror (`1`), Quest pair (`2`), One hand (`3`).
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
-> Choose how the Frame's face buttons send Quest Touch inputs: 0 = SteamVR default, 1 = Mirror, 2 = Quest pair. Used at the next launch; SteamVR custom bindings can override it. Requires the runtime's XR_VALVE_frame_controller_interaction extension. Mapping: https://github.com/spoopyghosty0/frameport/blob/main/docs/CONTROLLERS.md
+> Choose how the Frame's face buttons send Quest Touch inputs: 0 = SteamVR default, 1 = Mirror, 2 = Quest pair, 3 = One hand (the right controller's A/B/X/Y send Quest A/B/X/Y: FrameBridge answers the game's left X/Y from them; the left d-pad also moves the left thumbstick; View is Menu). Used at the next launch; SteamVR custom bindings can override it. Requires the runtime's XR_VALVE_frame_controller_interaction extension. Mapping: https://github.com/spoopyghosty0/frameport/blob/main/docs/CONTROLLERS.md
 
 ### <a id="adapter-rect_clamp"></a>Keep pictures in bounds
 

@@ -181,6 +181,7 @@ static int stable_local;     // keep every LOCAL space the app creates on the se
 static int focus_hold = 1;   // hide brief focus dips once the session has been focused for a while
 static float focus_hold_ms = 5000;  // longest focus dip focus_hold hides
 static float haptic_scale = 1.0f;   // vibration strength (0-1), all vibration types (xrApplyHapticFeedback)
+static int haptic_cap = 1;   // shorten renewed-every-frame vibrations so a stalled game stops buzzing (haptic_cap.h)
 static float aim_pitch, aim_yaw, aim_forward;  // aim pose correction (degrees, degrees, metres)
 static float refresh_rate;   // requested display refresh rate (Hz), 0 = the app's choice
 static int equirect_emul;    // show 360 layers as cube faces (GLES)
@@ -261,6 +262,7 @@ static void read_settings(const char *path) {
         if (sscanf(line, "focus_hold=%f", &value) == 1) focus_hold = value != 0;
         if (sscanf(line, "focus_hold_ms=%f", &value) == 1 && value >= 100 && value <= 5000) focus_hold_ms = value;
         if (sscanf(line, "haptic_scale=%f", &value) == 1 && value >= 0 && value <= 1) haptic_scale = value;
+        if (sscanf(line, "haptic_cap=%f", &value) == 1) haptic_cap = value != 0;
         if (sscanf(line, "aim_pitch=%f", &value) == 1 && fabsf(value) <= 90) aim_pitch = value;
         if (sscanf(line, "aim_yaw=%f", &value) == 1 && fabsf(value) <= 90) aim_yaw = value;
         if (sscanf(line, "aim_forward=%f", &value) == 1 && fabsf(value) <= 0.5f) aim_forward = value;
@@ -1420,9 +1422,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(XrInstance instance, const XrSess
     return result;
 }
 
+#include "haptic_cap.h"
+
 // Vibrations: logged (the first few, to see what games ask for) and scaled by haptic_scale. Plain vibrations, Meta's
 // amplitude envelopes and PCM buffers all pass here: games' own calls, OVRPort's VrApi bridge and the xrshim alike.
-static int haptics_logged;
+// Plain vibrations that a game renews every frame are shortened (haptic_cap, haptic_cap.h).
+static int haptics_logged, haptic_cap_logged;
 static XrResult apply_haptics(XrSession session, const XrHapticActionInfo *info, const XrHapticBaseHeader *feedback) {
     PFN_xrApplyHapticFeedback fn = (PFN_xrApplyHapticFeedback)lookup(active_instance, "xrApplyHapticFeedback");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
@@ -1433,6 +1438,15 @@ static XrResult apply_haptics(XrSession session, const XrHapticActionInfo *info,
             LOG("haptic: vibration amplitude=%.2f duration=%lld ns frequency=%.0f (scale %.2f)", v.amplitude,
                 (long long)v.duration, v.frequency, haptic_scale);
         v.amplitude *= haptic_scale;
+        if (haptic_cap && info) {
+            int64_t interval = 0;
+            XrDuration capped = haptic_cap_duration(info->action, info->subactionPath, v.duration, monotonic_ns(),
+                                                    &interval);
+            if (capped != v.duration && v.amplitude > 0.001f && haptic_cap_logged++ < 3)
+                LOG("haptic_cap: vibration renewed every %.0f ms: %lld ms -> %lld ms", interval / 1e6,
+                    (long long)(v.duration / 1000000), (long long)(capped / 1000000));
+            v.duration = capped;
+        }
         if (v.amplitude <= 0.001f) {
             // OVRPlugin stops a vibration by sending amplitude 0 with its usual 2 s duration (Jurassic World, The Boys
             // VR): on a Quest that stops the motor; OpenXR's stop is xrStopHapticFeedback, and without it the last
@@ -2740,8 +2754,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance instance, const 
         }
         return result;
     }
-    if (sync_guard || layer_debug || input_diag) HOOK_AS(xrSyncActions, hook_xrSyncActions)
-    if (layer_debug) HOOK_AS(xrGetActionStateBoolean, hook_xrGetActionStateBoolean)
+    if (sync_guard || layer_debug || input_diag || quest_buttons == 3) HOOK_AS(xrSyncActions, hook_xrSyncActions)
+    if (layer_debug || quest_buttons == 3) HOOK_AS(xrGetActionStateBoolean, hook_xrGetActionStateBoolean)
+    if (quest_buttons == 3) {  // one hand: FrameBridge's action set attached + synced, X/Y and stick answers
+        HOOK_AS(xrAttachSessionActionSets, hook_xrAttachSessionActionSets)
+        HOOK_AS(xrGetActionStateFloat, hook_xrGetActionStateFloat)
+        HOOK_AS(xrGetActionStateVector2f, hook_xrGetActionStateVector2f)
+    }
     if (layer_debug || aim_correction_on() || profile_remap || input_diag || proximity_emul || quest_buttons)
         HOOK_AS(xrSuggestInteractionProfileBindings, hook_xrSuggestInteractionProfileBindings)
     if (action_dedup || proximity_emul || profile_remap || input_diag) HOOK_AS(xrCreateAction, hook_xrCreateAction)

@@ -64,7 +64,9 @@ SETTINGS = [
      "tracking (for example Silhouette)."),
     ("quest_buttons", "int", 0, "Controller buttons",
      "Choose how the Frame's face buttons send Quest Touch inputs: 0 = SteamVR default, 1 = Mirror, "
-     "2 = Quest pair. Used at the next launch; SteamVR custom bindings can override it. Requires the runtime's "
+     "2 = Quest pair, 3 = One hand (the right controller's A/B/X/Y send Quest A/B/X/Y: FrameBridge answers the "
+     "game's left X/Y from them; the left d-pad also moves the left thumbstick; View is Menu). "
+     "Used at the next launch; SteamVR custom bindings can override it. Requires the runtime's "
      "XR_VALVE_frame_controller_interaction extension. Mapping: "
      "https://github.com/spoopyghosty0/frameport/blob/main/docs/CONTROLLERS.md"),
     ("swapchain_fix", "int", 1, "Swapchain format fallback",
@@ -147,6 +149,12 @@ SETTINGS = [
     ("haptic_scale", "float", 1.0, "Vibration strength",
      "Scales every controller vibration the game asks for (0-1): plain vibrations, Meta's amplitude envelopes and "
      "PCM buffers. For games whose vibrations feel much stronger than on a Quest."),
+    ("haptic_cap", "int", 1, "Stop vibrations of a stalled game",
+     "OVRPlugin games ask for ~2 s vibrations and renew them every frame; while the game stalls (a loading screen) "
+     "no renewal or stop comes and the controller buzzes for the full 2 s (for example Five Nights at Freddy's: Help "
+     "Wanted 2, GitHub #547). Once a hand's vibration has been renewed three times in a row (each within 250 ms), "
+     "each one is cut to four renewal intervals (at least 100 ms): it feels the same while renewed and stops soon "
+     "after the game stalls. Single long rumbles keep their duration. On by default; 0 = the game's durations."),
     ("aim_pitch", "float", 0.0, "Pointer tilt (degrees)",
      "Tilts the controllers' pointing ray up (+) or down (−), for games whose pointer doesn't hit what you aim at."),
     ("aim_yaw", "float", 0.0, "Pointer turn (degrees)", "Turns the controllers' pointing ray left (+) or right (−)."),
@@ -371,7 +379,8 @@ UI: dict[str, dict] = {
     "quest_buttons": dict(group="controllers", level="common", label="Controller buttons",
                           help="Choose which Quest Touch buttons the Frame's face buttons send. "
                                "Takes effect at the next launch.",
-                          control=("choice", [(0, "SteamVR default"), (1, "Mirror"), (2, "Quest pair")])),
+                          control=("choice", [(0, "SteamVR default"), (1, "Mirror"), (2, "Quest pair"),
+                                              (3, "One hand")])),
     "focus_hold_ms": dict(group="screens", level="advanced", label="Ignore focus dips up to", depends="focus_hold",
                           help="Longer for headsets that briefly think they're off your head.",
                           control=("slider", 500.0, 3000.0, 100.0, "{:.0f} ms")),
@@ -411,6 +420,10 @@ UI: dict[str, dict] = {
     "haptic_scale": dict(group="controllers", level="common", label="Vibration strength",
                          help="Turn it down if controller vibrations are too strong.",
                          control=("slider", 0.0, 1.0, 0.05, "{:.0%}")),
+    "haptic_cap": dict(group="controllers", level="advanced", label="Stop buzzing during loading screens",
+                       help="Stops the controllers from buzzing on while a game is loading (for example Five "
+                            "Nights at Freddy's: Help Wanted 2). Leave it on.",
+                       control=("switch",)),
     "aim_pitch": dict(group="controllers", level="common", label="Pointer angle",
                       help="If the pointer doesn't hit what you aim at, tilt it up or down.",
                       control=("slider", -30.0, 30.0, 1.0, "{:+.0f}°")),

@@ -218,8 +218,10 @@ describes two gamepad halves. Under `/user/hand/<hand>/input/`:
 
 SteamVR prefers a game's Frame Controller binding. Without one, its Touch remap sends left d-pad down as Touch X
 and left/up/right as Touch Y; right A as Touch A and X/Y/B as Touch B. Left View sends Touch Menu.
-FrameBridge's `quest_buttons` preference (`0` default, `1` Mirror, `2` Quest pair) enables the extension when offered
-and suggests a Frame binding translated from the game's Touch suggestions. Common pressure/trigger/thumbstick,
+FrameBridge's `quest_buttons` preference (`0` default, `1` Mirror, `2` Quest pair, `3` One hand) enables the
+extension when offered and suggests a Frame binding translated from the game's Touch suggestions. One hand also
+answers the game's left X/Y and left-thumbstick action states from the right X/Y and the left d-pad, which it reads
+through an action set of its own (a binding can't move an input to the other hand's subaction). Common pressure/trigger/thumbstick,
 pose and haptic paths keep their Touch counterparts; thumbrest touch and system click are dropped, bumpers stay
 unbound. The player's SteamVR custom bindings can override suggestions. `quest_buttons` works on both bridge ABIs, without
 the arm64-only extension shim. See [Controller buttons](CONTROLLERS.md) and the [mapping contract](input/QUEST_BUTTONS.md).

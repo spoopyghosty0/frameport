@@ -109,8 +109,80 @@ static XRAPI_ATTR XrResult XRAPI_CALL fake_current(XrSession s, XrPath hand, XrI
     out->interactionProfile = runtime_profile;
     return XR_SUCCESS;
 }
+// One hand: FrameBridge's own action set and the runtime's action states (indexed by action handle)
+static int created_actions, attach_result, refuse_set;
+static struct { int active; float x, y; } fake_state[2048];
+static XRAPI_ATTR XrResult XRAPI_CALL fake_create_set(XrInstance i, const XrActionSetCreateInfo *info,
+                                                     XrActionSet *out) {
+    (void)i;
+    printf("ACTIONSET %s\n", info->actionSetName);
+    if (refuse_set) return XR_ERROR_NAME_DUPLICATED;
+    *out = (XrActionSet)(uintptr_t)900;
+    return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL fake_create_action(XrActionSet set, const XrActionCreateInfo *info,
+                                                        XrAction *out) {
+    printf("ACTION %llu %s %d %u\n", (unsigned long long)(uintptr_t)set, info->actionName, (int)info->actionType,
+           info->countSubactionPaths);
+    *out = (XrAction)(uintptr_t)(1001 + created_actions++);
+    return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL fake_attach(XrSession s, const XrSessionActionSetsAttachInfo *info) {
+    printf("ATTACH %llu", (unsigned long long)(uintptr_t)s);
+    for (uint32_t k = 0; k < info->countActionSets; ++k)
+        printf(" %llu", (unsigned long long)(uintptr_t)info->actionSets[k]);
+    printf("\n");
+    if (attach_result && info->countActionSets > 1) return (XrResult)attach_result;
+    return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL fake_sync(XrSession s, const XrActionsSyncInfo *info) {
+    printf("SYNC %llu", (unsigned long long)(uintptr_t)s);
+    for (uint32_t k = 0; k < info->countActiveActionSets; ++k)
+        printf(" %llu", (unsigned long long)(uintptr_t)info->activeActionSets[k].actionSet);
+    printf("\n");
+    return XR_SUCCESS;
+}
+static int known_action(XrAction a) { return (uintptr_t)a < 2048; }
+static XRAPI_ATTR XrResult XRAPI_CALL fake_get_bool(XrSession s, const XrActionStateGetInfo *info,
+                                                   XrActionStateBoolean *out) {
+    (void)s;
+    if (!known_action(info->action)) return XR_ERROR_HANDLE_INVALID;
+    out->isActive = fake_state[(uintptr_t)info->action].active;
+    out->currentState = fake_state[(uintptr_t)info->action].x != 0;
+    out->changedSinceLastSync = 0;
+    out->lastChangeTime = 5;
+    return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL fake_get_float(XrSession s, const XrActionStateGetInfo *info,
+                                                    XrActionStateFloat *out) {
+    (void)s;
+    if (!known_action(info->action)) return XR_ERROR_HANDLE_INVALID;
+    out->isActive = fake_state[(uintptr_t)info->action].active;
+    out->currentState = fake_state[(uintptr_t)info->action].x;
+    out->changedSinceLastSync = 0;
+    out->lastChangeTime = 5;
+    return XR_SUCCESS;
+}
+static XRAPI_ATTR XrResult XRAPI_CALL fake_get_vec2(XrSession s, const XrActionStateGetInfo *info,
+                                                   XrActionStateVector2f *out) {
+    (void)s;
+    if (!known_action(info->action)) return XR_ERROR_HANDLE_INVALID;
+    out->isActive = fake_state[(uintptr_t)info->action].active;
+    out->currentState.x = fake_state[(uintptr_t)info->action].x;
+    out->currentState.y = fake_state[(uintptr_t)info->action].y;
+    out->changedSinceLastSync = 0;
+    out->lastChangeTime = 5;
+    return XR_SUCCESS;
+}
 static PFN_xrVoidFunction lookup(XrInstance i, const char *name) {
     (void)i;
+    if (!strcmp(name, "xrCreateActionSet")) return (PFN_xrVoidFunction)fake_create_set;
+    if (!strcmp(name, "xrCreateAction")) return (PFN_xrVoidFunction)fake_create_action;
+    if (!strcmp(name, "xrAttachSessionActionSets")) return (PFN_xrVoidFunction)fake_attach;
+    if (!strcmp(name, "xrSyncActions")) return (PFN_xrVoidFunction)fake_sync;
+    if (!strcmp(name, "xrGetActionStateBoolean")) return (PFN_xrVoidFunction)fake_get_bool;
+    if (!strcmp(name, "xrGetActionStateFloat")) return (PFN_xrVoidFunction)fake_get_float;
+    if (!strcmp(name, "xrGetActionStateVector2f")) return (PFN_xrVoidFunction)fake_get_vec2;
     if (!strcmp(name, "xrStringToPath")) return (PFN_xrVoidFunction)fake_string_to_path;
     if (!strcmp(name, "xrPathToString")) return (PFN_xrVoidFunction)fake_path_to_string;
     if (!strcmp(name, "xrSuggestInteractionProfileBindings")) return (PFN_xrVoidFunction)fake_suggest;
@@ -158,6 +230,55 @@ int main(int argc, char **argv) {
             if (scanf("%u %u", &thumb, &trigger) != 2) return 2;
             thumb_proximity_action = (XrAction)(uintptr_t)thumb;
             trigger_proximity_action = (XrAction)(uintptr_t)trigger;
+        } else if (!strcmp(command, "state")) {  // state <action> <active> <x> <y>: the runtime's answer
+            unsigned action;
+            int active;
+            float x, y;
+            if (scanf("%u %d %f %f", &action, &active, &x, &y) != 4 || action >= 2048) return 2;
+            fake_state[action].active = active;
+            fake_state[action].x = x;
+            fake_state[action].y = y;
+        } else if (!strcmp(command, "refuse_set")) {
+            refuse_set = 1;
+        } else if (!strcmp(command, "attach_result")) {
+            if (scanf("%d", &attach_result) != 1) return 2;
+        } else if (!strcmp(command, "attach")) {  // attach <session>: the game attaches its set 77
+            unsigned session;
+            if (scanf("%u", &session) != 1) return 2;
+            XrActionSet set = (XrActionSet)(uintptr_t)77;
+            XrSessionActionSetsAttachInfo a = {XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO, NULL, 1, &set};
+            printf("RESULT %d\n", hook_xrAttachSessionActionSets((XrSession)(uintptr_t)session, &a));
+        } else if (!strcmp(command, "sync")) {  // sync <session> <predicted time>
+            unsigned session;
+            long long t;
+            if (scanf("%u %lld", &session, &t) != 2) return 2;
+            last_predicted_time = (XrTime)t;
+            XrActiveActionSet set = {(XrActionSet)(uintptr_t)77, XR_NULL_PATH};
+            XrActionsSyncInfo y = {XR_TYPE_ACTIONS_SYNC_INFO, NULL, 1, &set};
+            printf("RESULT %d\n", hook_xrSyncActions((XrSession)(uintptr_t)session, &y));
+        } else if (!strcmp(command, "get")) {  // get <bool|float|vec2> <session> <action> <subaction path|none>
+            char kind[8], sub[XR_MAX_PATH_LENGTH];
+            unsigned session, action;
+            if (scanf("%7s %u %u %255s", kind, &session, &action, sub) != 4) return 2;
+            XrActionStateGetInfo g = {XR_TYPE_ACTION_STATE_GET_INFO, NULL, (XrAction)(uintptr_t)action,
+                                      strcmp(sub, "none") ? P(sub) : XR_NULL_PATH};
+            XrSession s = (XrSession)(uintptr_t)session;
+            if (!strcmp(kind, "bool")) {
+                XrActionStateBoolean b = {XR_TYPE_ACTION_STATE_BOOLEAN};
+                XrResult r = hook_xrGetActionStateBoolean(s, &g, &b);
+                printf("STATE %d %d %d %d %lld\n", r, b.isActive, b.currentState, b.changedSinceLastSync,
+                       (long long)b.lastChangeTime);
+            } else if (!strcmp(kind, "float")) {
+                XrActionStateFloat f = {XR_TYPE_ACTION_STATE_FLOAT};
+                XrResult r = hook_xrGetActionStateFloat(s, &g, &f);
+                printf("STATE %d %d %.3f %d %lld\n", r, f.isActive, f.currentState, f.changedSinceLastSync,
+                       (long long)f.lastChangeTime);
+            } else {
+                XrActionStateVector2f v = {XR_TYPE_ACTION_STATE_VECTOR2F};
+                XrResult r = hook_xrGetActionStateVector2f(s, &g, &v);
+                printf("STATE %d %d %.3f,%.3f %d %lld\n", r, v.isActive, v.currentState.x, v.currentState.y,
+                       v.changedSinceLastSync, (long long)v.lastChangeTime);
+            }
         } else if (!strcmp(command, "reject_touch_once")) {
             int result;
             if (scanf("%d", &result) != 1) return 2;
@@ -238,11 +359,32 @@ def calls(p):
     return out
 
 
+ONE_HAND_ROLES = {"input/x", "input/x/click", "input/x/touch", "input/y", "input/y/click", "input/y/touch",
+                  "input/thumbstick", "input/thumbstick/x", "input/thumbstick/y"}
+
+
+def one_hand_sources(mode):
+    """FrameBridge's own bindings in a mode, in creation order (action handles 1001, 1002, ... in the harness)."""
+    spec = CONTRACT["modes"][str(mode)]
+    out = []
+    for hand, buttons in spec.get("other_hand", {}).items():
+        other = "right" if hand == "left" else "left"
+        for _, frames in buttons.items():
+            out += [f"/user/hand/{other}/input/{f}/{c}" for f in frames for c in ("click", "touch")]
+    for hand, pads in spec.get("dpad_stick", {}).items():
+        out += [f"/user/hand/{hand}/input/{pad}/click" for pad in pads]
+    return out
+
+
 def translate(bindings, mode):
     """Independent oracle: use only the shared JSON, never the C table."""
     if not mode:
         return []
     out = []
+    spec = CONTRACT["modes"][str(mode)]
+    extras = [(1001 + i, path) for i, path in enumerate(one_hand_sources(mode))]
+    served = {f"/user/hand/{hand}/{role}" for hand in {*spec.get("other_hand", {}), *spec.get("dpad_stick", {})}
+              for role in ONE_HAND_ROLES}
     for action, path in bindings:
         for hand, buttons in CONTRACT["buttons"].items():
             prefix = f"/user/hand/{hand}/"
@@ -260,6 +402,8 @@ def translate(bindings, mode):
                     targets = [f"{target}/{suffix}" if suffix else target for target in
                                CONTRACT["modes"][str(mode)][hand].get(button, [])]
             out.extend((action, f"{prefix}{kind}/{target}") for target in targets)
+    if any(path in served for _, path in bindings):
+        out.extend(extras)
     return out
 
 
@@ -278,7 +422,7 @@ def full_bindings():
     return list(enumerate(paths, 1))
 
 
-@pytest.mark.parametrize("mode", [0, 1, 2])
+@pytest.mark.parametrize("mode", [0, 1, 2, 3])
 def test_json_mapping_all_components(harness, mode):
     bindings = full_bindings()
     p = run(harness, mode, suggest(bindings), diag=True)
@@ -289,16 +433,16 @@ def test_json_mapping_all_components(harness, mode):
     if mode:
         assert len(logs) == len(expected)
         for action, target in expected:
-            source = dict(bindings)[action]
+            source = dict(bindings).get(action, "FrameBridge")
             assert f"input_diag: quest_buttons {source} -> {target}" in logs
-        dropped = sum(not translate([binding], mode) for binding in bindings)
+        dropped = sum(not [t for t in translate([binding], mode) if t[0] < 1001] for binding in bindings)
         assert (f"quest_buttons: frame_controller bindings (mode {mode}, {len(expected)} bindings, "
                 f"{dropped} dropped): 0") in p.stderr
     else:
         assert not logs and "quest_buttons:" not in p.stderr
 
 
-@pytest.mark.parametrize("mode", [1, 2])
+@pytest.mark.parametrize("mode", [1, 2, 3])
 def test_vrapi_bridge_shaped_bindings(harness, mode):
     # Same action handles shared between hands, as in native/vrapi-bridge/input.cpp.
     bindings = []
@@ -314,7 +458,7 @@ def test_vrapi_bridge_shaped_bindings(harness, mode):
     assert calls(p) == [(TOUCH, bindings), (FRAME, translate(bindings, mode))]
 
 
-@pytest.mark.parametrize("mode", [0, 1, 2])
+@pytest.mark.parametrize("mode", [0, 1, 2, 3])
 def test_touch_pro_fallback_and_current_profile(harness, mode):
     bindings = [(1, "/user/hand/left/input/x/click"), (1, "/user/hand/right/input/a/touch"),
                 (2, "/user/hand/left/input/thumb_fb/proximity_fb")]
@@ -360,7 +504,7 @@ def test_touch_pro_success_ignores_frame_failure(harness):
     assert p.stdout.endswith("RESULT 0\n")
 
 
-@pytest.mark.parametrize("mode", [1, 2])
+@pytest.mark.parametrize("mode", [1, 2, 3])
 @pytest.mark.parametrize("previous", [False, True])
 def test_all_dropped_bindings_are_counted(harness, mode, previous):
     first = [(1, "/user/hand/right/input/a/click")]
@@ -392,7 +536,7 @@ def test_rejected_games_frame_binding_does_not_block_translation(harness):
     assert calls(p) == [(FRAME, bindings), (TOUCH, bindings), (FRAME, translate(bindings, 1))]
 
 
-@pytest.mark.parametrize("mode", [0, 1, 2])
+@pytest.mark.parametrize("mode", [0, 1, 2, 3])
 @pytest.mark.parametrize("offered", [0, 1, 2, 3, 4, 5])
 @pytest.mark.parametrize("requested", [False, True])
 def test_extension_enabled_only_when_offered_and_never_twice(harness, mode, offered, requested):
@@ -411,12 +555,13 @@ def test_extension_enabled_only_when_offered_and_never_twice(harness, mode, offe
         assert "quest_buttons:" not in p.stderr
 
 
-@pytest.mark.parametrize("value", ["0", "1", "2", "-1", "3", "1.5", "nan", "inf", "Mirror", "1junk", ""])
+@pytest.mark.parametrize("value", ["0", "1", "2", "3", "-1", "4", "1.5", "nan", "inf", "Mirror", "1junk", ""])
 def test_setting_numbers_only_invalid_values_disable(harness, value):
     p = run(harness, value)
-    expected = int(value) if value in ("0", "1", "2") else 0
+    valid = [str(n) for n in range(len(CONTRACT["modes"]))]
+    expected = int(value) if value in valid else 0
     assert p.stdout.startswith(f"MODE {expected}\n")
-    assert ("quest_buttons: invalid setting; using 0" in p.stderr) == (value not in ("0", "1", "2"))
+    assert ("quest_buttons: invalid setting; using 0" in p.stderr) == (value not in valid)
 
 
 @pytest.mark.parametrize("offered", [0, 1])
@@ -449,7 +594,7 @@ def test_off_preserves_runtime_call_bytes(harness):
     assert "quest_buttons:" not in p.stderr
 
 
-@pytest.mark.parametrize("mode", [1, 2])
+@pytest.mark.parametrize("mode", [1, 2, 3])
 @pytest.mark.parametrize("profile", [TOUCH, PRO])
 def test_proximity_expansion_becomes_frame_bindings(harness, mode, profile):
     bindings = [(1, "/user/hand/left/input/thumb_fb/proximity_fb"),
@@ -464,7 +609,7 @@ def test_proximity_expansion_becomes_frame_bindings(harness, mode, profile):
     assert {1, 2, 3} <= frame_actions
 
 
-@pytest.mark.parametrize("mode", [1, 2])
+@pytest.mark.parametrize("mode", [1, 2, 3])
 def test_bare_pose_parents_are_translated(harness, mode):
     bindings = [(i, f"/user/hand/{hand}/input/{pose}") for i, (hand, pose) in
                 enumerate(((h, p) for h in ("left", "right") for p in ("grip", "aim")), 1)]
@@ -545,3 +690,124 @@ def test_settings_and_hook_wiring():
     assert "quest_buttons_setting(line);" in settings
     hook = source[source.index("if (layer_debug || aim_correction_on() || profile_remap"):]
     assert "|| quest_buttons)\n        HOOK_AS(xrSuggestInteractionProfileBindings" in hook
+
+
+# ---------------------------------------------------------------- One hand (mode 3): answers from FrameBridge's set
+LEFT, RIGHT = "/user/hand/left", "/user/hand/right"
+# Unity-shaped: one action per button pair, read per hand through subaction paths
+UNITY = [(5, f"{LEFT}/input/x/click"), (5, f"{RIGHT}/input/a/click"), (6, f"{LEFT}/input/y/click"),
+         (6, f"{RIGHT}/input/b/click"), (7, f"{LEFT}/input/thumbstick"), (7, f"{RIGHT}/input/thumbstick"),
+         (8, f"{LEFT}/input/thumbstick/x"), (9, f"{LEFT}/input/x/touch"), (10, f"{LEFT}/input/menu/click")]
+SOURCES = {path: 1001 + i for i, path in enumerate(one_hand_sources(3))}
+
+
+def states(p):
+    return [line.removeprefix("STATE ") for line in p.stdout.splitlines() if line.startswith("STATE ")]
+
+
+def test_one_hand_frame_suggestion_and_own_action_set(harness):
+    p = run(harness, 3, suggest(UNITY) + "attach 1\nsync 1 100\n")
+    out = p.stdout.splitlines()
+    assert "ACTIONSET framebridge_one_hand" in out
+    # FrameBridge's actions: boolean inputs without subaction paths, in its own set
+    assert [line for line in out if line.startswith("ACTION ")] == [
+        f"ACTION 900 {name} 1 0" for name in ("right_x_click", "right_x_touch", "right_y_click", "right_y_touch",
+                                              "left_dpad_up", "left_dpad_down", "left_dpad_left", "left_dpad_right")]
+    frame = calls(p)[-1]
+    assert frame == (FRAME, translate(UNITY, 3))
+    # left X/Y get no Frame binding of their own; right A/B stay on A/B; View is Menu
+    assert (5, f"{RIGHT}/input/a/click") in frame[1] and (6, f"{RIGHT}/input/b/click") in frame[1]
+    assert not [b for b in frame[1] if b[0] in (5, 6, 9) and b[1].startswith(LEFT)]
+    assert (10, f"{LEFT}/input/view/click") in frame[1]
+    assert "ATTACH 1 77 900" in out and "SYNC 1 77 900" in out
+    assert "quest_buttons: one hand: FrameBridge's action set attached" in p.stderr
+
+
+def test_one_hand_x_y_from_the_right_controller(harness):
+    x, xt = SOURCES[f"{RIGHT}/input/x/click"], SOURCES[f"{RIGHT}/input/x/touch"]
+    y = SOURCES[f"{RIGHT}/input/y/click"]
+    commands = suggest(UNITY) + "attach 1\nstate 5 1 0 0\nstate 6 1 0 0\nstate 9 0 0 0\n"
+    commands += "sync 1 100\n" + f"get bool 1 5 {LEFT}\n"                       # nothing pressed
+    commands += f"state {x} 1 1 0\nstate {xt} 1 1 0\nsync 1 200\n"                # right X pressed
+    commands += f"get bool 1 5 {LEFT}\nget bool 1 5 {RIGHT}\nget bool 1 5 none\nget bool 1 6 {LEFT}\n"
+    commands += f"get bool 1 9 {LEFT}\nget float 1 5 {LEFT}\nget bool 2 5 {LEFT}\n"
+    commands += f"sync 1 300\nget bool 1 5 {LEFT}\n"                              # held: not changed
+    commands += f"state {x} 1 0 0\nstate {y} 1 1 0\nsync 1 400\nget bool 1 5 {LEFT}\nget bool 1 6 {LEFT}\n"
+    commands += f"sync 1 500\nget bool 1 5 {LEFT}\n"
+    p = run(harness, 3, commands)
+    assert states(p) == [
+        "0 1 0 0 5",
+        "0 1 1 1 200",      # left X reads the right X, changed at this sync
+        "0 1 0 0 5",        # the right hand's subaction (Quest A) is untouched
+        "0 1 1 1 200",      # no subaction path: any hand
+        "0 1 0 0 5",        # Y not pressed
+        "0 1 1 1 200",      # x/touch from the right X's touch, active although the runtime said inactive
+        "0 1 1.000 1 200",  # a float action on a button
+        "0 1 0 0 5",        # another session: FrameBridge's set isn't attached there
+        "0 1 1 0 200",      # still held
+        "0 1 0 1 400",      # released: changed
+        "0 1 1 1 400",      # Y pressed
+        "0 1 0 0 5",        # a sync after the release: the runtime's own values again
+    ]
+
+
+def test_one_hand_dpad_moves_the_left_stick(harness):
+    up, down = SOURCES[f"{LEFT}/input/dpad_up/click"], SOURCES[f"{LEFT}/input/dpad_down/click"]
+    right = SOURCES[f"{LEFT}/input/dpad_right/click"]
+    commands = suggest(UNITY) + "attach 1\nstate 7 1 0.25 -0.5\nstate 8 1 0.25 0\nsync 1 100\n"
+    commands += f"get vec2 1 7 {LEFT}\n"
+    commands += f"state {up} 1 1 0\nstate {right} 1 1 0\nsync 1 200\n"
+    commands += f"get vec2 1 7 {LEFT}\nget float 1 8 {LEFT}\nget vec2 1 7 {RIGHT}\n"
+    commands += f"state {right} 1 0 0\nstate {up} 1 0 0\nstate {down} 1 1 0\nsync 1 300\nget vec2 1 7 {LEFT}\n"
+    commands += f"get float 1 8 {LEFT}\nstate {down} 1 0 0\nsync 1 400\nget vec2 1 7 {LEFT}\n"
+    p = run(harness, 3, commands)
+    assert states(p) == [
+        "0 1 0.250,-0.500 0 5",    # the real stick
+        "0 1 0.707,0.707 1 200",   # up + right: a full diagonal push
+        "0 1 0.707 1 200",
+        "0 1 0.250,-0.500 0 5",    # the right stick is never touched
+        "0 1 0.000,-1.000 1 300",
+        "0 1 0.000 1 300",
+        "0 1 0.250,-0.500 1 400",  # released: the real stick again, reported as a change
+    ]
+
+
+@pytest.mark.parametrize("case", ["attach_fails", "set_refused", "no_left_roles", "game_frame_bindings"])
+def test_one_hand_falls_back_to_plain_bindings(harness, case):
+    bindings = UNITY if case != "no_left_roles" else [(5, f"{RIGHT}/input/a/click")]
+    commands = {"attach_fails": "attach_result -1\n", "set_refused": "refuse_set\n"}.get(case, "")
+    commands += suggest(bindings)
+    if case == "game_frame_bindings":
+        commands += suggest([(5, f"{RIGHT}/input/x/click")], FRAME)
+    x = SOURCES[f"{RIGHT}/input/x/click"]
+    commands += f"attach 1\nstate 5 1 0 0\nstate {x} 1 1 0\nsync 1 100\nget bool 1 5 {LEFT}\n"
+    p = run(harness, 3, commands)
+    out = p.stdout.splitlines()
+    assert out[-1] == "STATE 0 1 0 0 5"   # the runtime's answer, unchanged
+    assert "SYNC 1 77" in out
+    if case == "attach_fails":
+        assert out.count("ATTACH 1 77 900") == 1 and "ATTACH 1 77" in out
+        assert "attaching FrameBridge's action set failed (-1)" in p.stderr
+    else:
+        assert "ATTACH 1 77" in out and "ATTACH 1 77 900" not in out
+    if case in ("set_refused", "no_left_roles"):
+        assert calls(p)[-1] == (FRAME, [b for b in translate(bindings, 3) if b[0] < 1001])
+
+
+def test_other_modes_never_answer_for_the_game(harness):
+    x = SOURCES[f"{RIGHT}/input/x/click"]
+    commands = suggest(UNITY) + f"attach 1\nstate {x} 1 1 0\nsync 1 100\nget bool 1 5 {LEFT}\n"
+    p = run(harness, 1, commands)
+    assert "ACTIONSET" not in p.stdout
+    assert "ATTACH 1 77\n" in p.stdout and "SYNC 1 77\n" in p.stdout
+    assert states(p) == ["0 0 0 0 5"]
+
+
+def test_one_hand_hook_wiring():
+    source = (ROOT / "native/adapter/frame_adapter.c").read_text()
+    hook = source[source.index("if (sync_guard || layer_debug || input_diag"):]
+    assert hook.startswith("if (sync_guard || layer_debug || input_diag || quest_buttons == 3) HOOK_AS(xrSyncActions")
+    block = hook[:hook.index("#undef HOOK_AS")]
+    for name in ("xrAttachSessionActionSets", "xrGetActionStateFloat", "xrGetActionStateVector2f",
+                 "xrGetActionStateBoolean"):
+        assert f"HOOK_AS({name}, hook_{name})" in block

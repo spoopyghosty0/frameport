@@ -965,6 +965,37 @@ layout `oculus_touch`) is the diagram's "SteamVR default": X -> d-pad down, Y ->
 B -> B/X/Y, Menu -> View, plus trigger click -> bumper. Games with their own Valve binding file in that folder
 (Beat Saber, Batman, Accounting+, In Death, ...) use that file instead.
 
+### One hand (mode 3, GitHub discussion #570, 2026-11-08)
+
+Requested layout: the right Frame controller's A/B/X/Y send Quest A/B/X/Y, the left d-pad drives the left stick,
+View = Menu. The reporter tried it in SteamVR's binding UI and X/Y never worked: Touch X/Y are `/user/hand/left`
+inputs, and a binding on `/user/hand/right` only feeds the action's right-hand subaction (Unity's
+`primarybutton` = X left / A right, so Frame X read as A, and the left query stayed empty). No binding makes four
+d-pad buttons a stick vector either. FrameBridge (`native/adapter/quest_onehand.c`) creates its own action set
+`framebridge_one_hand` at the game's Touch suggestion (eight boolean actions: right x/y click+touch, left d-pad
+click), binds it in the generated Frame suggestion, adds it to `xrAttachSessionActionSets` / every
+`xrSyncActions`, and answers the game's left-hand (or null-subaction) X/Y and left-thumbstick state queries:
+X/Y = game state OR right X/Y; stick = d-pad direction while a d-pad button is held (diagonal normalised).
+Host-tested only (tests/test_quest_buttons.py, fake runtime). **Device checks pending:** headless, mode 3 +
+`input_diag=1` should log the Frame suggestion accepted (`(mode 3, K bindings, D dropped): 0`), `one hand: N game
+actions answered ...` and `FrameBridge's action set attached` with no attach/sync errors; that SteamVR accepts a
+second attached set with no subaction paths and that the answers reach OVRPlugin/Unity needs the headset
+(TestQuestControllers lights X/Y on the left controller model while the right X/Y are pressed).
+
+## Haptic cap (`haptic_cap`, GitHub #547, 2026-11-08)
+
+Five Nights at Freddy's: Help Wanted 2: controllers buzz through loading screens. OVRPlugin renews a ~2 s vibration
+every frame and stops it with amplitude 0 (already turned into xrStopHapticFeedback); a stalled game thread sends
+neither, so the last request runs 2 s (and a long load renews it in bursts). `haptic_cap` (adapter, default on,
+`native/adapter/haptic_cap.h`): per action + subaction, a plain vibration call within 250 ms of the previous one is a
+renewal; after three renewals in a row each duration is cut to max(100 ms, 4 x smoothed renewal interval). Every
+call counts, amplitude 0 too. A gap over 250 ms restarts the streak, so one-shot 1-2 s rumbles (and two effects in
+a row) keep their duration. Envelopes/PCM aren't touched (haptic_fix turns envelopes into plain vibrations in the
+xrshim before they reach the adapter). Not version- or game-gated; no adapter `revision` bump (the setting's C
+default is on; a rebuild/reinstall carries the new adapter). **Device check pending:** launch.log
+`haptic_cap: vibration renewed every N ms: 2000 ms -> M ms` during play; in the headset, buzzing should stop within
+~0.1 s of a loading screen.
+
 
 ## Fixed layer resolution / Batman (#406, #394)
 

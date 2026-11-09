@@ -199,7 +199,9 @@ HELP: dict[str, str] = _Translated({
     # ---- settings
     "quest_buttons": "Quest games bind Touch controllers. SteamVR normally repeats Touch Y/B on three top "
                      "buttons. Mirror gives the bottom and inner buttons X/A, the top and outer Y/B. Quest pair "
-                     "uses two diagonal buttons per hand. Requires the Frame runtime's controller extension; "
+                     "uses two diagonal buttons per hand. One hand puts A, B, X and Y on the right controller's "
+                     "A, B, X and Y and lets the left d-pad move the left stick. Requires the Frame runtime's "
+                     "controller extension; "
                      "SteamVR custom bindings can override the choice. Changes apply at the next launch. To see what "
                      "each mode does, try the free Test Quest Controllers app (Settings → Controllers): it lights up "
                      "every Quest button a game receives.",

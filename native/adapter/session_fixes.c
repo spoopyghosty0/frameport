@@ -12,6 +12,7 @@
 #include "refresh_rate.h"
 
 static void emul_on_begin_session(const XrSessionBeginInfo *info);  // layer_emul_gl.c
+#include "quest_onehand.c"  // quest_buttons=3: X/Y from the right controller, the left d-pad as the left stick
 
 static int64_t monotonic_ns(void) {
     struct timespec now;
@@ -108,11 +109,15 @@ static int64_t sync_resume_at;
 // layer_debug input counters, logged with the pacing line: were actions synced, did any button read as pressed?
 static int input_syncs, input_sync_ok, input_bool_reads, input_bool_true, input_last_sync_result;
 
-static XRAPI_ATTR XrResult XRAPI_CALL hook_xrSyncActions(XrSession session, const XrActionsSyncInfo *info) {
+static XRAPI_ATTR XrResult XRAPI_CALL hook_xrSyncActions(XrSession session, const XrActionsSyncInfo *game_info) {
     PFN_xrSyncActions fn = (PFN_xrSyncActions)lookup(active_instance, "xrSyncActions");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
-    if (!sync_guard) {  // installed for layer_debug / input_diag only: count, report failures
+    XrActionsSyncInfo copy;
+    XrActiveActionSet sets[64];
+    const XrActionsSyncInfo *info = oh_sync_info(session, game_info, &copy, sets);  // + FrameBridge's set (one hand)
+    if (!sync_guard) {  // installed for layer_debug / input_diag / one hand only: count, report failures
         XrResult r = fn(session, info);
+        oh_after_sync(session, info, game_info, r);
         __atomic_add_fetch(&input_syncs, 1, __ATOMIC_RELAXED);
         if (r == XR_SUCCESS) __atomic_add_fetch(&input_sync_ok, 1, __ATOMIC_RELAXED);
         input_last_sync_result = r;
@@ -123,6 +128,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL hook_xrSyncActions(XrSession session, cons
     int64_t wait = sync_resume_at - monotonic_ns();
     XrResult r = wait > 0 ? XR_SESSION_NOT_FOCUSED : fn(session, info);
     pthread_mutex_unlock(&sync_lock);
+    oh_after_sync(session, info, game_info, r);
     static int logged;
     if (wait > 0 && logged++ < 5) LOG("sync_guard: input paused for %.0f ms after focus returned", wait / 1e6);
     if (input_diag && XR_FAILED(r)) diag_call_failed("xrSyncActions", r, NULL);
@@ -134,6 +140,7 @@ static XRAPI_ATTR XrResult XRAPI_CALL hook_xrGetActionStateBoolean(XrSession ses
     PFN_xrGetActionStateBoolean fn = (PFN_xrGetActionStateBoolean)lookup(active_instance, "xrGetActionStateBoolean");
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
     XrResult r = fn(session, info, state);
+    if (r == XR_SUCCESS && state) oh_answer_boolean(session, info, state);
     __atomic_add_fetch(&input_bool_reads, 1, __ATOMIC_RELAXED);
     if (r == XR_SUCCESS && state && state->isActive && state->currentState)
         __atomic_add_fetch(&input_bool_true, 1, __ATOMIC_RELAXED);
@@ -302,6 +309,7 @@ static int app_suggested_touch;
 
 static void reset_bindings(int frame_enabled) {
     quest_buttons_enabled = frame_enabled;
+    oh_reset();
     app_suggested_frame = generated_frame_bindings = app_suggested_touch = 0;
     remapped_profile[0] = 0;
 }
@@ -432,14 +440,15 @@ static const char *const FRAME_COMMON[] = {"squeeze", "squeeze/value", "trigger"
 static const char *const FRAME_DROPPED[] = {"thumbrest/touch", "system/click"};
 static const struct {
     const char *hand, *touch;
-    const char *targets[2][2];  // Mirror, Quest pair
+    const char *targets[3][2];  // Mirror, Quest pair, One hand
 } FRAME_BUTTONS[] = {
-    // Quest's second button sits up and toward the other hand: left Y on d-pad right, right B on X
-    {"left", "x", {{"dpad_down", "dpad_left"}, {"dpad_down", NULL}}},
-    {"left", "y", {{"dpad_up", "dpad_right"}, {"dpad_right", NULL}}},
-    {"left", "menu", {{"view", NULL}, {"view", NULL}}},
-    {"right", "a", {{"a", "b"}, {"a", NULL}}},
-    {"right", "b", {{"x", "y"}, {"x", NULL}}},
+    // Quest's second button sits up and toward the other hand: left Y on d-pad right, right B on X.
+    // One hand: left X/Y come from the right X/Y (quest_onehand.c), not from a binding
+    {"left", "x", {{"dpad_down", "dpad_left"}, {"dpad_down", NULL}, {NULL, NULL}}},
+    {"left", "y", {{"dpad_up", "dpad_right"}, {"dpad_right", NULL}, {NULL, NULL}}},
+    {"left", "menu", {{"view", NULL}, {"view", NULL}, {"view", NULL}}},
+    {"right", "a", {{"a", "b"}, {"a", NULL}, {"a", NULL}}},
+    {"right", "b", {{"x", "y"}, {"x", NULL}, {"b", NULL}}},
 };
 
 static void suggest_frame(XrInstance instance, PFN_xrSuggestInteractionProfileBindings fn,
@@ -451,8 +460,9 @@ static void suggest_frame(XrInstance instance, PFN_xrSuggestInteractionProfileBi
     XrResult result = XR_ERROR_PATH_UNSUPPORTED;
     XrActionSuggestedBinding *bindings = NULL;
     if (!to_path || !to_string || XR_FAILED(to_path(instance, FRAME_PROFILE, &frame))) goto done;
-    // Every source contributes at most two bindings; check before multiplying the uint32_t count.
-    if (n > UINT32_MAX / 2 || !(bindings = calloc(n ? (size_t)n * 2 : 1, sizeof(*bindings)))) {
+    oh_begin_suggestion();
+    // Every source contributes at most two bindings, plus FrameBridge's own (one hand); check before multiplying.
+    if (n > (UINT32_MAX - OH_SOURCES) / 2 || !(bindings = calloc((size_t)n * 2 + OH_SOURCES, sizeof(*bindings)))) {
         result = XR_ERROR_OUT_OF_MEMORY;
         goto done;
     }
@@ -465,6 +475,7 @@ static void suggest_frame(XrInstance instance, PFN_xrSuggestInteractionProfileBi
         if (!strncmp(path, "/user/hand/left/", 16)) { hand = "left"; relative = path + 16; }
         else if (!strncmp(path, "/user/hand/right/", 17)) { hand = "right"; relative = path + 17; }
         if (!hand) { ++dropped; continue; }
+        oh_note_binding(source->action, hand, relative);
         const char *targets[2] = {NULL, NULL};
         char button_targets[2][64];
         if (!strcmp(relative, "output/haptic")) targets[0] = relative;
@@ -502,6 +513,7 @@ static void suggest_frame(XrInstance instance, PFN_xrSuggestInteractionProfileBi
         }
         if (kept == before) ++dropped;
     }
+    oh_append_bindings(instance, to_path, bindings, &kept);
     if (!kept) {
         LOG("quest_buttons: frame_controller bindings (mode %d, 0 bindings, %u dropped): not suggested",
             quest_buttons, dropped);

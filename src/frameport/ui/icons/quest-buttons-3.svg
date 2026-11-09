@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="380" viewBox="0 0 520 380" role="img" aria-labelledby="title desc">
+<title id="title">Quest Touch buttons on Steam Frame controllers</title>
+<desc id="desc">One hand: All four Quest face buttons on the right controller, printed letter for letter (A, B, X, Y); the left d-pad also moves the left thumbstick; View is Menu. Each Steam Frame controller button is labelled with the Quest Touch button it sends. A dash means it sends nothing. Left Touch buttons are X and Y; right are A and B.</desc>
+<rect width="520" height="380" rx="16" fill="#0D0E12"/>
+<g font-family="DejaVu Sans,Arial,sans-serif">
+<g transform="translate(0 0)">
+<rect x="0" y="0" width="520" height="380" rx="12" fill="#16181E" stroke="#2A2D37"/>
+<text x="20" y="31" fill="#EDEEF2" font-size="20" font-weight="600" text-anchor="start">One hand</text>
+<text x="20" y="55" fill="#A7ABB7" font-size="13" font-weight="400" text-anchor="start">Steam Frame controllers: each button shows the Quest button it sends</text>
+<text x="140" y="78" fill="#A7ABB7" font-size="13" font-weight="400" text-anchor="middle">Left</text>
+<path d="M102,256 C104,314 114,334 136,338 C158,342 178,326 194,256 Z" fill="#0D0E12" stroke="#2A2D37" stroke-width="2"/>
+<circle cx="140" cy="186" r="100" fill="#0D0E12" stroke="#2A2D37" stroke-width="2"/>
+<circle cx="174" cy="204" r="24" fill="#16181E" stroke="#2A2D37"/>
+<circle cx="174" cy="204" r="15" fill="#1D1F27" stroke="#2A2D37"/>
+<circle cx="126" cy="248" r="10" fill="#1D1F27" stroke="#2A2D37"/>
+<text x="126" y="272" fill="#868A96" font-size="9" font-weight="400" text-anchor="middle">Steam</text>
+<rect x="131" y="135" width="26" height="10" rx="5" fill="#1D1F27" stroke="#FF8A1F"/>
+<text x="144" y="130" fill="#FF8A1F" font-size="10" font-weight="600" text-anchor="middle">View: Menu</text>
+<path d="M84,144 h28 v30 h30 v28 h-30 v30 h-28 v-30 h-30 v-28 h30 Z" fill="#1D1F27" stroke="#2A2D37"/>
+<text x="98" y="164.04" fill="#EDEEF2" font-size="10" font-weight="700" text-anchor="middle">LS</text>
+<text x="69" y="193.04" fill="#EDEEF2" font-size="10" font-weight="700" text-anchor="middle">LS</text>
+<text x="127" y="193.04" fill="#EDEEF2" font-size="10" font-weight="700" text-anchor="middle">LS</text>
+<text x="98" y="222.04" fill="#EDEEF2" font-size="10" font-weight="700" text-anchor="middle">LS</text>
+<text x="380" y="78" fill="#A7ABB7" font-size="13" font-weight="400" text-anchor="middle">Right</text>
+<path d="M326,256 C328,314 338,334 360,338 C382,342 402,326 418,256 Z" fill="#0D0E12" stroke="#2A2D37" stroke-width="2"/>
+<circle cx="380" cy="186" r="100" fill="#0D0E12" stroke="#2A2D37" stroke-width="2"/>
+<circle cx="346" cy="204" r="24" fill="#16181E" stroke="#2A2D37"/>
+<circle cx="346" cy="204" r="15" fill="#1D1F27" stroke="#2A2D37"/>
+<circle cx="394" cy="248" r="10" fill="#1D1F27" stroke="#2A2D37"/>
+<text x="394" y="272" fill="#868A96" font-size="9" font-weight="400" text-anchor="middle">Steam</text>
+<rect x="363" y="135" width="26" height="10" rx="5" fill="#1D1F27" stroke="#868A96"/>
+<text x="376" y="130" fill="#868A96" font-size="10" font-weight="600" text-anchor="middle">Menu: —</text>
+<circle cx="422" cy="159" r="14" fill="#1D1F27" stroke="#FF8A1F" stroke-width="1.5"/>
+<text x="422" y="164.04" fill="#FF8A1F" font-size="14" font-weight="700" text-anchor="middle">Y</text>
+<text x="437" y="149" fill="#868A96" font-size="9" font-weight="400" text-anchor="middle">Y</text>
+<circle cx="393" cy="188" r="14" fill="#1D1F27" stroke="#3AA8FF" stroke-width="1.5"/>
+<text x="393" y="193.04" fill="#3AA8FF" font-size="14" font-weight="700" text-anchor="middle">X</text>
+<text x="408" y="178" fill="#868A96" font-size="9" font-weight="400" text-anchor="middle">X</text>
+<circle cx="451" cy="188" r="14" fill="#1D1F27" stroke="#FF8A1F" stroke-width="1.5"/>
+<text x="451" y="193.04" fill="#FF8A1F" font-size="14" font-weight="700" text-anchor="middle">B</text>
+<text x="466" y="178" fill="#868A96" font-size="9" font-weight="400" text-anchor="middle">B</text>
+<circle cx="422" cy="217" r="14" fill="#1D1F27" stroke="#3AA8FF" stroke-width="1.5"/>
+<text x="422" y="222.04" fill="#3AA8FF" font-size="14" font-weight="700" text-anchor="middle">A</text>
+<text x="437" y="207" fill="#868A96" font-size="9" font-weight="400" text-anchor="middle">A</text>
+<text x="260.0" y="366" fill="#A7ABB7" font-size="12" font-weight="400" text-anchor="middle">LS: the d-pad also moves the left stick · bumpers send nothing</text>
+</g>
+</g>
+</svg>

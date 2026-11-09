@@ -44,6 +44,16 @@
       "note": "Two buttons per controller, placed like Quest Touch's (the second one up and toward the other hand); the other face buttons do nothing.",
       "left": {"x": ["dpad_down"], "y": ["dpad_right"], "menu": ["view"]},
       "right": {"a": ["a"], "b": ["x"]}
+    },
+    "3": {
+      "name": "One hand",
+      "note": "All four Quest face buttons on the right controller, printed letter for letter (A, B, X, Y); the left d-pad also moves the left thumbstick; View is Menu.",
+      "left": {"menu": ["view"]},
+      "right": {"a": ["a"], "b": ["b"]},
+      "other_hand": {"left": {"x": ["x"], "y": ["y"]}},
+      "dpad_stick": {"left": ["dpad_up", "dpad_down", "dpad_left", "dpad_right"]},
+      "_other_hand": "Touch input (key, on the hand named above it) <- the listed Frame inputs on the OTHER hand, click and touch. FrameBridge reads them through an action set of its own and answers the game's left X/Y actions (queried for the left hand or with no subaction path); no binding suggestion can do this (a right-hand binding feeds the right subaction).",
+      "_dpad_stick": "The hand's Touch thumbstick (vector and x/y) reads these d-pad buttons (up, down, left, right; click) as a direction while one is held; the real thumbstick otherwise. Diagonals are normalised to length 1."
     }
   }
 }

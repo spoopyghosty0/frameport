@@ -61,7 +61,7 @@ def configuration_matches(recipe: dict, applied: str | None, package: str = "", 
         return False
     # set_settings records the live value in the agent's configuration fingerprint. Any inherited mode is
     # current: changing the library default is applied explicitly, without making the whole library outdated.
-    for mode in (1, 2):
+    for mode in (1, 2, 3):
         current["settings"]["quest_buttons"] = mode
         if fingerprint(current) == applied:
             return True

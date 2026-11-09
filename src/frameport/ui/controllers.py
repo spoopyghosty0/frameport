@@ -11,7 +11,7 @@ from . import theme as T
 
 
 def diagram_source(mode: int) -> str:
-    if mode not in (0, 1, 2):
+    if mode not in (0, 1, 2, 3):
         mode = 0  # retain an unknown CLI value in the choice while keeping a valid preview asset
     return asset_url(user_data_dir() / G.FOLDER / f"quest-buttons-{mode}.svg")
 

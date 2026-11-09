@@ -14,27 +14,31 @@ button and Touch Y/B from all three top buttons, so the right X and Y both send 
   controller, whose second button sits up and toward the other hand.
 - **Quest pair (2):** two buttons per controller, placed like Touch's: left X = d-pad down, Y = d-pad right; right
   A = A, B = X. The other face buttons send nothing.
+- **One hand (3):** all four Quest face buttons on the right controller, letter for letter: A = A, B = B, X = X,
+  Y = Y. The left d-pad moves the left thumbstick (the stick itself still works); View sends Menu. Quest X and Y
+  belong to the left Touch controller, which a binding can't move to the other hand, so FrameBridge reads the right
+  X/Y itself and gives the game's left X/Y their state.
 
-![Quest Touch reference and the three Steam Frame button mappings](images/controllers/quest-buttons.svg)
+![Quest Touch reference and the Steam Frame button mappings](images/controllers/quest-buttons.svg)
 
 The small label names the physical button, the large one the Touch input the game gets. Blue is X/A, orange is Y/B
 or Menu, a dash is no input.
 
 <!-- quest-buttons-table:start -->
-| Frame input | SteamVR default (0) | Mirror (1) | Quest pair (2) |
-|---|---|---|---|
-| Left d-pad ↑ | Y | Y | — |
-| Left d-pad ↓ | X | X | X |
-| Left d-pad ← | Y | X | — |
-| Left d-pad → | Y | Y | Y |
-| Left View | Menu | Menu | Menu |
-| Right A (bottom) | A | A | A |
-| Right B (right) | B | A | — |
-| Right X (left) | B | B | B |
-| Right Y (top) | B | B | — |
-| Right Menu | — | — | — |
-| Left bumper | — | — | — |
-| Right bumper | — | — | — |
+| Frame input | SteamVR default (0) | Mirror (1) | Quest pair (2) | One hand (3) |
+|---|---|---|---|---|
+| Left d-pad ↑ | Y | Y | — | Left stick ↑ |
+| Left d-pad ↓ | X | X | X | Left stick ↓ |
+| Left d-pad ← | Y | X | — | Left stick ← |
+| Left d-pad → | Y | Y | Y | Left stick → |
+| Left View | Menu | Menu | Menu | Menu |
+| Right A (bottom) | A | A | A | A |
+| Right B (right) | B | A | — | B |
+| Right X (left) | B | B | B | X |
+| Right Y (top) | B | B | — | Y |
+| Right Menu | — | — | — | — |
+| Left bumper | — | — | — | — |
+| Right bumper | — | — | — | — |
 <!-- quest-buttons-table:end -->
 
 Triggers, grips, thumbsticks, tracking and vibration keep their Touch bindings. View sends Menu click only.
@@ -67,12 +71,15 @@ frameport recipe <pkg> --set quest_buttons=2
 - The d-pad has one touch sensor: a thumb resting on the d-pad touches X and Y together. The right face buttons sense touch
   one by one.
 - Bumpers and thumbrest touch have no Touch counterpart and do nothing. System buttons keep their role.
-- Mirror and Quest pair need the runtime's `XR_VALVE_frame_controller_interaction` extension. Without the extension,
-  FrameBridge logs the fact and keeps SteamVR's mapping.
+- Mirror, Quest pair and One hand need the runtime's `XR_VALVE_frame_controller_interaction` extension. Without the
+  extension, FrameBridge logs the fact and keeps SteamVR's mapping.
+- One hand: the d-pad gives full pushes only (eight directions); while a d-pad button is held it replaces the left
+  stick. A SteamVR custom binding of the left X/Y doesn't help in this mode: FrameBridge answers them from the right
+  X/Y.
 - Games with their own Frame Controller bindings keep them; these modes don't replace a game's own mapping.
 - Touch bindings on bare pose, trigger, squeeze or button paths are translated too, as are `/pose`, `/value`,
   `/click` and `/touch` where the mapping has them.
-- Finger proximity emulation (`proximity_emul`) keeps working with Mirror and Quest pair.
+- Finger proximity emulation (`proximity_emul`) keeps working with Mirror, Quest pair and One hand.
 - Applies to Quest VR games, including 32-bit games on the bridge. PC VR games and flat Android apps aren't changed.
 
 The mapping follows [Valve's Frame Controller input reference](https://partner.steamgames.com/doc/steamhardware/steamframe/input)

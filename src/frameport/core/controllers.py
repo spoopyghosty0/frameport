@@ -4,7 +4,7 @@ from __future__ import annotations
 from . import library
 
 QUEST_BUTTONS = "adapter.quest_buttons"
-CHOICES = ((0, "SteamVR default"), (1, "Mirror"), (2, "Quest pair"))
+CHOICES = ((0, "SteamVR default"), (1, "Mirror"), (2, "Quest pair"), (3, "One hand"))
 
 # Test Quest Controllers (github.com/spoopyghosty0/TestQuestControllers): a small app that shows every Quest controller
 # input it receives on a 3D model, for trying the controller button modes. Installed through its install link.
@@ -14,7 +14,7 @@ TESTER_MANIFEST = "https://raw.githubusercontent.com/spoopyghosty0/TestQuestCont
 
 def quest_buttons_default() -> int:
     value = library.setting("input.quest_buttons", 0)
-    return int(value) if value in (0, 1, 2, "0", "1", "2") else 0
+    return int(value) if value in (0, 1, 2, 3, "0", "1", "2", "3") else 0
 
 
 def effective_adapter_settings(patches: dict) -> dict:

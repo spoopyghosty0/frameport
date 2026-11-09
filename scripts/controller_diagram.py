@@ -28,13 +28,29 @@ def portal_colors() -> dict:
                 and any(isinstance(t, ast.Name) and t.id == "_PORTAL" for t in n.targets))
 
 
-def inverse(mode: dict, hand: str) -> dict:
-    return {frame: touch.upper() if touch != "menu" else "Menu"
-            for touch, frames in mode.get(hand, {}).items() for frame in frames}
+# the left/right thumbstick directions a d-pad button sends in a mode with dpad_stick (the drawing labels each
+# d-pad arm "LS"/"RS": the arm shows the direction, and the app's SVG renderer has no arrow glyphs)
+STICK_DIRECTIONS = {"dpad_up": "↑", "dpad_down": "↓", "dpad_left": "←", "dpad_right": "→"}
+
+
+def inverse(mode: dict, hand: str, *, arrows: bool = False) -> dict:
+    """Frame input on `hand` -> the Touch input it sends: same-hand buttons, other_hand buttons (FrameBridge reads
+    the other controller's button for them) and dpad_stick (the d-pad moves this hand's thumbstick)."""
+    out = {frame: touch.upper() if touch != "menu" else "Menu"
+           for touch, frames in mode.get(hand, {}).items() for frame in frames}
+    other = "left" if hand == "right" else "right"
+    out.update({frame: touch.upper() for touch, frames in mode.get("other_hand", {}).get(other, {}).items()
+                for frame in frames})
+    stick = "LS" if hand == "left" else "RS"
+    out.update({pad: f"{'Left' if hand == 'left' else 'Right'} stick {STICK_DIRECTIONS[pad]}" if arrows else stick
+                for pad in mode.get("dpad_stick", {}).get(hand, [])})
+    return out
 
 
 def mapping_table(data: dict) -> str:
-    rows = ["| Frame input | SteamVR default (0) | Mirror (1) | Quest pair (2) |", "|---|---|---|---|"]
+    modes = sorted(data["modes"], key=int)
+    rows = ["| Frame input | " + " | ".join(f"{data['modes'][n]['name']} ({n})" for n in modes) + " |",
+            "|---" * (len(modes) + 1) + "|"]
     inputs = (("left", "dpad_up", "Left d-pad ↑"), ("left", "dpad_down", "Left d-pad ↓"),
               ("left", "dpad_left", "Left d-pad ←"), ("left", "dpad_right", "Left d-pad →"),
               ("left", "view", "Left View"), ("right", "a", "Right A (bottom)"),
@@ -42,20 +58,24 @@ def mapping_table(data: dict) -> str:
               ("right", "y", "Right Y (top)"), ("right", "menu", "Right Menu"),
               ("left", "bumper", "Left bumper"), ("right", "bumper", "Right bumper"))
     for hand, key, label in inputs:
-        values = [inverse(data["modes"][str(n)], hand).get(key, "—") for n in range(3)]
+        values = [inverse(data["modes"][n], hand, arrows=True).get(key, "—") for n in modes]
         rows.append("| " + " | ".join([label, *values]) + " |")
     return "\n".join(rows)
 
 
 def illustration(data: dict, colors: dict, mode: str | None = None) -> str:
     compact = mode is not None
-    width, height = (PANEL_W, PANEL_H) if compact else (2 * PANEL_W + 40, 2 * PANEL_H + 104)
+    modes = sorted(data["modes"], key=int)
+    rows = (len(modes) + 2) // 2  # the reference and every mode, two per row
+    width, height = (PANEL_W, PANEL_H) if compact else (2 * PANEL_W + 40, rows * PANEL_H + 88 + rows * 16)
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
              f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">',
              '<title id="title">Quest Touch buttons on Steam Frame controllers</title>',
              '<desc id="desc">' + escape(
                  (data["modes"][mode]["name"] + ": " + data["modes"][mode]["note"] if compact else
-                  "Quest Touch reference and three Frame mappings: SteamVR default, Mirror, and Quest pair.")
+                  f"Quest Touch reference and {len(modes)} Frame mappings: "
+                  + ", ".join(data["modes"][n]["name"] for n in modes[:-1])
+                  + f", and {data['modes'][modes[-1]]['name']}.")
                  + " Each Steam Frame controller button is labelled with the Quest Touch button it sends. "
                    "A dash means it sends nothing. Left Touch buttons are X and Y; right are A and B.") + '</desc>',
              f'<rect width="{width}" height="{height}" rx="16" fill="{colors["BG"]}"/>',
@@ -68,6 +88,8 @@ def illustration(data: dict, colors: dict, mode: str | None = None) -> str:
     def tone(touch):
         if touch == "—":
             return colors["TEXT_3"]
+        if touch in ("LS", "RS"):
+            return colors["TEXT"]
         return colors["SECONDARY"] if touch in ("X", "A") else colors["ACCENT"]
 
     def sends(x, y, touch, size=15):
@@ -141,6 +163,8 @@ def illustration(data: dict, colors: dict, mode: str | None = None) -> str:
             else:
                 controller(hx, 186, hand, inverse(data["modes"][key], hand))
         footnote = ("Lower: X / A · Upper: Y / B" if key is None else
+                    "LS: the d-pad also moves the left stick · bumpers send nothing"
+                    if data["modes"][key].get("dpad_stick") else
                     "Sticks, triggers and grips unchanged · bumpers send nothing")
         text(PANEL_W / 2, PANEL_H - 14, footnote, 12, colors["TEXT_2"], "middle")
         parts.append('</g>')
@@ -150,9 +174,11 @@ def illustration(data: dict, colors: dict, mode: str | None = None) -> str:
     else:
         text(20, 32, "Controller buttons", 24, weight=600)
         text(20, 57, "Blue: X / A · Orange: Y / B or Menu · —: sends nothing", 14, colors["TEXT_2"])
-        for x, y, key in ((16, 72, None), (PANEL_W + 24, 72, "0"), (16, PANEL_H + 88, "1"),
-                          (PANEL_W + 24, PANEL_H + 88, "2")):
-            panel(x, y, key)
+        for i, key in enumerate([None, *modes]):
+            row, column = divmod(i, 2)
+            last_alone = i == len(modes) and column == 0
+            x = (width - PANEL_W) // 2 if last_alone else (16 if column == 0 else PANEL_W + 24)
+            panel(x, 72 + row * (PANEL_H + 16), key)
     return "\n".join([*parts, '</g>', '</svg>', ''])
 
 
@@ -160,7 +186,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if generated files differ")
     parser.add_argument("--compact", action="store_true", help="generate one compact controller pair")
-    parser.add_argument("--mode", choices=("0", "1", "2"), default="1")
+    parser.add_argument("--mode", choices=tuple(json.loads(CONTRACT.read_text(encoding="utf-8"))["modes"]),
+                        default="1")
     parser.add_argument("--out", type=Path, help="destination for --compact (default: the bundled app asset)")
     args = parser.parse_args()
     data = json.loads(CONTRACT.read_text(encoding="utf-8"))
@@ -170,7 +197,7 @@ def main() -> int:
         outputs = {args.out or assets / f"quest-buttons-{args.mode}.svg": illustration(data, colors, args.mode)}
     else:
         outputs = {ROOT / "docs/images/controllers/quest-buttons.svg": illustration(data, colors)}
-        outputs.update({assets / f"quest-buttons-{n}.svg": illustration(data, colors, str(n)) for n in range(3)})
+        outputs.update({assets / f"quest-buttons-{n}.svg": illustration(data, colors, n) for n in data["modes"]})
         doc = DOC.read_text(encoding="utf-8")
         before, rest = doc.split(START, 1)
         _, after = rest.split(END, 1)
