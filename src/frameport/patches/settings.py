@@ -27,6 +27,13 @@ SETTINGS = [
      "game's files folder on the Frame. Launch tests run without anyone wearing the headset, so the headset view stays "
      "black; this shows what the game itself draws. Vulkan games: both eyes at half size (fb_snap_vk_N_vV.ppm), "
      "the whole swapchain image with the submitted rect and FOV in the log."),
+    ("gl_state_guard", "int", 1, "Keep the game's GL bindings (GLES)",
+     "The Frame's runtime runs OpenGL ES in the game's context inside xrEndFrame and other calls and leaves its own "
+     "objects bound (a 16x16 texture in JKXR's first frame). Games and gl4es that remember their bindings then upload "
+     "into the runtime's texture: black cinematics in JKXR (GL_INVALID_VALUE in glTexSubImage2D ... > 16, GitHub "
+     "#441/#502). FrameBridge saves the active texture unit, the texture bindings on it and on unit 0, framebuffers, "
+     "program, vertex array, array and unpack buffers and the unpack alignment before such calls and restores what "
+     "changed. About two dozen glGetIntegerv per guarded call."),
     ("gl_error_clear", "int", 0, "Clear the game's GL errors (GLES)",
      "Clears OpenGL errors the game left pending before FrameBridge calls the Frame's runtime. The runtime's GL code "
      "fails on any pending error; after one such failure at the start it allocated GPU memory every frame without "
@@ -582,6 +589,9 @@ UI: dict[str, dict] = {
     "snapshot": dict(group="troubleshooting", level="advanced", label="Eye-image snapshots (diagnostics)",
                 help="Saves what the game draws every few seconds, for testing without the headset.",
                 control=("switch",)),
+    "gl_state_guard": dict(group="troubleshooting", level="advanced", label="Keep the game's graphics state (GLES)",
+                help="Stops videos and pictures from staying black because the headset's own drawing changed the "
+                     "game's graphics settings (for example JKXR's cinematics). Leave it on.", control=("switch",)),
     "gl_error_clear": dict(group="troubleshooting", level="advanced", label="Clear the game's GL errors (GLES)",
                 help="For OpenGL ES games whose memory use keeps growing (e.g. Vader Immortal).", control=("switch",)),
     "flip_dump": dict(group="troubleshooting", level="advanced", label="Upside-down panel images (diagnostics)",
@@ -735,6 +745,7 @@ class AdapterSetting(Patch):
             "flip_quads": ap.is_vulkan,
             "mutable_fix": ap.is_vulkan,
             "swapchain_fix": ap.is_gles,
+            "gl_state_guard": ap.may_be_gles,
             "unorm_formats": lambda a: a.xr == "OpenXR",
             "perf_settings_emul": lambda a: a.xr == "OpenXR" or "libOVRPlugin.so" in a.libs,
             "gl_hide_multiview": lambda a: a.direct_vrapi and ap.is_gles(a),

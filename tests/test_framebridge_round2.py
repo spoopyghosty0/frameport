@@ -297,6 +297,116 @@ def test_wait_balance_is_wired():
     assert "static int wait_balance = 1;" in SRC
 
 
+# ---------------------------------------------------------------- GL state guard (#441/#502)
+FAKE_GLES = r"""
+#include <string.h>
+#define E __attribute__((visibility("default")))
+E int unit = 0x84C0, tex[3][32], draw_fb, read_fb, program, vao, array_buffer, unpack_buffer, align = 4, real_binds;
+static int slot(unsigned target) { return target == 0x0DE1 ? 0 : target == 0x8C1A ? 1 : 2; }
+E void glActiveTexture(unsigned u) { unit = (int)u; }
+E void glBindTexture(unsigned target, unsigned name) { tex[slot(target)][unit - 0x84C0] = (int)name; ++real_binds; }
+E void glBindFramebuffer(unsigned target, unsigned name) {
+    if (target == 0x8CA9 || target == 0x8D40) draw_fb = (int)name;
+    if (target == 0x8CA8 || target == 0x8D40) read_fb = (int)name;
+}
+E void glUseProgram(unsigned p) { program = (int)p; }
+E void glBindVertexArray(unsigned v) { vao = (int)v; }
+E void glBindBuffer(unsigned target, unsigned name) { if (target == 0x8892) array_buffer = (int)name; else unpack_buffer = (int)name; }
+E void glPixelStorei(unsigned pname, int v) { if (pname == 0x0CF5) align = v; }
+E const unsigned char *glGetString(unsigned name) { return (const unsigned char *)(name == 0x1F03 ? "GL_OES_EGL_image_external GL_EXT_x" : "x"); }
+E void glGetIntegerv(unsigned pname, int *out) {
+    int u = unit - 0x84C0;
+    switch (pname) {
+    case 0x84E0: *out = unit; break;
+    case 0x8069: *out = tex[0][u]; break;
+    case 0x8C1D: *out = tex[1][u]; break;
+    case 0x8D67: *out = tex[2][u]; break;
+    case 0x8CA6: *out = draw_fb; break;
+    case 0x8CAA: *out = read_fb; break;
+    case 0x8B8D: *out = program; break;
+    case 0x85B5: *out = vao; break;
+    case 0x8894: *out = array_buffer; break;
+    case 0x88EF: *out = unpack_buffer; break;
+    case 0x0CF5: *out = align; break;
+    default: *out = -99;
+    }
+}
+"""
+FAKE_EGL = r"""
+__attribute__((visibility("default"))) void *context = (void *)0x1234;
+__attribute__((visibility("default"))) void *eglGetCurrentContext(void) { return context; }
+"""
+GL_STATE_HARNESS = r"""
+#include <dlfcn.h>
+#include <stdio.h>
+#include <string.h>
+typedef int XrResult;
+#define LOG(...) (fprintf(stderr, __VA_ARGS__), fputc('\n', stderr))
+static int gl_state_guard = 1, gles_session = 1;
+#include "gl_state.c"
+extern int unit, tex[3][32], draw_fb, read_fb, program, vao, array_buffer, unpack_buffer, align, real_binds;
+extern void *context;
+// gl4es stand-in: the game's own GL entry point, which a global lookup (RTLD_DEFAULT) would find first
+int gl4es_binds;
+__attribute__((visibility("default"))) void glBindTexture(unsigned target, unsigned name) { (void)target; (void)name; ++gl4es_binds; }
+#define CHECK(c) do { if (!(c)) { fprintf(stderr, "FAILED line %d: %s\n", __LINE__, #c); return 1; } } while (0)
+static XrResult runtime_end_frame(void) {  // SteamVR's interop: its own texture on unit 0, its FBO, program, alignment
+    unit = 0x84C0; tex[0][0] = 99; draw_fb = read_fb = 7; program = 5; vao = 0; unpack_buffer = 0; align = 1;
+    return 0;
+}
+int main(void) {
+    // the app: unit 2 active with its cinematic texture, another one on unit 0, its own FBO/program/VAO/buffers
+    unit = 0x84C2; tex[0][2] = 42; tex[2][2] = 8; tex[0][0] = 41; draw_fb = 3; read_fb = 4; program = 9; vao = 6;
+    array_buffer = 11; unpack_buffer = 12; align = 2;
+    XrResult r = GL_GUARDED("xrEndFrame", runtime_end_frame());
+    CHECK(r == 0);
+    CHECK(unit == 0x84C2 && tex[0][2] == 42 && tex[2][2] == 8 && tex[0][0] == 41);
+    CHECK(draw_fb == 3 && read_fb == 4 && program == 9 && vao == 6 && array_buffer == 11 && unpack_buffer == 12);
+    CHECK(align == 2);
+    CHECK(gl4es_binds == 0 && real_binds > 0);  // the system's GL, never the game's own entry points
+    // nothing changed: nothing rebound
+    int binds = real_binds;
+    CHECK(GL_GUARDED("xrBeginFrame", 0) == 0 && real_binds == binds);
+    // no current context, or the setting off: nothing saved or restored
+    context = NULL;
+    CHECK(GL_GUARDED("xrEndFrame", runtime_end_frame()) == 0 && tex[0][0] == 99 && program == 5);
+    context = (void *)0x1234;
+    gl_state_guard = 0;
+    program = 9;
+    CHECK(GL_GUARDED("xrEndFrame", runtime_end_frame()) == 0 && program == 5);
+    puts("ok");
+    return 0;
+}
+"""
+
+
+@pytest.mark.skipif(not CC or platform.system() != "Linux", reason="needs a C compiler on Linux")
+def test_gl_state_guard_restores_the_apps_bindings(tmp_path):
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    for name, src in (("libGLESv3.so", FAKE_GLES), ("libEGL.so", FAKE_EGL)):
+        (tmp_path / f"{name}.c").write_text(src)
+        subprocess.run([CC, "-shared", "-fPIC", f"-Wl,-soname,{name}", str(tmp_path / f"{name}.c"), "-o",
+                        str(lib / name)], check=True)
+    out = _run_c(tmp_path, GL_STATE_HARNESS, "-rdynamic", "-L", str(lib), f"-Wl,-rpath,{lib}",
+                 "-Wl,--no-as-needed", "-l:libGLESv3.so", "-l:libEGL.so", "-ldl")
+    assert out.stdout.strip() == "ok"
+    assert "gl_state_guard: xrEndFrame changed" in out.stderr
+
+
+def test_gl_state_guard_is_wired():
+    base.load_all()
+    assert base.REGISTRY["adapter.gl_state_guard"].default == 1
+    assert 'sscanf(line, "gl_state_guard=%f", &value) == 1' in SRC and "static int gl_state_guard = 1;" in SRC
+    for where in ("xrEndFrame", "xrBeginFrame", "xrCreateSwapchain", "xrAcquireSwapchainImage",
+                  "xrWaitSwapchainImage", "xrReleaseSwapchainImage"):
+        assert f'GL_GUARDED("{where}", ' in SRC, where
+    end = SRC.split("XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(", 1)[1].split("\n}\n", 1)[0]
+    assert "return fn(session, info);" not in end  # every runtime call in it is guarded
+    clear = SRC.split("static void clear_gl_errors(const char *where) {", 1)[1].split("\n}\n", 1)[0]
+    assert clear.index('dlopen("libGLESv3.so"') < clear.index("dlsym(RTLD_DEFAULT")  # the system's GL first
+
+
 # ---------------------------------------------------------------- controller battery (#572)
 FAKE_PLUGIN = r"""
 #include <string.h>
@@ -430,6 +540,8 @@ def test_lambda1vr_catalog_turns_the_eye_fix_on():
 
 
 TRIAGE_LINES = {
+    "gl-upload-into-runtime-texture": [
+        "11-09 00:27:33.665  1161  1201 E Mesa    : GL_INVALID_VALUE in glTexSubImage2D(xoffset 0 + width 512 > 16)"],
     "wait-frame-stale": [
         "11-08 23:27:49.680  1006  1153 I OVRPlugin: Warning : CompositorOpenXR::Update called for frame 7 outside of "
         "frame bounds"],

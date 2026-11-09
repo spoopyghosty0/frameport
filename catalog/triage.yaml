@@ -952,6 +952,16 @@ signatures:
       the frame it waited for before was never started, and the Frame's runtime then waits forever (a Quest's
       doesn't). FrameBridge can close the forgotten frame itself (on by default since this was found).
     suggest: [adapter.wait_balance]
+  - id: gl-upload-into-runtime-texture
+    # GitHub #441/#502: JKXR's cinematics stayed black; with MESA_DEBUG every frame's upload hit SteamVR's 16x16 GL
+    # texture that its interop left bound inside the first xrEndFrame
+    pattern: 'GL_INVALID_VALUE in glTex(?:Sub)?Image[23]D\([xyz]offset \d+ \+ (?:width|height|depth) \d+ > 16\)'
+    unless: 'gl_state_guard: \w+ changed'
+    severity: error
+    diagnosis: The game's texture uploads land in a small texture of the headset runtime's, which the runtime left
+      bound in the game's graphics context, so videos or pictures stay black (for example JKXR's cinematics).
+      FrameBridge can keep the game's bindings across the runtime's calls (on by default for OpenGL ES games).
+    suggest: [adapter.gl_state_guard]
 # Launch tests run without a worn headset. Some parts give up on tracking after a while and end the VR session; what
 # the game does after that (often a crash in the GPU driver while its renderer tears down) never happens in the
 # headset. In a launch test that already had paced frames before such a line, a later exit or crash still passes,

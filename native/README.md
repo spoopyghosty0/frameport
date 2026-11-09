@@ -68,5 +68,6 @@ give each projection view its eye's offset when a game submits one pose twice (`
 whichever xrSyncActions hook comes next, #476); `haptic_log.c` + `haptic_summary.h` log a per-hand haptics
 summary every 10 s while vibrations happen (logging only, #567); `wait_balance.c` closes a waited frame nobody
 begins within 100 ms before the next xrWaitFrame, which SteamVR would block forever (`wait_balance`, default on,
-#135). Header parts are host-tested by
+#135); `gl_state.c` keeps a GLES app's GL bindings across the runtime's calls that run GL in its context
+(`gl_state_guard`, default on, #441/#502). Header parts are host-tested by
 `tests/test_framebridge_round2.py` (the OpenXR ones with `FRAMEPORT_NATIVE_TESTS=1`).

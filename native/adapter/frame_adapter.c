@@ -147,6 +147,7 @@ static int perf_settings_emul = 1;  // xrPerfSettingsSetPerformanceLevelEXT succ
 static int unorm_formats;  // list GL_RGBA8 / VK R8G8B8A8_UNORM after the runtime's formats (swapchain_formats.h)
 static int eye_pose_fix;   // both projection views with one (head) pose: each eye gets its own offset (eye_pose_fix.c)
 static int wait_balance = 1;  // close a waited frame nobody begins before the next xrWaitFrame (wait_balance.c)
+static int gl_state_guard = 1;  // GLES: keep the app's GL bindings across the runtime's calls (gl_state.c)
 static int pose_consistency = 0;  // repeat xrLocateViews queries for one display time get the same poses (GitHub #8)  // clamp submitted image rects to their swapchain (SteamVR rejects a 1 px overrun)
 static int pose_time_fix;   // poses asked for at CLOCK_MONOTONIC "now" or far in the past: at XrTime "now" (pose_time.c)
 static int pose_debug;      // diagnostics: requested pose times vs the predicted display time (pose_time.c)
@@ -237,6 +238,7 @@ static void read_settings(const char *path) {
         if (sscanf(line, "unorm_formats=%f", &value) == 1) unorm_formats = value != 0;
         if (sscanf(line, "eye_pose_fix=%f", &value) == 1) eye_pose_fix = value != 0;
         if (sscanf(line, "wait_balance=%f", &value) == 1) wait_balance = value != 0;
+        if (sscanf(line, "gl_state_guard=%f", &value) == 1) gl_state_guard = value != 0;
         if (sscanf(line, "pose_consistency=%f", &value) == 1) pose_consistency = value != 0;
         if (sscanf(line, "pose_debug=%f", &value) == 1) pose_debug = value != 0;
         if (sscanf(line, "pose_time_fix=%f", &value) == 1) pose_time_fix = value != 0;
@@ -704,6 +706,7 @@ static void flip_on_create_swapchain(XrSwapchain handle, const XrSwapchainCreate
 static int flip_wants_transfer(const XrSwapchainCreateInfo *info);
 static int snap_vk_wants_transfer(const XrSwapchainCreateInfo *info);
 static void clear_gl_errors(const char *where);
+#include "gl_state.c"  // gl_state_guard: GL_GUARDED(...) around runtime calls
 static void flip_on_destroy(XrSwapchain handle);
 static void ab_on_destroy(XrSwapchain handle);
 static void emul_on_create_swapchain(XrSwapchain handle, const XrSwapchainCreateInfo *info);
@@ -836,7 +839,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(XrSession session, const XrSwap
     // Start before the session's ~15-slot cap; leave headroom for 360/video outputs and a second atlas.
     if (pool_should_create(session) && pool_create(session, &fixed, swapchain, 0)) return XR_SUCCESS;
     clear_gl_errors("xrCreateSwapchain");
-    XrResult result = fn(session, &fixed, swapchain);
+    XrResult result = GL_GUARDED("xrCreateSwapchain", fn(session, &fixed, swapchain));
     LOG("xrCreateSwapchain %ux%u format=%lld samples=%u array=%u faces=%u usage=0x%llx flags=0x%llx mips=%u next=%d "
         "result=%d handle=%p",
         fixed.width, fixed.height, (long long)fixed.format, fixed.sampleCount, fixed.arraySize, fixed.faceCount,
@@ -858,14 +861,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(XrSession session, const XrSwap
     // Frame's runtime rejects some GLES formats (GL_RGBA8) and MSAA swapchains (overport #71).
     if (fixed.sampleCount > 1) {
         fixed.sampleCount = 1;
-        result = fn(session, &fixed, swapchain);
+        result = GL_GUARDED("xrCreateSwapchain", fn(session, &fixed, swapchain));
         LOG("  retry samples=1 result=%d", result);
     }
     if (result == XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED) {
         int64_t replacement = pick_format(session, fixed.format);
         if (replacement && replacement != fixed.format) {
             fixed.format = replacement;
-            result = fn(session, &fixed, swapchain);
+            result = GL_GUARDED("xrCreateSwapchain", fn(session, &fixed, swapchain));
             LOG("  retry format=%lld result=%d", (long long)replacement, result);
         }
     }
@@ -1386,13 +1389,13 @@ static void clear_gl_errors(const char *where) {
     static int resolved;
     if (!resolved) {
         resolved = 1;
-        get_error = (unsigned (*)(void))dlsym(RTLD_DEFAULT, "glGetError");
-        current_context = (void *(*)(void))dlsym(RTLD_DEFAULT, "eglGetCurrentContext");
-        if (!get_error || !current_context) {
-            void *gl = dlopen("libGLESv2.so", RTLD_NOW | RTLD_NOLOAD), *egl = dlopen("libEGL.so", RTLD_NOW | RTLD_NOLOAD);
-            if (!get_error && gl) get_error = (unsigned (*)(void))dlsym(gl, "glGetError");
-            if (!current_context && egl) current_context = (void *(*)(void))dlsym(egl, "eglGetCurrentContext");
-        }
+        // the system's GL first: in gl4es games RTLD_DEFAULT finds gl4es's own glGetError (its error state)
+        void *gl = dlopen("libGLESv3.so", RTLD_NOW | RTLD_NOLOAD), *egl = dlopen("libEGL.so", RTLD_NOW | RTLD_NOLOAD);
+        if (!gl) gl = dlopen("libGLESv2.so", RTLD_NOW | RTLD_NOLOAD);
+        if (gl) get_error = (unsigned (*)(void))dlsym(gl, "glGetError");
+        if (egl) current_context = (void *(*)(void))dlsym(egl, "eglGetCurrentContext");
+        if (!get_error) get_error = (unsigned (*)(void))dlsym(RTLD_DEFAULT, "glGetError");
+        if (!current_context) current_context = (void *(*)(void))dlsym(RTLD_DEFAULT, "eglGetCurrentContext");
         LOG("gl_error_clear: %s", get_error && current_context ? "on" : "glGetError/eglGetCurrentContext not found");
     }
     if (!get_error || !current_context || !current_context()) return;
@@ -1579,7 +1582,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(XrSwapchain swapchain, const
     int pooled = pool_find(swapchain);
     if (pooled >= 0) return pool_cycle(pooled, 1, NULL);
     if (is_standin(swapchain) || sw_served_wait(swapchain)) return XR_SUCCESS;
-    XrResult result = fn(swapchain, info);
+    XrResult result = GL_GUARDED("xrWaitSwapchainImage", fn(swapchain, info));
     __atomic_add_fetch(&sc_waits, 1, __ATOMIC_RELAXED);
     if (result != XR_SUCCESS) __atomic_add_fetch(&sc_wait_fails, 1, __ATOMIC_RELAXED);
     return result;
@@ -1590,7 +1593,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(XrSwapchain swapchain, co
     if (!fn) return XR_ERROR_FUNCTION_UNSUPPORTED;
     int pooled = pool_find(swapchain);
     if (is_standin(swapchain) || sw_served_release(swapchain)) return XR_SUCCESS;
-    XrResult result = pooled >= 0 ? pool_cycle(pooled, 2, NULL) : fn(swapchain, info);
+    XrResult result = pooled >= 0 ? pool_cycle(pooled, 2, NULL) : GL_GUARDED("xrReleaseSwapchainImage", fn(swapchain, info));
     if (pooled < 0) __atomic_add_fetch(&sc_releases, 1, __ATOMIC_RELAXED);
     if (XR_SUCCEEDED(result)) flip_on_release(swapchain);
     return result;
@@ -1621,7 +1624,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(XrSwapchain swapchain, co
         emul_on_acquire(swapchain, 0);
         return XR_SUCCESS;
     }
-    XrResult result = fn(swapchain, info, index);
+    XrResult result = GL_GUARDED("xrAcquireSwapchainImage", fn(swapchain, info, index));
     __atomic_add_fetch(&sc_acquires, 1, __ATOMIC_RELAXED);
     if (XR_SUCCEEDED(result) && index) {
         flip_on_acquire(swapchain, *index);
@@ -1912,12 +1915,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(XrSession session, const XrFrameBegi
         XrFrameEndInfo empty = {XR_TYPE_FRAME_END_INFO, NULL, last_begin_display_time ? last_begin_display_time
                                                                                         : last_predicted_time,
                                 XR_ENVIRONMENT_BLEND_MODE_OPAQUE, 0, NULL};
-        XrResult r = end ? end(session, &empty) : XR_ERROR_FUNCTION_UNSUPPORTED;
+        XrResult r = end ? GL_GUARDED("xrEndFrame", end(session, &empty)) : XR_ERROR_FUNCTION_UNSUPPORTED;
         static int logged;
         if (logged++ < 3) LOG("frame_balance: ended an open frame before xrBeginFrame (result %d)", r);
         __atomic_add_fetch(&frame_balanced, 1, __ATOMIC_RELAXED);
     }
-    XrResult result = fn(session, info);
+    XrResult result = GL_GUARDED("xrBeginFrame", fn(session, info));
     wb_after_begin(session, result);
     __atomic_add_fetch(&frame_begins, 1, __ATOMIC_RELAXED);
     if (result == XR_FRAME_DISCARDED) __atomic_add_fetch(&frame_discarded, 1, __ATOMIC_RELAXED);
@@ -1981,7 +1984,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(XrSession session, const XrFrameEndInf
     if ((!swapchain_pool && !cube_standin && !layer_fix && !swap_eyes && !emulate_passthrough && !flip_quads && !flip_emul && !strip_depth && !fade_quad &&
          !hide_space_warp && !space_warp_emul) || !info || !info->layerCount ||
         info->layerCount > 64)
-        return fn(session, info);
+        return GL_GUARDED("xrEndFrame", fn(session, info));
     if (layer_debug) {  // the submitted layer list (order, flags, eyes, chained structs) whenever its shape changes
         static char last[3000];
         char now[3000];
@@ -2435,7 +2438,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(XrSession session, const XrFrameEndInf
             ++views_logged;
         }
     }
-    XrResult result = fn(session, (dropped || swapped || passthrough) ? &fixed : info);
+    XrResult result = GL_GUARDED("xrEndFrame", fn(session, (dropped || swapped || passthrough) ? &fixed : info));
     if (result == XR_ERROR_ENVIRONMENT_BLEND_MODE_UNSUPPORTED && passthrough && !alpha_blend_failed) {
         alpha_blend_failed = 1;  // runtime refuses camera blending: resubmit as a normal opaque frame
         LOG("xrEndFrame: ALPHA_BLEND unsupported, passthrough falls back to opaque");

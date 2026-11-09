@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 213 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 214 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -12,7 +12,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 
 - [Patches from OVRPort](#group-overport) (25)
 - [Steam Frame patches](#group-frame) (74)
-- [Game settings](#group-adapter) (89)
+- [Game settings](#group-adapter) (90)
 - [Files and settings on the Frame](#group-device) (12)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
 
@@ -154,6 +154,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [GL shim: high-precision vertex shaders](#adapter-gl_highp_markers) | `adapter.gl_highp_markers` | Game settings | 1 |
 | [GL shim: integer vertex inputs](#adapter-gl_int_attribs) | `adapter.gl_int_attribs` | Game settings | 1 |
 | [Flat panel diagnostics (log)](#adapter-gl_mv_debug) | `adapter.gl_mv_debug` | Game settings |  |
+| [Keep the game's graphics state (GLES)](#adapter-gl_state_guard) | `adapter.gl_state_guard` | Game settings |  |
 | [Stop buzzing during loading screens](#adapter-haptic_cap) | `adapter.haptic_cap` | Game settings |  |
 | [Fix freezes when controllers vibrate](#adapter-haptic_fix) | `adapter.haptic_fix` | Game settings | 147 |
 | [Vibration strength](#adapter-haptic_scale) | `adapter.haptic_scale` | Game settings |  |
@@ -2043,6 +2044,22 @@ Logs details when flat panels stay black. No effect on the game.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Diagnostics for frame.gl_multiview_fbo: checks for GL errors after every single-view draw of a multiview shader and logs counters every 5 seconds (tag GLMV in launch.log). 2 (frameport settings) also checks every draw and logs the draw state, failed texture uploads and shader compiles and, for idTech 4 engines, the game clock.
+
+### <a id="adapter-gl_state_guard"></a>Keep the game's graphics state (GLES)
+
+Stops videos and pictures from staying black because the headset's own drawing changed the game's graphics settings (for example JKXR's cinematics). Leave it on.
+
+- `adapter.gl_state_guard`
+- **Changes:** Game setting: stored in the build and on the Frame (settings.conf); can be changed without a rebuild.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:**
+  - Value: int, default `1`.
+  - Game settings → Troubleshooting → "Keep the game's graphics state (GLES)" (advanced).
+- **Suggested by launch-test signatures:**
+  - `gl-upload-into-runtime-texture` (error): The game's texture uploads land in a small texture of the headset runtime's, which the runtime left bound in the game's graphics context, so videos or pictures stay black (for example JKXR's cinematics).
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> The Frame's runtime runs OpenGL ES in the game's context inside xrEndFrame and other calls and leaves its own objects bound (a 16x16 texture in JKXR's first frame). Games and gl4es that remember their bindings then upload into the runtime's texture: black cinematics in JKXR (GL_INVALID_VALUE in glTexSubImage2D ... &gt; 16, GitHub #441/#502). FrameBridge saves the active texture unit, the texture bindings on it and on unit 0, framebuffers, program, vertex array, array and unpack buffers and the unpack alignment before such calls and restores what changed. About two dozen glGetIntegerv per guarded call.
 
 ### <a id="adapter-haptic_cap"></a>Stop buzzing during loading screens
 
