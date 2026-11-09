@@ -1107,6 +1107,13 @@ class DisplayMode(Patch):
         ctx.display = ctx.params.get("mode") if ctx.params.get("mode") in ("vr", "flat") else ""
 
 
+def hybrid_panel(extra: dict) -> bool:
+    """A Horizon OS hybrid app (manifest feature oculus.software.vr.app.hybrid, e.g. YouTube VR): it starts as a 2D
+    panel, so like a flat launcher it needs its Android window shown (GitHub #484). Its panel activity is often MAIN +
+    INFO + VR, so the analysis' vr_activity doesn't name it (that's right for single-activity VR games, #476)."""
+    return HybridApp.FEATURE in ((extra or {}).get("features") or {})
+
+
 class TextInputWindow(Patch):
     id = "device.text_input_window"
     title = "Show the app's Android window (for typing)"
@@ -1128,7 +1135,8 @@ class TextInputWindow(Patch):
 
     def applies(self, a):
         extra = a.extra or {}
-        return a.vr_kind != "none" and bool(extra.get("text_fields") or extra.get("vr_activity"))
+        return a.vr_kind != "none" and bool(extra.get("text_fields") or extra.get("vr_activity")
+                                            or hybrid_panel(extra))
 
     def detect(self, a):
         if not self.applies(a):
@@ -1137,6 +1145,9 @@ class TextInputWindow(Patch):
         if vr:  # GitHub #475 (Xelee): headless, its launcher was never seen and never started the VR part
             return Suggestion(True, "The app opens a flat launcher that starts its VR part "
                                     f"({vr.rsplit('.', 1)[-1]}): Lepton runs VR apps headless, so the launcher "
+                                    "is only seen in a shown Android window.")
+        if hybrid_panel(a.extra or {}):  # GitHub #484 (YouTube VR): the 2D panel ran headless, nothing was shown
+            return Suggestion(True, "Hybrid app (oculus.software.vr.app.hybrid): it starts as a 2D panel, which "
                                     "is only seen in a shown Android window.")
         return Suggestion(True, "App with text fields: key presses only reach a shown Android window.")
 

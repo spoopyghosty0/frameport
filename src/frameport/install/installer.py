@@ -44,12 +44,14 @@ def install_context(recipe: Recipe) -> base.InstallContext:
 
 
 def flat_launcher(package: str, recipe: Recipe) -> bool:
-    """The app opens a flat launcher that starts its VR part (analysis vr_activity; GitHub #475 Xelee, WiiCompiled),
-    unless frame.start_activity starts the VR part directly."""
+    """The app opens a flat launcher that starts its VR part (analysis vr_activity; GitHub #475 Xelee, WiiCompiled)
+    or is a hybrid app that starts as a 2D panel (GitHub #484 YouTube VR), unless frame.start_activity starts the VR
+    part directly."""
     from ..core import library
+    from ..patches.settings import hybrid_panel
 
     extra = ((library.game(package) or {}).get("analysis") or {}).get("extra") or {}
-    return bool(extra.get("vr_activity")) and "frame.start_activity" not in recipe.patches
+    return (bool(extra.get("vr_activity")) or hybrid_panel(extra)) and "frame.start_activity" not in recipe.patches
 
 
 def deployment_recipe(recipe: Recipe) -> dict:

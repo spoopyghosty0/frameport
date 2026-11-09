@@ -1138,3 +1138,25 @@ def test_flat_launcher_apps_get_the_android_window_and_keep_theater(monkeypatch)
     direct = Recipe(package="dev.melee.game", patches={**window, "frame.start_activity": {}})
     assert "flat_launcher" not in installer.deployment_recipe(direct)  # starts the VR part itself
     assert "flat_launcher" not in installer.deployment_recipe(Recipe(package="com.x.vr", patches=window))
+
+
+def test_hybrid_panel_apps_get_the_android_window(monkeypatch):
+    """GitHub #484 (YouTube VR): its 2D panel activity is MAIN + INFO + VR, which analysis 28 rightly no longer takes
+    for a flat launcher (#476), so the panel ran headless and nothing was shown. The manifest feature
+    oculus.software.vr.app.hybrid brings the window (and theater mode) back; a single MAIN + INFO + VR game without
+    it (PadelVR, #476) still gets neither."""
+    from frameport.core import library
+    from frameport.install import installer
+
+    patch = base.get("device.text_input_window")
+    padel = _analysis(extra={"size": 1, "vr_activity": None, "features": {"android.hardware.vr.headtracking": True}})
+    assert not patch.applies(padel) and patch.detect(padel) is None
+    youtube = _analysis(extra={"size": 1, "vr_activity": None,
+                               "features": {"oculus.software.vr.app.hybrid": False}})  # required="false"
+    s = patch.detect(youtube)
+    assert patch.applies(youtube) and s and s.recommended and "Hybrid" in s.reason
+    games = {"yt": {"analysis": {"extra": youtube.extra}}, "padel": {"analysis": {"extra": padel.extra}}}
+    monkeypatch.setattr(library, "game", lambda pkg: games.get(pkg))
+    window = {"device.text_input_window": {}}
+    assert installer.deployment_recipe(Recipe(package="yt", patches=window))["flat_launcher"]
+    assert "flat_launcher" not in installer.deployment_recipe(Recipe(package="padel", patches=window))
