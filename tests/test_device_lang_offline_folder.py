@@ -5,7 +5,7 @@ import os
 import subprocess
 
 import pytest
-from test_steam_gamepad import LEPTON, NEEDS_POSIX, RUN, agent_module, anchor
+from test_steam_gamepad import LEPTON, NEEDS_POSIX, agent_module, anchor
 
 from frameport.core.models import Recipe
 from frameport.install.installer import install_context
@@ -110,32 +110,89 @@ def test_offline_patch_sets_its_variable():
 
 
 @NEEDS_POSIX
-def test_offline_container_gets_no_network(monkeypatch, tmp_path):
+def test_offline_keeps_leptons_network_options(monkeypatch, tmp_path):
+    """Lepton installs the APK over the container's network (adb through pasta's port forward): it stays."""
     agent = agent_module(monkeypatch, tmp_path)
     env = {"FRAMEPORT_OFFLINE": "1", "SteamAppId": "123"}
-    lepton = ["run", "--network", "slirp4netns", "--dns=1.1.1.1", "--add-host", "a:1.2.3.4", "--name",
-              "lepton-steamlaunch-123", "--network-alias=x", "--rootfs", "/lepton/rootfs:O", "/init", "-p"]
-    out = agent.podman_run_args(lepton, env, str(tmp_path / "sys"), str(tmp_path / "dev"))
-    assert out == ["run", "--network=none", "--name", "lepton-steamlaunch-123", "--rootfs", "/lepton/rootfs:O",
-                   "/init", "-p"]
-    assert agent.podman_run_args(RUN, env, "/x", "/x") == ["run", "--network=none", *RUN[1:]]
-    assert agent.podman_run_args(RUN, dict(env, SteamAppId="9"), "/x", "/x") == RUN  # another container
-    assert agent.podman_run_args(RUN, dict(env, FRAMEPORT_OFFLINE=""), "/x", "/x") == RUN
-    assert agent.podman_run_args(["ps", "--network", "x"], env, "/x", "/x") == ["ps", "--network", "x"]
+    lepton = ["run", "--network", "pasta:-t,5555", "--name", "lepton-steamlaunch-123", "/init"]
+    assert agent.podman_run_args(lepton, env, str(tmp_path / "sys"), str(tmp_path / "dev")) == lepton
 
 
-def test_offline_launcher_puts_the_wrapper_on_path(monkeypatch, tmp_path):
+class FakeRunner:
+    """podman inspect / podman unshare nsenter … calls, answered from a script."""
+
+    def __init__(self, pids, nft_ok=True, ipt_ok=True):
+        self.pids, self.nft_ok, self.ipt_ok, self.calls = list(pids), nft_ok, ipt_ok, []
+
+    def __call__(self, cmd, **kw):
+        from types import SimpleNamespace
+
+        self.calls.append((cmd, kw.get("input")))
+        if cmd[:2] == ["podman", "inspect"]:
+            pid = self.pids.pop(0) if len(self.pids) > 1 else self.pids[0]
+            return SimpleNamespace(returncode=0 if pid else 125, stdout=f"{pid}\n" if pid else "", stderr="")
+        assert cmd[:5] == ["podman", "unshare", "nsenter", "-t", cmd[4]] and cmd[5] == "-n"
+        tool = cmd[6]
+        ok = self.nft_ok if tool == "nft" else self.ipt_ok
+        if tool == "nft" and cmd[7] == "delete":
+            ok = False  # nothing to delete the first time
+        return SimpleNamespace(returncode=0 if ok else 1, stdout="", stderr="" if ok else f"{tool}: not found")
+
+
+def run_guard(agent, runner, rounds):
+    alive = iter([True] * rounds + [False])
+    agent.offline_guard("123", "1", runner=runner, alive=lambda pid: next(alive), sleep=lambda s: None,
+                        now=iter(range(0, 10000, 20)).__next__)
+
+
+def test_offline_guard_blocks_new_connections_in_the_containers_namespace(monkeypatch, tmp_path, capsys):
     agent = agent_module(monkeypatch, tmp_path)
-    plain = LEPTON.format(lines="export FRAMEPORT_OFFLINE=1\n")
-    directory = anchor(tmp_path, "com.game", plain)
-    old = anchor(tmp_path, "com.old", LEPTON.format(lines="export FRAMEPORT_FEATURES=a.b\n"
+    runner = FakeRunner([0, 0, 4242])  # the container comes up on the third look
+    run_guard(agent, runner, 4)
+    loads = [(c, i) for c, i in runner.calls if c[-2:] == ["-f", "-"]]
+    assert len(loads) == 1 and loads[0][0][:7] == ["podman", "unshare", "nsenter", "-t", "4242", "-n", "nft"]
+    rules = loads[0][1]
+    for line in ('oifname "lo" accept', "ct state established,related accept", "reject"):
+        assert line in rules  # adb's connections come in through pasta's port forward: their replies pass
+    assert "new outbound connections blocked (nft)" in capsys.readouterr().out
+    assert any(c[-4:] == ["list", "table", "inet", agent.OFFLINE_TABLE] for c, _ in runner.calls)  # checked again
+
+
+def test_offline_guard_falls_back_to_iptables_and_follows_a_new_container(monkeypatch, tmp_path, capsys):
+    agent = agent_module(monkeypatch, tmp_path)
+    runner = FakeRunner([10, 10, 20, 20], nft_ok=False)  # Unreal's self-restart: a second container
+    run_guard(agent, runner, 4)
+    inserted = [c for c, _ in runner.calls if "-I" in c]
+    assert {c[4] for c in inserted} == {"10", "20"} and {c[6] for c in inserted} == {"iptables", "ip6tables"}
+    assert inserted[0][-2:] == ["-j", "REJECT"]  # inserted in reverse: loopback/established end up first
+    out = capsys.readouterr().out
+    assert out.count("blocked (iptables)") == 2
+
+
+def test_offline_guard_says_when_it_cant(monkeypatch, tmp_path, capsys):
+    agent = agent_module(monkeypatch, tmp_path)
+    run_guard(agent, FakeRunner([7], nft_ok=False, ipt_ok=False), 3)
+    assert capsys.readouterr().out.count("could NOT block its network") == 1  # once, not every retry
+
+
+def test_offline_launcher_line(monkeypatch, tmp_path):
+    agent = agent_module(monkeypatch, tmp_path)
+    directory = anchor(tmp_path, "com.game", LEPTON.format(lines="export FRAMEPORT_OFFLINE=1\n"))
+    dev = anchor(tmp_path, "com.dev", LEPTON.format(lines="export FRAMEPORT_OFFLINE=1\n"
                                                      + agent.OLD_FEATURES_LINES[0] + "\n"))
     agent.upgrade_launchers()
-    assert (directory / "launch.sh").read_text().count(agent.FEATURES_LINE) == 1
-    text = (old / "launch.sh").read_text()
-    assert text.count(agent.FEATURES_LINE) == 1 and agent.OLD_FEATURES_LINES[0] not in text
-    source = open(os.path.join(ROOT, "agent/frameport_agent.py")).read()
-    assert 'get("FRAMEPORT_OFFLINE", "")) == "1"  # device.offline' in source
+    for d in (directory, dev):
+        text = (d / "launch.sh").read_text()
+        assert text.count(" _offline_guard ") == 1 and text.index("child=''") < text.index(" _offline_guard ")
+        assert agent.FEATURES_LINE not in text and agent.OLD_FEATURES_LINES[0] not in text
+    assert agent.upgrade_launchers() == []
+    target = tmp_path / "apps/new"
+    target.mkdir(parents=True)
+    agent.write_launcher(str(target), str(tmp_path / "base"), "com.x", "X", 123, "/lepton/lepton",
+                         {"FRAMEPORT_OFFLINE": "1"})
+    assert (target / "launch.sh").read_text().count(" _offline_guard ") == 1
+    agent.write_launcher(str(target), str(tmp_path / "base"), "com.x", "X", 123, "/lepton/lepton", {})
+    assert " _offline_guard " not in (target / "launch.sh").read_text()
 
 
 # ------------------------------------------------------------------------------------------- extra folder (#501)

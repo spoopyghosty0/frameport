@@ -978,15 +978,17 @@ class SharedFolder(Patch):
 class Offline(Patch):
     id = "device.offline"
     title = "Offline (no network)"
-    description = ("Starts this game's Android container without network (Podman --network=none through FramePort's "
-                   "Podman wrapper, in place of Lepton's own network options), e.g. to stop the ads of an app that "
-                   "also works offline (Discussion #505). Everything online stops working for this game: sign-in, "
-                   "multiplayer, leaderboards, downloads, store purchases, cloud saves. Steam and other games keep "
-                   "their network. The APK isn't changed; applied with Update on Frame.")
+    description = ("Blocks this game's connections to the network, e.g. to stop the ads of an app that also works "
+                   "offline (Discussion #505): once its Android container is up, FramePort adds a firewall rule to "
+                   "the container's own network that refuses every new outbound connection (DNS included); Lepton "
+                   "keeps the connection it needs to install the app. Everything online stops working for this "
+                   "game: sign-in, multiplayer, leaderboards, downloads, store purchases, cloud saves. Steam and "
+                   "other games keep their network. The APK isn't changed; applied with Update on Frame. Log: "
+                   "<game folder>/offline.log.")
     category = "device"
     needs_vr = False
-    stage = "install"  # the launcher exports FRAMEPORT_OFFLINE; the agent's Podman wrapper drops the network
-    experimental = True  # unverified on the device: whether Lepton itself needs the container's network
+    stage = "install"  # the launcher exports FRAMEPORT_OFFLINE; its line starts the agent's _offline_guard
+    experimental = True  # first connections in the seconds before the guard has the container's pid may get through
     ENV_KEY = "FRAMEPORT_OFFLINE"
 
     def applies(self, a):

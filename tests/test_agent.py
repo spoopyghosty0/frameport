@@ -1138,7 +1138,8 @@ def test_boot_state_finds_unclean_previous_boot_and_last_launch(monkeypatch, tmp
     monkeypatch.setattr(a, "boot_pon_reason", lambda: {"kind": "power_loss", "trigger": "SPML"})
     st = a.boot_state()
     assert st == {"boot_id": "abc", "boot_time": 2000, "prev_clean": False, "prev_reason": "power_loss",
-                  "pon_trigger": "SPML", "last_launch": {"package": "com.x", "title": "X", "time": 1000.0}}
+                  "pon_trigger": "SPML", "pon_poff_reason": None, "pon_fault_reason": None,
+                  "pon_agent": a.AGENT_VERSION, "last_launch": {"package": "com.x", "title": "X", "time": 1000.0}}
     monkeypatch.setattr(a, "run", lambda cmd, **kw: SimpleNamespace(stdout="Reached target System Power Off\n"))
     assert a.boot_state()["prev_clean"] is False  # cached for this boot: worked out once
 

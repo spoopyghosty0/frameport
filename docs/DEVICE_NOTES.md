@@ -27,11 +27,19 @@ now an explicit choice, the empty value means Steam's language. Off for one star
 
 ## Offline games and an extra shared folder (Discussions #505, #501, agent v126)
 
-Not yet checked on the device. `device.offline` exports `FRAMEPORT_OFFLINE=1`; the features line (now also for that
-variable) puts FramePort's Podman wrapper on PATH, and `podman_run_args` replaces Lepton's network options
-(`--network`, `--net`, `--dns*`, `--add-host`, `--publish*`, `--ip*`, `--mac-address`, `--network-alias`; short forms
-aren't matched) with `--network=none`, logging what it removed to launch.log. Open question: whether Lepton itself needs
-the container's network (ADB over TCP, the steam.pipe hand-offs are files); check headless first.
+`device.offline` exports `FRAMEPORT_OFFLINE=1`. A first version started the container with `--network=none`; on the
+dev Frame (2026-11-09) that hung every start after "Installing …game.apk…": Lepton installs the APK at every start
+("Clearing baked app data") with `adb connect localhost:<adb_port>` + `adb install` through pasta's `-t` port forward
+(liblepton.sh), so `adb wait-for-device` never returned. Now Lepton's pasta network stays and the launcher's
+`OFFLINE_LINE` (after `child=''`) starts the agent's `_offline_guard`: it polls `podman inspect` for the container's
+pid and loads an nftables table (`frameport_offline`, output hook: accept `lo`, ICMP, conntrack established/related;
+TCP reset / reject for everything new) into the container's network namespace from the host (`podman unshare nsenter
+-t <pid> -n nft -f -`: needs no tool or capability inside Lepton's Android; Android's netd iptables rules are other
+tables). adb's connections arrive through the port forward, so their replies are "established" and pass. Fallback:
+the host's iptables/ip6tables in that namespace's OUTPUT chain. It re-checks every 10 s and follows a new container
+(Unreal's self-restart). Log: `<base>/offline.log`. Still to check on the device: that nsenter/nft work there, and
+that the app's first connection doesn't beat the guard (the container is blocked within ~0.5 s of starting, Android
+takes several seconds to boot).
 
 `device.extra_folder` exports `FRAMEPORT_FOLDER=<path relative to home>`; `FOLDER_LINES` (after `child=''`) runs the
 agent's `_extra_folder`, which checks the folder (inside home, exists, no hidden component, real path inside home),
@@ -46,12 +54,16 @@ wrapper because that is Lepton's own, device-checked route for Documents and #44
 ## Power loss, not a game (GitHub #598, agent v126)
 
 A #598 diagnostics zip's `this-boot-kernel.txt` had the PMIC's power-on reason: `qcom-pon …: PON_PON_REASON1 0x02`
-(bit 1 = SMPL) and `PON: trigger: SPML` (the driver's spelling of SMPL, sudden momentary power loss). `boot_state`
-now reads `journalctl -k -b 0` for the `qcom-pon` lines once per boot (`pon_reason`: `PON: trigger:` words, else
-PON_PON_REASON1's bits) and returns `prev_reason` (power_loss / power_key / hard_reset / charger / reboot / other) and
-`pon_trigger`; the GUI (`ui/restart.power_loss_game`) then says the Frame lost power instead of naming the last game.
-What the trigger line says after a normal power-on, a held power key or a software reboot is still to be seen on the
-device.
+(bit 1 = SMPL) and `PON: trigger: SPML` (the driver's spelling of SMPL, sudden momentary power loss). The dev Frame
+(kernel 6.18, SteamOS 0.5.6, 2026-11-09) logs another format without the driver prefix and with codes:
+`PON: trigger [0x80]: KPDPWR_N`, `PON: warm_reset_reason [0x02]: RESIN_N`, `PON: poff_reason [0x02]: PS_HOLD`,
+`PON: off_reason [0x80]: POFF_SEQ`, `PON: fault_reason1 [0x00]: none`; earlier boots `PON: trigger [0x08]: DC_CHG`
+and `HARD_RESET`. `boot_state` reads `journalctl -k -b 0` for the PON lines (`pon_reason`: all `PON: <field>
+[code]: <words>` lines, else PON_PON_REASON1's bits) and returns `prev_reason` (power_loss when the trigger, the
+poff_reason or a fault_reason names SMPL/SPML/UVLO; else power_key / hard_reset / charger / reboot / other from the
+trigger), `pon_trigger`, `pon_poff_reason`, `pon_fault_reason`. An unknown reason is read again by a newer agent
+(`pon_agent`) and during a boot's first 5 minutes. The GUI (`ui/restart.power_loss_game`) then says the Frame lost
+power instead of naming the last game. What a real power loss logs in the new format is still to be seen.
 
 ## a32 bridge: games, lessons, debugging aids, profiling
 

@@ -2912,7 +2912,7 @@ Choose Flat window if a phone or tablet app shows nothing in the headset, VR if 
 
 ### <a id="device-extra_folder"></a>Share a folder of the Frame
 
-Makes a folder of the Frame (e.g. ROMs) available to this game in its storage, like Videos, Downloads and Documents.
+Makes a folder of the Frame (for example ROMs) available to this game in its storage, like Videos, Downloads and Documents.
 
 - `device.extra_folder` · also for 2D apps
 - **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
@@ -3017,14 +3017,14 @@ Extra settings for the Android container (for testing).
 
 ### <a id="device-offline"></a>Offline (no network)
 
-Starts this game without network, e.g. to stop ads in an app that also works offline. Online features (sign-in, multiplayer, downloads, cloud saves) stop working.
+Blocks this game's network connections, for example to stop ads in an app that also works offline. Online features (sign-in, multiplayer, downloads, cloud saves) stop working.
 
 - `device.offline` · experimental · also for 2D apps
 - **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
 - **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
-> Starts this game's Android container without network (Podman --network=none through FramePort's Podman wrapper, in place of Lepton's own network options), e.g. to stop the ads of an app that also works offline (Discussion #505). Everything online stops working for this game: sign-in, multiplayer, leaderboards, downloads, store purchases, cloud saves. Steam and other games keep their network. The APK isn't changed; applied with Update on Frame.
+> Blocks this game's connections to the network, e.g. to stop the ads of an app that also works offline (Discussion #505): once its Android container is up, FramePort adds a firewall rule to the container's own network that refuses every new outbound connection (DNS included); Lepton keeps the connection it needs to install the app. Everything online stops working for this game: sign-in, multiplayer, leaderboards, downloads, store purchases, cloud saves. Steam and other games keep their network. The APK isn't changed; applied with Update on Frame. Log: &lt;game folder&gt;/offline.log.
 
 ### <a id="device-shared_folder"></a>Share a folder with another game
 

@@ -105,14 +105,13 @@ PAD_DIR = "/dev/fp-input"  # the host's /dev/input inside the container
 # (YouTube) only leave their 2D panel for VR when the system has oculus.software.vr.app.hybrid. The launcher exports
 # FRAMEPORT_FEATURES (the patch's env) and puts the Podman wrapper on PATH; the wrapper mounts a permissions file that
 # declares them (Android reads /system/etc/permissions at every container start).
-# The same line puts the wrapper on PATH for a game started without network (device.offline: FRAMEPORT_OFFLINE=1,
-# Discussion #505; podman_run_args gives its container --network=none).
-FEATURES_LINE = ('[[ -z "${FRAMEPORT_FEATURES:-}${FRAMEPORT_OFFLINE:-}" || '
-                 '! -x "$HOME/.local/share/frameport/agent/bin/podman" ]] || '
+FEATURES_LINE = ('[[ -z "${FRAMEPORT_FEATURES:-}" || ! -x "$HOME/.local/share/frameport/agent/bin/podman" ]] || '
                  'export PATH="$HOME/.local/share/frameport/agent/bin:$PATH"')
-OLD_FEATURES_LINES = ('[[ -z "${FRAMEPORT_FEATURES:-}" || ! -x "$HOME/.local/share/frameport/agent/bin/podman" ]] || '
+# a development build's line (also for FRAMEPORT_OFFLINE, when device.offline used --network=none: Lepton's adb install
+# goes through the container's network, so that never started a game)
+OLD_FEATURES_LINES = ('[[ -z "${FRAMEPORT_FEATURES:-}${FRAMEPORT_OFFLINE:-}" || '
+                      '! -x "$HOME/.local/share/frameport/agent/bin/podman" ]] || '
                       'export PATH="$HOME/.local/share/frameport/agent/bin:$PATH"',)
-WRAPPER_ENV = ("FRAMEPORT_FEATURES", "FRAMEPORT_OFFLINE")  # launcher exports that need the features line
 FEATURES_TARGET = "/system/etc/permissions/frameport-features.xml"
 
 
@@ -884,56 +883,66 @@ CLEAN_SHUTDOWN = ("Reached target System Power Off", "Reached target System Rebo
                   "System is powering down", "System is rebooting", "systemd-shutdown", "Power-Off", "Rebooting.")
 
 
-# Why the Frame's power chip (Qualcomm PMIC) started this boot: the kernel's qcom-pon driver logs it once at boot
-# ("PON: trigger: SPML" (sic: SMPL, "sudden momentary power loss"), PON_PON_REASON1 0x02, ...). A sudden power loss
-# (SMPL; UVLO = the battery voltage fell too low) means the previous boot ended without power, not by a game crash
-# (GitHub #598). Kinds: power_loss, power_key (pressed), hard_reset (power key held / PMIC reset), charger (plugged
-# in), reboot (PS_HOLD: software reset), other.
-PON_TRIGGERS = (("power_loss", ("SMPL", "SPML", "UVLO")), ("power_key", ("KPDPWR",)),
+# Why the Frame's power chip (Qualcomm PMIC) started this boot and how the previous one ended: the kernel's PON driver
+# logs it once at boot. Two formats seen: the #598 zip's `qcom-pon c400000.spmi:pmic@0:pon@1300: PON: trigger: SPML`
+# (sic: SMPL, "sudden momentary power loss") with `PON_PON_REASON1 0x02` lines, and kernel 6.18 / SteamOS 0.5.6's
+# `PON: trigger [0x80]: KPDPWR_N`, `PON: warm_reset_reason [0x02]: RESIN_N`, `PON: poff_reason [0x02]: PS_HOLD`,
+# `PON: off_reason [0x80]: POFF_SEQ`, `PON: fault_reason1 [0x00]: none` (no device prefix). A sudden power loss (SMPL;
+# UVLO = the battery voltage fell too low) in the trigger, the power-off or the fault reasons means the previous boot
+# ended without power, not by a game crash (GitHub #598). Kinds: power_loss, power_key (pressed), hard_reset (power key
+# held / PMIC reset), charger (plugged in), reboot (PS_HOLD: software reset), other.
+PON_LOSS = ("SMPL", "SPML", "UVLO")
+PON_TRIGGERS = (("power_loss", PON_LOSS), ("power_key", ("KPDPWR",)),
                 ("hard_reset", ("HARD RESET", "HARD_RESET")), ("charger", ("USB_CHG", "DC_CHG", "CBLPWR")),
                 ("reboot", ("PS_HOLD", "PSHOLD", "WARM")))
 # PON_PON_REASON1 bits (Qualcomm PMICs): 0 hard reset, 1 SMPL, 2 RTC, 3 DC charger, 4 USB charger, 5 PON1,
 # 6 cable power, 7 power key
 PON_REASON_BITS = ((1, "SMPL", "power_loss"), (7, "KPDPWR_N", "power_key"), (0, "HARD_RESET", "hard_reset"),
                    (4, "USB_CHG", "charger"), (3, "DC_CHG", "charger"), (6, "CBLPWR_N", "charger"))
-PON_TRIGGER_RE = re.compile(r"qcom-pon\b.*?PON: trigger: ([^\r\n]+)")
-PON_REASON1_RE = re.compile(r"qcom-pon\b.*?PON_PON_REASON1 (0x[0-9a-fA-F]+)")
+PON_FIELD_RE = re.compile(r"\bPON: ([a-z_]+[0-9]*)(?: \[(0x[0-9a-fA-F]+)\])?: ([^\r\n]+)")
+PON_REASON1_RE = re.compile(r"\bPON_PON_REASON1 (0x[0-9a-fA-F]+)")
 
 
 def pon_reason(text):
-    """{"kind", "trigger"} from a boot's kernel log (the qcom-pon lines), or None when it has none."""
-    m = PON_TRIGGER_RE.search(text or "")
-    if m:
-        trigger = m.group(1).strip()
-        upper = trigger.upper()
+    """{"kind", "trigger", "poff_reason", "fault_reason"} from a boot's kernel log (its PON lines), or None when it
+    has none. The kind is power_loss when the trigger or a power-off/fault reason names one, else the trigger's."""
+    fields = {}
+    for m in PON_FIELD_RE.finditer(text or ""):
+        fields.setdefault(m.group(1).lower(), m.group(3).strip())
+    trigger = fields.get("trigger")
+    if trigger is None:
+        m = PON_REASON1_RE.search(text or "")
+        if m:
+            bits = int(m.group(1), 16)
+            trigger = next((name for bit, name, _kind in PON_REASON_BITS if bits >> bit & 1), m.group(1))
+    faults = [v for k, v in fields.items() if k.startswith("fault_reason") and v.lower() != "none"]
+    if trigger is None and not faults and "poff_reason" not in fields:
+        return None
+    ended = " ".join([fields.get("poff_reason", ""), *faults]).upper()
+    upper = (trigger or "").upper()
+    if any(w in upper or w in ended for w in PON_LOSS):
+        kind = "power_loss"
+    else:
         kind = next((k for k, words in PON_TRIGGERS if any(w in upper for w in words)), "other")
-        return {"kind": kind, "trigger": trigger}
-    m = PON_REASON1_RE.search(text or "")
-    if m:
-        bits = int(m.group(1), 16)
-        for bit, name, kind in PON_REASON_BITS:
-            if bits >> bit & 1:
-                return {"kind": kind, "trigger": name}
-        return {"kind": "other", "trigger": m.group(1)}
-    return None
+    return {"kind": kind, "trigger": trigger, "poff_reason": fields.get("poff_reason"),
+            "fault_reason": ", ".join(faults) or None}
 
 
 def boot_pon_reason():
-    """pon_reason of this boot's kernel log (journalctl -k -b 0; the lines come early, so it reads at most the first
-    20000 lines), or None."""
+    """pon_reason of this boot's kernel log (journalctl -k -b 0; the lines come early: it reads at most the first
+    20000 lines and stops 200 lines after the first PON line), or None."""
     try:
         proc = subprocess.Popen(["journalctl", "-k", "-b", "0", "-q", "--no-pager", "-o", "cat"],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, errors="replace")
     except OSError:
         return None
-    lines = []
+    lines, first = [], None
     try:
         for i, line in enumerate(proc.stdout):
-            if "qcom-pon" in line:
+            if "PON: " in line or "PON_PON_REASON1" in line:
                 lines.append(line)
-                if "PON: trigger:" in line:
-                    break
-            if i > 20000:
+                first = i if first is None else first
+            if i > 20000 or (first is not None and i - first > 200):
                 break
     finally:
         proc.kill()
@@ -943,10 +952,11 @@ def boot_pon_reason():
 
 def boot_state():
     """This boot and how the previous one ended: {"boot_id", "boot_time", "prev_clean" (True/False/None = unknown),
-    "prev_reason" (why the power chip started this boot: pon_reason's kind, e.g. "power_loss", or None),
-    "pon_trigger" (its words), "last_launch" ({"package", "title", "time"}: the FramePort game started last before
-    this boot)}. Worked out once per boot (cached), so the app can say "your Frame restarted while <game> was
-    running" (or that it lost power)."""
+    "prev_reason" (from the power chip: pon_reason's kind, e.g. "power_loss", or None), "pon_trigger",
+    "pon_poff_reason", "pon_fault_reason" (its words), "last_launch" ({"package", "title", "time"}: the FramePort
+    game started last before this boot)}. Worked out once per boot (cached), so the app can say "your Frame restarted
+    while <game> was running" (or that it lost power). An unknown power-on reason is read again by a newer agent and
+    during a boot's first 5 minutes (the kernel log may not be in the journal yet)."""
     try:
         boot_id = open("/proc/sys/kernel/random/boot_id").read().strip()
     except OSError:
@@ -954,8 +964,11 @@ def boot_state():
     try:
         cached = json.load(open(BOOT_STATE))
         if cached.get("boot_id") == boot_id and "prev_reason" in cached:  # (agent <= 125 had no prev_reason)
-            return cached
-    except (OSError, ValueError, AttributeError):
+            if cached.get("prev_reason") is not None or (cached.get("pon_agent") == AGENT_VERSION and
+                                                         time.time() - (cached.get("boot_time") or 0) > 300):
+                return cached
+            return save_boot_state({**cached, **pon_fields(boot_pon_reason())})
+    except (OSError, ValueError, AttributeError, TypeError):
         pass
     boot_time = None
     try:
@@ -978,9 +991,18 @@ def boot_state():
             continue
         if (boot_time is None or t < boot_time) and (last is None or t > last["time"]):
             last = {"package": d["package"], "title": d.get("title") or d["package"], "time": t}
-    pon = boot_pon_reason() or {}
-    state = {"boot_id": boot_id, "boot_time": boot_time, "prev_clean": prev_clean, "prev_reason": pon.get("kind"),
-             "pon_trigger": pon.get("trigger"), "last_launch": last}
+    return save_boot_state({"boot_id": boot_id, "boot_time": boot_time, "prev_clean": prev_clean,
+                            **pon_fields(boot_pon_reason()), "last_launch": last})
+
+
+def pon_fields(pon):
+    pon = pon or {}
+    return {"prev_reason": pon.get("kind"), "pon_trigger": pon.get("trigger"),
+            "pon_poff_reason": pon.get("poff_reason"), "pon_fault_reason": pon.get("fault_reason"),
+            "pon_agent": AGENT_VERSION}
+
+
+def save_boot_state(state):
     try:
         os.makedirs(os.path.dirname(BOOT_STATE), exist_ok=True)
         with open(BOOT_STATE, "w") as f:
@@ -4012,6 +4034,121 @@ def extra_folder_cleanup(base, value=None, home=HOME):
         pass
 
 
+# A game without network (device.offline, Discussion #505): Lepton keeps its own container network (pasta), because it
+# installs the APK at every start over it (`adb connect localhost:<port>` through pasta's -t port forward; with
+# --network=none `adb wait-for-device` hung for good). Once the container is up, _offline_guard adds an nftables table
+# to the container's network namespace (entered from the host: `podman unshare nsenter -t <pid> -n nft`, so it needs
+# no tool or capability inside Lepton's Android): its output chain accepts loopback, ICMP and replies (conntrack
+# established/related: adb's connections come in through the port forward) and rejects every new outbound connection,
+# DNS included. Android's own iptables rules (netd) live in other tables and can't remove it. Without nft the host's
+# iptables/ip6tables do the same in the OUTPUT chain. The guard checks the table every OFFLINE_CHECK s and adds it
+# again to a new container (Unreal's self-restart) while the launcher runs. Log: <base>/offline.log.
+OFFLINE_ENV = "FRAMEPORT_OFFLINE"
+OFFLINE_LINE = ('[[ "${{FRAMEPORT_OFFLINE:-}}" != 1 ]] || python3 {agent_q} _offline_guard "$SteamAppId" $$ '
+                '>"$app_dir/offline.log" 2>&1 9>&- &  # FramePort: no network for this game (device.offline)')
+OFFLINE_TABLE = "frameport_offline"
+OFFLINE_NFT = f"""table inet {OFFLINE_TABLE} {{
+    chain out {{
+        type filter hook output priority -10; policy accept;
+        oifname "lo" accept
+        ct state established,related accept
+        meta l4proto {{ icmp, ipv6-icmp }} accept
+        meta l4proto tcp reject with tcp reset
+        reject
+    }}
+}}
+"""
+OFFLINE_IPT = [["-o", "lo", "-j", "ACCEPT"], ["-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"],
+               ["-p", "tcp", "-j", "REJECT", "--reject-with", "tcp-reset"], ["-j", "REJECT"]]
+OFFLINE_CHECK = 10
+
+
+def set_offline_line(text, wanted):
+    """OFFLINE_LINE after `child=''` (before Lepton starts), once, when the recipe has device.offline."""
+    text = "".join(line for line in text.splitlines(True) if " _offline_guard " not in line)
+    if not wanted or "\nchild=''\n" not in text:
+        return text
+    line = OFFLINE_LINE.format(agent_q=shlex.quote(os.path.abspath(__file__)))
+    return text.replace("\nchild=''\n", "\nchild=''\n" + line + "\n", 1)
+
+
+def container_pid(container, runner=run):
+    """The host pid of a running container's first process, or 0."""
+    try:
+        p = runner(["podman", "inspect", "--format", "{{.State.Pid}}", container], timeout=20)
+        return int(p.stdout.strip() or 0) if p.returncode == 0 else 0
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return 0
+
+
+def netns_cmd(pid, cmd):
+    return ["podman", "unshare", "nsenter", "-t", str(int(pid)), "-n", *cmd]
+
+
+def block_network(pid, runner=run):
+    """Reject new outbound connections in the network namespace of `pid` (see OFFLINE_NFT): (method or None,
+    detail). Idempotent: an existing table is replaced."""
+    errors = []
+    try:
+        runner(netns_cmd(pid, ["nft", "delete", "table", "inet", OFFLINE_TABLE]), timeout=20)
+        p = runner(netns_cmd(pid, ["nft", "-f", "-"]), input=OFFLINE_NFT, timeout=20)
+        if p.returncode == 0:
+            return "nft", ""
+        errors.append(f"nft: {(p.stderr or p.stdout).strip()[:300]}")
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        errors.append(f"nft: {exc}")
+    try:
+        for tool in ("iptables", "ip6tables"):
+            for rule in reversed(OFFLINE_IPT):  # -I 1 in reverse: the rules end up in OFFLINE_IPT's order, first
+                p = runner(netns_cmd(pid, [tool, "-I", "OUTPUT", "1", *rule]), timeout=20)
+                if p.returncode != 0:
+                    raise AgentError(f"{tool}: {(p.stderr or p.stdout).strip()[:300]}")
+        return "iptables", ""
+    except (OSError, subprocess.TimeoutExpired, AgentError) as exc:
+        errors.append(str(exc))
+    return None, "; ".join(errors)
+
+
+def network_blocked(pid, method, runner=run):
+    """Whether the rules `method` added are still in the namespace of `pid`."""
+    try:
+        if method == "nft":
+            return runner(netns_cmd(pid, ["nft", "list", "table", "inet", OFFLINE_TABLE]), timeout=20).returncode == 0
+        return runner(netns_cmd(pid, ["iptables", "-C", "OUTPUT", *OFFLINE_IPT[-1]]), timeout=20).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def offline_guard(appid, parent, runner=run, alive=None, sleep=time.sleep, now=time.monotonic):
+    """While the launcher (parent) runs: keep the game's container without outbound network (device.offline)."""
+    container = f"lepton-steamlaunch-{int(appid)}"
+    alive = alive or pid_alive
+
+    def say(text):
+        print(f"{time.strftime('%H:%M:%S')} {text}", flush=True)
+    blocked, method, checked, failed = 0, None, 0.0, None
+    while alive(int(parent)):
+        pid = container_pid(container, runner)
+        if pid and pid != blocked:
+            method, detail = block_network(pid, runner)
+            if method:
+                say(f"container {container} (pid {pid}): new outbound connections blocked ({method})")
+                blocked, checked = pid, now()
+            else:
+                if detail != failed:
+                    say(f"container {container} (pid {pid}): could NOT block its network: {detail}")
+                    failed = detail
+                sleep(5.0)
+                continue
+        elif pid and now() - checked >= OFFLINE_CHECK:
+            checked = now()
+            if not network_blocked(pid, method, runner):
+                say("the rules were gone: adding them again")
+                blocked = 0
+                continue
+        sleep(0.5 if pid != blocked else 3.0)
+
+
 def upgrade_launchers():
     """Give launchers written by older agents the parent watchdog, the dashboard closer and the play-session log (in
     place: a new file, so a running launcher keeps reading the old one). Returns the packages changed."""
@@ -4031,7 +4168,8 @@ def upgrade_launchers():
             new = set_codec_line(new, wants_hw_video(os.path.dirname(path)))
             new = set_tz_line(new)
             new = set_gamepad_line(new, wants_gamepad(os.path.dirname(path)))
-            new = set_features_line(new, any(f"\nexport {k}=" in new for k in WRAPPER_ENV))
+            new = set_features_line(new, "\nexport FRAMEPORT_FEATURES=" in new)
+            new = set_offline_line(new, "\nexport FRAMEPORT_OFFLINE=1\n" in new)
             new = set_locale_line(new)
             pkg = os.path.basename(os.path.dirname(path))
             dep = deployment(pkg) or {}
@@ -4321,14 +4459,12 @@ def podman_run_args(args, env, sys_root="/sys", dev_root="/dev"):
     into the container's /dev/input. Anything else: the arguments unchanged. Lepton mounts a tmpfs over /dev, so a
     `--device` node would vanish under it, and its /dev/input holds its own Wayland input pipes: a bind mount next to
     it, like Lepton's own GPU nodes. System features the launcher names (FRAMEPORT_FEATURES, the features line) are
-    added as a permissions file in the container's /system/etc/permissions (device.hybrid_app). A game started
-    without network (FRAMEPORT_OFFLINE=1, device.offline) gets --network=none in place of Lepton's network options."""
+    added as a permissions file in the container's /system/etc/permissions (device.hybrid_app)."""
     if args[:1] != ["run"]:
         return args
     gamepad = env.get("FRAMEPORT_GAMEPAD") == "1" and env.get("FRAMEPORT_NO_GAMEPAD", "0") in ("", "0")
     features = system_features(env.get("FRAMEPORT_FEATURES", ""))
-    offline = env.get("FRAMEPORT_OFFLINE") == "1"
-    if not gamepad and not features and not offline:
+    if not gamepad and not features:
         return args
     appid = env.get("SteamAppId", "")
     name = None
@@ -4353,39 +4489,7 @@ def podman_run_args(args, env, sys_root="/sys", dev_root="/dev"):
     if features and FEATURES_TARGET not in taken:
         extra += ["--mount", f"type=bind,source={features_file(features)},destination={FEATURES_TARGET},ro"]
         print(f"FramePort: system features for this container: {', '.join(features)}", file=sys.stderr)
-    rest = args[1:]
-    if offline:
-        rest, removed = without_network_options(rest)
-        extra.append("--network=none")
-        print(f"FramePort: this game's container starts without network (Lepton's network options left out: "
-              f"{' '.join(removed) or 'none'})", file=sys.stderr)
-    return [args[0], *extra, *rest] if extra else args
-
-
-# Podman options that set up or need a network namespace; with --network=none Podman refuses some of them
-# ("conflicting options"), so an offline game's container (device.offline) starts without all of them.
-NETWORK_VALUE_OPTIONS = ("--network", "--net", "--dns", "--dns-search", "--dns-option", "--dns-opt", "--add-host",
-                         "--publish", "--ip", "--ip6", "--mac-address", "--network-alias")
-NETWORK_FLAGS = ("--publish-all",)  # short forms (-p, -P) aren't matched: the container's own command could have them
-
-
-def without_network_options(args):
-    """`podman run`'s arguments (after "run") without network options: (kept, removed). Options with a value are
-    taken out in both spellings (`--network host`, `--network=host`)."""
-    kept, removed, i = [], [], 0
-    while i < len(args):
-        arg = args[i]
-        if arg in NETWORK_FLAGS:
-            removed.append(arg)
-        elif arg in NETWORK_VALUE_OPTIONS and i + 1 < len(args):
-            removed += [arg, args[i + 1]]
-            i += 1
-        elif arg.startswith("--") and arg.partition("=")[0] in NETWORK_VALUE_OPTIONS and "=" in arg:
-            removed.append(arg)
-        else:
-            kept.append(arg)
-        i += 1
-    return kept, removed
+    return [args[0], *extra, *args[1:]] if extra else args
 
 
 def gamepad_mounts(env, taken, sys_root="/sys", dev_root="/dev"):
@@ -4631,6 +4735,7 @@ def write_launcher(anchor, base, pkg, title, appid, lepton, env, hw_video=False,
     text = set_share_lines(text, bool((env or {}).get("FRAMEPORT_SHARE")))
     text = set_folder_lines(text, pkg, bool((env or {}).get(FOLDER_ENV)))
     text = set_locale_line(text)
+    text = set_offline_line(text, str((env or {}).get(OFFLINE_ENV, "")) == "1")
     try:
         ensure_lepton_shims()
     except OSError:
@@ -6591,7 +6696,6 @@ def configure_install(args, prep, moved):
     hw_video = HW_VIDEO_PATCH in (recipe.get("patches") or [])  # the shared codec (install_video_codec)
     gamepad = GAMEPAD_PATCH in (recipe.get("patches") or [])  # Steam Input's virtual gamepad (PODMAN_WRAPPER)
     features = bool(system_features((args.get("env") or {}).get("FRAMEPORT_FEATURES")))  # device.hybrid_app
-    features = features or str((args.get("env") or {}).get("FRAMEPORT_OFFLINE", "")) == "1"  # device.offline
     if gamepad or features:
         ensure_podman_wrapper()
     extra_folder_cleanup(base, (args.get("env") or {}).get(FOLDER_ENV))  # device.extra_folder taken off or changed
@@ -11885,6 +11989,9 @@ def main():
         return 0
     if len(sys.argv) >= 5 and sys.argv[1] == "_logcat_keeper":
         logcat_keeper(sys.argv[2], sys.argv[3], sys.argv[4])
+        return 0
+    if len(sys.argv) >= 4 and sys.argv[1] == "_offline_guard":
+        offline_guard(sys.argv[2], sys.argv[3])
         return 0
     if len(sys.argv) >= 2 and sys.argv[1] == "_steam_locale":
         print(steam_locale())
