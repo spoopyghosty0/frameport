@@ -937,7 +937,8 @@ class GameView:
                     ], spacing=T.S3), padding=ft.Padding(T.S4, T.px(10), T.S4, T.px(10)), border=ft.Border(
                         top=ft.BorderSide(1, T.BORDER))))
                     continue
-                flags = any(q.kind == "bool" for q in p.params)
+                # a patch's own options; FIELDS = its text fields are shown too (e.g. the Frame folder to share)
+                flags = any(q.kind == "bool" for q in p.params) or bool(getattr(p, "FIELDS", False))
                 if on and flags:  # a patch's own options (e.g. the gamepad's button layout), under it while it's on
                     params = recipe.params(p.id)
                     for q in p.params:

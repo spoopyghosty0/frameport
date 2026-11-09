@@ -1318,6 +1318,9 @@ def diag_inspect(bundle: Path = typer.Argument(..., help="a diagnostics zip"),
                f"Frame: {(env.get('frame') or {}).get('build_id') or '-'}")
     for w in m.get("warnings", []):
         typer.echo(f"  warning: {w}")
+    for f in ((res.get("frame") or {}).get("triage") or {}).get("findings") or []:
+        typer.echo(f"  Frame ({res['frame']['log']}): {f['severity']} {f['id']}: {f['diagnosis']}\n"
+                   f"            {f['evidence'][:200]}")
     for pkg, g in res["games"].items():
         typer.echo(f"\n{pkg} — {g.get('title')} [{g.get('status')}]")
         last = g.get("last_test") or {}

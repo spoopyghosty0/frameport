@@ -343,6 +343,15 @@ signatures:
     # triage keeps only the dump for the graphics API the session used (FrameBridge's swapchain formats)
     suggest: [adapter.vk_shader_dump, adapter.zink_shader_dump]
     report: true
+  - id: frame-power-loss
+    # the Frame's power chip (qcom-pon) at boot: SMPL (the driver spells it SPML) = sudden momentary power loss,
+    # UVLO = battery voltage too low (diagnostics: frame/this-boot-kernel.txt; #598)
+    pattern: 'qcom-pon[^\r\n]*PON: trigger: [^\r\n]*(?:SMPL|SPML|UVLO)'
+    severity: info
+    diagnosis: The Frame lost power and started again (its power chip reported a sudden power loss, for example a
+      loose or empty battery or a voltage drop under load), so the restart wasn't a game or software crash. If it
+      keeps happening while it is charging or well charged, it is a hardware matter for Valve's support.
+    suggest: []
   - id: space-warp-used
     # space warp's motion vectors (97 = R16G16B16A16_SFLOAT); its depth (129) is also what eye depth layers use (#323)
     pattern: 'xrCreateSwapchain \d+x\d+ format=97 '

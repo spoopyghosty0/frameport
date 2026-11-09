@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 214 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 216 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -13,7 +13,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 - [Patches from OVRPort](#group-overport) (25)
 - [Steam Frame patches](#group-frame) (74)
 - [Game settings](#group-adapter) (90)
-- [Files and settings on the Frame](#group-device) (12)
+- [Files and settings on the Frame](#group-device) (14)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
 
 ## Index
@@ -211,6 +211,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [OpenGL ES shader fixes](#adapter-zink_shader_fix) | `adapter.zink_shader_fix` | Game settings | 2 |
 | [Keep the game's saved resolution in step](#device-config_sync) | `device.config_sync` | Files and settings on the Frame | 1 |
 | [Show as VR or as a flat window](#device-display_mode) | `device.display_mode` | Files and settings on the Frame |  |
+| [Share a folder of the Frame](#device-extra_folder) | `device.extra_folder` | Files and settings on the Frame |  |
 | [Settings files for the game](#device-files) | `device.files` | Files and settings on the Frame | 3 |
 | [Foveated rendering (Valve)](#device-foveation) | `device.foveation` | Files and settings on the Frame | 6 |
 | [Headset model](#device-headset_model) | `device.headset_model` | Files and settings on the Frame | default |
@@ -218,6 +219,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Hybrid app: allow the switch into VR](#device-hybrid_app) | `device.hybrid_app` | Files and settings on the Frame |  |
 | [Game language](#device-language) | `device.language` | Files and settings on the Frame |  |
 | [Extra Lepton settings](#device-lepton_env) | `device.lepton_env` | Files and settings on the Frame | 3 |
+| [Offline (no network)](#device-offline) | `device.offline` | Files and settings on the Frame |  |
 | [Share a folder with another game](#device-shared_folder) | `device.shared_folder` | Files and settings on the Frame |  |
 | [Controllers as a gamepad (Steam Input)](#device-steam_gamepad) | `device.steam_gamepad` | Files and settings on the Frame | 2 |
 | [Show the app's Android window (for typing)](#device-text_input_window) | `device.text_input_window` | Files and settings on the Frame | 158 |
@@ -2908,6 +2910,18 @@ Choose Flat window if a phone or tablet app shows nothing in the headset, VR if 
 
 > How Lepton runs the app: VR (headless Android, only what the app draws through OpenXR reaches the headset) or a flat window (Lepton's lepton-show-flatscreen marker: the Android window on a screen in the headset, like a phone or tablet app). Automatic uses a flat window for apps without VR code. Choose "Flat window" for a 2D app FramePort took for VR (it shows nothing in the headset), "VR" for a VR app FramePort took for 2D.
 
+### <a id="device-extra_folder"></a>Share a folder of the Frame
+
+Makes a folder of the Frame (e.g. ROMs) available to this game in its storage, like Videos, Downloads and Documents.
+
+- `device.extra_folder` · also for 2D apps
+- **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Options:** `folder`: str, default empty — Folder in the Frame's home folder, e.g. ROMs or Games/ROMs
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> Makes a folder in the Frame's home folder (e.g. ROMs, or Games/ROMs) available to this game as /sdcard/&lt;folder name&gt;, like Videos, Downloads and Documents (Discussion #501): files the game saves there are on the Frame, and files you put there (Files tab) are in the game. The folder must exist on the Frame and stay inside the home folder (no hidden folders, no links out of it); it is checked at every start, and the game starts without it otherwise (reason in &lt;game folder&gt;/extra-folder.log). A folder of the game's own with that name is kept beside it (&lt;name&gt;.frameport-own). Applied with Update on Frame.
+
 ### <a id="device-files"></a>Settings files for the game
 
 Puts settings files next to the game on the Frame, for example to turn off an unsupported effect.
@@ -2978,15 +2992,15 @@ Lets apps that start as a 2D panel (e.g. YouTube) switch into VR for 360° video
 
 ### <a id="device-language"></a>Game language
 
-Choose the language for games that follow the system language. The game must include it. Apply with Update on Frame.
+Games that follow the system language use Steam's language; choose another one here. The game must include it. A chosen language applies with Update on Frame.
 
 - `device.language` · also for 2D apps
 - **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
 - **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
-- **Options:** `tag`: str, default empty — Android language tag, e.g. de-DE (empty = English, US)
+- **Options:** `tag`: str, default empty — Android language tag, e.g. de-DE (empty = Steam's language)
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
-> The language Android reports to the game. Lepton's Android is set to English (US), and games that follow the system language (most Unity and Unreal games) start in English. A language the game doesn't have still shows English. Applies with Update on Frame (the APK isn't changed).
+> The language Android reports to the game, for games that follow the system language (most Unity and Unreal games). By default it is Steam's language on the Frame, read at every start (Lepton's own Android is English, US); choose a language here to use that one instead, English (US) included. A language the game doesn't have still shows English. A chosen language applies with Update on Frame (the APK isn't changed); Steam's language needs no update. Off for one start: FRAMEPORT_NO_STEAM_LANGUAGE=1 in the game's launch options.
 
 ### <a id="device-lepton_env"></a>Extra Lepton settings
 
@@ -3000,6 +3014,17 @@ Extra settings for the Android container (for testing).
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Environment variables exported by the launcher (for example VK_INSTANCE_LAYERS="" to test without Valve's layers).
+
+### <a id="device-offline"></a>Offline (no network)
+
+Starts this game without network, e.g. to stop ads in an app that also works offline. Online features (sign-in, multiplayer, downloads, cloud saves) stop working.
+
+- `device.offline` · experimental · also for 2D apps
+- **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> Starts this game's Android container without network (Podman --network=none through FramePort's Podman wrapper, in place of Lepton's own network options), e.g. to stop the ads of an app that also works offline (Discussion #505). Everything online stops working for this game: sign-in, multiplayer, leaderboards, downloads, store purchases, cloud saves. Steam and other games keep their network. The APK isn't changed; applied with Update on Frame.
 
 ### <a id="device-shared_folder"></a>Share a folder with another game
 

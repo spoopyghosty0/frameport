@@ -906,14 +906,19 @@ LANGUAGE_TAG = re.compile(r"^[a-z]{2,3}(-[A-Z][a-z]{3})?(-[A-Z]{2}|-[0-9]{3})?$"
 class Language(Patch):
     id = "device.language"
     title = "Game language"
-    description = ("The language Android reports to the game. Lepton's Android is set to English (US), and games that "
-                   "follow the system language (most Unity and Unreal games) start in English. A language the game "
-                   "doesn't have still shows English. Applies with Update on Frame (the APK isn't changed).")
+    description = ("The language Android reports to the game, for games that follow the system language (most Unity "
+                   "and Unreal games). By default it is Steam's language on the Frame, read at every start (Lepton's "
+                   "own Android is English, US); choose a language here to use that one instead, English (US) "
+                   "included. A language the game doesn't have still shows English. A chosen language applies with "
+                   "Update on Frame (the APK isn't changed); Steam's language needs no update. Off for one start: "
+                   "FRAMEPORT_NO_STEAM_LANGUAGE=1 in the game's launch options.")
     category = "device"
     needs_vr = False
     stage = "install"
-    params = [Param("tag", "str", "", "Android language tag, e.g. de-DE (empty = English, US)")]
-    CHOICES = (("", "English (US)"), ("en-GB", "English (UK)"), ("de-DE", "Deutsch"), ("fr-FR", "Français"),
+    params = [Param("tag", "str", "", "Android language tag, e.g. de-DE (empty = Steam's language)")]
+    # "" = Steam's language: the agent's launcher line (LOCALE_LINE) reads it at every start; "steam" means the same
+    CHOICES = (("", "Steam's language"), ("en-US", "English (US)"), ("en-GB", "English (UK)"), ("de-DE", "Deutsch"),
+               ("fr-FR", "Français"),
                ("es-ES", "Español"), ("es-MX", "Español (Latinoamérica)"), ("it-IT", "Italiano"),
                ("pt-BR", "Português (Brasil)"), ("pt-PT", "Português (Portugal)"), ("nl-NL", "Nederlands"),
                ("pl-PL", "Polski"), ("cs-CZ", "Čeština"), ("sv-SE", "Svenska"), ("da-DK", "Dansk"),
@@ -930,8 +935,8 @@ class Language(Patch):
 
     def install(self, ctx: InstallContext) -> None:
         tag = str(ctx.params.get("tag") or "").strip()
-        if not tag:
-            return
+        if not tag or tag.lower() == "steam":
+            return  # Steam's language, at launch
         if not LANGUAGE_TAG.match(tag):
             raise ValueError(f"Not a language tag: {tag!r} (for example de-DE)")
         ctx.env[self.ENV_KEY] = f"0\npersist.sys.locale={tag}"
@@ -968,6 +973,77 @@ class SharedFolder(Patch):
         if not SHARE_FOLDER.match(folder) or folder in (".", ".."):
             raise ValueError(f"Not a folder name in /sdcard: {folder!r} (for example JKXR)")
         ctx.env[self.ENV_KEY] = f"{game}:{folder}"
+
+
+class Offline(Patch):
+    id = "device.offline"
+    title = "Offline (no network)"
+    description = ("Starts this game's Android container without network (Podman --network=none through FramePort's "
+                   "Podman wrapper, in place of Lepton's own network options), e.g. to stop the ads of an app that "
+                   "also works offline (Discussion #505). Everything online stops working for this game: sign-in, "
+                   "multiplayer, leaderboards, downloads, store purchases, cloud saves. Steam and other games keep "
+                   "their network. The APK isn't changed; applied with Update on Frame.")
+    category = "device"
+    needs_vr = False
+    stage = "install"  # the launcher exports FRAMEPORT_OFFLINE; the agent's Podman wrapper drops the network
+    experimental = True  # unverified on the device: whether Lepton itself needs the container's network
+    ENV_KEY = "FRAMEPORT_OFFLINE"
+
+    def applies(self, a):
+        return True
+
+    def install(self, ctx: InstallContext) -> None:
+        ctx.env[self.ENV_KEY] = "1"
+
+
+EXTRA_FOLDER_RESERVED = {"android", "movies", "download", "documents", "obb"}  # Lepton's own entries of /sdcard
+
+
+def extra_folder_value(value: str) -> str:
+    """A device.extra_folder setting as the agent gets it: a folder relative to the Frame's home ("ROMs",
+    "Games/ROMs"; "~/ROMs" and "/home/<user>/ROMs" are accepted). Raises ValueError for anything that can't be a
+    visible folder in the home folder (the Frame checks that it exists and stays inside home at every start)."""
+    value = str(value or "").strip().replace("\\", "/")
+    if value.startswith("~/"):
+        value = value[2:]
+    elif value.startswith("/home/"):
+        value = value.split("/", 3)[3] if value.count("/") >= 3 else ""
+    elif value.startswith("/"):
+        raise ValueError(f"Not in the Frame's home folder: {value!r} (for example ROMs or Games/ROMs)")
+    parts = [p for p in value.split("/") if p not in ("", ".")]
+    if not parts or len(value) > 255 or any(c in value for c in ":\n\r\0") or \
+            any(p == ".." or p.startswith(".") for p in parts):
+        raise ValueError(f"Not a folder in the Frame's home folder: {value!r} (for example ROMs or Games/ROMs)")
+    if parts[-1].lower() in EXTRA_FOLDER_RESERVED:
+        raise ValueError(f"/sdcard/{parts[-1]} is Lepton's own folder: choose a folder with another name")
+    return "/".join(parts)
+
+
+class ExtraFolder(Patch):
+    id = "device.extra_folder"
+    title = "Share a folder of the Frame"
+    description = ("Makes a folder in the Frame's home folder (e.g. ROMs, or Games/ROMs) available to this game as "
+                   "/sdcard/<folder name>, like Videos, Downloads and Documents (Discussion #501): files the game "
+                   "saves there are on the Frame, and files you put there (Files tab) are in the game. The folder "
+                   "must exist on the Frame and stay inside the home folder (no hidden folders, no links out of "
+                   "it); it is checked at every start, and the game starts without it otherwise (reason in "
+                   "<game folder>/extra-folder.log). A folder of the game's own with that name is kept beside it "
+                   "(<name>.frameport-own). Applied with Update on Frame.")
+    category = "device"
+    needs_vr = False
+    stage = "install"  # the launcher exports FRAMEPORT_FOLDER; the agent links it and adds it to Lepton's mounts
+    params = [Param("folder", "str", "", "Folder in the Frame's home folder, e.g. ROMs or Games/ROMs")]
+    FIELDS = True  # the game page shows the folder field while it's on (not only with technical details)
+    ENV_KEY = "FRAMEPORT_FOLDER"
+
+    def applies(self, a):
+        return True
+
+    def install(self, ctx: InstallContext) -> None:
+        folder = str(ctx.params.get("folder") or "").strip()
+        if not folder:
+            return
+        ctx.env[self.ENV_KEY] = extra_folder_value(folder)
 
 
 class SteamGamepad(Patch):
@@ -1213,6 +1289,8 @@ register(Language)
 register(SteamGamepad)
 register(HybridApp)
 register(SharedFolder)
+register(ExtraFolder)
+register(Offline)
 register(TextInputWindow)
 register(DisplayMode)
 register(Foveation)

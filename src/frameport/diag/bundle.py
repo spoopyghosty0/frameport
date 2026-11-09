@@ -282,10 +282,10 @@ def _elf_summary(z: zipfile.ZipFile, info: zipfile.ZipInfo) -> dict:
         return {"size": info.file_size, "error": str(exc)[:300]}
 
 
-def retriage(package: str, log: str, state: str = "UNKNOWN") -> dict:
+def retriage(package: str, log: str, state: str = "UNKNOWN", kernel: str = "") -> dict:
     from ..validate.triage import triage
 
-    r = triage(log, state, package)
+    r = triage(log, state, package or None, kernel=kernel, applied=set() if not package else None)
     return {"state": r.state, "verdict": r.verdict, "milestone": r.milestone, "milestones": r.milestones, "fps": r.fps,
             "findings": [f.__dict__ for f in r.findings], "suggestions": r.suggestions()}
 
@@ -472,4 +472,7 @@ def read(zip_path: Path) -> dict:
                 res["triage"] = retriage(pkg, z.read(log_name).decode("utf-8", "replace"),
                                          last.get("state") or "UNKNOWN")
             out["games"][pkg] = res
+        kernel = "frame/this-boot-kernel.txt"
+        if kernel in names:  # the Frame itself (e.g. frame-power-loss: the boot after a sudden power loss, #598)
+            out["frame"] = {"log": kernel, "triage": retriage("", "", kernel=z.read(kernel).decode("utf-8", "replace"))}
         return out

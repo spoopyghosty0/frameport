@@ -167,8 +167,12 @@ SUMMARIES = {
                     "effect.",
     "device.config_sync": "Keeps the resolution the game saves in step with the headset's picture size (else the "
                           "picture is shifted, with black borders, after a render resolution change).",
-    "device.language": "Choose the language for games that follow the system language. The game must include it. "
-                       "Apply with Update on Frame.",
+    "device.language": "Games that follow the system language use Steam's language; choose another one here. The "
+                       "game must include it. A chosen language applies with Update on Frame.",
+    "device.offline": "Starts this game without network, e.g. to stop ads in an app that also works offline. Online "
+                      "features (sign-in, multiplayer, downloads, cloud saves) stop working.",
+    "device.extra_folder": "Makes a folder of the Frame (e.g. ROMs) available to this game in its storage, like "
+                           "Videos, Downloads and Documents.",
     "device.hide_navbar": "Hides Android's back, home and recents buttons, which cover the app's own buttons.",
     "device.text_input_window": "Lets typing reach this app from Steam's on-screen keyboard or your PC's keyboard. VR "
                                 "keeps working.",

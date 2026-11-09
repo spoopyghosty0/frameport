@@ -252,7 +252,8 @@ def test_upgrade_launchers_follow_the_deployment(monkeypatch, tmp_path, hw_video
         assert text.count(agent.GAMEPAD_LINE) == int(gamepad), directory.name
         if hw_video and gamepad:
             assert text.index(agent.VIDEO_CODEC_LINE) < text.index(agent.GAMEPAD_LINE)
-        assert text.endswith("child=''\nsetsid /lepton start\n")
+        locale = agent.LOCALE_LINE.format(agent_q=agent.shlex.quote(agent.os.path.abspath(agent.__file__)))
+        assert text.endswith("child=''\n" + locale + "\nsetsid /lepton start\n")  # Steam's language (#530)
     assert agent.upgrade_launchers() == []  # idempotent
 
 

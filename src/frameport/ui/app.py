@@ -2695,6 +2695,13 @@ class FramePortApp:
         if seen == boot["boot_id"]:
             return
         library.set_setting("frame.boot_id", boot["boot_id"])
+        lost = restart.power_loss_game(boot, seen)
+        if lost is not None:  # the power chip reports a sudden power loss: not the game's fault (GitHub #598)
+            applog.log.info("Frame lost power while %s was running: %s", lost["package"], boot)
+            self.toast(tr("Your Frame lost power and restarted while {title} was running (its power chip reported a "
+                          "sudden power loss). The game didn't cause it.").format(
+                title=lost.get("title") or lost["package"]))
+            return
         game = restart.crashed_game(boot, seen)
         if game is None:
             return

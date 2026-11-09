@@ -279,6 +279,15 @@ def warnings(recipe: Recipe, analysis: Analysis | None = None) -> list[str]:
                 if c in recipe.patches and pid < c:
                     out.append(f"{base.get(pid).title} conflicts with {base.get(c).title}.")
         return out
+    params = recipe.patches.get("device.extra_folder") if isinstance(recipe.patches, dict) else None
+    folder = str(params.get("folder") or "") if isinstance(params, dict) else ""
+    if folder.strip():
+        from ..patches.settings import extra_folder_value
+
+        try:
+            extra_folder_value(folder)
+        except ValueError as exc:
+            out.append(str(exc))
     for pid in recipe.patches:
         p = base.get(pid)
         for c in p.conflicts:

@@ -459,6 +459,11 @@
   "title": "Show as VR or as a flat window",
   "group": "Files and settings on the Frame"
  },
+ "device.extra_folder": {
+  "anchor": "device-extra_folder",
+  "title": "Share a folder of the Frame",
+  "group": "Files and settings on the Frame"
+ },
  "device.files": {
   "anchor": "device-files",
   "title": "Settings files for the game",
@@ -492,6 +497,11 @@
  "device.lepton_env": {
   "anchor": "device-lepton_env",
   "title": "Extra Lepton settings",
+  "group": "Files and settings on the Frame"
+ },
+ "device.offline": {
+  "anchor": "device-offline",
+  "title": "Offline (no network)",
   "group": "Files and settings on the Frame"
  },
  "device.shared_folder": {

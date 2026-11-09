@@ -49,7 +49,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 125
+AGENT_VERSION = 126
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -105,8 +105,14 @@ PAD_DIR = "/dev/fp-input"  # the host's /dev/input inside the container
 # (YouTube) only leave their 2D panel for VR when the system has oculus.software.vr.app.hybrid. The launcher exports
 # FRAMEPORT_FEATURES (the patch's env) and puts the Podman wrapper on PATH; the wrapper mounts a permissions file that
 # declares them (Android reads /system/etc/permissions at every container start).
-FEATURES_LINE = ('[[ -z "${FRAMEPORT_FEATURES:-}" || ! -x "$HOME/.local/share/frameport/agent/bin/podman" ]] || '
+# The same line puts the wrapper on PATH for a game started without network (device.offline: FRAMEPORT_OFFLINE=1,
+# Discussion #505; podman_run_args gives its container --network=none).
+FEATURES_LINE = ('[[ -z "${FRAMEPORT_FEATURES:-}${FRAMEPORT_OFFLINE:-}" || '
+                 '! -x "$HOME/.local/share/frameport/agent/bin/podman" ]] || '
                  'export PATH="$HOME/.local/share/frameport/agent/bin:$PATH"')
+OLD_FEATURES_LINES = ('[[ -z "${FRAMEPORT_FEATURES:-}" || ! -x "$HOME/.local/share/frameport/agent/bin/podman" ]] || '
+                      'export PATH="$HOME/.local/share/frameport/agent/bin:$PATH"',)
+WRAPPER_ENV = ("FRAMEPORT_FEATURES", "FRAMEPORT_OFFLINE")  # launcher exports that need the features line
 FEATURES_TARGET = "/system/etc/permissions/frameport-features.xml"
 
 
@@ -878,19 +884,78 @@ CLEAN_SHUTDOWN = ("Reached target System Power Off", "Reached target System Rebo
                   "System is powering down", "System is rebooting", "systemd-shutdown", "Power-Off", "Rebooting.")
 
 
+# Why the Frame's power chip (Qualcomm PMIC) started this boot: the kernel's qcom-pon driver logs it once at boot
+# ("PON: trigger: SPML" (sic: SMPL, "sudden momentary power loss"), PON_PON_REASON1 0x02, ...). A sudden power loss
+# (SMPL; UVLO = the battery voltage fell too low) means the previous boot ended without power, not by a game crash
+# (GitHub #598). Kinds: power_loss, power_key (pressed), hard_reset (power key held / PMIC reset), charger (plugged
+# in), reboot (PS_HOLD: software reset), other.
+PON_TRIGGERS = (("power_loss", ("SMPL", "SPML", "UVLO")), ("power_key", ("KPDPWR",)),
+                ("hard_reset", ("HARD RESET", "HARD_RESET")), ("charger", ("USB_CHG", "DC_CHG", "CBLPWR")),
+                ("reboot", ("PS_HOLD", "PSHOLD", "WARM")))
+# PON_PON_REASON1 bits (Qualcomm PMICs): 0 hard reset, 1 SMPL, 2 RTC, 3 DC charger, 4 USB charger, 5 PON1,
+# 6 cable power, 7 power key
+PON_REASON_BITS = ((1, "SMPL", "power_loss"), (7, "KPDPWR_N", "power_key"), (0, "HARD_RESET", "hard_reset"),
+                   (4, "USB_CHG", "charger"), (3, "DC_CHG", "charger"), (6, "CBLPWR_N", "charger"))
+PON_TRIGGER_RE = re.compile(r"qcom-pon\b.*?PON: trigger: ([^\r\n]+)")
+PON_REASON1_RE = re.compile(r"qcom-pon\b.*?PON_PON_REASON1 (0x[0-9a-fA-F]+)")
+
+
+def pon_reason(text):
+    """{"kind", "trigger"} from a boot's kernel log (the qcom-pon lines), or None when it has none."""
+    m = PON_TRIGGER_RE.search(text or "")
+    if m:
+        trigger = m.group(1).strip()
+        upper = trigger.upper()
+        kind = next((k for k, words in PON_TRIGGERS if any(w in upper for w in words)), "other")
+        return {"kind": kind, "trigger": trigger}
+    m = PON_REASON1_RE.search(text or "")
+    if m:
+        bits = int(m.group(1), 16)
+        for bit, name, kind in PON_REASON_BITS:
+            if bits >> bit & 1:
+                return {"kind": kind, "trigger": name}
+        return {"kind": "other", "trigger": m.group(1)}
+    return None
+
+
+def boot_pon_reason():
+    """pon_reason of this boot's kernel log (journalctl -k -b 0; the lines come early, so it reads at most the first
+    20000 lines), or None."""
+    try:
+        proc = subprocess.Popen(["journalctl", "-k", "-b", "0", "-q", "--no-pager", "-o", "cat"],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, errors="replace")
+    except OSError:
+        return None
+    lines = []
+    try:
+        for i, line in enumerate(proc.stdout):
+            if "qcom-pon" in line:
+                lines.append(line)
+                if "PON: trigger:" in line:
+                    break
+            if i > 20000:
+                break
+    finally:
+        proc.kill()
+        proc.wait()
+    return pon_reason("".join(lines))
+
+
 def boot_state():
     """This boot and how the previous one ended: {"boot_id", "boot_time", "prev_clean" (True/False/None = unknown),
-    "last_launch" ({"package", "title", "time"}: the FramePort game started last before this boot)}. Worked out once
-    per boot (cached), so the app can say "your Frame restarted while <game> was running"."""
+    "prev_reason" (why the power chip started this boot: pon_reason's kind, e.g. "power_loss", or None),
+    "pon_trigger" (its words), "last_launch" ({"package", "title", "time"}: the FramePort game started last before
+    this boot)}. Worked out once per boot (cached), so the app can say "your Frame restarted while <game> was
+    running" (or that it lost power)."""
     try:
         boot_id = open("/proc/sys/kernel/random/boot_id").read().strip()
     except OSError:
         return None
     try:
         cached = json.load(open(BOOT_STATE))
-        if cached.get("boot_id") == boot_id:
+        if cached.get("boot_id") == boot_id and "prev_reason" in cached:  # (agent <= 125 had no prev_reason)
             return cached
-    except (OSError, ValueError):
+    except (OSError, ValueError, AttributeError):
         pass
     boot_time = None
     try:
@@ -913,7 +978,9 @@ def boot_state():
             continue
         if (boot_time is None or t < boot_time) and (last is None or t > last["time"]):
             last = {"package": d["package"], "title": d.get("title") or d["package"], "time": t}
-    state = {"boot_id": boot_id, "boot_time": boot_time, "prev_clean": prev_clean, "last_launch": last}
+    pon = boot_pon_reason() or {}
+    state = {"boot_id": boot_id, "boot_time": boot_time, "prev_clean": prev_clean, "prev_reason": pon.get("kind"),
+             "pon_trigger": pon.get("trigger"), "last_launch": last}
     try:
         os.makedirs(os.path.dirname(BOOT_STATE), exist_ok=True)
         with open(BOOT_STATE, "w") as f:
@@ -3762,6 +3829,189 @@ def set_share_lines(text, wanted):
     return text.replace("\nchild=''\n", "\n" + SHARE_LINES + "child=''\n", 1)
 
 
+# Game language follows Steam's (GitHub #530): a game whose recipe names no language (device.language) gets the Steam
+# client's language as Android's system language (persist.sys.locale, passed like device.language's own tag as a
+# second line of a LEPTON_GFXRECON_* value, see docs/FRAME_RUNTIME.md). Read at every launch, so a language changed in
+# Steam reaches the next start; a tag set by the recipe (an export before this line) wins. English (or no language
+# found) leaves Lepton's default (en-US). Off for one game: FRAMEPORT_NO_STEAM_LANGUAGE=1 in its launch options.
+LOCALE_LINE = ('[[ -n "${{LEPTON_GFXRECON_FP_LOCALE:-}}${{FRAMEPORT_NO_STEAM_LANGUAGE:-}}" ]] || '
+               '{{ fp_locale=$(python3 {agent_q} _steam_locale 2>/dev/null 9>&-) && [[ -n "$fp_locale" ]] && '
+               "export LEPTON_GFXRECON_FP_LOCALE=$'0\\npersist.sys.locale='\"$fp_locale\" && "
+               'echo "FramePort: game language follows Steam: $fp_locale"; }} || true')
+# Steam's language names (Steam Web API "language" values) -> Android language tags
+STEAM_LANGUAGES = {
+    "arabic": "ar-SA", "bulgarian": "bg-BG", "schinese": "zh-CN", "tchinese": "zh-TW", "czech": "cs-CZ",
+    "danish": "da-DK", "dutch": "nl-NL", "english": "en-US", "finnish": "fi-FI", "french": "fr-FR",
+    "german": "de-DE", "greek": "el-GR", "hungarian": "hu-HU", "indonesian": "id-ID", "italian": "it-IT",
+    "japanese": "ja-JP", "koreana": "ko-KR", "korean": "ko-KR", "norwegian": "nb-NO", "polish": "pl-PL",
+    "portuguese": "pt-PT", "brazilian": "pt-BR", "romanian": "ro-RO", "russian": "ru-RU", "spanish": "es-ES",
+    "latam": "es-MX", "swedish": "sv-SE", "thai": "th-TH", "turkish": "tr-TR", "ukrainian": "uk-UA",
+    "vietnamese": "vi-VN",
+}
+LOCALE_TAG_RE = re.compile(r"[a-z]{2,3}(-[A-Z][a-z]{3})?(-[A-Z]{2}|-[0-9]{3})?")
+
+
+def steam_language(paths=None):
+    """The Steam client's language name (e.g. "german") from its registry.vdf (Registry/HKCU/Software/Valve/Steam/
+    language; the Linux client keeps that file in ~/.steam), or None."""
+    for path in paths or (os.path.join(HOME, ".steam/registry.vdf"), os.path.join(STEAM, "registry.vdf"),
+                          os.path.join(HOME, ".steam/steam/registry.vdf")):
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                node = kv_parse(f.read())
+        except OSError:
+            continue
+        for key in ("Registry", "HKCU", "Software", "Valve", "Steam", "language"):
+            node = next((v for k, v in node.items() if k.lower() == key.lower()), None) \
+                if isinstance(node, dict) else None
+        if isinstance(node, str) and node.strip():
+            return node.strip().lower()
+    return None
+
+
+def steam_locale(paths=None):
+    """The Android language tag for Steam's language, "" for English or an unknown/missing language."""
+    tag = STEAM_LANGUAGES.get(steam_language(paths) or "", "")
+    return "" if tag == "en-US" or not LOCALE_TAG_RE.fullmatch(tag) else tag
+
+
+def set_locale_line(text):
+    """A Lepton launcher with the Steam-language line (LOCALE_LINE) after `child=''` (after the recipe's exports and
+    the Podman wrapper lines, before Lepton starts); once. Other launchers are left alone."""
+    text = "".join(line for line in text.splitlines(True) if " _steam_locale " not in line)
+    if "export LEPTON_ENV_FRAMEBRIDGE_CONFIG=" not in text or "\nchild=''\n" not in text:
+        return text
+    line = LOCALE_LINE.format(agent_q=shlex.quote(os.path.abspath(__file__)))
+    return text.replace("\nchild=''\n", "\nchild=''\n" + line + "\n", 1)
+
+
+# An extra shared folder (device.extra_folder, Discussion #501): FRAMEPORT_FOLDER = a folder under the Frame's home
+# (relative to it, e.g. "ROMs" or "Games/ROMs"). Like device.shared_folder, /sdcard/<its name> becomes a link to it
+# and the folder joins STEAM_COMPAT_LIBRARY_PATHS, which Lepton bind-mounts at the same path (as for ~/Documents);
+# _extra_folder checks it (inside home, exists, no hidden folder, no link out of home) at every start.
+FOLDER_ENV = "FRAMEPORT_FOLDER"
+FOLDER_RECORD = "extra-folder.json"  # <base>/: the /sdcard link it made (removed when the setting goes)
+FOLDER_RESERVED = {"android", "movies", "download", "documents", "obb"}  # Lepton's own entries of /sdcard
+FOLDER_LINES = ('fp_folder=$(python3 {agent_q} _extra_folder "$app_dir" {pkg_q} 2>>"$app_dir/extra-folder.log" '
+                '9>&-) && [[ -n "$fp_folder" ]] && '
+                'export STEAM_COMPAT_LIBRARY_PATHS="${{STEAM_COMPAT_LIBRARY_PATHS:+$STEAM_COMPAT_LIBRARY_PATHS:}}'
+                '$fp_folder" || true  # FramePort: an extra shared folder (device.extra_folder)')
+
+
+def set_folder_lines(text, pkg, wanted):
+    """FOLDER_LINES after `child=''` (before Lepton starts), once, when the recipe names an extra folder."""
+    text = "".join(line for line in text.splitlines(True) if " _extra_folder " not in line)
+    if not wanted or "\nchild=''\n" not in text:
+        return text
+    line = FOLDER_LINES.format(agent_q=shlex.quote(os.path.abspath(__file__)), pkg_q=shlex.quote(pkg))
+    return text.replace("\nchild=''\n", "\nchild=''\n" + line + "\n", 1)
+
+
+def extra_folder_path(value, home=HOME):
+    """(the checked real path, the /sdcard name) of an extra folder setting: relative to home, ~/…, or an absolute
+    path in home. Raises AgentError for anything outside home, hidden, missing or not a folder."""
+    value = str(value or "").strip()
+    if not value or "\n" in value or "\0" in value or ":" in value:
+        raise AgentError(f"not a folder name: {value!r}")
+    home_real = os.path.realpath(home)
+    if value.startswith("~/"):
+        value = value[2:]
+    elif os.path.isabs(value):
+        norm = os.path.normpath(value)
+        if not (_inside(norm, home) or _inside(norm, home_real)):
+            raise AgentError(f"{value} isn't in the home folder")
+        value = os.path.relpath(norm, home if _inside(norm, home) else home_real)
+    parts = [p for p in value.replace("\\", "/").split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." or p.startswith(".") for p in parts):
+        raise AgentError(f"{value!r}: only visible folders in the home folder can be shared")
+    real = os.path.realpath(os.path.join(home, *parts))
+    rel = os.path.relpath(real, home_real)
+    if rel == "." or rel.startswith("..") or any(p.startswith(".") for p in rel.split(os.sep)):
+        raise AgentError(f"{value!r} leads out of the home folder or into a hidden folder ({real})")
+    if not os.path.isdir(real):
+        raise AgentError(f"{value!r} isn't a folder on this Frame")
+    return real, parts[-1]
+
+
+def extra_folder(app_dir, pkg, value, home=HOME, links=None):
+    """Prepare the extra folder for a game's start: /sdcard/<name> (<app_dir>/lepton-data/external/<name>) links to
+    it. Returns the path Lepton must bind-mount (the folder, or a link to it without spaces: Lepton breaks on paths
+    with spaces), or "" when the setting can't be used (the reason on stderr; the game starts without it)."""
+    def say(text):
+        print(f"{time.strftime('%F %T')} FramePort: {text}", file=sys.stderr)
+    try:
+        real, name = extra_folder_path(value, home)
+    except AgentError as exc:
+        say(f"extra folder not shared: {exc}")
+        return ""
+    if name.lower() in FOLDER_RESERVED:
+        say(f"extra folder not shared: /sdcard/{name} is Lepton's own")
+        return ""
+    mount = real
+    if re.search(r"[\s:,'\"\\$`]", real):
+        mount = os.path.join(links or os.path.join(HOME, ".local/share/frameport/lepton-paths"), f"{pkg}.folder")
+        os.makedirs(os.path.dirname(mount), exist_ok=True)
+        if os.path.lexists(mount):
+            if not os.path.islink(mount):
+                say(f"extra folder not shared: {mount} is in the way")
+                return ""
+            os.remove(mount)
+        os.symlink(real, mount)
+    external = os.path.join(app_dir, "lepton-data", "external")
+    dst = os.path.join(external, name)
+    os.makedirs(external, exist_ok=True)
+    if os.path.isdir(dst) and not os.path.islink(dst):
+        try:
+            os.rmdir(dst)
+        except OSError:
+            if os.path.lexists(dst + ".frameport-own"):
+                say(f"extra folder not shared: /sdcard/{name} and /sdcard/{name}.frameport-own both exist")
+                return ""
+            os.replace(dst, dst + ".frameport-own")  # the game's own folder of that name is kept beside it
+    elif os.path.lexists(dst) and not os.path.islink(dst):
+        say(f"extra folder not shared: /sdcard/{name} is a file")
+        return ""
+    if os.path.islink(dst):
+        os.remove(dst)
+    os.symlink(mount, dst)
+    try:
+        with open(os.path.join(app_dir, FOLDER_RECORD), "w") as f:
+            json.dump({"link": name, "target": mount, "folder": real}, f)
+    except OSError:
+        pass
+    say(f"/sdcard/{name} is {real}")
+    return mount
+
+
+def extra_folder_cleanup(base, value=None, home=HOME):
+    """At finalize: the /sdcard link of an extra folder the recipe no longer names (or names under another name) goes;
+    the game's own folder kept beside it comes back. Only FramePort's own link is touched."""
+    record = os.path.join(base, FOLDER_RECORD)
+    try:
+        with open(record) as f:
+            old = json.load(f)
+        name = str(old["link"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return
+    if value:
+        try:
+            if extra_folder_path(value, home)[1] == name:
+                return
+        except AgentError:
+            pass
+    if "/" in name or name in ("", ".", ".."):
+        return
+    dst = os.path.join(base, "lepton-data", "external", name)
+    if os.path.islink(dst) and os.readlink(dst) == old.get("target"):
+        os.remove(dst)
+        if os.path.isdir(dst + ".frameport-own") and not os.path.lexists(dst):
+            os.replace(dst + ".frameport-own", dst)
+    try:
+        os.remove(record)
+    except OSError:
+        pass
+
+
 def upgrade_launchers():
     """Give launchers written by older agents the parent watchdog, the dashboard closer and the play-session log (in
     place: a new file, so a running launcher keeps reading the old one). Returns the packages changed."""
@@ -3781,7 +4031,8 @@ def upgrade_launchers():
             new = set_codec_line(new, wants_hw_video(os.path.dirname(path)))
             new = set_tz_line(new)
             new = set_gamepad_line(new, wants_gamepad(os.path.dirname(path)))
-            new = set_features_line(new, "\nexport FRAMEPORT_FEATURES=" in new)
+            new = set_features_line(new, any(f"\nexport {k}=" in new for k in WRAPPER_ENV))
+            new = set_locale_line(new)
             pkg = os.path.basename(os.path.dirname(path))
             dep = deployment(pkg) or {}
             new = set_openxr_manifest_line(new, pkg, dep.get("static_openxr_loader", False))
@@ -3927,7 +4178,8 @@ def set_features_line(text, want):
     if want and here >= 0 and all(text.find(line + "\n") < here
                                   for line in (GAMEPAD_LINE, DECODER_USERS_LINE, VIDEO_CODEC_LINE)):
         return text
-    text = text.replace(FEATURES_LINE + "\n", "")
+    for line in (FEATURES_LINE, *OLD_FEATURES_LINES):
+        text = text.replace(line + "\n", "")
     if not want:
         return text
     at = -1
@@ -4069,12 +4321,14 @@ def podman_run_args(args, env, sys_root="/sys", dev_root="/dev"):
     into the container's /dev/input. Anything else: the arguments unchanged. Lepton mounts a tmpfs over /dev, so a
     `--device` node would vanish under it, and its /dev/input holds its own Wayland input pipes: a bind mount next to
     it, like Lepton's own GPU nodes. System features the launcher names (FRAMEPORT_FEATURES, the features line) are
-    added as a permissions file in the container's /system/etc/permissions (device.hybrid_app)."""
+    added as a permissions file in the container's /system/etc/permissions (device.hybrid_app). A game started
+    without network (FRAMEPORT_OFFLINE=1, device.offline) gets --network=none in place of Lepton's network options."""
     if args[:1] != ["run"]:
         return args
     gamepad = env.get("FRAMEPORT_GAMEPAD") == "1" and env.get("FRAMEPORT_NO_GAMEPAD", "0") in ("", "0")
     features = system_features(env.get("FRAMEPORT_FEATURES", ""))
-    if not gamepad and not features:
+    offline = env.get("FRAMEPORT_OFFLINE") == "1"
+    if not gamepad and not features and not offline:
         return args
     appid = env.get("SteamAppId", "")
     name = None
@@ -4099,7 +4353,39 @@ def podman_run_args(args, env, sys_root="/sys", dev_root="/dev"):
     if features and FEATURES_TARGET not in taken:
         extra += ["--mount", f"type=bind,source={features_file(features)},destination={FEATURES_TARGET},ro"]
         print(f"FramePort: system features for this container: {', '.join(features)}", file=sys.stderr)
-    return [args[0], *extra, *args[1:]] if extra else args
+    rest = args[1:]
+    if offline:
+        rest, removed = without_network_options(rest)
+        extra.append("--network=none")
+        print(f"FramePort: this game's container starts without network (Lepton's network options left out: "
+              f"{' '.join(removed) or 'none'})", file=sys.stderr)
+    return [args[0], *extra, *rest] if extra else args
+
+
+# Podman options that set up or need a network namespace; with --network=none Podman refuses some of them
+# ("conflicting options"), so an offline game's container (device.offline) starts without all of them.
+NETWORK_VALUE_OPTIONS = ("--network", "--net", "--dns", "--dns-search", "--dns-option", "--dns-opt", "--add-host",
+                         "--publish", "--ip", "--ip6", "--mac-address", "--network-alias")
+NETWORK_FLAGS = ("--publish-all",)  # short forms (-p, -P) aren't matched: the container's own command could have them
+
+
+def without_network_options(args):
+    """`podman run`'s arguments (after "run") without network options: (kept, removed). Options with a value are
+    taken out in both spellings (`--network host`, `--network=host`)."""
+    kept, removed, i = [], [], 0
+    while i < len(args):
+        arg = args[i]
+        if arg in NETWORK_FLAGS:
+            removed.append(arg)
+        elif arg in NETWORK_VALUE_OPTIONS and i + 1 < len(args):
+            removed += [arg, args[i + 1]]
+            i += 1
+        elif arg.startswith("--") and arg.partition("=")[0] in NETWORK_VALUE_OPTIONS and "=" in arg:
+            removed.append(arg)
+        else:
+            kept.append(arg)
+        i += 1
+    return kept, removed
 
 
 def gamepad_mounts(env, taken, sys_root="/sys", dev_root="/dev"):
@@ -4343,6 +4629,8 @@ def write_launcher(anchor, base, pkg, title, appid, lepton, env, hw_video=False,
                             restart=restart_block(pkg, lepton))
     text = set_tz_line(text)
     text = set_share_lines(text, bool((env or {}).get("FRAMEPORT_SHARE")))
+    text = set_folder_lines(text, pkg, bool((env or {}).get(FOLDER_ENV)))
+    text = set_locale_line(text)
     try:
         ensure_lepton_shims()
     except OSError:
@@ -6303,8 +6591,10 @@ def configure_install(args, prep, moved):
     hw_video = HW_VIDEO_PATCH in (recipe.get("patches") or [])  # the shared codec (install_video_codec)
     gamepad = GAMEPAD_PATCH in (recipe.get("patches") or [])  # Steam Input's virtual gamepad (PODMAN_WRAPPER)
     features = bool(system_features((args.get("env") or {}).get("FRAMEPORT_FEATURES")))  # device.hybrid_app
+    features = features or str((args.get("env") or {}).get("FRAMEPORT_OFFLINE", "")) == "1"  # device.offline
     if gamepad or features:
         ensure_podman_wrapper()
+    extra_folder_cleanup(base, (args.get("env") or {}).get(FOLDER_ENV))  # device.extra_folder taken off or changed
     config_sync = args.get("config_sync") if isinstance(args.get("config_sync"), dict) else {}
     scene_value = settings.get("scene_emul", (recipe.get("adapter") or {}).get(
         "scene_emul", int("adapter.scene_emul" in (recipe.get("patches") or []))))
@@ -11595,6 +11885,12 @@ def main():
         return 0
     if len(sys.argv) >= 5 and sys.argv[1] == "_logcat_keeper":
         logcat_keeper(sys.argv[2], sys.argv[3], sys.argv[4])
+        return 0
+    if len(sys.argv) >= 2 and sys.argv[1] == "_steam_locale":
+        print(steam_locale())
+        return 0
+    if len(sys.argv) >= 4 and sys.argv[1] == "_extra_folder":
+        print(extra_folder(sys.argv[2], check_pkg(sys.argv[3]), os.environ.get(FOLDER_ENV, "")))
         return 0
     if len(sys.argv) >= 4 and sys.argv[1] == "_gamepad_links":
         gamepad_links(sys.argv[2], sys.argv[3])
