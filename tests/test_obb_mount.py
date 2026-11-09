@@ -479,4 +479,4 @@ def test_real_grid_legends():
     assert NATIVE_IMPORTS[done[0]] in elf.dyn_symbols(out, defined=False)
     respelt, names, unclear = respell_names(out)
     assert (names, unclear) == (["Index.txt"], []) and len(respelt) == len(out)
-    assert sum(a != b for a, b in zip(respelt, out)) == 1  # one byte: I -> i
+    assert sum(a != b for a, b in zip(respelt, out, strict=True)) == 1  # one byte: I -> i
