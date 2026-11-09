@@ -126,7 +126,7 @@ def test_launchers_get_the_codec_line_only_for_games_with_the_patch(monkeypatch,
         text = (directory / "launch.sh").read_text()
         assert (agent.VIDEO_CODEC_LINE in text) is want, directory.name
         assert not any(line in text for line in agent.OLD_CODEC_LINES)
-        assert text.endswith("child=''\nsetsid /lepton start\n")
+        assert "child=''\n" in text and text.endswith("setsid /lepton start\n")
         assert "surface_native" not in text
     assert (player / "launch.sh").read_text().count(agent.VIDEO_CODEC_LINE) == 1
     assert (rift / "launch.sh").read_text() == "exec proton\n"

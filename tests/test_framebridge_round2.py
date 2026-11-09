@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (embedded C test sources)
 """FrameBridge fixes of November 2026: performance-level requests (#336/#400), plain RGBA8 formats (#400), per-eye
 poses for games that submit the head pose twice (#527), detached controllers in xrSyncActions (#476), the haptics
 summary (#567) and the OVRPlugin controller battery (#572).

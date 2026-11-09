@@ -265,7 +265,8 @@ SETTINGS = [
      "OpenXR lets xrWaitFrame block until the frame waited before it has begun; the Frame's runtime does, forever. "
      "Unreal's Oculus splash screen waits for a new frame while the one waited before was never begun (OVRPlugin: "
      "\"CompositorOpenXR::Update called for frame N outside of frame bounds\"), and the game hung at its logo (for "
-     "example FNaF Help Wanted, GitHub #135). When no thread begins that frame within 100 ms, FrameBridge begins it and "
+     "example FNaF Help Wanted, GitHub #135). When no thread begins that frame within 100 ms, FrameBridge begins "
+     "it and "
      "ends it without layers, then lets the wait go on; the game's own late xrBeginFrame/xrEndFrame for it are "
      "answered without the runtime. Acts only in a state that would otherwise hang."),
     ("swap_eyes", "int", 0, "Swap eyes", "Swap left/right views (diagnostic)."),
