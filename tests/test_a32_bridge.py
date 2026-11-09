@@ -544,6 +544,24 @@ def test_jit_stub_overflow_is_triaged_and_rebuilds_pinball():
     assert patch.revision_for("com.fallen.affected") == patch.revision
 
 
+def test_libgcc_unwinder_gets_the_guest_library_table():
+    """GitHub #439 (Ghost Giant, Unity 2017 il2cpp, gnustl): libgcc's unwinder inside libil2cpp.so asks
+    __gnu_Unwind_Find_exidx, which static bionic answers with the runtime's own table (every throw → terminate). The
+    runtime exports it as the same wrapper as dl_unwind_find_exidx; the bridge harness checks it in the guest
+    (test/libbtest5.c), and the fixed runtime marks every bridged game "Update on Frame"."""
+    from pathlib import Path
+
+    root =Path(__file__).resolve().parents[1] / "native" / "a32translator" / "bridge"
+    stubs = (root / "gen_stubs.py").read_text()
+    assert '"__gnu_Unwind_Find_exidx": "__wrap_dl_unwind_find_exidx"' in stubs
+    assert '"dl_unwind_find_exidx": "__wrap_dl_unwind_find_exidx"' in stubs
+    assert "__gnu_Unwind_Find_exidx" in (root / "test" / "libbtest5.c").read_text()
+    assert "test_exidx(argv[1]);" in (root / "test" / "harness.c").read_text()
+    patch = a32_bridge.A32Bridge()
+    assert patch.revision >= 2
+    assert patch.revision_for("com.zoink.ghostgiant") > 4
+
+
 def test_jit_ends_blocks_before_the_stub_table_is_full():
     """The block loop in jit.c also ends a block when the exit-stub table is nearly full (it used to check only the
     instruction count and the code size); tests/programs/sha1ce.c is the run-time check (run_programs.py)."""

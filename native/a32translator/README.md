@@ -115,7 +115,7 @@ python native/a32translator/bridge/build.py [--test]
 - **Guest runtime** (`bridge/guest`): bionic's static libc/libm/libz/libstdc++/libunwind, linked whole and
   exported through a table (`gen/exports.S`), plus a loader for the game's libraries (bionic's lookup order, packed
   relocations, RELR, `dlopen`/`dlsym`/`dladdr`/`dl_iterate_phdr`, ARM EHABI unwinding through
-  `dl_unwind_find_exidx`). Symbols nothing defines become stubs that log their name and return 0. Libraries the
+  `dl_unwind_find_exidx` and libgcc's `__gnu_Unwind_Find_exidx`). Symbols nothing defines become stubs that log their name and return 0. Libraries the
   guest knows as system libraries (`libGLESv2.so`, ...) resolve against the export table.
 - **Hypercalls** (`bridge/abi.h`): guest code calls the host with `SVC 0` and `r7 = 0x0a32xxxx`; host-to-guest
   calls return through a trampoline in the kuser page. The thread that starts the bridge becomes the guest's main
@@ -176,7 +176,8 @@ Tests:
   Call*Method style, NewObject, nested calls, guest threads that attach, several host threads, exceptions, a
   NativeActivity with a DT_NEEDED library, NDK media against a fake libmediandk whose buffers lie above 4 GiB
   (`fakemedia.c`, `libbtest4.c`), and C++ exceptions in guest libraries using ordinary REL,
-  standard RELR and Android's older RELR tags (with APS2). Runs under qemu-aarch64 or
+  standard RELR and Android's older RELR tags (with APS2), and the unwind-table lookup libgcc's unwinder uses
+  (`__gnu_Unwind_Find_exidx`, `libbtest5.c`). Runs under qemu-aarch64 or
   natively (passes on the Frame with JIT and interpreter).
 - `uv run python bridge/test/make_apk.py`: `org.frameport.a32test`, a NativeActivity APK without Java code whose
   library is 32-bit (`bridge/test/libapktest.c`). Installed with FramePort (`frameport scan`, then `frameport

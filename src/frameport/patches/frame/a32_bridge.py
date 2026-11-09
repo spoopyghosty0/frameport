@@ -197,7 +197,11 @@ class A32Bridge(Patch):
     # ARMv8 SHA-1 rounds in Pinball FX2 VR killed the game): "Update on Frame" for the game that hit it
     # Ghost Giant (GitHub #439): Unity's video player needs libmediandk (AMediaFormat/AMediaCodec/AMediaExtractor
     # functions, then its AMEDIAFORMAT_KEY_* data symbols); 4: OpenSL ES buffers read on the clock (distorted sound)
-    package_revisions = {"com.zenstudios.PinballFX2VRQuest": 2, "com.zoink.ghostgiant": 4}
+    # 2 (every game, the runtime ships inside each APK): libgcc's unwinder in gnustl-era libraries (Unity 2017's
+    # libil2cpp.so) got the runtime's own unwind table from __gnu_Unwind_Find_exidx, so every C++ throw ended in
+    # terminate (GitHub #439); the per-package numbers moved up with it
+    revision = 2
+    package_revisions = {"com.zenstudios.PinballFX2VRQuest": 3, "com.zoink.ghostgiant": 5}
     title = "32-bit ARM bridge (Gear VR / Go games)"
     description = (
         "Runs a 32-bit-only game (armeabi-v7a: Gear VR, Oculus Go and early Quest games) on the Frame, which has no "

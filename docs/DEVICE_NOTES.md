@@ -126,6 +126,17 @@ untracked default pose (`a32 submit anomaly … dropped=1`), so there was nothin
 the VrApi bridge now submits the images anyway, puts the floor (GetTrackingTransform(3)) 1.6 m below the eye origin
 instead of the runtime's headless STAGE (0.865 m: Ghost Giant then showed only "Return to play area"), and the a32
 bridge keeps the game's pose. Never set outside tests.
+**C++ exceptions in gnustl-era libraries (GitHub #439, Ghost Giant, 2026-11-09):** every throw from libil2cpp.so
+(Unity 2017.4.18f1, gnustl + libgcc) ended in `terminate called after throwing an instance of
+'Il2CppExceptionWrapper'` → exit_group(127). Such libraries link libgcc's ARM EHABI unwinder + libsupc++ and import
+only `__gnu_Unwind_Find_exidx` for it; the runtime exported that name straight to static bionic's version
+(`exidx_static.o`), which ignores the pc and returns the runtime's own `__exidx_start..__exidx_end`, so phase 1 never
+found a handler. libc++ builds (e.g. NDK r27c's) use LLVM libunwind, which asks `dl_unwind_find_exidx` (already wrapped:
+`--wrap`, guest/loader.c), so the existing exception tests passed. Fix: gen_stubs.py OVERRIDES maps
+`__gnu_Unwind_Find_exidx` to the same `__wrap_dl_unwind_find_exidx` (identical signature `(_Unwind_Ptr pc, int
+*pcount)`); harness `libbtest5.c` checks both names give the calling library's table (before: 0x1 = the runtime's).
+The runtime ships inside every bridged APK → `frame.a32_bridge` revision 2 (all bridged games "Update on Frame").
+Ghost Giant itself needs controller input to reach chapter 1, where the throws happen: not checkable headless.
 
 ## Upload speed
 

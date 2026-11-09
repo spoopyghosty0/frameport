@@ -90,6 +90,8 @@ def main():
              to / "libbtest.a32.so", "-landroid", "-llog", "-o", to / "libbtest2.a32.so"])
         run([cc32, *opt, *prefix, *WARN, "-mthumb", "-mfpu=neon-vfpv4", "-shared", "-fPIC", "-I", t,
              t / "libbtest4.c", "-ldl", "-o", to / "libbtest4.a32.so"])
+        run([cc32, *opt, *prefix, *WARN, "-mthumb", "-shared", "-fPIC", "-funwind-tables", t / "libbtest5.c",
+             "-ldl", "-o", to / "libbtest5.a32.so"])
         run([bin_ / "armv7a-linux-androideabi30-clang++", *opt, *prefix, *WARN, "-mthumb", "-shared", "-fPIC",
              "-static-libstdc++", t / "libbtest3.cpp", "-o", to / "libbtest3.a32.so"])
         # Exercise both RELR tag families through the real guest loader. C++ constructors,

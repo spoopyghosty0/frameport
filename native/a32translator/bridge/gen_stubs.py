@@ -27,6 +27,10 @@ OVERRIDES = {
     "dlopen": "grt_dlopen", "dlsym": "grt_dlsym", "dlclose": "grt_dlclose", "dlerror": "grt_dlerror",
     "dladdr": "grt_dladdr", "dl_iterate_phdr": "dl_iterate_phdr",
     "dl_unwind_find_exidx": "__wrap_dl_unwind_find_exidx", "android_dlopen_ext": "grt_android_dlopen_ext",
+    # libgcc's unwinder (gnustl-era libraries such as Unity 2017's libil2cpp.so carry their own) asks this one; static
+    # bionic's version ignores the pc and returns the runtime's own table (#439). Same signature as
+    # dl_unwind_find_exidx.
+    "__gnu_Unwind_Find_exidx": "__wrap_dl_unwind_find_exidx",
     "dlvsym": "grt_dlvsym", "eglGetProcAddress": "grt_eglGetProcAddress",
 }
 COMPAT = ["_tolower_tab_", "_toupper_tab_", "__isthreaded", "bsd_signal", "pthread_atfork",  # pthread_atfork: crtbegin_static.o

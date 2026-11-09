@@ -276,6 +276,18 @@ static void test_cxx(const char *dir, const char *name)
     CHECK(r == 303, "%s: C++ exceptions and static constructors in a guest library (%d)", name, r);
 }
 
+static void test_exidx(const char *dir)
+{
+    char stub[512];
+    snprintf(stub, sizeof stub, "%s/libbtest5.so", dir);
+    uint32_t h = a32b_load(stub);
+    uint32_t fn = h ? a32b_sym(h, "exidx_test") : 0;
+    int r = fn ? (int)a32b_call(fn, NULL, 0) : -1;
+    CHECK(r >= 0 && (r & 1), "dl_unwind_find_exidx finds a guest library's unwind table (0x%x)", r);
+    CHECK(r >= 0 && (r & 6) == 6, "__gnu_Unwind_Find_exidx (libgcc's unwinder, #439) gives the same table, not the "
+                                  "runtime's (0x%x)", r);
+}
+
 static void test_media(const char *dir)
 {
     char stub[512];
@@ -315,6 +327,7 @@ int main(int argc, char **argv)
     test_cxx(argv[1], "libbtest3");
     test_cxx(argv[1], "libbtest3_android");
     test_cxx(argv[1], "libbtest3_standard");
+    test_exidx(argv[1]);
     test_media(argv[1]);
     CHECK(mprotect(taken, 4 << 20, PROT_NONE) == 0, "the host's low mapping is still there");
     if (failures) {

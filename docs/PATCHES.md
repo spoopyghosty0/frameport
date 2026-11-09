@@ -542,7 +542,7 @@ FramePort's own changes to a converted Quest game, for what the Steam Frame lack
 
 Runs a 32-bit game (Gear VR, Oculus Go, early Quest) on the Frame, which only runs 64-bit code. Experimental.
 
-- `frame.a32_bridge` · experimental · also for 2D apps
+- `frame.a32_bridge` · experimental · also for 2D apps · revision 2
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** 32-bit-only game: the Frame can't run 32-bit ARM code, the bridge translates it.
 - **Catalog games (9):** AFFECTED: The Manor, First Contact, Gunjack, HeroBound 2, HeroBound: First Steps, Journey of the Gods, Shadow Point, Sports Scramble (Santa Cruz) and 1 more.
