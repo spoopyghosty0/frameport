@@ -138,7 +138,7 @@ class FilesView:
         self.sel_bar = ft.Container(ft.Row([
             self.sel_label, ft.Container(expand=True),
             C.secondary(tr("Download…"), ft.Icons.DOWNLOAD_ROUNDED, self._download_selected),
-            C.ghost(tr("Move to…"), ft.Icons.DRIVE_FILE_MOVE_OUTLINED, lambda e: self._move_selected()),
+            C.ghost(tr("Move to…"), ft.Icons.DRIVE_FILE_MOVE_ROUNDED, lambda e: self._move_selected()),
             C.ghost(tr("Delete…"), ft.Icons.DELETE_OUTLINE_ROUNDED, lambda e: self._delete_selected()),
             C.ghost(tr("Clear"), ft.Icons.CLOSE_ROUNDED, lambda e: self._clear_selection()),
         ], spacing=T.S2), padding=ft.Padding(T.S3, T.px(6), T.S2, T.px(6)), border_radius=T.RADIUS_SM,
@@ -491,7 +491,7 @@ class FilesView:
         if self._writable() and not self._protected(e):
             actions += [C.icon_btn(ft.Icons.DRIVE_FILE_RENAME_OUTLINE_OUTLINED, tr("Rename…"),
                                    lambda ev, x=e: self.rename(x)),
-                        C.icon_btn(ft.Icons.DRIVE_FILE_MOVE_OUTLINED, tr("Move to…"),
+                        C.icon_btn(ft.Icons.DRIVE_FILE_MOVE_ROUNDED, tr("Move to…"),
                                    lambda ev, x=e: self.move_to([x])),
                         C.icon_btn(ft.Icons.DELETE_OUTLINE_ROUNDED, tr("Delete…"), lambda ev, x=e: self.delete([x]))]
         check = ft.Checkbox(value=e.path in self.selected, active_color=T.ACCENT, check_color=T.ON_ACCENT,
@@ -520,7 +520,7 @@ class FilesView:
     def _saves_row(self, e) -> ft.Control:
         row = ft.Container(
             ft.Row([ft.Container(width=T.px(40)),  # where other rows have their checkbox
-                    ft.Icon(ft.Icons.SAVE_OUTLINED, size=T.px(20), color=T.ACCENT),
+                    ft.Icon(ft.Icons.SAVE_ROUNDED, size=T.px(20), color=T.ACCENT),
                     ft.Column([C.body(e.name, T.TEXT, weight=ft.FontWeight.W_500, max_lines=1,
                                       overflow=ft.TextOverflow.ELLIPSIS),
                                C.meta(tr("link → the game's internal storage (/data/data/{package}): saves and "
@@ -589,7 +589,7 @@ class FilesView:
                         lambda ev: self._toggle(e.path, not on)))
         if deletable:
             out += [None, (tr("Move {n} items to…").format(n=len(deletable)) if len(deletable) > 1 else tr("Move to…"),
-                           ft.Icons.DRIVE_FILE_MOVE_OUTLINED, lambda ev: self.move_to(deletable)),
+                           ft.Icons.DRIVE_FILE_MOVE_ROUNDED, lambda ev: self.move_to(deletable)),
                     (tr("Delete {n} items…").format(n=len(deletable)) if len(deletable) > 1 else tr("Delete…"),
                      ft.Icons.DELETE_OUTLINE_ROUNDED, lambda ev: self.delete(deletable))]
         return out

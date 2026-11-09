@@ -36,7 +36,7 @@ class MovePicker:
         self.crumb_row = ft.Row(spacing=T.px(2), wrap=True)
         self.folders = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.hint = C.meta("")
-        self.go = C.primary(tr("Move here"), ft.Icons.DRIVE_FILE_MOVE_OUTLINED, lambda e: self._move())
+        self.go = C.primary(tr("Move here"), ft.Icons.DRIVE_FILE_MOVE_ROUNDED, lambda e: self._move())
         self.go.disabled = True
 
     def show(self) -> None:
@@ -130,7 +130,7 @@ class MovePicker:
             rows.append(self._folder_row("..", ft.Icons.ARROW_UPWARD_ROUNDED, "",
                                          on_click=lambda e, c=loc["parent"]: self.open(c)))
         if self.view.has_saves_entry(loc, path):  # into the game's saves, like the Files list
-            rows.append(self._folder_row(tr("Saves (internal storage)"), ft.Icons.SAVE_OUTLINED, "", link=True,
+            rows.append(self._folder_row(tr("Saves (internal storage)"), ft.Icons.SAVE_ROUNDED, "", link=True,
                                          on_click=lambda e: self.open(self.view.saves_location(loc))))
         for e in folders:
             if e.path in moving:  # never into itself
