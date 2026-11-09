@@ -99,7 +99,7 @@ static float c_sharp_centre(uint32_t fb, uint32_t texels, int axis, uint32_t bin
 // ---------------------------------------------------------------- object tracking (handles below Valve's layer)
 
 #define C_SLOTS 2048
-typedef struct { uint64_t key; uint64_t a, b, c, d; } c_slot;  // a/b/c/d meaning per table
+typedef struct { uint64_t key; uint64_t a, b, c, d, e; } c_slot;  // a-e meaning per table
 static c_slot c_images[C_SLOTS], c_ivs[C_SLOTS], c_rps[C_SLOTS], c_fbs[C_SLOTS], c_cmds[C_SLOTS];
 static int c_obj_lock;
 // Not the darkening layer's lock: it holds that one while asking the next layer (Valve's, then this one) for
@@ -771,6 +771,7 @@ typedef struct {
     float vx, vy;               // where the full-density area is centred without offsets
     uint32_t bin_w, bin_h;      // Turnip's bins (0: unknown)
     int bin_source;             // 0 unknown, 1 computed, 2 fdm_bin_w/fdm_bin_h
+    uint32_t raw, rah;          // the pass's render area (Valve scales its gaze offsets by it)
 } c_pass_info;
 static void c_diag_pass(VkCommandBuffer cmd, const c_pass_info *pi, uint32_t in_count, const VkOffset2D *in,
                         const VkOffset2D *out, uint32_t handed) {
@@ -784,11 +785,11 @@ static void c_diag_pass(VkCommandBuffer cmd, const c_pass_info *pi, uint32_t in_
     drop_lock(&c_obj_lock);
     if (!(pass_no <= 40 || pass_no % 1000 == 0 || (shared && total_shared <= 20))) return;
     char text[640];
-    int len = snprintf(text, sizeof(text), "fdm_diag: pass #%llu %ux%u map %ux%u layer %u+%u%s, bins %ux%u, sharp centre %.0f,%.0f: "
+    int len = snprintf(text, sizeof(text), "fdm_diag: pass #%llu %ux%u (render area %ux%u) map %ux%u layer %u+%u%s, bins %ux%u, sharp centre %.0f,%.0f: "
                        "%llu pipeline bind(s)%s, %llu Turnip shares one viewport for%s (first: 0x%x), %llu writing "
                        "ViewportIndex -> %s [%llu of %llu passes shared; pipelines created %llu, without density map "
                        "%llu, writing ViewportIndex %llu]; offsets in %u:",
-                       (unsigned long long)pass_no, pi->fbw, pi->fbh, pi->mw, pi->mh, pi->first, pi->map_layers,
+                       (unsigned long long)pass_no, pi->fbw, pi->fbh, pi->raw, pi->rah, pi->mw, pi->mh, pi->first, pi->map_layers,
                        pi->flagged ? "" : " (map without offset flag)", pi->bin_w, pi->bin_h, pi->vx, pi->vy,
                        (unsigned long long)binds,
                        d >> 62 ? " incl. secondaries" : "", (unsigned long long)shared,
@@ -826,8 +827,9 @@ static uint32_t c_pass_views(uint32_t view_mask, uint32_t layers) {
 
 // command buffer state: a = framebuffer width | height << 32, b = map width | height << 32 (0: no map), c = map flags
 // | Turnip's bin size << 32 (width | height << 16, 0: undecided), d = offsets Turnip reads | first map layer << 16 |
-// map view's layer count << 32
-static void c_begin(VkCommandBuffer cmd, uint32_t fbw, uint32_t fbh, VkImageView map, uint32_t views, uint32_t bin) {
+// map view's layer count << 32, e = render area width | height << 32 (Valve's gaze offsets are NDC x half of it)
+static void c_begin(VkCommandBuffer cmd, uint32_t fbw, uint32_t fbh, VkImageView map, uint32_t views, uint32_t bin,
+                    VkExtent2D area) {
     take_lock(&c_obj_lock);
     c_slot *iv = map ? c_find(c_ivs, H(map), 0) : NULL;
     c_slot *s = c_find(c_cmds, H(cmd), iv != NULL);
@@ -836,6 +838,7 @@ static void c_begin(VkCommandBuffer cmd, uint32_t fbw, uint32_t fbh, VkImageView
         s->b = iv ? (iv->a | iv->b << 32) : 0;
         s->c = iv ? ((iv->c & 0xffffffffull) | (uint64_t)bin << 32) : 0;
         s->d = iv ? ((views & 0xffff) | (iv->d & 0xffff) << 16 | (iv->d >> 32) << 32) : 0;
+        s->e = area.width | (uint64_t)area.height << 32;
     }
     drop_lock(&c_obj_lock);
     if (iv) c_pdiag_start(cmd, 0);
@@ -851,7 +854,7 @@ static void c_begin_rp(VkCommandBuffer cmd, const VkRenderPassBeginInfo *info) {
         if (ab && (uint32_t)index - 1 < ab->attachmentCount) view = H(ab->pAttachments[(uint32_t)index - 1]);
     }
     c_begin(cmd, (uint32_t)size, (uint32_t)(size >> 32), (VkImageView)(uintptr_t)view,
-            c_pass_views((uint32_t)(lm >> 32), (uint32_t)lm), (uint32_t)(index >> 32));
+            c_pass_views((uint32_t)(lm >> 32), (uint32_t)lm), (uint32_t)(index >> 32), info->renderArea.extent);
 }
 static VKAPI_ATTR void VKAPI_CALL c_CmdBeginRenderPass(VkCommandBuffer cmd, const VkRenderPassBeginInfo *info,
                                                        VkSubpassContents contents) {
@@ -874,7 +877,8 @@ static void c_begin_rendering(VkCommandBuffer cmd, const VkRenderingInfo *info) 
     // Turnip: a dynamic-rendering framebuffer ends where the render area ends
     c_begin(cmd, (uint32_t)(info->renderArea.offset.x + (int32_t)info->renderArea.extent.width),
             (uint32_t)(info->renderArea.offset.y + (int32_t)info->renderArea.extent.height), f ? f->imageView : VK_NULL_HANDLE,
-            c_pass_views(info->viewMask, info->layerCount), f && f->imageView ? c_dynamic_bin(info) : 0);
+            c_pass_views(info->viewMask, info->layerCount), f && f->imageView ? c_dynamic_bin(info) : 0,
+            info->renderArea.extent);
 }
 static VKAPI_ATTR void VKAPI_CALL c_CmdBeginRendering(VkCommandBuffer cmd, const VkRenderingInfo *info) {
     c_begin_rendering(cmd, info);
@@ -899,7 +903,7 @@ static uint32_t c_offsets_for(VkCommandBuffer cmd, c_device *d, uint32_t in_coun
                               VkOffset2D *out, c_pass_info *pi) {
     take_lock(&c_obj_lock);
     c_slot *s = c_find(c_cmds, H(cmd), 0);
-    uint64_t size = s ? s->a : 0, map = s ? s->b : 0, flags = s ? s->c : 0, shape = s ? s->d : 0;
+    uint64_t size = s ? s->a : 0, map = s ? s->b : 0, flags = s ? s->c : 0, shape = s ? s->d : 0, area = s ? s->e : 0;
     if (s) s->key = ~0ull;  // one pass at a time per command buffer
     drop_lock(&c_obj_lock);
     uint32_t n = (uint32_t)(shape & 0xffff), first = (uint32_t)((shape >> 16) & 0xffff);
@@ -910,8 +914,10 @@ static uint32_t c_offsets_for(VkCommandBuffer cmd, c_device *d, uint32_t in_coun
     int bin_source = bin ? 1 : 0;
     if (c_bin_w && c_bin_h) bin_w = c_bin_w, bin_h = c_bin_h, bin_source = 2;
     float vx = c_sharp_centre(fbw, mw, 0, bin_w), vy = c_sharp_centre(fbh, mh, 1, bin_h);
+    // Valve's render area (its gaze offsets are gaze NDC x half of it); the framebuffer when none was recorded
+    uint32_t raw = (uint32_t)area ? (uint32_t)area : fbw, rah = (uint32_t)(area >> 32) ? (uint32_t)(area >> 32) : fbh;
     *pi = (c_pass_info){fbw, fbh, mw, mh, first, map_layers, map ? n : 0, (flags & FDM_OFFSET_FLAG) != 0,
-                        {-1, -1, -1, -1}, {{0}}, vx, vy, bin_w, bin_h, bin_source};
+                        {-1, -1, -1, -1}, {{0}}, vx, vy, bin_w, bin_h, bin_source, raw, rah};
     fp_fdm_view *views = pi->views;
     take_lock(&c_lock);
     uint32_t nviews = c_view_count;
@@ -938,9 +944,10 @@ static uint32_t c_offsets_for(VkCommandBuffer cmd, c_device *d, uint32_t in_coun
         pi->eye[v] = (int32_t)(e - views);
         float dx = e->cx, dy = e->cy;
         if (gaze) {
-            // Valve: gaze NDC * render-area half size from the swapchain centre; the gaze is in the eye's view
-            dx = (float)e->x + (float)e->w / 2.0f + (float)g.x * (float)e->w / (float)fbw;
-            dy = (float)e->y + (float)e->h / 2.0f + (float)g.y * (float)e->h / (float)fbh;
+            // Valve: gaze NDC * half the pass's render area (not the framebuffer: Unreal-style passes render only
+            // the eye's rect, In Death 1730 of 2768, #394/#520); the gaze NDC is in the eye's view = its rect
+            dx = (float)e->x + (float)e->w / 2.0f + (float)g.x * (float)e->w / (float)raw;
+            dy = (float)e->y + (float)e->h / 2.0f + (float)g.y * (float)e->h / (float)rah;
         }
         out[v].x = c_round(dx - vx, d->gran.width);
         out[v].y = c_round(dy - vy, d->gran.height);
@@ -948,8 +955,9 @@ static uint32_t c_offsets_for(VkCommandBuffer cmd, c_device *d, uint32_t in_coun
     }
     static int logged;
     if (matched && logged++ < 8)
-        LOG("fdm_centre: pass %ux%u map %ux%u layer %u+%u (preset %d, bins %ux%u %s, sharp centre %.0f,%.0f, texel "
-            "centre %.0f,%.0f, %s): %u view(s), %u offset(s) from Valve %d,%d -> %d,%d%s", fbw, fbh, mw, mh, first,
+        LOG("fdm_centre: pass %ux%u (render area %ux%u) map %ux%u layer %u+%u (preset %d, bins %ux%u %s, sharp centre "
+            "%.0f,%.0f, texel centre %.0f,%.0f, %s): %u view(s), %u offset(s) from Valve %d,%d -> %d,%d%s", fbw, fbh,
+            raw, rah, mw, mh, first,
             map_layers, c_level, bin_w, bin_h, bin_source == 2 ? "from fdm_bin_w/_h" : bin_source ? "computed" : "unknown",
             vx, vy, c_valve_centre(fbw, mw, 0), c_valve_centre(fbh, mh, 1), c_fixed ? "Fixed" : gaze ? "gaze" : "no gaze",
             n, in_count, in_count ? in[0].x : 0, in_count ? in[0].y : 0, out[0].x, out[0].y,

@@ -105,6 +105,7 @@ static VKAPI_ATTR void VKAPI_CALL n_CmdEndRenderPass(VkCommandBuffer c) {
 // One pass into a w x h swapchain with Valve's ceil(w/32) x ceil(h/32) two-layer map: multiview (view_mask 3, the
 // whole map) or a one-eye pass (view_mask 0, the map view of `eye`'s layer, as Valve attaches it); ends with `valve`
 // offsets (NULL: none). `flagged`: the map has the offset flag (Valve's offsets on).
+static VkExtent2D render_area;  // pass_ex's render area; 0: the whole framebuffer
 static void pass_ex(uint32_t w, uint32_t h, const VkOffset2D *valve, uint32_t count, uint32_t view_mask, uint32_t eye,
                     int flagged) {
     VkDevice dev = (VkDevice)&device_obj;
@@ -137,7 +138,7 @@ static void pass_ex(uint32_t w, uint32_t h, const VkOffset2D *valve, uint32_t co
     VkFramebuffer fb;
     c_CreateFramebuffer(dev, &fci, NULL, &fb);
     VkRenderPassBeginInfo bi = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    bi.renderPass = rp, bi.framebuffer = fb, bi.renderArea.extent = (VkExtent2D){w, h};
+    bi.renderPass = rp, bi.framebuffer = fb, bi.renderArea.extent = render_area.width ? render_area : (VkExtent2D){w, h};
     c_CmdBeginRenderPass2(cmd, &bi, NULL);
     last_rp = rp;
     if (bind_in_pass) c_CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bind_in_pass);
@@ -255,6 +256,20 @@ int main(void) {
     // Valve computes both eyes' gaze offsets but declares count 1 (seen on the Frame): each eye uses its own
     pass(2016, 1728, gaze, 1);
     CHECK(got_count == 2 && near(got[1].x, 287 + 863 - 504 * 1726.0f / 2016 - 1024, 4));
+
+    // In Death (Unreal, #394/#520): the eye pass renders only the rect (render area 1730 of a 2768 framebuffer) and
+    // Valve scales its gaze by that render area: its straight-ahead gaze 128,-176 is the left eye's optical centre
+    // 996,689 (1730/2 + 128, 1730/2 - 176), not 945,755 as with the framebuffer's scale
+    fp_fdm_view id_eyes[2] = {{2768, 2768, 0, 0, 0, 1730, 1730, 996, 689}, {2768, 2768, 1, 0, 0, 1730, 1730, 725, 702}};
+    fp_fdm_set_views(id_eyes, 2);
+    render_area = (VkExtent2D){1730, 1730};
+    VkOffset2D ahead[2] = {{128, -176}, {-136, -160}};
+    pass(2768, 2768, ahead, 1);
+    CHECK(got_count == 2);
+    CHECK(near(got[0].x, 993 - c_valve_centre(2768, 87, 0), 8) && near(got[0].y, 689 - c_valve_centre(2768, 87, 1), 8));
+    CHECK(near(got[1].x, 729 - c_valve_centre(2768, 87, 0), 8) && near(got[1].y, 705 - c_valve_centre(2768, 87, 1), 8));
+    render_area = (VkExtent2D){0, 0};
+    fp_fdm_set_views(views, 2);
 
     // Fixed (Valve's offsets on underneath): its gaze is ignored, the optical centre wins
     c_fixed = 1;
