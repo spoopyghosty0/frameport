@@ -1,0 +1,24 @@
+package: com.sketchar.sketcharmeta
+title: Sketchar Meta
+status: works
+tested_version: 1.10.2
+engine: Unity
+xr: OpenXR
+frame:
+- frame.meta_permissions
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  controller_models: 1
+  haptic_fix: 1
+  scene_emul: 1
+verified:
+  date: '2026-11-05'
+  known_good_sha256: 7106f5df1a7930025ac6afae78e8b299a02f5b48e22928de21931aaf07277721
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261103.6153824'
+  agent: 125
+  issue: 580
+source_hint: SketchAR- Drawing, Tracing, Mural art

@@ -1,0 +1,21 @@
+package: com.BurntTomato.RillaShotgun
+title: Rilla Shotgun
+status: works
+tested_version: '3.2'
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-30'
+  known_good_sha256: 0053e6b29b4292968da6652222cdc88b269ab07ba299224451c7a93f8aa32fc0
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6150929'
+  agent: 125
+  issue: 541
+source_hint: com.BurntTomato.RillaShotgun

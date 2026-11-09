@@ -1,0 +1,27 @@
+package: com.ImpactReality.TromboneChamp
+title: 'Trombone Champ: Unflattened!'
+status: works
+notes: Reaches the game; lightly tested.
+tested_version: 01.010.575
+engine: Unity
+xr: OpenXR
+frame:
+- frame.meta_permissions
+- frame.gms_platform_version
+- frame.unity_text_input
+- frame.hw_video_decode
+- frame.oculusos
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+  scene_emul: 1
+verified:
+  date: '2026-11-03'
+  known_good_sha256: a6ff907a7c183f26701aa2fd45b41a828ad8f07a96ecee6e7eb9f7ede74ee2f2
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261103.6153824'
+  agent: 125
+  issue: 578
+source_hint: TromboneChamp

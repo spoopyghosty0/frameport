@@ -1,0 +1,26 @@
+package: com.DeoVR.Hyper
+title: DeoVR Hyper
+status: works
+tested_version: '1.16'
+engine: Unity
+xr: OpenXR
+frame:
+- frame.meta_permissions
+- frame.gms_platform_version
+- frame.unity_appui_vibrator
+- frame.unity_text_input
+- frame.hw_video_decode
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-11-03'
+  known_good_sha256: 4b379e2bddf7a7de589564d6b9bc497e920aa54ea61fd2bdebf11b5948c261ca
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 577
+source_hint: base
+notes: Videos above 1080p don't play; scrolling is unreliable.

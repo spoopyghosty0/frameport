@@ -39,7 +39,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Patch Oculus detection for Unity](#patch_oculus_unity) | `patch_oculus_unity` | Patches from OVRPort | default |
 | [Patch Oculus detection for Unreal](#patch_oculus_unreal) | `patch_oculus_unreal` | Patches from OVRPort | default |
 | [Remove localized app names](#patch_remove_localized_names) | `patch_remove_localized_names` | Patches from OVRPort | default |
-| [Remove Unreal's ForceQuit](#patch_remove_unreal_force_quit) | `patch_remove_unreal_force_quit` | Patches from OVRPort | 50 |
+| [Remove Unreal's ForceQuit](#patch_remove_unreal_force_quit) | `patch_remove_unreal_force_quit` | Patches from OVRPort | 54 |
 | [Remove uses-library](#patch_remove_uses_library) | `patch_remove_uses_library` | Patches from OVRPort | default |
 | [Remove VrApi library](#patch_remove_vrapi) | `patch_remove_vrapi` | Patches from OVRPort |  |
 | [Replace application label and icon](#patch_replace_icon_label) | `patch_replace_icon_label` | Patches from OVRPort | default |
@@ -50,7 +50,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Content files from the game's data](#frame-asset_files) | `frame.asset_files` | Steam Frame patches | 2 |
 | [Asset-file service bypass](#frame-asset_files_stub) | `frame.asset_files_stub` | Steam Frame patches |  |
 | [Skip Meta avatars](#frame-avatar_stub) | `frame.avatar_stub` | Steam Frame patches | 1 |
-| [bHaptics: skip the Bluetooth permission request](#frame-bhaptics_permission) | `frame.bhaptics_permission` | Steam Frame patches | 13 |
+| [bHaptics: skip the Bluetooth permission request](#frame-bhaptics_permission) | `frame.bhaptics_permission` | Steam Frame patches | 17 |
 | [BlazeRush: controllers without Meta avatars, own shader cache](#frame-blazerush) | `frame.blazerush` | Steam Frame patches | 1 |
 | [Browser for sign-ins: open pages in Steam's browser](#frame-browser_handoff) | `frame.browser_handoff` | Steam Frame patches |  |
 | [Cortopia games: don't wait for Meta's org-scoped id](#frame-cortopia_org_id) | `frame.cortopia_org_id` | Steam Frame patches | 1 |
@@ -58,9 +58,9 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [GAZZLERS: take the Quest platform path](#frame-gazzlers_quest_platform) | `frame.gazzlers_quest_platform` | Steam Frame patches | 1 |
 | [OpenGL ES: multiview shaders on flat panels (HUD, menus)](#frame-gl_multiview_fbo) | `frame.gl_multiview_fbo` | Steam Frame patches | 1 |
 | [GL shim (Mesa GLSL compatibility)](#frame-gl_shim) | `frame.gl_shim` | Steam Frame patches | 2 |
-| [Play services: Android 11 version checks](#frame-gms_platform_version) | `frame.gms_platform_version` | Steam Frame patches | 2 |
+| [Play services: Android 11 version checks](#frame-gms_platform_version) | `frame.gms_platform_version` | Steam Frame patches | 4 |
 | [Godot apps: start without a clipboard service](#frame-godot_clipboard) | `frame.godot_clipboard` | Steam Frame patches | 1 |
-| [Hardware video decoding (H.264, HEVC, VP9)](#frame-hw_video_decode) | `frame.hw_video_decode` | Steam Frame patches | 43 |
+| [Hardware video decoding (H.264, HEVC, VP9)](#frame-hw_video_decode) | `frame.hw_video_decode` | Steam Frame patches | 53 |
 | [Just Dance VR: keep progress in the local save](#frame-justdance_local_save) | `frame.justdance_local_save` | Steam Frame patches |  |
 | [Keep Android's shared libraries the app uses](#frame-keep_system_libraries) | `frame.keep_system_libraries` | Steam Frame patches | default |
 | [Language packs from the game's files](#frame-langpacks) | `frame.langpacks` | Steam Frame patches |  |
@@ -69,10 +69,10 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Fix Lua startup crashes on Frame](#frame-luajit_pointers) | `frame.luajit_pointers` | Steam Frame patches | 1 |
 | [Start the game in the app's main process](#frame-main_process) | `frame.main_process` | Steam Frame patches | default |
 | [Unity: disable Meta depth occlusion](#frame-meta_depth_occlusion) | `frame.meta_depth_occlusion` | Steam Frame patches | 1 |
-| [Declare Meta-only permissions](#frame-meta_permissions) | `frame.meta_permissions` | Steam Frame patches | 10 |
+| [Declare Meta-only permissions](#frame-meta_permissions) | `frame.meta_permissions` | Steam Frame patches | 16 |
 | [Meta XR Audio: skip Quest telemetry class](#frame-metaxr_telemetry) | `frame.metaxr_telemetry` | Steam Frame patches | default |
 | [Clear android:debuggable](#frame-nodebug) | `frame.nodebug` | Steam Frame patches | 3 |
-| [Oculus OS telemetry class stubs](#frame-oculusos) | `frame.oculusos` | Steam Frame patches | 18 |
+| [Oculus OS telemetry class stubs](#frame-oculusos) | `frame.oculusos` | Steam Frame patches | 20 |
 | [Fix crash when the game prepares the microphone](#frame-ovr_microphone) | `frame.ovr_microphone` | Steam Frame patches | 1 |
 | [Answer Meta's org-scoped user id request](#frame-ovr_org_scoped_id) | `frame.ovr_org_scoped_id` | Steam Frame patches | default |
 | [Keep the same Meta user between starts](#frame-ovr_stable_user) | `frame.ovr_stable_user` | Steam Frame patches | default |
@@ -80,7 +80,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Platform compat (ovrMessageType_ToString)](#frame-ovrplatformcompat) | `frame.ovrplatformcompat` | Steam Frame patches | default |
 | [Stub missing Meta platform functions](#frame-ovrstubs) | `frame.ovrstubs` | Steam Frame patches | default |
 | [Unpaired pointer-authentication checks](#frame-pac_hints) | `frame.pac_hints` | Steam Frame patches | 1 |
-| [Photon Voice: skip Android 12 audio routing](#frame-photon_voice_audio_route) | `frame.photon_voice_audio_route` | Steam Frame patches | 4 |
+| [Photon Voice: skip Android 12 audio routing](#frame-photon_voice_audio_route) | `frame.photon_voice_audio_route` | Steam Frame patches | 5 |
 | [QuestCraft: count the Frame's network as online](#frame-pojlib_connection) | `frame.pojlib_connection` | Steam Frame patches | 1 |
 | [SDL apps: start without a clipboard service](#frame-sdl_clipboard) | `frame.sdl_clipboard` | Steam Frame patches | 9 |
 | [Stress Level Zero: let Unity start Vulkan itself](#frame-slz_vulkan_hooks) | `frame.slz_vulkan_hooks` | Steam Frame patches | 1 |
@@ -88,27 +88,27 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Embedded OpenXR loader: use FrameBridge](#frame-static_openxr_loader) | `frame.static_openxr_loader` | Steam Frame patches |  |
 | [Allow swapchains larger than 4096 px](#frame-swapchain_limit) | `frame.swapchain_limit` | Steam Frame patches | default |
 | [Team Beef ports: treat the Frame as a Meta headset](#frame-tbxr_vendor) | `frame.tbxr_vendor` | Steam Frame patches | 3 |
-| [Unity App UI: no Android 12 vibrator](#frame-unity_appui_vibrator) | `frame.unity_appui_vibrator` | Steam Frame patches |  |
-| [GL shim for Unity (no multisampled render-to-texture)](#frame-unity_gl_shim) | `frame.unity_gl_shim` | Steam Frame patches | 28 |
-| [Unity: render each eye separately (no multiview)](#frame-unity_multipass) | `frame.unity_multipass` | Steam Frame patches | 2 |
+| [Unity App UI: no Android 12 vibrator](#frame-unity_appui_vibrator) | `frame.unity_appui_vibrator` | Steam Frame patches | 1 |
+| [GL shim for Unity (no multisampled render-to-texture)](#frame-unity_gl_shim) | `frame.unity_gl_shim` | Steam Frame patches | 33 |
+| [Unity: render each eye separately (no multiview)](#frame-unity_multipass) | `frame.unity_multipass` | Steam Frame patches | 3 |
 | [Unity: disable MSAA](#frame-unity_no_msaa) | `frame.unity_no_msaa` | Steam Frame patches | 11 |
 | [Unity: skip OVROverlay layers (fades, splash screens)](#frame-unity_no_overlay_copy) | `frame.unity_no_overlay_copy` | Steam Frame patches | 2 |
-| [Unity: start VR without Meta's system apps](#frame-unity_oculus_check) | `frame.unity_oculus_check` | Steam Frame patches | 15 |
-| [Unity: keep MSAA off at runtime (OVRManager)](#frame-unity_runtime_msaa_off) | `frame.unity_runtime_msaa_off` | Steam Frame patches | 34 |
+| [Unity: start VR without Meta's system apps](#frame-unity_oculus_check) | `frame.unity_oculus_check` | Steam Frame patches | 16 |
+| [Unity: keep MSAA off at runtime (OVRManager)](#frame-unity_runtime_msaa_off) | `frame.unity_runtime_msaa_off` | Steam Frame patches | 39 |
 | [Unity: skip Meta's player-in-room check](#frame-unity_scene_active_rooms) | `frame.unity_scene_active_rooms` | Steam Frame patches | 1 |
-| [Make Unity text fields work](#frame-unity_text_input) | `frame.unity_text_input` | Steam Frame patches | 137 |
+| [Make Unity text fields work](#frame-unity_text_input) | `frame.unity_text_input` | Steam Frame patches | 155 |
 | [Unity: share thread keys (games that run out of them)](#frame-unity_tls_key_pool) | `frame.unity_tls_key_pool` | Steam Frame patches | 1 |
 | [Unity: headset always counts as worn](#frame-unity_user_presence) | `frame.unity_user_presence` | Steam Frame patches | 1 |
 | [GL shim for Unreal (no multisampled render-to-texture)](#frame-unreal_gl_shim) | `frame.unreal_gl_shim` | Steam Frame patches | 1 |
 | [Unreal: match multiview depth to the eye size](#frame-unreal_multiview_depth) | `frame.unreal_multiview_depth` | Steam Frame patches | 1 |
-| [Unreal: reserve memory like on Quest](#frame-unreal_noreserve) | `frame.unreal_noreserve` | Steam Frame patches | 1 |
+| [Unreal: reserve memory like on Quest](#frame-unreal_noreserve) | `frame.unreal_noreserve` | Steam Frame patches | 4 |
 | [Unreal: stand-ins for OVRPlugin functions OVRPort lacks](#frame-unreal_ovrp_entrypoints) | `frame.unreal_ovrp_entrypoints` | Steam Frame patches | 6 |
 | [Unreal: Quest controller bindings (RPOC key map)](#frame-unreal_quest_keymap) | `frame.unreal_quest_keymap` | Steam Frame patches | 3 |
 | [Unreal: don't wait for the Quest shader precompile](#frame-unreal_quest_precompile) | `frame.unreal_quest_precompile` | Steam Frame patches | 3 |
-| [Unreal: start without the OBB check](#frame-unreal_skip_obb_check) | `frame.unreal_skip_obb_check` | Steam Frame patches | 10 |
+| [Unreal: start without the OBB check](#frame-unreal_skip_obb_check) | `frame.unreal_skip_obb_check` | Steam Frame patches | 13 |
 | [Unreal: skip the OBB delivery check](#frame-unreal_skip_obb_delivery) | `frame.unreal_skip_obb_delivery` | Steam Frame patches | 1 |
 | [Unreal: bypass the stalled loading splash](#frame-unreal_splash_bypass) | `frame.unreal_splash_bypass` | Steam Frame patches | 1 |
-| [Unreal: thumb follows the capacitive touches](#frame-unreal_thumb_touch) | `frame.unreal_thumb_touch` | Steam Frame patches | 8 |
+| [Unreal: thumb follows the capacitive touches](#frame-unreal_thumb_touch) | `frame.unreal_thumb_touch` | Steam Frame patches | 9 |
 | [USB MIDI: don't poll for USB devices](#frame-usb_midi_watcher) | `frame.usb_midi_watcher` | Steam Frame patches |  |
 | [Vermillion: paint canvases in the scene](#frame-vermillion_scene_canvas) | `frame.vermillion_scene_canvas` | Steam Frame patches | 1 |
 | [Vivox voice chat: skip Android 12 audio routing](#frame-vivox_audio_route) | `frame.vivox_audio_route` | Steam Frame patches | 4 |
@@ -122,7 +122,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Pointer turn](#adapter-aim_yaw) | `adapter.aim_yaw` | Game settings |  |
 | [Fix inside-out mixed reality](#adapter-alpha_blend_emul) | `adapter.alpha_blend_emul` | Game settings |  |
 | [Use controllers](#adapter-controller_fix) | `adapter.controller_fix` | Game settings | 2 |
-| [Show Steam Frame controllers](#adapter-controller_models) | `adapter.controller_models` | Game settings | 9 |
+| [Show Steam Frame controllers](#adapter-controller_models) | `adapter.controller_models` | Game settings | 10 |
 | [Show cube loading screens](#adapter-cube_quads) | `adapter.cube_quads` | Game settings |  |
 | [Stand in for cube layers](#adapter-cube_standin) | `adapter.cube_standin` | Game settings |  |
 | [Show curved menus and screens](#adapter-cylinder_strips) | `adapter.cylinder_strips` | Game settings |  |
@@ -150,7 +150,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [GL shim: high-precision vertex shaders](#adapter-gl_highp_markers) | `adapter.gl_highp_markers` | Game settings | 1 |
 | [GL shim: integer vertex inputs](#adapter-gl_int_attribs) | `adapter.gl_int_attribs` | Game settings | 1 |
 | [Flat panel diagnostics (log)](#adapter-gl_mv_debug) | `adapter.gl_mv_debug` | Game settings |  |
-| [Fix freezes when controllers vibrate](#adapter-haptic_fix) | `adapter.haptic_fix` | Game settings | 123 |
+| [Fix freezes when controllers vibrate](#adapter-haptic_fix) | `adapter.haptic_fix` | Game settings | 144 |
 | [Vibration strength](#adapter-haptic_scale) | `adapter.haptic_scale` | Game settings |  |
 | [Turn off Quest Vulkan foveation](#adapter-hide_fb_foveation) | `adapter.hide_fb_foveation` | Game settings |  |
 | [Turn off space warp](#adapter-hide_space_warp) | `adapter.hide_space_warp` | Game settings | 5 |
@@ -163,17 +163,17 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [See your room](#adapter-passthrough_emul) | `adapter.passthrough_emul` | Game settings | 2 |
 | [Steadier head tracking](#adapter-pose_consistency) | `adapter.pose_consistency` | Game settings | 2 |
 | [Pose timing diagnostics (log)](#adapter-pose_debug) | `adapter.pose_debug` | Game settings |  |
-| [Fix hands lagging behind controllers](#adapter-pose_time_fix) | `adapter.pose_time_fix` | Game settings | 17 |
+| [Fix hands lagging behind controllers](#adapter-pose_time_fix) | `adapter.pose_time_fix` | Game settings | 19 |
 | [Treat newer Quest controllers as Touch](#adapter-profile_remap) | `adapter.profile_remap` | Game settings |  |
 | [Animate fingers from touch](#adapter-proximity_emul) | `adapter.proximity_emul` | Game settings |  |
 | [Controller buttons](#adapter-quest_buttons) | `adapter.quest_buttons` | Game settings |  |
 | [Keep pictures in bounds](#adapter-rect_clamp) | `adapter.rect_clamp` | Game settings |  |
-| [Refresh rate](#adapter-refresh_rate) | `adapter.refresh_rate` | Game settings | 6 |
+| [Refresh rate](#adapter-refresh_rate) | `adapter.refresh_rate` | Game settings | 7 |
 | [Wait for the game's GPU](#adapter-release_wait) | `adapter.release_wait` | Game settings |  |
 | [Re-create play space](#adapter-respace_kick) | `adapter.respace_kick` | Game settings |  |
 | [Render resolution (supersampling)](#adapter-scale) | `adapter.scale` | Game settings | 18 |
 | [Room depth](#adapter-scene_depth) | `adapter.scene_depth` | Game settings |  |
-| [Use room layout](#adapter-scene_emul) | `adapter.scene_emul` | Game settings | 21 |
+| [Use room layout](#adapter-scene_emul) | `adapter.scene_emul` | Game settings | 26 |
 | [Room height](#adapter-scene_height) | `adapter.scene_height` | Game settings |  |
 | [Hide play-area size](#adapter-scene_hide_bounds) | `adapter.scene_hide_bounds` | Game settings | 1 |
 | [Scan when requested](#adapter-scene_scan_request) | `adapter.scene_scan_request` | Game settings |  |
@@ -188,7 +188,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Swap eyes](#adapter-swap_eyes) | `adapter.swap_eyes` | Game settings |  |
 | [Retry refused picture formats](#adapter-swapchain_fix) | `adapter.swapchain_fix` | Game settings |  |
 | [Share panel images (swapchain limit)](#adapter-swapchain_pool) | `adapter.swapchain_pool` | Game settings | 2 |
-| [Steady controller input after focus](#adapter-sync_guard) | `adapter.sync_guard` | Game settings | 3 |
+| [Steady controller input after focus](#adapter-sync_guard) | `adapter.sync_guard` | Game settings | 4 |
 | [Hide Vulkan foveation](#adapter-vk_hide_fdm) | `adapter.vk_hide_fdm` | Game settings | 1 |
 | [Without Steam's shader cache layer](#adapter-vk_no_fossilize) | `adapter.vk_no_fossilize` | Game settings | 1 |
 | [Skip refused graphics](#adapter-vk_pipeline_fallback) | `adapter.vk_pipeline_fallback` | Game settings | 1 |
@@ -211,7 +211,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Extra Lepton settings](#device-lepton_env) | `device.lepton_env` | Files and settings on the Frame | 3 |
 | [Share a folder with another game](#device-shared_folder) | `device.shared_folder` | Files and settings on the Frame |  |
 | [Controllers as a gamepad (Steam Input)](#device-steam_gamepad) | `device.steam_gamepad` | Files and settings on the Frame |  |
-| [Show the app's Android window (for typing)](#device-text_input_window) | `device.text_input_window` | Files and settings on the Frame | 136 |
+| [Show the app's Android window (for typing)](#device-text_input_window) | `device.text_input_window` | Files and settings on the Frame | 153 |
 | [Launch options (SteamVR or OpenXR)](#pcvr-launch_args) | `pcvr.launch_args` | PC VR (Proton and Revive) | 2 |
 | [Provide the Oculus runtime from Revive (Frame)](#pcvr-libovr_redirect) | `pcvr.libovr_redirect` | PC VR (Proton and Revive) |  |
 | [No Unreal crash reporter](#pcvr-no_crash_reporter) | `pcvr.no_crash_reporter` | PC VR (Proton and Revive) |  |
@@ -456,7 +456,7 @@ Stops some Unreal games from closing themselves right after starting.
 - `patch_remove_unreal_force_quit`
 - **Changes:** Changes the APK (during the OVRPort conversion).
 - **Offered (off):** Built as the alternate APK for Unreal games (use it if the game quits itself).
-- **Catalog games (50):** Asgard's Wrath 2, BARTENDER VR SIMULATOR, Breathedge VR, Carve Snowboarding, Creed, Dance Central, Darksword, Espire 1: VR Operative (Quest Edition) and 42 more.
+- **Catalog games (54):** Amid Evil, Asgard's Wrath 2, BARTENDER VR SIMULATOR, Breathedge VR, Carve Snowboarding, Creed, Dance Central, Darksword and 46 more.
 - **Suggested by launch-test signatures:**
   - `force-quit` (error): The game quit itself right after starting.
 - **Source:** [patches/overport.py](../src/frameport/patches/overport.py)
@@ -604,7 +604,7 @@ Stops bHaptics from asking for a Bluetooth permission the Frame doesn't have (th
 - `frame.bhaptics_permission` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** bHaptics asks for an Android 12 Bluetooth permission at start; the permission screen interrupts the game on the Frame.
-- **Catalog games (13):** Crisis Brigade 2 reloaded, Darksword, Deisim, Epic Roller Coasters, Eternal Starlight, Quantum Void, Ragnarock, Smash Drums and 5 more.
+- **Catalog games (17):** &lt;RUNNER&gt;, Crisis Brigade 2 reloaded, Crisis VRigade, Darksword, Deisim, Epic Roller Coasters, Eternal Starlight, Metacity Patrol and 9 more.
 - **Suggested by launch-test signatures:**
   - `bhaptics-permission-prompt` (error): The game asked for Android 12's Bluetooth permission (bHaptics' vest SDK, for example Yupitergrad).
 - **Source:** [patches/frame/bhaptics_permission.py](../src/frameport/patches/frame/bhaptics_permission.py)
@@ -710,7 +710,7 @@ Lets games with Google Play services code start on the Frame (they'd crash at st
 - `frame.gms_platform_version` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Google Play services' Android 12 checks were built in as 'always true'; on Lepton (Android 11) the game would crash at start.
-- **Catalog games (2):** Solero, Table Troopers.
+- **Catalog games (4):** DeoVR Hyper, Solero, Table Troopers, Trombone Champ: Unflattened!.
 - **Suggested by launch-test signatures:**
   - `gms-android12-call` (fatal): Google Play services' code in the game called an Android 12 method (the game was built for Android 12 and newer, so its version checks were built in as "always true") and Lepton runs Android 11; the game crashes on its GoogleApiHandler thread at start (for example Titan Isles).
 - **Source:** [patches/frame/gms_platform_version.py](../src/frameport/patches/frame/gms_platform_version.py)
@@ -738,7 +738,7 @@ Plays the game's videos on the Frame's video hardware, so 4K and 8K video runs s
 - `frame.hw_video_decode` · also for 2D apps
 - **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
 - **Suggested (on):** The game plays video through Android's decoders (MediaCodec, ExoPlayer or VLC): decode it on the Frame's hardware.
-- **Catalog games (43):** 4XVR Video Player, AugmentedEmpire, Batman: Arkham Shadow, Battlemarked, BattleTalent, Breathedge VR, Dance Central, Darksword and 35 more.
+- **Catalog games (53):** 4XVR Video Player, &lt;RUNNER&gt;, AimAssault, AJAX ALL POWERFUL, Amid Evil, AugmentedEmpire, Batman: Arkham Shadow, Battlemarked and 45 more.
 - **Source:** [patches/frame/hw_video_decode.py](../src/frameport/patches/frame/hw_video_decode.py)
 
 > Decodes the game's videos on the Frame's hardware video decoder instead of Android's software decoders, which stutter or fall behind with 4K/8K video (for example video players, Batman: Arkham Shadow's cutscenes). Adds FramePort's codec plugin (OMX.frameport.avc/hevc/vp9.decoder) to this game's container only; the APK isn't changed. When the hardware is busy (for example Steam's own hardware video decoding is on) the video is decoded in software as before.
@@ -850,7 +850,7 @@ Declares Meta's permissions some mixed-reality games ask for, so they don't stop
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Mixed-reality game that needs the room model: its 'use spatial data' permission must be granted (for example Demeter).
 - **Suggested (on):** Uses Meta's room or anchor APIs: their permissions must be granted, or the game never asks for the room (for example NOPE's MR mode).
-- **Catalog games (10):** Arkio, BattleTalent, Demeter, Laser Dance, Movie Deck for Plex, Punch Fit, Real VR Fishing, SynthRiders and 2 more.
+- **Catalog games (16):** Arcade Paradise VR, Arcane Horizon, Arkio, BattleTalent, Demeter, DeoVR Hyper, Laser Dance, Movie Deck for Plex and 8 more.
 - **Source:** [patches/frame/manifest_fixes.py](../src/frameport/patches/frame/manifest_fixes.py)
 
 > Declares com.oculus.permission.* / horizonos.permission.* that the app uses, so Android grants them at install (for example the 'use spatial data' permission of mixed-reality games like Demeter).
@@ -893,7 +893,7 @@ Provides stand-ins for Quest system calls some games make at start.
 - **Suggested (on):** The Unreal build of Meta XR Audio looks up com.oculus.os.AnalyticsEvent and aborts without it (for example NOPE Challenge).
 - **Suggested (on):** Several Meta SDK libraries look up com.oculus.os.AnalyticsEvent (…); games like this abort without the stub (for example Nano).
 - **Offered (off):** … references com.oculus.os.AnalyticsEvent; usually harmless (for example Batman: Arkham Shadow and LEGO Bricktales run without it). Enable if the game aborts with ClassNotFoundException.
-- **Catalog games (18):** AgeOfJoy, AllInOneSports, Caves, Deep Cuts, Does it Stack?, Drums Rock, Nano, Neko Atsume Purrfect and 10 more.
+- **Catalog games (20):** AgeOfJoy, AllInOneSports, Arcane Horizon, Caves, Deep Cuts, Does it Stack?, Drums Rock, Nano and 12 more.
 - **Suggested by launch-test signatures:**
   - `oculus-os-class` (fatal): The game looks up a Quest-only system class and aborts.
 - **Source:** [patches/frame/telemetry.py](../src/frameport/patches/frame/telemetry.py)
@@ -997,7 +997,7 @@ Stops games with Photon Voice chat from crashing on the Frame when voice chat st
 - `frame.photon_voice_audio_route` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Photon Voice calls Android 12 audio methods, which Lepton (Android 11) lacks, and crashes when voice chat starts.
-- **Catalog games (4):** Crisis Brigade 2 reloaded, Deisim, Table Troopers, UNDERDOGS.
+- **Catalog games (5):** Aqua Glide, Crisis Brigade 2 reloaded, Deisim, Table Troopers, UNDERDOGS.
 - **Suggested by launch-test signatures:**
   - `photon-voice-api31` (fatal): The game's Photon Voice microphone plugin calls Android 12 audio-routing methods (AudioManager communication devices) without checking the Android version; Lepton runs Android 11, so the app crashes when voice chat starts (for example Table Troopers at the tutorial).
 - **Source:** [patches/frame/photon_voice_audio_route.py](../src/frameport/patches/frame/photon_voice_audio_route.py)
@@ -1105,6 +1105,7 @@ Lets games built with Unity's App UI start on the Frame (they'd quit at once on 
 - `frame.unity_appui_vibrator` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Unity App UI's activity uses Android 12's VibratorManager at start, which Lepton (Android 11) lacks: the game would quit at once.
+- **Catalog games (1):** DeoVR Hyper.
 - **Suggested by launch-test signatures:**
   - `unity-appui-vibrator` (fatal): The game's start activity uses Android 12's VibratorManager (Unity's App UI package, for example PianoVision) and Lepton runs Android 11, so it quits before the game starts.
 - **Source:** [patches/frame/unity_appui_vibrator.py](../src/frameport/patches/frame/unity_appui_vibrator.py)
@@ -1118,7 +1119,7 @@ Stops a gray or frozen screen in Unity games that turn on anti-aliasing while ru
 - `frame.unity_gl_shim`
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Unity GLES game that may switch to MSAA at runtime: hide multisampled render-to-texture, which crashes the Frame's GL driver (for example The Room VR).
-- **Catalog games (28):** Audica, BattleSisters, Beat Saber, COMPOUND, Cosmodread, Down the Rabbit Hole, Drunkn Bar Fight, End Space and 20 more.
+- **Catalog games (33):** 10 Seconds, &lt;RUNNER&gt;, AJAX ALL POWERFUL, Aqua Glide, Audica, BattleSisters, Beat Saber, COMPOUND and 25 more.
 - **Suggested by launch-test signatures:**
   - `unreal-msrtt-crash` (fatal): The game's graphics crashed a few seconds after start.
 - **Source:** [patches/frame/vrapi_bridge.py](../src/frameport/patches/frame/vrapi_bridge.py)
@@ -1132,7 +1133,7 @@ Draws each eye separately. Try it when one eye shows a gray or broken picture.
 - `frame.unity_multipass` · revision 2
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
-- **Catalog games (2):** BattleTalent, I Am Cat.
+- **Catalog games (3):** &lt;RUNNER&gt;, BattleTalent, I Am Cat.
 - **Source:** [patches/frame/unity_runtime.py](../src/frameport/patches/frame/unity_runtime.py)
 
 > Oculus XR Plugin games render both eyes in one pass (multiview) on Android. If one eye shows only effects or gray (for example I Am Cat), rendering each eye in its own pass can fix it, at some GPU cost. Rewrites OculusSettings.GetStereoRenderingMode and its inlined read in OculusLoader.Initialize -&gt; MultiPass in libil2cpp.so (found with Cpp2IL). Try it when one eye is wrong.
@@ -1173,7 +1174,7 @@ Lets older Unity games start VR without Meta's system apps (they'd stay on a 2D 
 - `frame.unity_oculus_check` · revision 5
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Unity with built-in Oculus support: it checks for Meta's system apps before starting VR, else it runs as a 2D app (for example Accounting+, BattleSisters).
-- **Catalog games (15):** Accounting+, Audica, BattleSisters, Cosmodread, End Space, Eye of the Temple, I Expect You To Die 2, Invasion and 7 more.
+- **Catalog games (16):** Accounting+, AJAX ALL POWERFUL, Audica, BattleSisters, Cosmodread, End Space, Eye of the Temple, I Expect You To Die 2 and 8 more.
 - **Suggested by launch-test signatures:**
   - `unity-vr-device-none` (fatal): Unity didn't start VR, so the game runs as a hidden 2D app.
 - **Source:** [patches/frame/unity_oculus_check.py](../src/frameport/patches/frame/unity_oculus_check.py)
@@ -1187,7 +1188,7 @@ Keeps a smoothing setting off that the game turns on itself and that can freeze 
 - `frame.unity_runtime_msaa_off` · revision 2
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** GLES Unity game whose OVRManager turns 4x MSAA on at runtime: multisampled render-to-texture can hang the Frame's GPU.
-- **Catalog games (34):** Audica, BattleSisters, BattleTalent, Beat Saber, COMPOUND, Cosmodread, Down the Rabbit Hole, Drunkn Bar Fight and 26 more.
+- **Catalog games (39):** 10 Seconds, &lt;RUNNER&gt;, AJAX ALL POWERFUL, Aqua Glide, Audica, BattleSisters, BattleTalent, Beat Saber and 31 more.
 - **Suggested by launch-test signatures:**
   - `unity-render-crash` (fatal): The game's graphics crashed, so the picture freezes or stays gray.
   - `unity-runtime-msaa` (info): The game turns MSAA on at runtime, which can hang the Frame's GPU.
@@ -1215,7 +1216,7 @@ Lets you type into this app's text fields on the Frame (they'd close at once).
 - `frame.unity_text_input` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Unity app with text fields (…): they close at once on the Frame because it has no system keyboard.
-- **Catalog games (137):** AgeOfJoy, AllInOneSports, Ancient_Dungeon, Arcsmith, Arkio, Assassin's Creed Nexus, Attack on Titan VR: Unbreakable, Audica and 129 more.
+- **Catalog games (155):** 10 Seconds, &lt;RUNNER&gt;, AgeOfJoy, AimAssault, AJAX ALL POWERFUL, AllInOneSports, Among Giants, Ancient_Dungeon and 147 more.
 - **Source:** [patches/frame/unity_text_input.py](../src/frameport/patches/frame/unity_text_input.py)
 
 > Unity's TMP_InputField / InputField wait for Android's on-screen keyboard and close themselves a frame later when there is none (Lepton has no on-screen keyboard; Meta's system keyboard does this on a Quest), so a selected text field only flashes a caret. Rewrites TouchScreenKeyboardShouldBeUsed -&gt; false and isKeyboardUsingEvents (TMP) / InPlaceEditing (uGUI) -&gt; true in libil2cpp.so, found per game with Cpp2IL (downloaded on first use), so fields stay selected and take key presses: Steam's keyboard (with "Show the app window") or Type on Frame from the PC.
@@ -1282,7 +1283,7 @@ Lets the game load: it reserves more memory at start than the Frame grants in on
 - `frame.unreal_noreserve` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Unreal's Binned3 allocator reserves more memory at start than the Frame's kernel allows in one piece; without this the game crashes while it loads.
-- **Catalog games (1):** Zero Caliber 2.
+- **Catalog games (4):** Amid Evil, STRIDE, Trover, Zero Caliber 2.
 - **Suggested by launch-test signatures:**
   - `unreal-reserve-refused` (fatal): The game crashed while Unreal was still loading, before its first frame.
 - **Source:** [patches/frame/unreal_noreserve.py](../src/frameport/patches/frame/unreal_noreserve.py)
@@ -1332,7 +1333,7 @@ Starts Unreal games without re-checking their data file (they'd seem to hang on 
 - `frame.unreal_skip_obb_check` · also for 2D apps
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested (on):** Unreal checks the OBB's contents before starting (bVerifyOBBOnStartUp); on the Frame a failed or slow check can't be seen and the game seems to hang.
-- **Catalog games (10):** Dance Central, Darksword, Kill It With Fire VR, Lost Recipes, MacacoVR, Maestro, Puzzling Places, Ragnarock and 2 more.
+- **Catalog games (13):** Amid Evil, Dance Central, Darksword, Kill It With Fire VR, Lost Recipes, MacacoVR, Maestro, Please, Don't Touch Anything: House Broken and 5 more.
 - **Suggested by launch-test signatures:**
   - `unreal-obb-check-stuck` (fatal): The game stays on Unreal's OBB check screen (DownloaderActivity), which the Frame doesn't show, and never starts VR (for example Contractors, GitHub #159).
 - **Source:** [patches/frame/unreal_obb_check.py](../src/frameport/patches/frame/unreal_obb_check.py)
@@ -1374,7 +1375,7 @@ Makes the hands' thumbs follow what your thumb touches (they always pointed up: 
 - `frame.unreal_thumb_touch`
 - **Changes:** Changes the APK (a rebuild and reinstall apply it).
 - **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
-- **Catalog games (8):** Phantom: Covert Ops, Robo Recall, Star Wars: Tales from the Galaxy's Edge, The Wizards, Time Stall, Vader Immortal: Episode I, Vader Immortal: Episode II, Vader Immortal: Episode III.
+- **Catalog games (9):** Phantom: Covert Ops, Robo Recall, Star Wars: Tales from the Galaxy's Edge, The Wizards, Time Stall, Trover, Vader Immortal: Episode I, Vader Immortal: Episode II and 1 more.
 - **Source:** [patches/frame/unreal_thumb_touch.py](../src/frameport/patches/frame/unreal_thumb_touch.py)
 
 > Unreal 4's Oculus input sets the ThumbUp axis (games animate the hand's thumb with it) from Meta's near-touch sensing, which the Frame never reports: the thumb always points up. Uses the touches instead (left X/Y/stick/thumb rest, right A/B/stick/thumb rest). Changes three instructions in OculusInput::SendControllerEvents, only where the code matches exactly (UE4 Oculus games of one engine generation, for example Vader Immortal, Robo Recall). Found by Klownicle (GitHub #49).
@@ -1576,7 +1577,7 @@ For games that show the headset's own controllers. Takes effect after a reinstal
 - **Options:**
   - Value: int, default `0`.
   - Game settings → Controllers → "Show Steam Frame controllers".
-- **Catalog games (9):** Hitstream, Movie Deck for Plex, Neko Atsume Purrfect, Ocean Rift, Real VR Fishing, SynthRiders, UNDERDOGS, VR HOT Quest and 1 more.
+- **Catalog games (10):** Hitstream, Movie Deck for Plex, Neko Atsume Purrfect, Ocean Rift, Real VR Fishing, Sketchar Meta, SynthRiders, UNDERDOGS and 2 more.
 - **Suggested by launch-test signatures:**
   - `render-model-requested` (info): The game shows Quest controllers (or none) because the Frame doesn't provide controller models.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
@@ -1990,7 +1991,7 @@ For games that freeze the Frame when a controller vibrates (for example Lucky's 
 - **Options:**
   - Value: int, default `0`.
   - Game settings → Controllers → "Fix freezes when controllers vibrate" (advanced).
-- **Catalog games (123):** AgeOfJoy, Ancient_Dungeon, Attack on Titan VR: Unbreakable, Audica, AugmentedEmpire, Barbaria, Battlemarked, BattleSisters and 115 more.
+- **Catalog games (144):** 10 Seconds, &lt;RUNNER&gt;, AgeOfJoy, AimAssault, AJAX ALL POWERFUL, Amid Evil, Among Giants, Ancient_Dungeon and 136 more.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Routes OVRPlugin through FramePort's extension shim, which turns Meta's amplitude-envelope vibrations into plain ones: OVRPort's loader reads their nanosecond duration as seconds and allocates gigabytes, freezing the Frame when the game vibrates a controller (for example Lucky's Tale's save slots, GitHub #9). Needs a rebuild.
@@ -2185,7 +2186,7 @@ For games whose hands trail the controllers when you move them (for example Batt
 - **Options:**
   - Value: int, default `0`.
   - Game settings → Controllers → "Fix hands lagging behind controllers" (advanced).
-- **Catalog games (17):** Battlemarked, BattleSisters, Beat Saber, Dance Central, Dungeons of Eternity, Mini Motor Racing X, OrbusVR, Phantom: Covert Ops and 9 more.
+- **Catalog games (19):** AJAX ALL POWERFUL, Battlemarked, BattleSisters, Beat Saber, Dance Central, Dungeons of Eternity, Mini Motor Racing X, OrbusVR and 11 more.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Poses a game asks for at a CLOCK_MONOTONIC time, or more than 0.5 s before the frame's display time, are located at the same moment in the runtime's time (or now). Meta's OVRPlugin passes the monotonic clock on as the OpenXR time, which on the Frame runs seconds behind the runtime's clock, so its "now" poses (Unity's physics step, controller poses) came from the past: hands trailing the controllers (for example BattleSisters, Sniper Elite VR).
@@ -2256,7 +2257,7 @@ How often the picture updates. Higher is smoother if the game can keep up.
 - **Options:**
   - Value: float, default `0.0`.
   - Game settings → Picture → "Refresh rate": Game's choice (`0`), 72 Hz (`72`), 80 Hz (`80`), 90 Hz (`90`), 96 Hz (`96`), 108 Hz (`108`), 120 Hz (`120`), 144 Hz (`144`).
-- **Catalog games (6):** Astro VR Host, Does it Stack?, Majora's Mask VR, Port0r: Time Crisis VR, Simpsons Hit and Run VR, Vacation Simulator.
+- **Catalog games (7):** Astro VR Host, Does it Stack?, Majora's Mask VR, Port0r: Time Crisis VR, Simpsons Hit and Run VR, STRIDE, Vacation Simulator.
 - **Suggested by launch-test signatures:**
   - `refresh-rate-refused` (error): The game asked for a refresh rate the Frame's runtime refuses and may quit on that error.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
@@ -2330,7 +2331,7 @@ Scene games get your saved room. Without one, they get a simple room from the pl
 - **Options:**
   - Value: int, default `0`.
   - Game settings → Mixed reality → "Use room layout".
-- **Catalog games (21):** Arkio, AugmentedEmpire, Battlemarked, BattleTalent, cubism, Demeo, Demeter, Ghostbusters: Rise of the Ghost Lord and 13 more.
+- **Catalog games (26):** Arcade Paradise VR, Arcane Horizon, Arkio, AugmentedEmpire, Battlemarked, BattleTalent, cubism, Demeo and 18 more.
 - **Suggested by launch-test signatures:**
   - `mr-discovery-unsupported` (warning): The game cannot discover a Meta room.
   - `scene-missing` (warning): The game wants Meta's room data (scene API), which the Frame lacks.
@@ -2553,7 +2554,7 @@ For games that crash right after you return to them (for example after the Steam
 - **Options:**
   - Value: int, default `0`.
   - Game settings → Troubleshooting → "Steady controller input after focus" (advanced).
-- **Catalog games (3):** Batman: Arkham Shadow, Myst, Robo Recall.
+- **Catalog games (4):** Batman: Arkham Shadow, Myst, Please, Don't Touch Anything: House Broken, Robo Recall.
 - **Suggested by launch-test signatures:**
   - `runtime-input-crash` (fatal): The Frame's runtime crashed in its controller code, usually right after the game got focus. sync_guard runs input syncs (xrSyncActions) one at a time and pauses them briefly after focus returns.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
@@ -2893,7 +2894,7 @@ Lets typing reach this app from Steam's on-screen keyboard or your PC's keyboard
 - **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
 - **Suggested (on):** The app opens a flat launcher that starts its VR part (…): Lepton runs VR apps headless, so the launcher is only seen in a shown Android window.
 - **Suggested (on):** App with text fields: key presses only reach a shown Android window.
-- **Catalog games (136):** AFFECTED: The Manor, AgeOfJoy, AllInOneSports, Ancient_Dungeon, Arcsmith, Arkio, Attack on Titan VR: Unbreakable, Audica and 128 more.
+- **Catalog games (153):** 10 Seconds, &lt;RUNNER&gt;, AFFECTED: The Manor, AgeOfJoy, AimAssault, AJAX ALL POWERFUL, AllInOneSports, Among Giants and 145 more.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Lepton runs VR apps headless: their Android window is never shown, so it never gets keyboard focus and no key press (Steam's on-screen keyboard, a USB/Bluetooth keyboard, Type on Frame) reaches the app's text fields. With Lepton's lepton-show-flatscreen marker the window is shown (behind the VR view, which keeps working) and Steam's keyboard opens for a selected text field. Steam lists the shown window as "Gamescope" (the Frame's compositor). While the game runs, FramePort turns off SteamVR's automatic theater mode for game windows: it put the Android window in front of the player with the controllers as a mouse pointer, and the game got no controller input. The window stays a page of the game in the dashboard. Pairs with "Make Unity text fields work without a system keyboard". Apps that open a flat launcher before their VR part (for example Xelee or WiiCompiled, whose launchers pick the game) need the window too: headless, the launcher is never seen and the VR part never starts. For those, theater mode stays on, so the launcher is in front of you; once the VR part runs, close the dashboard with the controller's button if it opened on the window.

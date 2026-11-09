@@ -1,0 +1,24 @@
+package: com.HorizonForge.AquaGlide
+title: Aqua Glide
+status: works
+tested_version: 0.0.3.9
+engine: Unity
+xr: OpenXR
+frame:
+- frame.photon_voice_audio_route
+- frame.unity_text_input
+- frame.unity_runtime_msaa_off
+- frame.unity_gl_shim
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-11-07'
+  known_good_sha256: 07944f3acf8951729d4cbaacbc7e128cd5bb2a600abf42389d9a400d083176d5
+  app: 1.3.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6150929'
+  agent: 109
+  issue: 595
+source_hint: Aqua Glide

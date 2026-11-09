@@ -1,0 +1,24 @@
+package: aei.AndreElijahImmersive.AmidEvilVR
+title: Amid Evil
+status: works
+notes: Occasional fps drops.
+tested_version: '1.34'
+engine: Unreal
+xr: OpenXR
+alt_overport:
+- patch_remove_unreal_force_quit
+frame:
+- frame.unreal_skip_obb_check
+- frame.hw_video_decode
+- frame.unreal_noreserve
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-11-07'
+  known_good_sha256: 73f6e57963949c0329cbe8046e1d742b5186219dd2419252a7b9076775093c84
+  app: 1.3.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6150929'
+  agent: 109
+  issue: 594
+source_hint: Amid Evil

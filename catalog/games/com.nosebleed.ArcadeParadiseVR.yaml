@@ -1,0 +1,24 @@
+package: com.nosebleed.ArcadeParadiseVR
+title: Arcade Paradise VR
+status: works
+notes: Played for about 30 minutes without problems.
+tested_version: '1.026'
+engine: Unity
+xr: OpenXR
+frame:
+- frame.meta_permissions
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+  scene_emul: 1
+verified:
+  date: '2026-11-07'
+  known_good_sha256: 38f6c6f84a75336090b65683e248231098f3bd1c34585daffc3939daa2499992
+  app: 1.3.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6150929'
+  agent: 109
+  issue: 596
+source_hint: Arcade Paradise VR

@@ -1,0 +1,23 @@
+package: com.DIVR.AimAssault
+title: AimAssault
+status: works
+notes: 120 fps in training, 60-90 fps in the main game.
+tested_version: 1.0.46
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+- frame.hw_video_decode
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-11-07'
+  known_good_sha256: 3938552ab40c5203890e7621a7a917b8728ccbec193e302f489b13ce66df7d1a
+  app: 1.3.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6150929'
+  agent: 109
+  issue: 589
+source_hint: Aim Assault

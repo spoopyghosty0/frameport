@@ -1,0 +1,25 @@
+package: com.SquanchGames.Trover
+title: Trover
+status: works
+notes: A new game starts without problems.
+tested_version: '1.0'
+engine: Unreal
+xr: VrApi
+alt_overport:
+- patch_remove_unreal_force_quit
+frame:
+- frame.unreal_thumb_touch
+- frame.hw_video_decode
+- frame.unreal_noreserve
+adapter:
+  haptic_fix: 1
+  pose_time_fix: 1
+verified:
+  date: '2026-10-27'
+  known_good_sha256: 8baec6d61efb0015aa389761dae414bb1705fa8308f961195c85d9bc8ae1a9c2
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 529
+source_hint: Trover Saves the Universe

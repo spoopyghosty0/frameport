@@ -1,0 +1,26 @@
+package: com.truantpixel.Runner
+title: <RUNNER>
+status: works
+tested_version: '1.6'
+engine: Unity
+xr: OpenXR
+frame:
+- frame.bhaptics_permission
+- frame.unity_text_input
+- frame.unity_runtime_msaa_off
+- frame.hw_video_decode
+- frame.unity_gl_shim
+- frame.unity_multipass
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-11-07'
+  known_good_sha256: 6ad3ae06a4ec23354e1912fa74433f92674f9a9d8a6f8437a02bbf4a6e5b715e
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6150929'
+  agent: 125
+  issue: 583
+source_hint: Runner

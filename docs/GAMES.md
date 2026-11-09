@@ -6,10 +6,20 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 
 | Game | Platform | Status | Notes |
 |---|---|---|---|
+| 10 Seconds | Quest | ✅ Works |  |
 | 4XVR Video Player | Quest | ✅ Works |  |
+| <RUNNER> | Quest | ✅ Works |  |
 | Accounting+ | Quest | ✅ Works |  |
 | AgeOfJoy | Quest | ✅ Works |  |
+| AimAssault | Quest | ✅ Works |  |
+| AJAX ALL POWERFUL | Quest | ✅ Works |  |
 | AllInOneSports | Quest | ✅ Works |  |
+| Amid Evil | Quest | ✅ Works |  |
+| Among Giants | Quest | ✅ Works |  |
+| Aqua Glide | Quest | ✅ Works |  |
+| Arcade Paradise VR | Quest | ✅ Works |  |
+| ArcadeLegend | Quest | ✅ Works |  |
+| Arcane Horizon | Quest | ✅ Works |  |
 | Arkio | Quest | ✅ Works |  |
 | Asgard's Wrath 2 | Quest | ✅ Works |  |
 | Assassin's Creed Nexus | Quest | ✅ Works |  |
@@ -43,6 +53,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | CrazyTaxiVR | Quest | ✅ Works |  |
 | Creed | Quest | ✅ Works |  |
 | Crisis Brigade 2 reloaded | Quest | ✅ Works |  |
+| Crisis VRigade | Quest | ✅ Works |  |
 | Crisis Zone VR | Quest | ✅ Works |  |
 | cubism | Quest | ✅ Works |  |
 | cubism | Quest | ✅ Works |  |
@@ -52,6 +63,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Deisim | Quest | ✅ Works |  |
 | Demeo | Quest | ✅ Works |  |
 | Demeter | Quest | ✅ Works |  |
+| DeoVR Hyper | Quest | ✅ Works |  |
 | Dinosaur Island | Quest | ✅ Works |  |
 | Doom3Quest | Quest | ✅ Works |  |
 | Down the Rabbit Hole | Quest | ✅ Works |  |
@@ -76,6 +88,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Gunjack | Quest | ✅ Works |  |
 | H.U.N.T | Quest | ✅ Works |  |
 | Hitstream | Quest | ✅ Works |  |
+| Hungry Dragon | Quest | ✅ Works |  |
 | Hungry Shark Evolution | Quest | ✅ Works |  |
 | I Am Cat | Quest | ✅ Works |  |
 | I Am Monkey | Quest | ✅ Works |  |
@@ -102,6 +115,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Marvel's Iron Man VR | Quest | ✅ Works |  |
 | Max Mustard | Quest | ✅ Works |  |
 | Medieval Dynasty New Settlement | Quest | ✅ Works |  |
+| Metacity Patrol | Quest | ✅ Works |  |
 | Metro Awakening | Quest | ✅ Works |  |
 | Mini Motor Racing X | Quest | ✅ Works |  |
 | Mobile Suit Gundam: Silver Phantom | Quest | ✅ Works |  |
@@ -123,6 +137,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Pistol Whip | Quest | ✅ Works |  |
 | Pistol Whip | PC VR | ✅ Works |  |
 | Please Don't Touch Anything | Quest | ✅ Works |  |
+| Please, Don't Touch Anything: House Broken | Quest | ✅ Works |  |
 | Port0r: Cop VR | Quest | ✅ Works |  |
 | Port0r: House of the Dead VR | Quest | ✅ Works |  |
 | Port0r: Rally VR | Quest | ✅ Works |  |
@@ -137,6 +152,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Retropolis | Quest | ✅ Works |  |
 | Richie's Plank Experience | Quest | ✅ Works |  |
 | Rick and Morty: Virtual Rick-ality | PC VR | ✅ Works |  |
+| Rilla Shotgun | Quest | ✅ Works |  |
 | Riven | Quest | ✅ Works |  |
 | Robo Recall | Quest | ✅ Works |  |
 | RUINSMAGUS | Quest | ✅ Works |  |
@@ -147,10 +163,12 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Shores of Loci | Quest | ✅ Works |  |
 | SilentSlayer | Quest | ✅ Works |  |
 | Simpsons Hit and Run VR | Quest | ✅ Works |  |
+| Sketchar Meta | Quest | ✅ Works |  |
 | Smash Drums | Quest | ✅ Works |  |
 | Sniper Elite VR | Quest | ✅ Works |  |
 | Sniper Elite VR: Winter Warrior | Quest | ✅ Works |  |
 | Solero | Quest | ✅ Works |  |
+| Space Docker VR | Quest | ✅ Works |  |
 | Space Pirate Trainer Quest | Quest | ✅ Works |  |
 | SpaceControl | Quest | ✅ Works |  |
 | Spectre | Quest | ✅ Works |  |
@@ -158,6 +176,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Star Wars Pinball VR | Quest | ✅ Works |  |
 | Star Wars: Tales from the Galaxy's Edge | Quest | ✅ Works |  |
 | Stremio | Quest | ✅ Works |  |
+| STRIDE | Quest | ✅ Works |  |
 | Summer Sports | Quest | ✅ Works |  |
 | Superfly | Quest | ✅ Works |  |
 | SUPERHOT VR | PC VR | ✅ Works |  |
@@ -186,6 +205,8 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Toy Master | Quest | ✅ Works |  |
 | ToyTrains | Quest | ✅ Works |  |
 | TRIANGLE STRATEGY | Quest | ✅ Works |  |
+| Trombone Champ: Unflattened! | Quest | ✅ Works |  |
+| Trover | Quest | ✅ Works |  |
 | Under Cover | Quest | ✅ Works |  |
 | UNDERDOGS | Quest | ✅ Works |  |
 | Vacation Simulator | Quest | ✅ Works |  |
@@ -201,6 +222,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Wallace & Gromit in The Grand Getaway | Quest | ✅ Works |  |
 | Waltz of the Wizard: Extended Edition | Quest | ✅ Works |  |
 | Wander | Quest | ✅ Works |  |
+| WHAT THE BAT? | Quest | ✅ Works |  |
 | Zero Caliber 2 | Quest | ✅ Works |  |
 | ZombielandVR | Quest | ✅ Works |  |
 | AFFECTED: The Manor | Quest | ⚠️ Works with issues | Gear VR game (32-bit only), runs through FramePort's 32-bit bridge (experimental). |

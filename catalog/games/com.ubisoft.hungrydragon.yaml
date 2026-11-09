@@ -1,0 +1,36 @@
+package: com.ubisoft.hungrydragon
+title: Hungry Dragon
+status: works
+notes: Flat game. Works with the controllers mapped through Steam Input.
+tested_version: '5.7'
+engine: Unity
+xr: '?'
+overport_remove:
+- patch_copy_libraries
+- patch_copy_ovrplugin_vrapi
+- patch_replace_icon_label
+- patch_fix_min_android_sdk
+- patch_generate_config
+- patch_remove_localized_names
+- patch_clean_up_frida
+- patch_oculus_unity
+- patch_oculus_unreal
+- patch_vr_metadata
+- patch_launcher_entry
+- patch_remove_uses_library
+- patch_fix_unreal_crash
+- patch_meta_xr_audio
+- patch_mark_as_debuggable
+- patch_mark_allow_backup
+frame:
+- frame.unity_text_input
+- frame.hw_video_decode
+verified:
+  date: '2026-11-01'
+  known_good_sha256: f6ecb305d856d43735ad3a76a4bd3756f5c8326bff2ffe6a07ffde06634c565f
+  app: 1.4.1.dev714
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 564
+source_hint: com.ubisoft.hungrydragon-727_arm64-v8a

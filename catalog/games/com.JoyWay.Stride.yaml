@@ -1,0 +1,26 @@
+package: com.JoyWay.Stride
+title: STRIDE
+status: works
+notes: Tutorial and endless run play fine; Arena mode hung once.
+tested_version: 2.17.3
+engine: Unreal
+xr: VrApi
+alt_overport:
+- patch_remove_unreal_force_quit
+frame:
+- frame.unreal_skip_obb_check
+- frame.bhaptics_permission
+- frame.hw_video_decode
+- frame.unreal_noreserve
+adapter:
+  haptic_fix: 1
+  refresh_rate: 72.0
+verified:
+  date: '2026-11-01'
+  known_good_sha256: 57928c70bc5ebc81b3a75d5f14798cbb99b275127e7abd386af29d6f14a09c73
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 557
+source_hint: com.JoyWay.Stride

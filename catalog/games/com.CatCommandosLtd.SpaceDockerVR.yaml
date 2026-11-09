@@ -1,0 +1,21 @@
+package: com.CatCommandosLtd.SpaceDockerVR
+title: Space Docker VR
+status: works
+tested_version: 0.2.215
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-11-05'
+  known_good_sha256: e2aee7fcba67d441527ec7975e5bd269f7c5cb95e8b435c69e53f94bb5a18eed
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261103.6153824'
+  agent: 125
+  issue: 581
+source_hint: Space Docker VR

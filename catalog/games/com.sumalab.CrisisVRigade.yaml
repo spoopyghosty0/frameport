@@ -1,0 +1,24 @@
+package: com.sumalab.CrisisVRigade
+title: Crisis VRigade
+status: works
+tested_version: '1.30'
+engine: Unity
+xr: VrApi
+frame:
+- frame.bhaptics_permission
+- frame.unity_text_input
+- frame.unity_runtime_msaa_off
+- frame.unity_gl_shim
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-27'
+  known_good_sha256: 79327c39c99c620af0a4940518f6e8a962d68e0bed5d1a439c883c97f08f5e90
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 528
+source_hint: CrisisVRigade

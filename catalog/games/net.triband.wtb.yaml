@@ -1,0 +1,19 @@
+package: net.triband.wtb
+title: WHAT THE BAT?
+status: works
+tested_version: 1.4.2
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-28'
+  known_good_sha256: 8c3e54d88395795926719191985c555b5220c59ff34f7312ea82e00e4989226f
+  app: 1.4.0
+  overport_cli: 1.2.5
+  issue: 531
+source_hint: net.triband.wtb
