@@ -10,6 +10,7 @@ that app's own folder too (agent `link_media`; no copy, no extra space). Uploads
 """
 from __future__ import annotations
 
+import json
 import posixpath
 import stat
 from dataclasses import dataclass
@@ -232,3 +233,267 @@ def download(frame: Frame, root: str, paths: list[str], local_dir: Path, reporte
             xfer.sftp.get(remote, str(dest), callback=progress)
             done += size
     return {"files": len(files), "bytes": total, "folder": str(local_dir)}
+
+
+# ------------------------------------------------------------------ more locations (GitHub #532)
+TMP = "/tmp"  # the Frame's temporary files (a tmpfs: emptied at every restart)
+EXEC_TIMEOUT = 120  # s without data on an exec channel (saves transfers, moves)
+CHUNK = 1 << 20
+
+
+class FilesError(RuntimeError):
+    """The Frame refused a Files-tab operation (its reason is the message)."""
+
+
+def tmp_location() -> dict:
+    return {"id": "tmp", "path": TMP, "android": "", "shared": False, "tmp": True}
+
+
+def saves_location(package: str) -> dict:
+    """A game's internal storage (Lepton's /data/data/<package>: Unreal's and Unity's saves), resolved lazily (the
+    agent's `saves_files` info gives the path). Its files belong to the game's user id: everything goes through the
+    agent, in podman's namespace."""
+    return {"id": f"saves:{package}", "package": package, "saves": package, "android": "", "shared": False}
+
+
+def _quote(s: str) -> str:
+    return "'" + s.replace("'", "'\"'\"'") + "'"
+
+
+def _exec(frame: Frame, command: str, args: dict):
+    remote = frame.ensure_agent()
+    return frame.client.exec_command(f"python3 {_quote(remote)} {command} {_quote(json.dumps(args))}",
+                                     timeout=EXEC_TIMEOUT)
+
+
+def _last_json(text: str) -> dict | None:
+    for line in reversed(text.splitlines()):
+        if line.strip().startswith("{"):
+            try:
+                return json.loads(line)
+            except ValueError:
+                return None
+    return None
+
+
+def saves_info(frame: Frame, package: str) -> dict:
+    """{root, android, exists, running} of the game's internal storage."""
+    return frame.agent("saves_files", package=package, op="info")
+
+
+def _saves_list(frame: Frame, package: str, root: str, path: str, hidden: bool = False) -> list[Entry]:
+    path = inside(root, path)
+    got = frame.agent("saves_files", package=package, op="list", path=path, hidden=hidden)["entries"]
+    out = [Entry(e["name"], e["path"], bool(e["is_dir"]), int(e.get("size") or 0), float(e.get("mtime") or 0),
+                 bool(e.get("link"))) for e in got]
+    for e in out:
+        inside(root, e.path)  # the agent's answer stays in the location too
+    return sorted(out, key=lambda e: (not e.is_dir, e.name.lower()))
+
+
+def _saves_download(frame: Frame, package: str, root: str, paths: list[str], local_dir: Path,
+                    reporter: Reporter, expected: int = 0) -> dict:
+    """The agent sends a plain tar (`_saves_get`); it's unpacked here as untrusted input (folders and files only,
+    nothing outside local_dir)."""
+    import tarfile
+
+    paths = [inside(root, p) for p in paths]
+    local_dir = Path(local_dir)
+    stdin, stdout, stderr = _exec(frame, "_saves_get", {"package": package, "paths": paths})
+    stdin.channel.shutdown_write()
+    reporter.stage("Download saves")
+    files = received = 0
+    try:
+        with tarfile.open(fileobj=stdout, mode="r|") as tar:
+            for m in tar:
+                parts = [x for x in m.name.replace("\\", "/").split("/") if x and x != "."]
+                if not parts or ".." in parts or m.name.startswith("/") or not (m.isdir() or m.isreg()):
+                    continue
+                dest = local_dir.joinpath(*parts)
+                if m.isdir():
+                    dest.mkdir(parents=True, exist_ok=True)
+                    continue
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                src = tar.extractfile(m)
+                with open(dest, "wb") as f:
+                    while chunk := src.read(CHUNK):
+                        reporter.check_cancel()
+                        f.write(chunk)
+                        received += len(chunk)
+                        reporter.progress(min(0.99, received / expected) if expected else 0.5,
+                                          f"{received / 2**20:.1f} MiB")
+                files += 1
+    except tarfile.ReadError:
+        pass  # nothing came (refused): the reply says why
+    except BaseException:
+        stdout.channel.close()
+        raise
+    code = stdout.channel.recv_exit_status()
+    reply = _last_json(stderr.read().decode("utf-8", "replace")) or {}
+    if code or not reply.get("ok"):
+        raise FilesError(reply.get("error") or f"the Frame couldn't send the files (exit {code})")
+    return {"files": files, "bytes": received, "folder": str(local_dir)}
+
+
+class _ChannelWriter:
+    """A file object over an exec channel's stdin for tarfile's stream mode: progress + Cancel per write."""
+
+    def __init__(self, stdin, reporter: Reporter, total: int):
+        self.stdin, self.reporter, self.total, self.sent = stdin, reporter, total, 0
+
+    def write(self, data: bytes) -> int:
+        self.reporter.check_cancel()
+        self.stdin.write(data)
+        self.sent += len(data)
+        self.reporter.progress(min(0.99, self.sent / max(self.total, 1)), f"{self.sent / 2**20:.1f} MiB")
+        return len(data)
+
+
+def _saves_upload(frame: Frame, package: str, root: str, paths: list[Path], dest: str,
+                  reporter: Reporter) -> tuple[list, list, int]:
+    """Files/folders (empty folders too) into a folder of the game's internal storage, as one tar on `_saves_put`."""
+    import tarfile
+
+    dest = inside(root, dest)
+    items = _items(paths, "")
+    empty = _empty_dirs(paths, "")
+    total = sum(i[2] for i in items)
+    reporter.log(f"{len(items)} file(s), {total / 2**20:.0f} MiB → {dest}")
+    reporter.stage(f"Upload {len(items)} file(s)")
+    stdin, stdout, stderr = _exec(frame, "_saves_put", {"package": package, "dest": dest})
+    try:
+        with tarfile.open(fileobj=_ChannelWriter(stdin, reporter, total), mode="w|") as tar:
+            for rel in empty:
+                ti = tarfile.TarInfo(rel)
+                ti.type, ti.mode = tarfile.DIRTYPE, 0o770
+                tar.addfile(ti)
+            for local, rel, size in items:
+                ti = tarfile.TarInfo(rel)
+                ti.size, ti.mode, ti.mtime = size, 0o660, int(Path(local).stat().st_mtime)
+                with open(local, "rb") as f:
+                    tar.addfile(ti, f)
+        stdin.channel.shutdown_write()
+    except OSError:
+        pass  # the Frame stopped reading (refused): its reply says why
+    except BaseException:
+        stdout.channel.close()  # cancelled: the agent sees a cut-off archive (files already in place stay)
+        raise
+    reply = _last_json(stdout.read().decode("utf-8", "replace")) or {}
+    code = stdout.channel.recv_exit_status()
+    if not reply.get("ok"):
+        err = stderr.read().decode("utf-8", "replace").strip()
+        raise FilesError(reply.get("error") or f"the Frame couldn't store the files (exit {code}) {err[-300:]}")
+    return items, [], total
+
+
+# One entry point per operation for the GUI: plain locations go over SFTP, a game's saves through the agent.
+def loc_list(frame: Frame, loc: dict, path: str, hidden: bool = False) -> list[Entry]:
+    if loc.get("saves"):
+        return _saves_list(frame, loc["saves"], loc["path"], path, hidden)
+    return list_dir(frame, loc["path"], path, hidden)
+
+
+def loc_make_dir(frame: Frame, loc: dict, parent: str, name: str) -> str:
+    if loc.get("saves"):
+        parent = inside(loc["path"], parent)
+        return frame.agent("saves_files", package=loc["saves"], op="mkdir", parent=parent, name=_name(name))["path"]
+    return make_dir(frame, loc["path"], parent, name)
+
+
+def loc_rename(frame: Frame, loc: dict, path: str, new_name: str) -> str:
+    if loc.get("saves"):
+        path = inside(loc["path"], path)
+        if path == posixpath.normpath(loc["path"]):
+            raise ValueError("the location itself can't be renamed")
+        return frame.agent("saves_files", package=loc["saves"], op="rename", path=path, name=_name(new_name))["path"]
+    return rename(frame, loc["path"], path, new_name)
+
+
+def loc_delete(frame: Frame, loc: dict, paths: list[str]) -> int:
+    if loc.get("saves"):
+        targets = [inside(loc["path"], p) for p in paths]
+        if any(t == posixpath.normpath(loc["path"]) for t in targets):
+            raise ValueError("the location itself can't be deleted")
+        return frame.agent("saves_files", package=loc["saves"], op="delete", paths=targets)["deleted"]
+    return delete(frame, loc["path"], paths)
+
+
+def loc_download(frame: Frame, loc: dict, paths: list[str], local_dir: Path, reporter: Reporter | None = None,
+                 expected: int = 0) -> dict:
+    reporter = reporter or Reporter()
+    if loc.get("saves"):
+        return _saves_download(frame, loc["saves"], loc["path"], paths, local_dir, reporter, expected)
+    return download(frame, loc["path"], paths, local_dir, reporter)
+
+
+def loc_upload(frame: Frame, loc: dict, paths: list[Path], dest: str, reporter: Reporter) -> tuple[list, list, int]:
+    if loc.get("saves"):
+        return _saves_upload(frame, loc["saves"], loc["path"], paths, dest, reporter)
+    return upload(frame, paths, inside(loc["path"], dest), reporter)
+
+
+# ------------------------------------------------------------------ Move to…
+def move_end(loc: dict) -> dict:
+    """How the agent names a location: a game's saves by its package, anything else by its folder."""
+    return {"saves": loc["saves"]} if loc.get("saves") else {"root": posixpath.normpath(loc["path"])}
+
+
+def check_move(src: dict, items: list[str], dest: dict, folder: str) -> tuple[list[str], str]:
+    """Both ends checked here before the Frame is asked (the agent checks them again): every item inside the source
+    location (never the location itself), the folder inside the destination, nothing into itself or where it is."""
+    root = posixpath.normpath(src["path"])
+    paths = [inside(root, p) for p in items]
+    if not paths:
+        raise ValueError("nothing to move")
+    if root in paths:
+        raise ValueError("the location itself can't be moved")
+    if dest.get("read_only"):
+        raise ValueError(f"{dest.get('label') or dest['path']} is read-only")
+    folder = inside(dest["path"], folder)
+    for p in paths:
+        if folder == p or folder.startswith(p.rstrip("/") + "/"):
+            raise ValueError(f"{posixpath.basename(p)} can't be moved into itself")
+        if posixpath.dirname(p) == folder:
+            raise ValueError(f"{posixpath.basename(p)} is already in that folder")
+    return paths, folder
+
+
+def move(frame: Frame, src: dict, items: list[str], dest: dict, folder: str,
+         reporter: Reporter | None = None) -> dict:
+    """Move files/folders between (or within) locations on the Frame: the agent renames them when both folders are
+    on one file system, else copies them there and deletes the originals (`_files_move`, progress lines). Into or
+    out of a game's saves it works in podman's namespace and refuses while the game runs. Cancel stops a copy (its
+    partial copy is removed, the original kept)."""
+    reporter = reporter or Reporter()
+    paths, folder = check_move(src, items, dest, folder)
+    reporter.stage(f"Move {len(paths)} item(s)")
+    stdin, stdout, _stderr = _exec(frame, "_files_move", {"src": move_end(src), "dest": move_end(dest),
+                                                         "items": paths, "folder": folder})
+    stdin.channel.shutdown_write()
+    reply: dict = {}
+    try:
+        for raw in iter(stdout.readline, b""):
+            line = (raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw).strip()
+            if not raw:
+                break
+            if not line.startswith("{"):
+                continue
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if "progress" in msg:
+                reporter.check_cancel()
+                total = msg.get("total") or 0
+                reporter.progress(min(0.99, msg["progress"] / total) if total else 0.5,
+                                  f"{msg.get('item') or ''} {msg['progress'] / 2**20:.0f}/{total / 2**20:.0f} MiB")
+            elif "ok" in msg:
+                reply = msg
+    except BaseException:
+        stdout.channel.close()  # the agent's next progress line fails: it removes the partial copy
+        raise
+    code = stdout.channel.recv_exit_status()
+    if not reply.get("ok"):
+        raise FilesError(reply.get("error") or f"the Frame couldn't move the files (exit {code})")
+    reporter.progress(1.0, "")
+    return reply["result"]

@@ -25,6 +25,7 @@ PC VR (Oculus Rift) games packed for the Frame (id "rift.<slug>"), run by Proton
 """
 import base64
 import contextlib
+import errno
 import glob
 import hashlib
 import json
@@ -12122,6 +12123,19 @@ def saves_ns_main(op, raw):
     if op == "snapshot":
         print(json.dumps(create_save_snapshot(args["package"])))
         return 0
+    if op == "files":
+        try:
+            print(json.dumps({"ok": True, "result": saves_files_here(args)}))
+        except Exception as exc:  # noqa: BLE001
+            print(json.dumps({"ok": False, "error": str(exc) if isinstance(exc, AgentError)
+                              else f"{type(exc).__name__}: {exc}"}))
+        return 0
+    if op == "get":
+        return saves_get_session(args, sys.stdout.buffer, sys.stderr)
+    if op == "put":
+        return saves_put_session(args, sys.stdin.buffer, sys.stdout)
+    if op == "move":
+        return files_move_session(args, sys.stdout)
     if op == "info":
         try:
             _pkg, _dep, roots = saves_context(args)
@@ -12254,6 +12268,467 @@ def fetch_save_snapshot(args, out, err):
         return 1
 
 
+# ------------------------------------------------------------------------------------------ Files tab (GitHub #532)
+# The PC's Files tab browses most locations over SFTP. Two things need the agent: a game's internal storage (Lepton's
+# /data/data/<pkg>, where Unreal and Unity keep saves), whose files belong to the container's mapped user ids and are
+# only reachable in podman's user namespace (like save backups), and "Move to…", which copies on the Frame when the
+# two folders are on different file systems. Saves are never changed while the game runs (its launch lock is held).
+FILES_CHUNK = 1 << 20
+
+
+def _files_checked(root, path, follow=False):
+    """`path` (absolute, or relative to root) normalised; refused outside root. Also checked through links: the
+    folder holding it (follow=False: the item itself may be a link, which is acted on, never followed) or the path
+    itself (follow=True, e.g. a folder to list or to move into) must really be inside root."""
+    root = os.path.normpath(root)
+    path = os.path.normpath(path if os.path.isabs(path) else os.path.join(root, path))
+    if not _inside(path, root):
+        raise AgentError(f"{path} is outside {root}")
+    probe = path if follow or path == root else os.path.dirname(path)
+    if not _inside(os.path.realpath(probe), os.path.realpath(root)):
+        raise AgentError(f"{path} leads outside {root} (through a link)")
+    return path
+
+
+def _files_name(name):
+    name = (name or "").strip()
+    if not name or name in (".", "..") or "/" in name or "\0" in name:
+        raise AgentError(f"not a valid name: {name!r}")
+    return name
+
+
+def _files_lepton_link(path):
+    """One of Lepton's links at the top of a game's /sdcard (Movies → ~/Videos, …): moving it breaks the game's view
+    of the shared folders."""
+    parent = os.path.dirname(os.path.normpath(path))
+    return (os.path.islink(path) and os.path.basename(parent) == "external"
+            and os.path.basename(os.path.dirname(parent)) == "lepton-data")
+
+
+def saves_files_here(args):
+    """A Files-tab operation on the game's internal storage, run where its files are reachable (podman's namespace)."""
+    import stat as st_
+
+    pkg, _dep, roots = saves_context(args)
+    root, op = roots["internal"], args.get("op")
+    if op == "info":
+        return {"root": root, "android": f"/data/data/{pkg}", "exists": os.path.isdir(root)}
+    if not os.path.isdir(root):
+        raise AgentError("the game hasn't created its storage yet: start it once")
+    if op == "list":
+        path = _files_checked(root, args.get("path") or root, follow=True)
+        out = []
+        for name in sorted(os.listdir(path)):
+            if name.startswith(".") and not args.get("hidden"):
+                continue
+            full = os.path.join(path, name)
+            try:
+                s = t = os.lstat(full)
+            except OSError:
+                continue
+            link = st_.S_ISLNK(s.st_mode)
+            if link:
+                try:
+                    t = os.stat(full)
+                except OSError:
+                    pass
+            out.append({"name": name, "path": full, "is_dir": st_.S_ISDIR(t.st_mode), "size": t.st_size,
+                        "mtime": s.st_mtime, "link": link})
+        return {"entries": out}
+    if op == "mkdir":
+        parent = _files_checked(root, args.get("parent") or root, follow=True)
+        path = os.path.join(parent, _files_name(args.get("name")))
+        if os.path.lexists(path):
+            raise AgentError(f"{os.path.basename(path)} already exists")
+        _saves_mkdir(path)
+        return {"path": path}
+    if op == "rename":
+        path = _files_checked(root, args.get("path"))
+        if path == root:
+            raise AgentError("the location itself can't be renamed")
+        new = os.path.join(os.path.dirname(path), _files_name(args.get("name")))
+        if os.path.lexists(new):
+            raise AgentError(f"{os.path.basename(new)} already exists")
+        os.rename(path, new)
+        return {"path": new}
+    if op == "delete":
+        paths = [_files_checked(root, p) for p in args.get("paths") or []]
+        if root in paths:
+            raise AgentError("the location itself can't be deleted")
+        for p in paths:
+            if os.path.isdir(p) and not os.path.islink(p):
+                shutil.rmtree(p)
+            elif os.path.lexists(p):
+                os.remove(p)
+        return {"deleted": len(paths)}
+    raise AgentError(f"unknown saves files operation {op!r}")
+
+
+SAVES_FILES_WRITE = ("mkdir", "rename", "delete")
+
+
+def _saves_ns_reply(op, args, here):
+    """Run `here(args)` in podman's namespace (`_saves_ns <op>`, one JSON reply line) or, without podman, here."""
+    owner = as_owner()
+    if not owner or os.environ.get("FRAMEPORT_SAVES_NS") == "1":
+        return here(args)
+    p = run(owner + [sys.executable or "python3", os.path.abspath(__file__), "_saves_ns", op, json.dumps(args)],
+            env=dict(os.environ, FRAMEPORT_SAVES_NS="1"))
+    line = next((ln for ln in reversed(p.stdout.splitlines()) if ln.startswith("{")), "")
+    try:
+        reply = json.loads(line)
+    except ValueError:
+        raise AgentError(f"couldn't reach the game's storage: {p.stderr.strip()[-300:]}") from None
+    if not reply.get("ok"):
+        raise AgentError(reply.get("error") or "the game's storage couldn't be changed")
+    return reply["result"]
+
+
+def cmd_saves_files(args):
+    """The Files tab's "<game> — saves" location (the game's /data/data/<pkg>): op info | list (path, hidden) |
+    mkdir (parent, name) | rename (path, name) | delete (paths). Changes are refused while the game runs and hold its
+    launch lock; info and list also work while it runs (info says whether it does)."""
+    _pkg, dep, _roots = saves_context(args)
+    op = args.get("op")
+    if op not in ("info", "list", *SAVES_FILES_WRITE):
+        raise AgentError(f"unknown saves files operation {op!r}")
+    running = saves_running(dep)
+    if op in SAVES_FILES_WRITE:
+        if running:
+            raise AgentError("the game is running: close it before changing its saves")
+        with _SavesLock(dep):
+            return _saves_ns_reply("files", args, saves_files_here)
+    result = _saves_ns_reply("files", args, saves_files_here)
+    if op == "info":
+        result["running"] = running
+    return result
+
+
+def saves_get_here(args, out):
+    """Files below the game's internal storage as one plain tar on `out` (folders keep their structure; links,
+    devices and pipes are left out). Returns {files, bytes}."""
+    import stat as st_
+    import tarfile
+
+    _pkg, _dep, roots = saves_context(args)
+    root = roots["internal"]
+    files = size = 0
+    with tarfile.open(fileobj=out, mode="w|") as tar:
+        for p in args.get("paths") or []:
+            p = _files_checked(root, p)
+            top = os.path.dirname(p)
+            for cur, dirs, names in os.walk(p) if os.path.isdir(p) and not os.path.islink(p) else [(None, [], [p])]:
+                if cur is not None:
+                    dirs[:] = sorted(d for d in dirs if not os.path.islink(os.path.join(cur, d)))
+                    tar.add(cur, arcname=os.path.relpath(cur, top), recursive=False)
+                for name in sorted(names):
+                    full = name if cur is None else os.path.join(cur, name)
+                    s = os.lstat(full)
+                    if not st_.S_ISREG(s.st_mode):
+                        continue
+                    ti = tar.gettarinfo(full, arcname=os.path.relpath(full, top))
+                    ti.uid = ti.gid = 0
+                    ti.uname = ti.gname = ""
+                    with open(full, "rb") as f:
+                        tar.addfile(ti, f)
+                    files, size = files + 1, size + s.st_size
+    out.flush()
+    return {"files": files, "bytes": size}
+
+
+def saves_put_here(args, inp):
+    """Unpack a plain tar from the PC into a folder of the game's internal storage (untrusted input: folders and
+    regular files only, nothing outside the folder or through a link). New files and folders belong to the folder's
+    owner (the game's user id), an existing file keeps its owner and mode. Returns {files, bytes, folders}."""
+    import stat as st_
+    import tarfile
+
+    _pkg, _dep, roots = saves_context(args)
+    root = roots["internal"]
+    if not os.path.isdir(root):
+        raise AgentError("the game hasn't created its storage yet: start it once")
+    dest = _files_checked(root, args.get("dest") or root, follow=True)
+    files = size = folders = 0
+    with tarfile.open(fileobj=inp, mode="r|") as tar:
+        for m in tar:
+            parts = [x for x in m.name.replace("\\", "/").split("/") if x and x != "."]
+            if not parts or any(x == ".." for x in parts) or m.name.startswith("/"):
+                raise AgentError(f"refusing the path {m.name[:200]!r}")
+            if not (m.isdir() or m.isreg()):
+                continue
+            for i in range(1, len(parts) + 1):  # nothing on the way may be a link (or a file where a folder goes)
+                p = os.path.join(dest, *parts[:i])
+                try:
+                    s = os.lstat(p)
+                except FileNotFoundError:
+                    break
+                if st_.S_ISLNK(s.st_mode):
+                    raise AgentError(f"won't write through the link {'/'.join(parts[:i])}")
+                if (i < len(parts) or m.isdir()) and not st_.S_ISDIR(s.st_mode):
+                    raise AgentError(f"{'/'.join(parts[:i])} is a file on the Frame, not a folder")
+                if i == len(parts) and m.isreg() and not st_.S_ISREG(s.st_mode):
+                    raise AgentError(f"{'/'.join(parts)} is a folder on the Frame, not a file")
+            target = os.path.join(dest, *parts)
+            if m.isdir():
+                if not os.path.isdir(target):
+                    _saves_mkdir(target)
+                    folders += 1
+                continue
+            _saves_mkdir(os.path.dirname(target))
+            old = os.lstat(target) if os.path.lexists(target) else None
+            ps = os.stat(os.path.dirname(target))
+            tmp = os.path.join(os.path.dirname(target), f".fp-upload-{os.getpid()}-{parts[-1]}"[:255])
+            src = tar.extractfile(m)
+            try:
+                if os.path.lexists(tmp):  # a leftover of a cut-off upload (removed, never followed)
+                    os.remove(tmp)
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+                with os.fdopen(fd, "wb") as f:
+                    shutil.copyfileobj(src, f, FILES_CHUNK)
+                os.chmod(tmp, old.st_mode & 0o7777 if old else 0o660)
+                _saves_chown(tmp, old.st_uid if old else ps.st_uid, old.st_gid if old else ps.st_gid)
+                os.replace(tmp, target)
+            finally:
+                if os.path.lexists(tmp):
+                    os.remove(tmp)
+            files, size = files + 1, size + m.size
+    return {"files": files, "bytes": size, "folders": folders}
+
+
+def _saves_stream(op, args, here, write):
+    """Outside podman's namespace: check the game (write: not running, launch lock held), then run `op` in the
+    namespace with stdio inherited. Inside it, or without podman: `here()`."""
+    if os.environ.get("FRAMEPORT_SAVES_NS") == "1":
+        return here()
+    _pkg, dep, _roots = saves_context(args)
+    if not write:
+        code = _saves_in_namespace(op, args)
+        return here() if code is None else code
+    if saves_running(dep):
+        raise AgentError("the game is running: close it before changing its saves")
+    with _SavesLock(dep):
+        code = _saves_in_namespace(op, args)
+        return here() if code is None else code
+
+
+def saves_get_session(args, out, err):
+    """`_saves_get '<json>'`: a tar of the paths on `out`, one JSON line (ok + {files, bytes}, or error) on `err`."""
+    def here():
+        err.write(json.dumps({"ok": True, "result": saves_get_here(args, out)}) + "\n")
+        err.flush()
+        return 0
+    try:
+        return _saves_stream("get", args, here, write=False)
+    except Exception as exc:  # noqa: BLE001
+        err.write(json.dumps({"ok": False, "error": str(exc) if isinstance(exc, AgentError)
+                              else f"{type(exc).__name__}: {exc}"}) + "\n")
+        err.flush()
+        return 1
+
+
+def saves_put_session(args, inp, out):
+    """`_saves_put '<json>'`: a tar on `inp` unpacked into args.dest, one JSON line on `out`."""
+    def here():
+        out.write(json.dumps({"ok": True, "result": saves_put_here(args, inp)}) + "\n")
+        out.flush()
+        return 0
+    try:
+        return _saves_stream("put", args, here, write=True)
+    except Exception as exc:  # noqa: BLE001
+        out.write(json.dumps({"ok": False, "error": str(exc) if isinstance(exc, AgentError)
+                              else f"{type(exc).__name__}: {exc}"}) + "\n")
+        out.flush()
+        return 1
+
+
+# --- Move to…
+def _files_end(end):
+    """(root, package or None) of one end of a move: {"saves": pkg} = that game's internal storage, else {"root":
+    an absolute folder} (one of the Files tab's locations; never / itself)."""
+    if not isinstance(end, dict):
+        raise AgentError("bad location")
+    if end.get("saves"):
+        pkg, _dep, roots = saves_context({"package": end["saves"]})
+        return roots["internal"], pkg
+    root = end.get("root") or ""
+    if not root.startswith("/") or os.path.normpath(root) == "/":
+        raise AgentError(f"bad location {root!r}")
+    return os.path.normpath(root), None
+
+
+def _files_same_fs(src, folder):
+    """Whether moving src into folder is a rename (one file system) rather than a copy."""
+    return os.lstat(src).st_dev == os.stat(folder).st_dev
+
+
+def _files_tree_size(path):
+    import stat as st_
+
+    s = os.lstat(path)
+    if st_.S_ISREG(s.st_mode):
+        return s.st_size
+    if not st_.S_ISDIR(s.st_mode):
+        return 0
+    total = 0
+    for cur, _dirs, names in os.walk(path):
+        for n in names:
+            try:
+                s = os.lstat(os.path.join(cur, n))
+            except OSError:
+                continue
+            if st_.S_ISREG(s.st_mode):
+                total += s.st_size
+    return total
+
+
+def _files_copy(src, dst, tick):
+    """Copy a file, link or folder (links stay links, devices and pipes are left out); tick(n) after each chunk."""
+    import stat as st_
+
+    s = os.lstat(src)
+    if st_.S_ISLNK(s.st_mode):
+        os.symlink(os.readlink(src), dst)
+    elif st_.S_ISDIR(s.st_mode):
+        os.mkdir(dst)
+        for name in sorted(os.listdir(src)):
+            _files_copy(os.path.join(src, name), os.path.join(dst, name), tick)
+        shutil.copystat(src, dst, follow_symlinks=False)
+    elif st_.S_ISREG(s.st_mode):
+        with open(src, "rb") as fi, open(dst, "wb") as fo:
+            while True:
+                chunk = fi.read(FILES_CHUNK)
+                if not chunk:
+                    break
+                fo.write(chunk)
+                tick(len(chunk))
+        shutil.copystat(src, dst, follow_symlinks=False)
+
+
+def _files_chown_tree(path, uid, gid):
+    _saves_chown(path, uid, gid)
+    if os.path.isdir(path) and not os.path.islink(path):
+        for cur, dirs, names in os.walk(path):
+            for n in dirs + names:
+                _saves_chown(os.path.join(cur, n), uid, gid)
+
+
+def files_move_here(args, emit):
+    """Move args.items (inside the source location) into args.folder (inside the destination location): one rename
+    when both are on the same file system, else a copy and then the original deleted (a failed copy removes its
+    partial copy and keeps the original). Nothing is overwritten. Into or out of a game's internal storage the
+    moved files get the destination folder's owner (the game's user id, or the steamos user). emit(progress dict)
+    reports copied bytes. Returns {moved, renamed, copied, bytes}."""
+    src_root, src_pkg = _files_end(args.get("src"))
+    dest_root, dest_pkg = _files_end(args.get("dest"))
+    folder = _files_checked(dest_root, args.get("folder") or dest_root, follow=True)
+    if not os.path.isdir(folder):
+        raise AgentError(f"{folder} is not a folder")
+    items = []
+    for p in args.get("items") or []:
+        p = _files_checked(src_root, p)
+        if p == src_root:
+            raise AgentError("the location itself can't be moved")
+        if not os.path.lexists(p):
+            raise AgentError(f"{os.path.basename(p)} isn't there any more")
+        if _files_lepton_link(p):
+            raise AgentError(f"{os.path.basename(p)} is one of Lepton's links: the game needs it where it is")
+        target = os.path.join(folder, os.path.basename(p))
+        if _inside(folder, p):
+            raise AgentError(f"{os.path.basename(p)} can't be moved into itself")
+        if os.path.normpath(os.path.dirname(p)) == folder:
+            raise AgentError(f"{os.path.basename(p)} is already in that folder")
+        if os.path.lexists(target):
+            raise AgentError(f"{os.path.basename(p)} already exists in {folder}")
+        items.append((p, target))
+    if not items:
+        raise AgentError("nothing to move")
+    owner = None
+    if (src_pkg or dest_pkg) and os.environ.get("FRAMEPORT_SAVES_NS") == "1":
+        fs = os.stat(folder)
+        owner = (fs.st_uid, fs.st_gid)
+    plan = [(p, t, _files_same_fs(p, folder)) for p, t in items]
+    total = sum(_files_tree_size(p) for p, _t, same in plan if not same)
+    done = {"bytes": 0, "at": 0.0}
+    renamed = copied = 0
+
+    def tick(n, name=""):
+        done["bytes"] += n
+        now = time.monotonic()
+        if now - done["at"] >= 0.25 or not n:
+            done["at"] = now
+            emit({"progress": done["bytes"], "total": total, "item": name})
+
+    for p, target, same in plan:
+        name = os.path.basename(p)
+        if same:
+            try:
+                os.rename(p, target)
+                renamed += 1
+            except OSError as exc:
+                if exc.errno != errno.EXDEV:
+                    raise
+                same = False
+                total += _files_tree_size(p)
+        if not same:
+            try:
+                _files_copy(p, target, lambda n, name=name: tick(n, name))
+            except BaseException:
+                if os.path.isdir(target) and not os.path.islink(target):
+                    shutil.rmtree(target, ignore_errors=True)
+                elif os.path.lexists(target):
+                    os.remove(target)
+                raise
+            try:
+                if os.path.isdir(p) and not os.path.islink(p):
+                    shutil.rmtree(p)
+                else:
+                    os.remove(p)
+            except OSError as exc:
+                raise AgentError(f"{name} was copied to {folder}, but the original couldn't be removed completely: "
+                                 f"{exc}") from exc
+            copied += 1
+        if owner:
+            _files_chown_tree(target, *owner)
+        tick(0, name)
+    return {"moved": len(plan), "renamed": renamed, "copied": copied, "bytes": done["bytes"]}
+
+
+def files_move_session(args, out):
+    """`_files_move '<json>'`: progress lines ({"progress", "total", "item"}) and one result line on `out`. Moves into
+    or out of a game's internal storage run in podman's namespace, refused while that game runs, its launch lock held.
+    A closed channel (Cancel on the PC) stops a copy and removes its partial copy."""
+    def emit(obj):
+        out.write(json.dumps(obj) + "\n")
+        out.flush()
+
+    def here():
+        emit({"ok": True, "result": files_move_here(args, emit)})
+        return 0
+    try:
+        if os.environ.get("FRAMEPORT_SAVES_NS") == "1":
+            return here()
+        games = sorted({e["saves"] for e in (args.get("src"), args.get("dest"))
+                        if isinstance(e, dict) and e.get("saves")})
+        if not games:
+            return here()
+        with contextlib.ExitStack() as stack:
+            for pkg in games:
+                _pkg, dep, _roots = saves_context({"package": pkg})
+                if saves_running(dep):
+                    raise AgentError("the game is running: close it before changing its saves")
+                stack.enter_context(_SavesLock(dep))
+            code = _saves_in_namespace("move", args)
+            return here() if code is None else code
+    except BrokenPipeError:
+        return 1
+    except Exception as exc:  # noqa: BLE001
+        try:
+            emit({"ok": False, "error": str(exc) if isinstance(exc, AgentError) else f"{type(exc).__name__}: {exc}"})
+        except OSError:
+            pass
+        return 1
+
+
 COMMANDS = {n[4:]: f for n, f in globals().items() if n.startswith("cmd_")}
 
 
@@ -12279,6 +12754,12 @@ def main():
         return saves_backup_session(json.loads(sys.argv[2]), sys.stdout.buffer, sys.stderr)
     if len(sys.argv) >= 3 and sys.argv[1] == "_restore_saves":
         return saves_restore_session(json.loads(sys.argv[2]), sys.stdin.buffer, sys.stdout)
+    if len(sys.argv) >= 3 and sys.argv[1] == "_saves_get":
+        return saves_get_session(json.loads(sys.argv[2]), sys.stdout.buffer, sys.stderr)
+    if len(sys.argv) >= 3 and sys.argv[1] == "_saves_put":
+        return saves_put_session(json.loads(sys.argv[2]), sys.stdin.buffer, sys.stdout)
+    if len(sys.argv) >= 3 and sys.argv[1] == "_files_move":
+        return files_move_session(json.loads(sys.argv[2]), sys.stdout)
     if len(sys.argv) >= 4 and sys.argv[1] == "_saves_ns":
         return saves_ns_main(sys.argv[2], sys.argv[3])
     if len(sys.argv) >= 2 and sys.argv[1] == "_monitor":
