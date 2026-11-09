@@ -1,0 +1,28 @@
+package: com.mrf.zenstudios.PFXVRQuest
+title: Pinball FX VR
+status: issues
+notes: The first table plays fine; each table switch makes performance worse.
+tested_version: '1.9'
+engine: Unreal
+xr: OpenXR
+alt_overport:
+- patch_remove_unreal_force_quit
+frame:
+- frame.meta_permissions
+- frame.unreal_skip_obb_check
+- frame.asset_files
+- frame.unreal_ovrp_entrypoints
+- frame.hw_video_decode
+adapter:
+  equirect_emul: 1
+  haptic_fix: 1
+  scene_emul: 1
+verified:
+  date: '2026-11-01'
+  known_good_sha256: 4f440219788a82c1763a7f8a4c57972a38420154dd05b5d8dd810ebb93fef446
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 562
+source_hint: Pinball FX VR

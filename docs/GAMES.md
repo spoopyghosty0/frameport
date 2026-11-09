@@ -53,6 +53,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | CrazyTaxiVR | Quest | ✅ Works |  |
 | Creed | Quest | ✅ Works |  |
 | Crisis Brigade 2 reloaded | Quest | ✅ Works |  |
+| Crisis Brigade 2 reloaded (App Lab) | Quest | ✅ Works |  |
 | Crisis VRigade | Quest | ✅ Works |  |
 | Crisis Zone VR | Quest | ✅ Works |  |
 | cubism | Quest | ✅ Works |  |
@@ -87,6 +88,8 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Gravity Lab | Quest | ✅ Works |  |
 | Gunjack | Quest | ✅ Works |  |
 | H.U.N.T | Quest | ✅ Works |  |
+| HeroBound 2 | Quest | ✅ Works |  |
+| HeroBound: First Steps | Quest | ✅ Works |  |
 | Hitstream | Quest | ✅ Works |  |
 | Hungry Dragon | Quest | ✅ Works |  |
 | Hungry Shark Evolution | Quest | ✅ Works |  |
@@ -138,6 +141,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Pistol Whip | PC VR | ✅ Works |  |
 | Please Don't Touch Anything | Quest | ✅ Works |  |
 | Please, Don't Touch Anything: House Broken | Quest | ✅ Works |  |
+| Plex | Quest | ✅ Works |  |
 | Port0r: Cop VR | Quest | ✅ Works |  |
 | Port0r: House of the Dead VR | Quest | ✅ Works |  |
 | Port0r: Rally VR | Quest | ✅ Works |  |
@@ -209,6 +213,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Trover | Quest | ✅ Works |  |
 | Under Cover | Quest | ✅ Works |  |
 | UNDERDOGS | Quest | ✅ Works |  |
+| UnLoop | Quest | ✅ Works |  |
 | Vacation Simulator | Quest | ✅ Works |  |
 | Vader Immortal: Episode I | Quest | ✅ Works |  |
 | Vader Immortal: Episode II | Quest | ✅ Works |  |
@@ -237,7 +242,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | ExploreVR | Quest | ⚠️ Works with issues | The 3D world warps and shifts with head movement (wrong perspective). |
 | FGO VR | Quest | ⚠️ Works with issues | Audio stuttering and popping sounds |
 | Fisherman | Quest | ⚠️ Works with issues | Loading screens have corruption, but everything works otherwise. |
-| GoldenEye VR | Quest | ⚠️ Works with issues | No sound; otherwise works great. |
+| GoldenEye VR | Quest | ⚠️ Works with issues | Sound works (from the second start on some setups). |
 | HardBullet | Quest | ⚠️ Works with issues | Loading screens (a cube overlay) are missing or corrupted up to FramePort 1.2.1; cube_quads (next release) shows them as six panels, not confirmed in the hea… |
 | Homeworld: Vast Reaches | Quest | ⚠️ Works with issues | The game starts but after selecting to start a new game it seems to crash. |
 | JKXR | Quest | ⚠️ Works with issues | Tested in the early part of Jedi Outcast. |
@@ -246,6 +251,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | Majora's Mask VR | Quest | ⚠️ Works with issues | Audio on the file select screen sounds crunchy. |
 | Myst | Quest | ⚠️ Works with issues | Minor graphical glitches on some objects. |
 | Phantom: Covert Ops | Quest | ⚠️ Works with issues | DLC/store button crashes (no Meta store). |
+| Pinball FX VR | Quest | ⚠️ Works with issues | The first table plays fine; each table switch makes performance worse. |
 | Pinball FX VR | Quest | ⚠️ Works with issues | Plays; space warp off (fewer stutters). |
 | Plezy | Quest | ⚠️ Works with issues | Some videos play with strong artifacts and wrong colours; the cause is unknown, possibly hardware video decoding. |
 | Port0r: Time Crisis II VR | Quest | ⚠️ Works with issues | Gameplay runs well; cut scenes and the title and game-selection screens after inserting coins don't display properly. |

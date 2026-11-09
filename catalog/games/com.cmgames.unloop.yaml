@@ -1,0 +1,26 @@
+package: com.cmgames.unloop
+title: UnLoop
+status: works
+notes: Starts slowly, then works.
+tested_version: 1.1.5.1250
+engine: Unreal
+xr: OpenXR
+alt_overport:
+- patch_remove_unreal_force_quit
+frame:
+- frame.unreal_skip_obb_check
+- frame.gms_platform_version
+- frame.unreal_ovrp_entrypoints
+- frame.hw_video_decode
+adapter:
+  equirect_emul: 1
+  haptic_fix: 1
+verified:
+  date: '2026-10-26'
+  known_good_sha256: 960c6ac1bd597885b6561ac20aab8433a6d7fb0a921346cb2f80447a19832caf
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 504
+source_hint: Unloop

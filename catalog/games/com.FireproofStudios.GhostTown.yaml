@@ -20,3 +20,6 @@ verified:
   agent: 88
   issue: 299
 source_hint: Ghost Town
+notes: 'Its data comes as loose .bundle files: put them (and any .obb) in a folder named com.FireproofStudios.GhostTown
+  next to base.apk before scanning.'
+updated: '2026-11-08'

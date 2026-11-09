@@ -1,7 +1,8 @@
 package: com.forcefieldxr.explorevr
 title: ExploreVR
 status: issues
-notes: The 3D world warps and shifts with head movement (wrong perspective).
+notes: The 3D world warps and shifts with head movement (wrong perspective). The two eyes' images don't line up
+  (double vision, issue 518).
 tested_version: 1.2.1
 engine: Unreal
 xr: VrApi
@@ -20,3 +21,4 @@ verified:
   agent: 59
   issue: 149
 source_hint: com.forcefieldxr.explorevr
+updated: '2026-11-08'

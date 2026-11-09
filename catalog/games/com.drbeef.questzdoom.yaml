@@ -1,12 +1,13 @@
 package: com.drbeef.questzdoom
 title: QuestZDoom
 status: works
-notes: 'Needs a WAD: put it into QuestZDoom/wads in the game''s storage (Files tab) and create QuestZDoom/qzdoom.ini
-  with the lines "[IWADSearch.Directories]" and "Path=/sdcard/QuestZDoom/wads" (commandline.txt alone is not
-  enough). Smooth past 15 minutes in the headset with gl_error_clear (issue 237).'
-details: GZDoom on OpenGL ES with Team Beef's OpenXR code. The game leaves GL_INVALID_ENUM pending every frame; the
-  runtime's GL check failed on it at the first swapchain and its GL interop then created about 100 GPU objects a
-  second that were never freed (8,000 after 75 s headless). Frames slowed down over the minutes, and in a player's
+notes: 'Needs a WAD: put it into QuestZDoom/wads in the game''s storage (Files tab) and create QuestZDoom/config/qzdoom.ini
+  before the first start (without it the game crashes on the first start and writes a default file) with the lines
+  "[IWADSearch.Directories]" and "Path=/sdcard/QuestZDoom/wads" (commandline.txt alone is not enough). Smooth past
+  15 minutes in the headset with gl_error_clear (issue 237).'
+details: GZDoom on OpenGL ES with Team Beef's OpenXR code. The game leaves GL_INVALID_ENUM pending every frame;
+  the runtime's GL check failed on it at the first swapchain and its GL interop then created about 100 GPU objects
+  a second that were never freed (8,000 after 75 s headless). Frames slowed down over the minutes, and in a player's
   session the GPU driver crashed after 6 minutes and the Frame restarted. gl_error_clear clears the errors before
   FrameBridge calls the runtime; GPU objects then stay flat (headless, 2026-10-24).
 tested_version: 1.6.2
@@ -19,5 +20,5 @@ adapter:
 verified:
   date: '2026-10-25'
   issue: 237
-updated: '2026-10-25'
+updated: '2026-11-08'
 source_hint: questzdoom-1.6.2

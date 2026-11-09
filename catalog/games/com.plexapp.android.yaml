@@ -1,0 +1,37 @@
+package: com.plexapp.android
+title: Plex
+status: works
+notes: Flat Android app. Sign in through Steam's browser (browser stand-in, on in this recipe). The Meta Store and
+  Google Play builds are the same package.
+tested_version: 2026.18.0
+engine: Other
+xr: none
+overport_remove:
+- patch_copy_libraries
+- patch_copy_ovrplugin_vrapi
+- patch_replace_icon_label
+- patch_fix_min_android_sdk
+- patch_generate_config
+- patch_remove_localized_names
+- patch_clean_up_frida
+- patch_oculus_unity
+- patch_oculus_unreal
+- patch_vr_metadata
+- patch_launcher_entry
+- patch_remove_uses_library
+- patch_fix_unreal_crash
+- patch_meta_xr_audio
+- patch_mark_as_debuggable
+- patch_mark_allow_backup
+frame:
+- frame.hw_video_decode
+- frame.browser_handoff
+verified:
+  date: '2026-10-26'
+  known_good_sha256: 8b9c2b3884e5d0d007e37bb372c437f806d85c3610977a0b54d89498fa7f341c
+  app: 1.4.1.dev714
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 509
+source_hint: Plex

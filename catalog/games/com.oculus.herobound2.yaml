@@ -1,0 +1,37 @@
+package: com.oculus.herobound2
+title: HeroBound 2
+status: works
+notes: Gear VR game through the 32-bit bridge; needs "Controllers as a gamepad" (on in this recipe).
+tested_version: 1.5.1
+engine: Unity
+xr: VrApi
+overport_remove:
+- patch_copy_libraries
+- patch_copy_ovrplugin_vrapi
+- patch_replace_icon_label
+- patch_fix_min_android_sdk
+- patch_generate_config
+- patch_remove_localized_names
+- patch_clean_up_frida
+- patch_oculus_unity
+- patch_oculus_unreal
+- patch_vr_metadata
+- patch_launcher_entry
+- patch_remove_uses_library
+- patch_fix_unreal_crash
+- patch_meta_xr_audio
+- patch_mark_as_debuggable
+- patch_mark_allow_backup
+frame:
+- frame.a32_bridge
+device:
+- device.text_input_window
+- device.steam_gamepad
+verified:
+  date: '2026-11-01'
+  known_good_sha256: d2967759a5f7d4b23009babc8dca71a9bb2598c6529c43f6b8f94fd426f44d68
+  app: 1.4.0
+  overport_cli: 1.2.5
+  issue: 554
+source_hint: HeroBound 2
+headset: gearvr

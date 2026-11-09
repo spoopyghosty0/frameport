@@ -1,16 +1,18 @@
 package: com.gevr.port
 title: GoldenEye VR
 status: issues
-notes: No sound; otherwise works great.
-tested_version: 0.5.8
+notes: Sound works (from the second start on some setups). Scopes and the HUD (ammo etc.) don't show.
+tested_version: 0.5.13
 engine: Other
 xr: OpenXR
 frame:
 - frame.sdl_clipboard
 verified:
-  date: '2026-10-18'
-  known_good_sha256: 5bd0d5ad71368178f8478193c215459a670d22ca6828bb155d76c5255908759b
-  app: 1.2.1
+  date: '2026-10-31'
+  known_good_sha256: 5e2a450f0dc6a0657b0d185de9382de0c8d060c8a1bcb92584bb1d9bbe83e4e2
+  app: 1.4.0
   overport_cli: 1.2.5
-  issue: 412
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 552
 source_hint: GoldenEye-VR-v0.5.8

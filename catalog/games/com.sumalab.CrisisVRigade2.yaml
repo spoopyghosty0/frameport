@@ -1,0 +1,26 @@
+package: com.sumalab.CrisisVRigade2
+title: Crisis Brigade 2 reloaded (App Lab)
+status: works
+notes: Works since FramePort 1.4.0 (earlier versions showed a black void).
+tested_version: '2.11'
+engine: Unity
+xr: VrApi
+frame:
+- frame.bhaptics_permission
+- frame.photon_voice_audio_route
+- frame.unity_text_input
+- frame.unity_runtime_msaa_off
+- frame.unity_gl_shim
+device:
+- device.text_input_window
+adapter:
+  haptic_fix: 1
+verified:
+  date: '2026-10-25'
+  known_good_sha256: 4fa0eef61814fcf5d1f487f401059002c298462ea37b07844108af9b85f3acbf
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 109
+  issue: 491
+source_hint: com.sumalab.CrisisVRigade2

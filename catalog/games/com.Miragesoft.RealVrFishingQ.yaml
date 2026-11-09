@@ -3,7 +3,7 @@ title: Real VR Fishing
 status: issues
 notes: Seems to be almost 100% functional with meta permissions enabled.  In the new Mixed Reality mode, the room
   scan doesn't seem to do anything and I can't seem to manually place anything either.
-tested_version: '3.06096'
+tested_version: '3.06110'
 engine: Unity
 xr: OpenXR
 frame:
@@ -26,3 +26,4 @@ verified:
   agent: 91
   issue: 333
 source_hint: Real VR Fishing
+updated: '2026-11-08'
