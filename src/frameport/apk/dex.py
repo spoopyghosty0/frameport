@@ -78,6 +78,38 @@ class Dex:
         protos_off = struct.unpack_from("<I", self.data, 76)[0]
         return self.type_name(struct.unpack_from("<I", self.data, protos_off + 12 * proto + 4)[0])
 
+    def descriptor(self, idx: int) -> str:
+        """Descriptor of method id `idx`, e.g. "(Landroid/content/ContentResolver;Ljava/lang/String;)I"."""
+        proto = struct.unpack_from("<HHI", self.data, self.methods_off + 8 * idx)[1]
+        protos_off = struct.unpack_from("<I", self.data, 76)[0]
+        ret, params_off = struct.unpack_from("<II", self.data, protos_off + 12 * proto + 4)
+        params = []
+        if params_off:
+            n = struct.unpack_from("<I", self.data, params_off)[0]
+            params = [self.type_name(t) for t in struct.unpack_from(f"<{n}H", self.data, params_off + 4)]
+        return f"({''.join(params)}){self.type_name(ret)}"
+
+    @property
+    def fields_n(self) -> int:
+        return struct.unpack_from("<I", self.data, 80)[0]
+
+    def find_string(self, s: str) -> int | None:
+        """Index of string `s` (string ids are sorted by UTF-16 code units), or None."""
+        key = list(s.encode("utf-16-be"))
+        lo, hi = 0, self.strings_n
+        while lo < hi:
+            mid = (lo + hi) // 2
+            k = list(self.string(mid).encode("utf-16-be"))
+            if k == key:
+                return mid
+            lo, hi = (mid + 1, hi) if k < key else (lo, mid)
+        return None
+
+    def string_data_offset(self, idx: int) -> int:
+        """File offset of string `idx`'s MUTF-8 bytes (after its length prefix)."""
+        off = struct.unpack_from("<I", self.data, self.strings_off + 4 * idx)[0]
+        return _uleb(self.data, off)[1]
+
     def method_index(self, cls: str, name: str) -> list[int]:
         return [i for i in range(self.methods_n) if self.method(i) == (cls, name)]
 
