@@ -114,8 +114,20 @@ signatures:
     diagnosis: The game uses Meta's newer Horizon Platform SDK, which reaches Meta's services (sign-in, licence
       check, user) through a Horizon OS system component (hzplatformclientcore) instead of the platform library
       OVRPort replaces. The Frame doesn't have that component, so the game's Meta platform start fails; games that
-      wait for it stay on their loading screen. No fix is available yet. A version of the game built with the older
-      Meta Platform SDK may work.
+      wait for it stay on their loading screen. The Horizon platform stand-in lets the start succeed and answers
+      harmless requests; licence and purchase checks still get an error, so a game that requires them stops
+      later. A version of the game built with the older Meta Platform SDK may work.
+    suggest: [frame.horizon_platform_stub]
+    updated: '2026-11-09'
+  - id: horizon-platform-licence-refused
+    # frame.horizon_platform_stub's own log line (native/java-horizon HorizonPlatformCore.note): a licence or
+    # account-proof request got its error answer (#511)
+    pattern: 'Horizon platform: [a-z_]+/[a-z_0-9*]+ -> not answered \(licence or account check\)'
+    severity: info
+    diagnosis: The game asked Meta's platform for a licence, purchase or account check. FramePort's Horizon
+      platform stand-in never answers those with a success, so they get an error. If the game stops or shows an
+      error after this line, it requires Meta's services and can't run this way; an older version of the game
+      (older Meta Platform SDK) may work.
     suggest: []
     updated: '2026-11-09'
   - id: lua-lightuserdata-pointer

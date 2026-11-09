@@ -66,7 +66,9 @@ IL2CPP_METADATA = "assets/bin/Data/Managed/Metadata/global-metadata.dat"
 #     a VR part behind a flat launcher, GitHub #476) (2026-10)
 # 29: fmod_record_ring (a Unity game that records the microphone through FMOD's 4-buffer OpenSL ring:
 #     frame.unity_mic_ring) (2026-10)
-ANALYSIS_VERSION = 29  # (cortopia_org_id's TMNT layout, GitHub #422, needed no re-analysis: see the patch)
+# 30: horizonos_supplements (the manifest's Horizon OS supplements; hzplatformclientcore = Meta's Horizon Platform SDK:
+#     frame.horizon_platform_stub, GitHub #511) (2026-11)
+ANALYSIS_VERSION = 30  # (cortopia_org_id's TMNT layout, GitHub #422, needed no re-analysis: see the patch)
 
 
 # Android versions by API level (for messages); the Frame's Lepton container runs Android 11 (API 30)

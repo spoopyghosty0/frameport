@@ -21,6 +21,7 @@ fde5e954209f39e447263b94451c626812ab192a0e65f867148fdfb46cbc0123  ./arm64-v8a/li
 0faea8956cf9007244091e313cf935999f5ee617cd70a98c102565e9b0d30e5a  ./arm64-v8a/libvrapi_foveation.so
 76577655ff7599dd7e5b7ad6e9666d28eae56c035c911ce89e7214c55426f714  ./armeabi-v7a/libopenxr_loader_generic.so
 6fd59e6c6e533c0a17204e4f12adaf992ffa6cf58d6280aa9b37ca7ba20299d4  ./dex/browser-handoff.dex
+b1f7d794405726e7c52eb1aedb631d804f9e4444b4f3a67ba82ba941ca5dff91  ./dex/horizon-platform-stub.dex
 1871eae093432d277da4bc751bf5f3269dfcf11f9168260b0c3caadb0dedb19d  ./dex/oculusos-stubs.dex
 b634ab5640e258563c536e658cad87080553df6f34f62269a21d554844e58bfe  ./hevc/COPYING.FFmpeg
 55aae57d292e9536701f2f8a9dbaf1edcfdd766c5748d07a34da2f5ef197f212  ./hevc/libstagefrighthw.so

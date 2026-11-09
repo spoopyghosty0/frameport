@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 217 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 218 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -11,7 +11,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 ## Groups
 
 - [Patches from OVRPort](#group-overport) (25)
-- [Steam Frame patches](#group-frame) (75)
+- [Steam Frame patches](#group-frame) (76)
 - [Game settings](#group-adapter) (90)
 - [Files and settings on the Frame](#group-device) (14)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
@@ -60,6 +60,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [GL shim (Mesa GLSL compatibility)](#frame-gl_shim) | `frame.gl_shim` | Steam Frame patches | 2 |
 | [Play services: Android 11 version checks](#frame-gms_platform_version) | `frame.gms_platform_version` | Steam Frame patches | 5 |
 | [Godot apps: start without a clipboard service](#frame-godot_clipboard) | `frame.godot_clipboard` | Steam Frame patches | 1 |
+| [Horizon platform stand-in (no licence answers)](#frame-horizon_platform_stub) | `frame.horizon_platform_stub` | Steam Frame patches |  |
 | [Hardware video decoding (H.264, HEVC, VP9)](#frame-hw_video_decode) | `frame.hw_video_decode` | Steam Frame patches | 56 |
 | [Interaction SDK: telemetry off](#frame-isdk_telemetry) | `frame.isdk_telemetry` | Steam Frame patches | default |
 | [Just Dance VR: keep progress in the local save](#frame-justdance_local_save) | `frame.justdance_local_save` | Steam Frame patches |  |
@@ -743,6 +744,19 @@ Lets Godot games start on the Frame (they'd crash looking for a clipboard).
 - **Source:** [patches/frame/godot_clipboard.py](../src/frameport/patches/frame/godot_clipboard.py)
 
 > Lepton's Android has no clipboard service, and the Android code of Godot 4.2-4.4 (for example EndoparasiticVR) casts the missing service to a ClipboardManager without checking, so the app crashes at start with a NullPointerException in Godot.&lt;init&gt;. That check is skipped and Godot's clipboard functions do nothing instead (an in-place edit of classes.dex).
+
+### <a id="frame-horizon_platform_stub"></a>Horizon platform stand-in (no licence answers)
+
+Lets games built with Meta's newer platform SDK get past their start (they'd wait forever). Licence and purchase checks still aren't answered.
+
+- `frame.horizon_platform_stub`
+- **Changes:** Changes the APK (a rebuild and reinstall apply it).
+- **Suggested (on):** The game uses Meta's Horizon Platform SDK, whose start needs a Horizon OS component the Frame doesn't have; without a stand-in it waits forever.
+- **Suggested by launch-test signatures:**
+  - `horizon-platform-core-missing` (error): The game uses Meta's newer Horizon Platform SDK, which reaches Meta's services (sign-in, licence check, user) through a Horizon OS system component (hzplatformclientcore) instead of the platform library OVRPort replaces.
+- **Source:** [patches/frame/horizon_platform_stub.py](../src/frameport/patches/frame/horizon_platform_stub.py)
+
+> Games built with Meta's newer Horizon Platform SDK (2xx) start Meta's services through a Horizon OS system component the Frame doesn't have (log: Failed to initialize HorizonPlatformCore: ClassNotFoundException), and games that wait for it stay on their loading screen. This adds a local stand-in to the game: it answers harmless requests (the local player with a fixed id, the app's version, empty friends and achievement lists, analytics and rich presence accepted and dropped) and answers an error to everything else. Licence, purchase and account checks are never answered with a success, so a game that requires them still stops, with a clear log line.
 
 ### <a id="frame-hw_video_decode"></a>Hardware video decoding (H.264, HEVC, VP9)
 

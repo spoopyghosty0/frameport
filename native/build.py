@@ -10,7 +10,7 @@ timefix OpenXR layer for Proton games (linux-arm64, glibc; the NDK's clang build
 OculusHMDConnected helper for Rift games under Proton (win-x64 PE; the NDK's clang + lld-link, no Windows SDK), the
 live view's hardware H.264 encoder fp_venc (linux-arm64-bin, static freestanding executable), and rewrites artifacts/SHA256SUMS. Run `frameport parity` afterwards to see which games change.
 
-    python native/build.py [--only adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,handoff,xrlayer,oculushmd,xrruntime,xrshim,vkshim,zinkfix,foveation,ovrpshim,ovrpbattery,tlskeys,vrsettings,venc,vroverlay_probe] [--ndk PATH]
+    python native/build.py [--only adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,handoff,horizon,xrlayer,oculushmd,xrruntime,xrshim,vkshim,zinkfix,foveation,ovrpshim,ovrpbattery,tlskeys,vrsettings,venc,vroverlay_probe] [--ndk PATH]
 """
 from __future__ import annotations
 
@@ -428,7 +428,24 @@ def build_a32(tc: Path):
 
 # compile-only stand-ins for the Android classes the Java sources reference (not dexed; the device provides them)
 ANDROID_STAND_INS = {
-    "android/content/Context.java": "package android.content;\npublic abstract class Context {}\n",
+    "android/content/Context.java": "package android.content;\npublic abstract class Context {\n"
+                                    "    public android.content.res.AssetManager getAssets() { return null; }\n}\n",
+    "android/content/res/AssetManager.java": "package android.content.res;\npublic final class AssetManager {\n"
+                                             "    public java.io.InputStream open(String f) throws java.io.IOException "
+                                             "{ return null; }\n}\n",
+    "org/json/JSONException.java": "package org.json;\npublic class JSONException extends Exception {}\n",
+    "org/json/JSONArray.java": "package org.json;\npublic class JSONArray {\n"
+                               "    public int length() { return 0; }\n"
+                               "    public String getString(int i) throws JSONException { return null; }\n}\n",
+    "org/json/JSONObject.java": "package org.json;\npublic class JSONObject {\n"
+                                "    public JSONObject(String s) throws JSONException {}\n"
+                                "    public JSONObject optJSONObject(String k) { return null; }\n"
+                                "    public JSONArray optJSONArray(String k) { return null; }\n"
+                                "    public JSONObject getJSONObject(String k) throws JSONException { return null; }\n"
+                                "    public String getString(String k) throws JSONException { return null; }\n"
+                                "    public String optString(String k) { return null; }\n"
+                                "    public String optString(String k, String d) { return null; }\n"
+                                "    public java.util.Iterator<String> keys() { return null; }\n}\n",
     "android/os/Bundle.java": "package android.os;\npublic final class Bundle {}\n",
     "android/net/Uri.java": "package android.net;\npublic abstract class Uri {\n"
                             "    public abstract String getScheme();\n}\n",
@@ -482,6 +499,11 @@ def build_handoff():
     _java_dex("handoff", HERE / "java-handoff", "browser-handoff.dex")
 
 
+def build_horizon():
+    """frame.horizon_platform_stub's stand-in for Horizon OS's hzplatformclientcore supplement (java-horizon/)."""
+    _java_dex("horizon", HERE / "java-horizon", "horizon-platform-stub.dex")
+
+
 def _build_tools_paths():
     idx = ElementTree.fromstring(fetch(REPO + "repository2-3.xml", CACHE / "repository2-3.xml").read_text())
     paths = [p.get("path") for p in idx.iter("remotePackage") if p.get("path", "").startswith("build-tools;")
@@ -498,16 +520,16 @@ def write_sums():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--only", default="adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrruntime,xrshim,vkshim,zinkfix,foveation,ovrpshim,ovrpbattery,tlskeys,luajit,vrsettings,venc,roomscan,a32,handoff")
+    ap.add_argument("--only", default="adapter,bridge,compat,langpack,glshim,eglfmt,glmv,ovrtrace,dex,xrlayer,oculushmd,xrruntime,xrshim,vkshim,zinkfix,foveation,ovrpshim,ovrpbattery,tlskeys,luajit,vrsettings,venc,roomscan,a32,handoff,horizon")
     ap.add_argument("--ndk")
     args = ap.parse_args()
     parts = set(args.only.split(","))
     for d in ("arm64-v8a", "armeabi-v7a", "dex"):
         (ART / d).mkdir(parents=True, exist_ok=True)
-    tc = clang_dir(ndk(args.ndk)) if parts - {"dex", "handoff"} else None
+    tc = clang_dir(ndk(args.ndk)) if parts - {"dex", "handoff", "horizon"} else None
     steps = {"adapter": lambda: build_adapter(tc), "bridge": lambda: build_bridge(tc), "compat": lambda: build_compat(tc),
              "xrruntime": lambda: build_xrruntime(tc), "langpack": lambda: build_langpack(tc),
-             "glshim": lambda: build_glshim(tc), "eglfmt": lambda: build_eglfmt(tc), "glmv": lambda: build_glmv(tc), "ovrtrace": lambda: build_ovrtrace(tc), "xrshim": lambda: build_xrshim(tc), "dex": build_dex, "handoff": build_handoff, "xrlayer": lambda: build_xrlayer(tc),
+             "glshim": lambda: build_glshim(tc), "eglfmt": lambda: build_eglfmt(tc), "glmv": lambda: build_glmv(tc), "ovrtrace": lambda: build_ovrtrace(tc), "xrshim": lambda: build_xrshim(tc), "dex": build_dex, "handoff": build_handoff, "horizon": build_horizon, "xrlayer": lambda: build_xrlayer(tc),
              "oculushmd": lambda: build_oculushmd(tc), "vkshim": lambda: build_vkshim(tc),
              "zinkfix": lambda: build_zinkfix(tc),
              "foveation": lambda: build_foveation(tc),
@@ -516,7 +538,7 @@ def main():
              "vrsettings": lambda: build_vrsettings(tc), "venc": lambda: build_venc(tc),
              "roomscan": lambda: build_roomscan(tc),
              "vroverlay_probe": lambda: build_vroverlay_probe(tc), "a32": lambda: build_a32(tc)}
-    for name in ("adapter", "bridge", "compat", "langpack", "glshim", "eglfmt", "glmv", "ovrtrace", "xrruntime", "xrshim", "vkshim", "zinkfix", "foveation", "ovrpshim", "ovrpbattery", "tlskeys", "luajit", "dex", "handoff", "xrlayer", "oculushmd", "vrsettings", "venc",
+    for name in ("adapter", "bridge", "compat", "langpack", "glshim", "eglfmt", "glmv", "ovrtrace", "xrruntime", "xrshim", "vkshim", "zinkfix", "foveation", "ovrpshim", "ovrpbattery", "tlskeys", "luajit", "dex", "handoff", "horizon", "xrlayer", "oculushmd", "vrsettings", "venc",
                  "roomscan", "vroverlay_probe", "a32"):
         if name in parts:
             log(f"build {name}")

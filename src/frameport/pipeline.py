@@ -1474,6 +1474,8 @@ def _build_record(entry: dict, apk: Path | None = None, superseded=None) -> dict
             native_names.append("dex/oculusos-stubs.dex")
         if "frame.browser_handoff" in (entry["recipe"].get("patches") or {}):
             native_names.append("dex/browser-handoff.dex")
+        if "frame.horizon_platform_stub" in (entry["recipe"].get("patches") or {}):
+            native_names.append("dex/horizon-platform-stub.dex")
     jar = toolchain.overport_jar()
     converter_stat = None
     if jar and jar.is_file():

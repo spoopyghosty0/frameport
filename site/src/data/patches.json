@@ -594,6 +594,11 @@
   "title": "Godot apps: start without a clipboard service",
   "group": "Steam Frame patches"
  },
+ "frame.horizon_platform_stub": {
+  "anchor": "frame-horizon_platform_stub",
+  "title": "Horizon platform stand-in (no licence answers)",
+  "group": "Steam Frame patches"
+ },
  "frame.hw_video_decode": {
   "anchor": "frame-hw_video_decode",
   "title": "Hardware video decoding (H.264, HEVC, VP9)",
