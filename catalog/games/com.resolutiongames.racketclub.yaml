@@ -1,0 +1,10 @@
+package: com.resolutiongames.racketclub
+title: Racket Club
+tested_version: 1.11.12414
+engine: Unity
+xr: OpenXR
+status: unsupported
+notes: Its server checks a Meta sign-in proof with Meta's servers and refuses it, so the game stays at the title.
+verified:
+  date: '2026-11-08'
+  issue: 537

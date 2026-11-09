@@ -1,0 +1,10 @@
+package: com.sadetta.premiumbowling
+title: Premium Bowling
+tested_version: 1.32.3
+engine: Unity
+xr: OpenXR
+status: unsupported
+notes: The login needs a Meta account access token, which the Frame can't provide, so the game's online part fails.
+verified:
+  date: '2026-11-08'
+  issue: 526
