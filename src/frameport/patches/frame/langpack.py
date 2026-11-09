@@ -63,6 +63,14 @@ def with_org_id(lib: bytes) -> bytes:
     return _flag(lib, ORG_MARK, b"0", b"1")
 
 
+APPVER_MARK = b"@FPAPPVER@"  # native/langpack: g_appver_slot = marker + '0'/'1' (version checks answered or not)
+
+
+def with_app_version(lib: bytes) -> bytes:
+    """The library with ovr_Application_GetVersion answered (frame.ovr_app_version)."""
+    return _flag(lib, APPVER_MARK, b"0", b"1")
+
+
 def without_langs(lib: bytes) -> bytes:
     """The library with the language-pack calls passed through to the loader (linked for another reason only)."""
     return _flag(lib, LANGS_MARK, b"1", b"0")
@@ -86,6 +94,7 @@ EXPORTS = (
     "ovr_Message_GetRequestID",
     "ovr_Message_GetType", "ovr_Message_IsError", "ovr_PopMessage",
     "ovr_Message_GetOrgScopedID", "ovr_OrgScopedID_GetID", "ovr_User_GetOrgScopedID",
+    "ovr_Application_GetVersion", "ovr_Message_GetApplicationVersion",
 )
 
 

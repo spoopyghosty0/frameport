@@ -674,6 +674,11 @@
   "title": "Oculus OS telemetry class stubs",
   "group": "Steam Frame patches"
  },
+ "frame.ovr_app_version": {
+  "anchor": "frame-ovr_app_version",
+  "title": "Answer Meta's app version check",
+  "group": "Steam Frame patches"
+ },
  "frame.ovr_microphone": {
   "anchor": "frame-ovr_microphone",
   "title": "Fix crash when the game prepares the microphone",

@@ -690,3 +690,84 @@ def test_org_scoped_id_patch_after_language_packs_keeps_them(built, tmp_path, mo
         out = ws.read_lib(patch_mod.LIB)
         assert patch_mod.ORG_MARK + b"1" in out and patch_mod.LANGS_MARK + b"1" in out
         assert elf.needed(ws.read_lib(patch_mod.LOADER)).count(patch_mod.LIB) == 1
+
+
+GETVERSION = 0x68670A0E  # ovrMessage_Application_GetVersion
+
+
+def test_app_version_check_is_answered_with_an_error_when_switched_on(api, monkeypatch):
+    monkeypatch.setenv("FRAMEPORT_APP_VERSION", "1")
+    req = api.f("ovr_Application_GetVersion", C.c_uint64)()
+    m = api.pop()
+    assert req != 0 and m and api.msg_type(m) == GETVERSION and api.req_id(m) == req
+    assert api.is_error(m)  # the game's callback runs and takes its "couldn't check" path: no version is made up
+    err = api.f("ovr_Message_GetError", VOIDP, VOIDP)(m)
+    assert err and api.f("ovr_Error_GetCode", C.c_int, VOIDP)(err) == 1
+    assert api.f("ovr_Error_GetHttpCode", C.c_int, VOIDP)(err) == 503
+    assert b"store" in api.f("ovr_Error_GetMessage", C.c_char_p, VOIDP)(err)
+    assert api.f("ovr_Message_GetApplicationVersion", VOIDP, VOIDP)(m) is None
+    api.free(m)
+    assert api.pop() is None  # one answer
+    assert api.loader.fake_freed() == 0  # nothing went to the loader
+
+
+def test_app_version_check_off_reaches_the_loader(api, monkeypatch):
+    monkeypatch.delenv("FRAMEPORT_APP_VERSION", raising=False)
+    assert api.f("ovr_Application_GetVersion", C.c_uint64)() == 0  # OVRPort's own `return 0`
+    assert api.pop() is None
+
+
+def test_app_version_marker(built, tmp_path, monkeypatch):
+    lib = built["lib"].read_bytes()
+    assert patch_mod.APPVER_MARK + b"0" in lib
+    on = patch_mod.with_app_version(lib)
+    assert len(on) == len(lib) and patch_mod.APPVER_MARK + b"1" in on and patch_mod.with_app_version(on) == on
+    monkeypatch.delenv("FRAMEPORT_APP_VERSION", raising=False)
+    marked = tmp_path / "marked.so"
+    marked.write_bytes(on)
+    for api in _api({**built, "marked": marked}, tmp_path, monkeypatch, "marked"):
+        req = api.f("ovr_Application_GetVersion", C.c_uint64)()
+        m = api.pop()
+        assert req and api.msg_type(m) == GETVERSION and api.is_error(m)
+        api.free(m)
+        _, m = _org_id(api, 42)  # the other answers stay off
+        assert m is None
+
+
+def test_app_version_patch(built, tmp_path, monkeypatch):
+    from frameport.patches.frame import ovr_app_version
+
+    lib = built["lib"].read_bytes()
+    monkeypatch.setattr(ovr_app_version, "artifact", lambda abi, name: lib)
+    patch = base.get("frame.ovr_app_version")
+    plain = _analysis(libs=["libovrplatformloader.so"])
+    assert patch.applies(plain) and patch.detect(plain) is None  # no sign that the game waits for it
+    assert patch.detect(_analysis(package="com.wolfandwood.csmashvs", libs=["libovrplatformloader.so"]))
+    assert not patch.applies(_analysis(libs=[]))
+    assert not patch.applies(_analysis(libs=["libovrplatformloader.so"], abis=["armeabi-v7a"]))
+    with ApkWorkspace(_apk(tmp_path, built)) as ws:
+        ctx = base.ApkContext(ws, plain, {}, Reporter(), {})
+        assert patch.apply(ctx)
+        loader = ws.read_lib(patch_mod.LOADER)
+        assert elf.needed(loader)[0] == patch_mod.LIB
+        assert not elf.hide_exports(loader, patch_mod.EXPORTS)[1]  # every library function hidden in the loader
+        out = ws.read_lib(patch_mod.LIB)
+        assert patch_mod.APPVER_MARK + b"1" in out and patch_mod.LANGS_MARK + b"0" in out
+        assert patch_mod.ORG_MARK + b"0" in out  # only this answer
+        assert all(ok for _, ok, _ in patch.validate(ctx))
+        assert not patch.apply(ctx)  # once is enough
+
+
+def test_app_version_patch_with_org_scoped_id_links_the_library_once(built, tmp_path, monkeypatch):
+    from frameport.patches.frame import ovr_app_version, ovr_org_scoped_id
+
+    lib = built["lib"].read_bytes()
+    monkeypatch.setattr(ovr_org_scoped_id, "artifact", lambda abi, name: lib)
+    monkeypatch.setattr(ovr_app_version, "artifact", lambda abi, name: lib)
+    a = _analysis(libs=["libovrplatformloader.so"])
+    with ApkWorkspace(_apk(tmp_path, built)) as ws:
+        assert base.get("frame.ovr_org_scoped_id").apply(base.ApkContext(ws, a, {}, Reporter(), {}))
+        assert base.get("frame.ovr_app_version").apply(base.ApkContext(ws, a, {}, Reporter(), {}))
+        out = ws.read_lib(patch_mod.LIB)
+        assert patch_mod.ORG_MARK + b"1" in out and patch_mod.APPVER_MARK + b"1" in out
+        assert elf.needed(ws.read_lib(patch_mod.LOADER)).count(patch_mod.LIB) == 1

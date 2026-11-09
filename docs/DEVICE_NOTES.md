@@ -699,6 +699,27 @@ every start; Walkabout Mini Golf files saves under `Profiles/Oculus/<id>/` and l
 sha256(package, keystore)>; ret`: stable per game and per user (keystores are personal), so online games never see two
 FramePort users as one. Found in every PATCHED build checked. Host-tested only; upstream candidate.
 
+## Meta app version check (C-Smash VRS, GitHub #503)
+
+**2026-11-09, headless on the dev Frame.** C-Smash VRS (com.wolfandwood.csmashvs 1.2.0.7, Unity 2021.3.32f1 GLES,
+Wolf And Wood's "Burrito" framework) showed solid black eye images with steady frames. Its `WolfAndWoodLogHandler.Load`
+(`[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`) replaces Unity's log handler, so release builds log nothing; a
+test build with that method's first instruction made `ret` brought Unity's log back. Start-up then stops after
+`NavigateToEntry` / `Fade Screen Col: BLACK t = 0` with no error. Reading the IL2CPP statics from `/proc/<pid>/mem`
+(`podman unshare python3`, class pointers from the metadata-usage slots that Cpp2IL's addresses point at, +0xb8 =
+static fields) showed `MenuSceneManager.Initialised` = 0 and `OculusNetworkManager.NetworkVersionUpdateCheckState` = 1
+(CHECKING_UPDATE): `MenuSceneManager.<Initialise>d__57` yields while that state is 1, and only then loads the menu
+scene, sets `Initialised` and starts `LoadingRoutine` (the fade-in, the player avatar, the models/animation bundles).
+`OculusNetworkManager.CheckLatestVersion` sets the state to 1 and calls `Application.GetVersion().OnComplete(...)`;
+OVRPort's `ovr_Application_GetVersion` is `mov x0, xzr; ret`, so Meta's wrapper logs "An unknown error occurred.
+Request failed." (stack: `OculusNetworkManager:OnCoreServicesInitalised`) and the callback never runs. The callback
+sets UP_TO_DATE / UPDATE_REQUIRED from the versions, or NONE on an error. `frame.ovr_app_version` answers the request
+from `libfp_langpack.so` with an error message (code 1, HTTP 503, "Meta's store can't be reached"); with it the
+statics read Initialised 1 / state 0, `models_assets_all.bundle` is opened, and the eye snapshots show the game's
+terms page over its scene (mean 39, max 255) at 72 fps. The user proof (`ovr_User_GetUserProof`, OVRPort answers it)
+only feeds Unity Authentication's sign-in, which fails with "external token not provided" without blocking the menu.
+The 3840x2160 + 1280x720 AVC decoders are the menu's videos (`StreamableVideoPlayer`), not a start-up gate.
+
 ## Android device id
 
 **Android device id (GitHub #420, 2026-11-09):** on the Frame, `settings get secure android_id` (the device-wide

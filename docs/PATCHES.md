@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 219 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 220 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -11,7 +11,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 ## Groups
 
 - [Patches from OVRPort](#group-overport) (25)
-- [Steam Frame patches](#group-frame) (77)
+- [Steam Frame patches](#group-frame) (78)
 - [Game settings](#group-adapter) (90)
 - [Files and settings on the Frame](#group-device) (14)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
@@ -76,6 +76,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Clear android:debuggable](#frame-nodebug) | `frame.nodebug` | Steam Frame patches | 3 |
 | [OBB disk images: unpack instead of mounting](#frame-obb_mount_emul) | `frame.obb_mount_emul` | Steam Frame patches |  |
 | [Oculus OS telemetry class stubs](#frame-oculusos) | `frame.oculusos` | Steam Frame patches | 21 |
+| [Answer Meta's app version check](#frame-ovr_app_version) | `frame.ovr_app_version` | Steam Frame patches | default |
 | [Fix crash when the game prepares the microphone](#frame-ovr_microphone) | `frame.ovr_microphone` | Steam Frame patches | 1 |
 | [Answer Meta's org-scoped user id request](#frame-ovr_org_scoped_id) | `frame.ovr_org_scoped_id` | Steam Frame patches | default |
 | [Keep the same Meta user between starts](#frame-ovr_stable_user) | `frame.ovr_stable_user` | Steam Frame patches | default |
@@ -954,6 +955,19 @@ Provides stand-ins for Quest system calls some games make at start.
 - **Source:** [patches/frame/telemetry.py](../src/frameport/patches/frame/telemetry.py)
 
 > Adds no-op com.oculus.os.AnalyticsEvent / UnifiedTelemetryLogger classes for native code that looks them up through the app class loader (for example Nano, NOPE Challenge).
+
+### <a id="frame-ovr_app_version"></a>Answer Meta's app version check
+
+Gets games past a black screen when they wait for Meta's app version check before their menu (for example C-Smash VRS).
+
+- `frame.ovr_app_version` · on by default
+- **Changes:** Changes the APK (a rebuild and reinstall apply it).
+- **Suggested (on):** … waits for Meta's app version check, which OVRPort's platform library never answers (black screen before the menu).
+- **Suggested by launch-test signatures:**
+  - `meta-app-version-wait` (error): The game asked Meta's store for the latest version of the app, which OVRPort's platform library never answers.
+- **Source:** [patches/frame/ovr_app_version.py](../src/frameport/patches/frame/ovr_app_version.py)
+
+> OVRPort's platform library never answers Meta's "latest version of this app" request (ovr_Application_GetVersion returns 'no request'), so Meta's Unity wrapper logs "An unknown error occurred. Request failed." and a game that waits for the check before its menu stays on a black screen (e.g. C-Smash VRS). Adds the small platform library FramePort also uses for language packs and answers that request at once with an error (Meta's store can't be reached), as a Quest without a connection to Meta would; no version is made up. Every other platform call goes to OVRPort's library unchanged.
 
 ### <a id="frame-ovr_microphone"></a>Fix crash when the game prepares the microphone
 

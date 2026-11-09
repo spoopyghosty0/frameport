@@ -49,6 +49,15 @@
 // the org-scoped id is the same at every start. (ovr_User_GetUserProof, the next request Eleven makes, is answered by
 // the dispatcher itself: it queues an ovrMessage_User_GetUserProof with a nonce string, so it is left alone.)
 //
+// Application version checks (patch frame.ovr_app_version, which sets the marker byte g_appver_slot; or
+// FRAMEPORT_APP_VERSION=1): OVRPort's dispatcher exports ovr_Application_GetVersion as `return 0` (runtimes
+// 3.4.3-23204ea and -aa54c3f: `mov x0, xzr; ret`), so the game's "is this the latest version?" callback never runs and a
+// game that waits for it before loading its menu stays on a black screen (C-Smash VRS, GitHub #503: its
+// PlatformNetworkManager stays in CHECKING_UPDATE and MenuSceneManager never loads the menu scene). Here the request
+// is answered at once with an error message (ovrMessage_Application_GetVersion, IsError): Meta's store can't be asked
+// on the Frame, which is what a Quest without a connection to Meta answers too. No version is made up. If the
+// dispatcher itself answers the call (a request id other than 0), its answer is used.
+//
 // The library can also be linked for that alone: then the language-pack calls are passed through to the dispatcher
 // (marker byte g_langs_slot '0', set by frame.ovr_org_scoped_id when no other patch linked the library;
 // FRAMEPORT_LANGPACK_SERVE=0/1 overrides it).
@@ -118,6 +127,7 @@ static int g_traced;
 #define MSG_ASSETFILE_DOWNLOADBYID 0x2D008992u
 #define MSG_NOTIFICATION_DOWNLOADUPDATE 0x2FDD0CCDu
 #define MSG_USER_GETORGSCOPEDID 0x18F0B01Bu
+#define MSG_APPLICATION_GETVERSION 0x68670A0Eu
 
 #define MAXP 32
 #define PATHLEN 1024
@@ -246,6 +256,8 @@ DEFORIG(const char *, Error_GetDisplayableMessage, (const void *e), (e))
 DEFORIG(u64, User_GetOrgScopedID, (u64 user), (user))
 DEFORIG(void *, Message_GetOrgScopedID, (const void *m), (m))
 DEFORIG(u64, OrgScopedID_GetID, (const void *o), (o))
+DEFORIG(u64, Application_GetVersion, (void), ())
+DEFORIG(void *, Message_GetApplicationVersion, (const void *m), (m))
 
 /* ---------------------------------------------------------------------------------------------------------------
  * Finding the packs
@@ -340,6 +352,16 @@ static int org_enabled(void) {
     const char *env = getenv("FRAMEPORT_ORG_SCOPED_ID");
     if (env && *env) return *env == '1';
     return ((const volatile char *)g_org_slot)[sizeof ORG_MARK - 1] == '1';
+}
+
+// frame.ovr_app_version sets the byte after the marker to '1' (frameport.patches.frame.langpack.with_app_version)
+#define APPVER_MARK "@FPAPPVER@"
+__attribute__((used)) static char g_appver_slot[sizeof APPVER_MARK + 1] = APPVER_MARK "0";
+
+static int appver_enabled(void) {
+    const char *env = getenv("FRAMEPORT_APP_VERSION");
+    if (env && *env) return *env == '1';
+    return ((const volatile char *)g_appver_slot)[sizeof APPVER_MARK - 1] == '1';
 }
 
 // '1' (default): language packs are served. frame.ovr_org_scoped_id writes '0' when it is the only reason the library
@@ -930,6 +952,19 @@ EXPORT u64 ovr_User_GetOrgScopedID(u64 user) {
     return req;
 }
 
+EXPORT u64 ovr_Application_GetVersion(void) {
+    u64 req = o_Application_GetVersion();
+    if (req || !appver_enabled()) return req;  // the dispatcher answers it itself: keep its answer
+    msg_t *m = new_msg(MSG_APPLICATION_GETVERSION, 0);
+    if (!m) return 0;
+    req = m->req;
+    fail(m, 1, "Meta's store can't be reached on this device: the latest version is unknown");
+    m->err.http = 503;
+    fplog("Application_GetVersion -> request %llu, answered with an error (no store to ask)", (unsigned long long)req);
+    post(m);
+    return req;
+}
+
 /* ---------------------------------------------------------------------------------------------------------------
  * Message loop
  * ------------------------------------------------------------------------------------------------------------- */
@@ -1031,6 +1066,11 @@ EXPORT void *ovr_Message_GetOrgScopedID(const void *h) {
     msg_t *m = owner(h);
     if (!m) return o_Message_GetOrgScopedID(h);
     return m->has_org ? (void *)&m->org : NULL;
+}
+
+EXPORT void *ovr_Message_GetApplicationVersion(const void *h) {
+    msg_t *m = owner(h);
+    return m ? NULL : o_Message_GetApplicationVersion(h);  // ours are errors: no version data
 }
 
 EXPORT void *ovr_Message_GetAssetDetailsArray(const void *h) {

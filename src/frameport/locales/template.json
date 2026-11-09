@@ -198,6 +198,7 @@
   "",
   ""
  ],
+ "Answer Meta's app version check": "",
  "Answer Meta's org-scoped user id request": "",
  "Answer the open install question first": "",
  "Answers Meta's request for your org-scoped user id, which games such as Eleven Table Tennis wait for on their loading screen.": "",
@@ -833,6 +834,7 @@
  "Get Test Quest Controllers": "",
  "Get Test Quest MR": "",
  "Gets Cortopia games (for example Escaping Wonderland) past their loading screen.": "",
+ "Gets games past a black screen when they wait for Meta's app version check before their menu (for example C-Smash VRS).": "",
  "Getting FramePort ready": "",
  "GiB": "",
  "GitHub issue opened": "",
@@ -1421,6 +1423,7 @@
  "OVRPort's OVRPlugin reports 0 % battery for both controllers on the Frame, so games that show or check the level warn about empty controllers all the time (for example In Death: Unchained). Adds a small library to libOVRPlugin.so that reports 100 % for a connected controller whose level reads 0 (ovrp_GetControllerState4/5/6); every other value passes unchanged.": "",
  "OVRPort's own converter for games that use Meta's oldest VR interface (experimental).": "",
  "OVRPort's own VrApi→OpenXR adapter for engines that call libvrapi.so directly: the same upstream code as FramePort's 'VrApi → OpenXR bridge' without its Frame-specific changes. Only in OVRPort's experimental CLI builds (the stable CLI lists it but can't apply it).": "",
+ "OVRPort's platform library never answers Meta's \"latest version of this app\" request (ovr_Application_GetVersion returns 'no request'), so Meta's Unity wrapper logs \"An unknown error occurred. Request failed.\" and a game that waits for the check before its menu stays on a black screen (e.g. C-Smash VRS). Adds the small platform library FramePort also uses for language packs and answers that request at once with an error (Meta's store can't be reached), as a Quest without a connection to Meta would; no version is made up. Every other platform call goes to OVRPort's library unchanged.": "",
  "OVRPort's platform library never answers Meta's org-scoped user id request (ovr_User_GetOrgScopedID returns 'no request'), so Meta's Unity wrapper logs \"An unknown error occurred. Request failed.\" and a game that waits for the id stays on its loading screen (e.g. Eleven Table Tennis, Escaping Wonderland). Adds the small platform library FramePort also uses for language packs and answers that request with a fixed id derived from the game's user id. Every other platform call goes to OVRPort's library unchanged.": "",
  "OVRPort's platform loader answers the Meta Platform SDK's language-pack calls (ovr_LanguagePack_GetCurrent/SetCurrent) with 'no request', so a game that asks for its language pack never gets an answer. Adds a small library that serves language packs (<tag>.lang, for example de.lang) found in the game's own data folders (OBB and app files) through the same calls, the asset-file list and the status call, without any download. The game then finds the file path itself. The pack it applies with SetCurrent wins; otherwise the environment variable FRAMEPORT_LANGPACK (a tag), otherwise the only pack there is. Everything else goes to the loader unchanged. Off by default: turn it on for a game whose data has such files (the game page lists the patch only then).": "",
  "Package": "",

@@ -652,6 +652,22 @@ def test_meta_org_scoped_id_wait():
     assert "meta-org-scoped-id-wait" not in {x.id for x in triage(LOG_META_REQUEST + LOG_OK, "RUNNING").findings}
 
 
+def test_meta_app_version_wait():
+    # C-Smash VRS (GitHub #503) with Unity's log on: the version check is the frame after OnComplete
+    log = ("11-09 16:47:25.158  1202  1228 E Unity   : An unknown error occurred. Request failed.\n"
+           "11-09 16:47:25.158  1202  1228 E Unity   : Oculus.Platform.Request`1:OnComplete(Callback)\n"
+           "11-09 16:47:25.158  1202  1228 E Unity   : OculusNetworkManager:OnCoreServicesInitalised()\n"
+           "11-09 16:47:25.158  1202  1228 E Unity   : Oculus.Platform.Callback:HandleMessage(Message)\n")
+    r = triage(log + LOG_OK, "RUNNING", "com.wolfandwood.csmashvs")
+    ids = {x.id for x in r.findings}
+    assert "meta-app-version-wait" in ids and "meta-request-failed" not in ids
+    assert next(f for f in r.findings if f.id == "meta-app-version-wait").suggest == ["frame.ovr_app_version"]
+    other = log.replace("OculusNetworkManager:OnCoreServicesInitalised", "Game.Store:CheckLatestVersion")
+    assert "meta-app-version-wait" in {x.id for x in triage(other + LOG_OK, "RUNNING").findings}
+    # another request's failure stays the generic hint
+    assert "meta-app-version-wait" not in {x.id for x in triage(LOG_META_REQUEST + LOG_OK, "RUNNING").findings}
+
+
 def test_meta_system_activities():
     log = ("W System.err: \tat android.content.ContextWrapper.startActivity(ContextWrapper.java:403)\n"
            "F OVRPlatform-Loader: DisplayErrorAndExit: Failed to launch SystemActivities\n"

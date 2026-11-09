@@ -630,6 +630,18 @@ signatures:
       never answers. The patch answers that request with a fixed id derived from the game's user id.
     suggest: [frame.ovr_org_scoped_id]
     supersedes: [meta-request-failed]
+  - id: meta-app-version-wait
+    # OVRPort's ovr_Application_GetVersion returns request id 0 and Meta's wrapper logs "Request failed." from
+    # Request`1:OnComplete; the next stack frame is the game's version check (C-Smash VRS, GitHub #503:
+    # OculusNetworkManager:OnCoreServicesInitalised, which inlines CheckLatestVersion; its log handler keeps Unity's
+    # log off in release builds, so its own launch.log shows nothing: the patch is suggested for it by package)
+    pattern: 'An unknown error occurred\. Request failed\.[\s\S]{0,400}?Oculus\.Platform\.Request`1:OnComplete\(Callback\)[^\n]*\n[^\n]*(?:Version|OnCoreServicesInitalised)'
+    severity: error
+    diagnosis: The game asked Meta's store for the latest version of the app, which OVRPort's platform library
+      never answers. A game that waits for that check before its menu stays on a black screen. The patch answers the
+      check at once with an error (the store can't be reached), as a Quest without a connection to Meta would.
+    suggest: [frame.ovr_app_version]
+    supersedes: [meta-request-failed]
   - id: gazzlers-platform-unsupported
     # GAZZLERS (GitHub #404): picks Meta/PICO from SystemInfo.deviceModel and throws for Lepton's "Valve Lepton"
     pattern: 'Exception: Current Platform is not supported[\s\S]{0,300}?PlatformDeterminer\.GetAndroidPlatform'
