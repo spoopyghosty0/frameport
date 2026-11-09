@@ -383,6 +383,7 @@ def test_box_sizes_keep_thin_sizes_readable():
 
 def test_slider_range_keeps_its_value_inside():  # GitHub #559
     import flet as ft
+
     from frameport.ui.views.room_edit import set_range
 
     s = ft.Slider(min=-5, max=5, value=0)
