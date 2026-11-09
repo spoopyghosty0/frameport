@@ -1,0 +1,21 @@
+package: com.Baggyg.QuestZDoom_Launcher
+title: QuestZDoom_Launcher
+status: unsupported
+notes: 'Can''t start QuestZDoom: each app has its own container and SteamVR runs one VR app at a time. Start QuestZDoom
+  (com.drbeef.questzdoom) from Steam instead.'
+tested_version: 1.0.6
+engine: Unity
+xr: OpenXR
+frame:
+- frame.unity_text_input
+device:
+- device.text_input_window
+verified:
+  date: '2026-11-01'
+  known_good_sha256: d7312912da523a1665ee5575376bb3b42f69cb454bb740fd5a80365e0137d171
+  app: 1.4.0
+  overport_cli: 1.2.5
+  frame_build: '20261022.6153909'
+  agent: 125
+  issue: 563
+source_hint: questzdoom_launcher_106

@@ -282,6 +282,7 @@ Generated from [catalog/games](../catalog/games) by `scripts/compat_list.py`.
 | PianoVision | Quest | ❌ Doesn't run | Starts, but needs camera hand tracking (Android games on the Frame only get hands built from the controllers) and USB MIDI from a piano, which the Frame's An… |
 | Population: ONE | Quest | ❌ Doesn't run | Online-only. |
 | Premium Bowling | Quest | ❌ Doesn't run | The login needs a Meta account access token, which the Frame can't provide, so the game's online part fails. |
+| QuestZDoom_Launcher | Quest | ❌ Doesn't run | Can't start QuestZDoom: each app has its own container and SteamVR runs one VR app at a time. |
 | Racket Club | Quest | ❌ Doesn't run | Its server checks a Meta sign-in proof with Meta's servers and refuses it, so the game stays at the title. |
 | Roblox | Quest | ❌ Doesn't run | Crashes on its first VR frame on the Frame. |
 | Thief Simulator | Quest | ❌ Doesn't run | Quits at start with the game's own "installed from unknown source" message. |
