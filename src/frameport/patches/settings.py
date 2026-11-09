@@ -1069,7 +1069,11 @@ class SteamGamepad(Patch):
                    "later isn't seen until the next start). The APK isn't changed. Off for one start: "
                    "FRAMEPORT_NO_GAMEPAD=1 in the game's launch options. Steam Input's own per-game remapping may "
                    "not reach the app (GitHub #162); the options below change the buttons inside the app instead "
-                   "(applied with Update on Frame).")
+                   "(applied with Update on Frame). \"Ignore the laser pointer\" (off by default) leaves the pointer "
+                   "that SteamVR's laser drives out of the app's Android, for games that flip between gamepad and "
+                   "mouse prompts (flicker, a repeating sound) when the laser points at their window: the laser then "
+                   "no longer clicks or scrolls in the app's window, so menus must be used with the gamepad (or the "
+                   "PC's keyboard).")
     category = "device"
     needs_vr = False
     stage = "install"  # the agent reads it from the recipe at finalize (deployment.json steam_gamepad)
@@ -1079,6 +1083,8 @@ class SteamGamepad(Patch):
         Param("swap_ab", "bool", False, "Swap A and B"),
         Param("keys", "str", "", "Own key layout lines (Android .kl), separated by ';', e.g. 'key 304 DPAD_DOWN' "
                                  "(A presses D-pad down) or 'key 305 BACK'"),
+        Param("ignore_pointer", "bool", False, "Ignore the laser pointer: the laser no longer clicks in the app's "
+                                               "window (for games that flip between gamepad and mouse prompts)"),
     ]
     KL_LINE = re.compile(r"(key [0-9]{1,4} [A-Z][A-Z0-9_]{0,40}( (FUNCTION|WAKE))?"
                          r"|axis 0x[0-9a-f]{1,2} (invert )?[A-Z][A-Z0-9_]{0,40}( flat [0-9]{1,5})?)")
@@ -1104,6 +1110,9 @@ class SteamGamepad(Patch):
             ctx.env["FRAMEPORT_GAMEPAD_LAYOUT"] = layout
         if lines:
             ctx.env["FRAMEPORT_GAMEPAD_KEYS"] = "; ".join(lines)
+        if ctx.params.get("ignore_pointer"):
+            # agent: the wrapper mounts excluded-input-devices.xml (wayland_pointer); _gamepad_links reads the pipe
+            ctx.env["FRAMEPORT_GAMEPAD_IGNORE_POINTER"] = "1"
 
 
 class HybridApp(Patch):
