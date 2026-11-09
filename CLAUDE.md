@@ -254,6 +254,16 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
     store matches and links then only update `auto_title`; a locked name gets no twin suffix); `sync_title` → Frame
     agent v77 `rename` (deployment.json title, same shortcut appid: upsert matches by Exe) + art + one Steam restart, PC
     `PcReviveTarget.rename`; an unreachable Frame → `steam_name_stale` (game page "Update name on Frame", next install).
+  - Recipe picker (GitHub #508: a repack's package id `ru.camouflaj.manta` never matched `com.camouflaj.manta`):
+    Recipe ▸ / recipe card "Use a recipe from the catalog…" = `views/recipe_picker.py` (search pre-filled with the
+    game's name; `catalog.search`: fuzzy title/package, same package core (`package_core`) first and preselected;
+    preview = `pipeline.preview_catalog_recipe`: patches `drop_inapplicable` left out, `engine.pick_warnings` for
+    engine/VR API/32-bit/kind), CLI `frameport recipe <pkg> --find "<name>"` / `--from <catalog pkg>`. Stored as a
+    derived recipe with `Recipe.recipe_source` = the entry's package: `engine.suggest(a, pick=)` derives it, so
+    `_follow_catalog`, rescans (`add_game`/`add_rift_game`) and re-analyses (`_store_analysis`) keep it and it follows
+    that entry's revisions (edited by hand → the usual `catalog_update` offer from that entry); "Reset to suggested
+    recipe" ends it; a picked entry gone from the catalog falls back to the normal suggestion. Status "unknown"
+    (the entry's "unsupported" stays), the game keeps its own name.
   - Newer versions (GitHub #161): game menu "Update with a newer APK…" (`pipeline.replace_apk`, outdated via
     `build.source_version`) and, for Linux apps / PC VR games, "Update with a newer version…" (`replace_linux_app` /
     `replace_rift_game` via `add_linux_app(replace=)` / `add_rift_game(replace=)`, CLI `frameport new-version`): the

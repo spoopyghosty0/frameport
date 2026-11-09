@@ -188,3 +188,13 @@ def test_cli_recipe_find_and_from(entries):
     assert "frame.nodebug" in library.game("ru.example.shadow")["recipe"]["patches"]
     bad = CliRunner().invoke(cli.app, ["recipe", "ru.example.shadow", "--from", "com.not.there"])
     assert bad.exit_code != 0
+
+
+def test_picker_rows_say_how_an_entry_relates_to_the_game():
+    from frameport.ui.views.recipe_picker import facts, relation
+
+    assert relation(SHADOW, "ru.example.shadow", "") == "same"
+    assert relation(SHADOW, "ru.example.shadow", "com.example.shadow") == "current"
+    assert relation(SHADOW, "com.example.shadow", "") == "own"
+    assert relation(UNITY, "ru.example.shadow", "") is None
+    assert facts(SHADOW) == "com.example.shadow · Unreal · OpenXR · tested with 1.4.1"

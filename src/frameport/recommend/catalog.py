@@ -389,7 +389,7 @@ def _words(text: str) -> list[str]:
     return [w for w in _norm(text).split() if w not in _NOISE] or _norm(text).split()
 
 
-def _package_core(package: str) -> str:
+def package_core(package: str) -> str:
     """A package id without its first (country/company type) part: a repack's "ru.camouflaj.manta" and the store's
     "com.camouflaj.manta" have the same core."""
     parts = (package or "").lower().split(".")
@@ -430,7 +430,7 @@ def _package_score(a: str, b: str) -> float:
         return 0.0
     if a == b:
         return 1.0
-    ca, cb = _package_core(a), _package_core(b)
+    ca, cb = package_core(a), package_core(b)
     if ca == cb:
         return 0.98
     return 0.9 * SequenceMatcher(None, ca, cb).ratio()

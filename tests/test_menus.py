@@ -167,7 +167,7 @@ def test_library_menu_on_a_selection_acts_on_all_of_it():
 
 
 def test_recipe_actions_are_for_games_with_a_recipe():
-    assert [e[2] for e in recipe_actions(QUEST, _key)] == ["reset_recipe", "save_recipe", "share"]
+    assert [e[2] for e in recipe_actions(QUEST, _key)] == ["reset_recipe", "pick_recipe", "save_recipe", "share"]
     assert [e[0] for e in recipe_actions(RIFT, _key)][0] == "Reset to suggested recipe…"
     assert recipe_actions(LINUX, _key) == []
     assert len(RECIPE_HELP) == len(recipe_actions(QUEST, _key))

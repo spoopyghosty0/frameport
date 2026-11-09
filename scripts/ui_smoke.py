@@ -147,6 +147,31 @@ def menu_mouse(out: Path, name: str, sub: str, click: str | None = None):
     return run
 
 
+def open_recipe_picker_mismatch(app, game: str) -> None:
+    """The recipe picker (GitHub #508) with a catalog recipe for another engine selected: its warnings and the patches
+    left out."""
+    from frameport.core import library
+    from frameport.recommend import catalog
+    from frameport.ui.views.recipe_picker import show_recipe_picker
+
+    engine = (library.game(game).get("analysis") or {}).get("engine")
+    other = next(e for e in sorted(catalog.load().values(), key=lambda e: e.title)
+                 if e.kind == "quest" and e.engine not in (engine, "", "Other") and e.frame)
+    app.page.pop_dialog()
+    show_recipe_picker(app, game, query=other.title, choice=other.package)
+
+
+def use_picked_recipe(app, game: str) -> None:
+    """The game page after its recipe was taken from the best-matching catalog entry (changes the test library)."""
+    from frameport import pipeline
+
+    app.page.pop_dialog()
+    best = pipeline.catalog_choices(game)
+    if best and best[0][1].package != game:
+        pipeline.apply_catalog_recipe(game, best[0][1].package)
+    app.open_game(game)
+
+
 def open_selection_menu(app, game: str) -> None:
     """Select `game` and the next two shown games, then right-click `game`: the menu for the whole selection."""
     lv = app.library_view
@@ -233,7 +258,11 @@ def main() -> int:
         steps += [("share-dialog", lambda a: a.share_config_dialog(game)),
                   ("report-dialog", lambda a: (a.page.pop_dialog(), a.report_problem_dialog(game))),
                   ("custom-art-dialog", lambda a: (a.page.pop_dialog(), a.custom_artwork(game))),
-                  ("game-settings-dialog", lambda a: (a.page.pop_dialog(), a.settings_dialog(game)))]
+                  ("game-settings-dialog", lambda a: (a.page.pop_dialog(), a.settings_dialog(game))),
+                  # GitHub #508: another game's catalog recipe, searched by the game's name
+                  ("recipe-picker", lambda a: (a.page.pop_dialog(), a.pick_recipe(game))),
+                  ("recipe-picker-mismatch", lambda a: open_recipe_picker_mismatch(a, game)),
+                  ("game-recipe-picked", lambda a: use_picked_recipe(a, game))]
         # a pretend install of --game, mid-upload: the transit in the sidebar, the game page and Activity
         steps += [("transit-game", lambda a: (a.page.pop_dialog(), start_fake_install(a, game), a.open_game(game))),
                   ("transit-activity", lambda a: a.show_activity(True))]

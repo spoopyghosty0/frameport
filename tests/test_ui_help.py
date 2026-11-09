@@ -115,7 +115,8 @@ def test_menus_offer_sharing_and_diagnostics(monkeypatch):
     assert labels[-1] == "Remove from library…"
     # the recipe's actions: the menus' Recipe ▸ and the page's recipe card
     recipe = _labels(_app(monkeypatch, g, {"installed": []}).game_actions("com.q", recipe=True))
-    assert recipe == ["Reset to suggested recipe…", "Save as known-good recipe", "Share working recipe…"]
+    assert recipe == ["Reset to suggested recipe…", "Use a recipe from the catalog…", "Save as known-good recipe",
+                      "Share working recipe…"]
     assert set(recipe) <= set(labels)
     quick = _labels(_app(monkeypatch, g, {"installed": []}).game_actions("com.q"))  # the right-click menu
     assert quick[-1] == "Remove from library…" and {"Collect logs", *recipe} <= set(quick)

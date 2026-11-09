@@ -1202,6 +1202,7 @@ class FramePortApp:
             "custom_art": lambda e: self.custom_artwork(pkg),
             "steam_art": lambda e: self.update_steam_art(pkg),
             "reset_recipe": lambda e: self.reset_recipe(pkg),
+            "pick_recipe": lambda e: self.pick_recipe(pkg),
             "save_recipe": lambda e: self.save_known_good(pkg),
             "share": lambda e: self.share_config_dialog(pkg),
             "test_frame": lambda e: self.test_game(pkg, "frame"),
@@ -2069,6 +2070,12 @@ class FramePortApp:
         C.confirm(self.page, tr("Reset {title}'s recipe?").format(title=self._title(pkg)),
                   tr("Your changes to its patches and game settings are replaced by the suggested recipe."),
                   tr("Reset"), go)
+
+    def pick_recipe(self, pkg: str) -> None:
+        """Use another game's catalog recipe for this one (GitHub #508): views/recipe_picker."""
+        from .views.recipe_picker import show_recipe_picker
+
+        show_recipe_picker(self, pkg)
 
     def save_known_good(self, package: str) -> None:
         catalog.save_user_entry(catalog.entry_from_library(library.game(package)))

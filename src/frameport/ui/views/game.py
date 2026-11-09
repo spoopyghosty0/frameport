@@ -726,10 +726,14 @@ class GameView:
         if self.linux:
             return self.linux_summary()
         recipe = library.recipe_from_dict(self.g["recipe"])
-        entry = catalog.lookup(self.package)
+        entry = catalog.lookup(recipe.recipe_source or self.package)
         on = [base.get(pid) for pid in recipe.patches if pid in base.REGISTRY or _known(pid)]
         visible = [p for p in on if not p.default_on or p.category in ("pcvr",)]
-        if entry and recipe.source.startswith("catalog"):
+        if entry and recipe.recipe_source:  # another game's catalog recipe, chosen by the user (#508)
+            lead = (tr("Recipe of {title} from the catalog, chosen by you") if recipe.source != "user" else
+                    tr("Your custom recipe, from {title}'s catalog recipe")).format(title=entry.title)
+            icon, color = G.RECIPE, T.ACCENT
+        elif entry and recipe.source.startswith("catalog"):
             lead = f"Known-good recipe for this game, tested {entry.verified.get('date', '')}".strip(", ")
             icon, color = G.RECIPE, T.OK
         elif recipe.source == "user":

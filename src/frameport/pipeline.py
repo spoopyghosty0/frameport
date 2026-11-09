@@ -1289,9 +1289,10 @@ class RecipePick:
     blocked: bool = False  # can't be used at all (a PC VR recipe for a Quest game)
 
 
-def preview_catalog_recipe(package: str, from_package: str) -> RecipePick:
-    """The recipe `from_package`'s catalog entry would give this game, without saving it."""
-    g = library.game(package)
+def preview_catalog_recipe(package: str, from_package: str, game: dict | None = None) -> RecipePick:
+    """The recipe `from_package`'s catalog entry would give this game, without saving it (`game` = its library entry,
+    when the caller has it already)."""
+    g = game or library.game(package)
     if not g or g.get("kind") == "linux" or not g.get("analysis"):
         raise ValueError(f"{package} has no recipe to replace")
     entry = catalog.lookup(from_package)

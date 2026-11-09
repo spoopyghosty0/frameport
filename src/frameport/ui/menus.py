@@ -166,7 +166,8 @@ def labels(entries: list) -> list[str]:
     return out
 
 
-RECIPE_HELP = ("reset_recipe", "save_recipe", "share_config")  # ui/help.py keys of recipe_actions, in order
+# ui/help.py keys of recipe_actions, in order
+RECIPE_HELP = ("reset_recipe", "pick_recipe", "save_recipe", "share_config")
 
 
 def recipe_actions(g: dict, act: Callable[[str], Callable]) -> list:
@@ -175,6 +176,7 @@ def recipe_actions(g: dict, act: Callable[[str], Callable]) -> list:
     if g.get("kind") == "linux":
         return []
     return [(tr("Reset to suggested recipe…"), ft.Icons.SETTINGS_BACKUP_RESTORE_ROUNDED, act("reset_recipe")),
+            (tr("Use a recipe from the catalog…"), ft.Icons.MANAGE_SEARCH_ROUNDED, act("pick_recipe")),
             (tr("Save as known-good recipe"), G.RECIPE, act("save_recipe")),
             (tr("Share working recipe…"), ft.Icons.SHARE_ROUNDED, act("share"))]
 
