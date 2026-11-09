@@ -564,6 +564,11 @@
   "title": "Hardware video decoding (H.264, HEVC, VP9)",
   "group": "Steam Frame patches"
  },
+ "frame.isdk_telemetry": {
+  "anchor": "frame-isdk_telemetry",
+  "title": "Interaction SDK: telemetry off",
+  "group": "Steam Frame patches"
+ },
  "frame.justdance_local_save": {
   "anchor": "frame-justdance_local_save",
   "title": "Just Dance VR: keep progress in the local save",

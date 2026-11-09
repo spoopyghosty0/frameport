@@ -141,6 +141,7 @@ SUMMARIES = {
                         "64-bit code. Experimental.",
     "frame.gl_shim": "Corrects graphics code the Frame's drivers reject (black screen with sound).",
     "frame.metaxr_telemetry": "Skips a Quest-only reporting step in Meta's audio library that crashes some games.",
+    "frame.isdk_telemetry": "Turns off Quest-only telemetry in Meta's Interaction SDK, which crashes some games at start.",
     "frame.oculusos": "Provides stand-ins for Quest system calls some games make at start.",
     "frame.unity_text_input": "Lets you type into this app's text fields on the Frame (they'd close at once).",
     "frame.vk_sanitize": "Cleans up graphics data that crashes some Unreal games on the Frame.",

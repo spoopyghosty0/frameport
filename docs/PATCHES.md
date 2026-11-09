@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 207 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 208 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -11,7 +11,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 ## Groups
 
 - [Patches from OVRPort](#group-overport) (25)
-- [Steam Frame patches](#group-frame) (72)
+- [Steam Frame patches](#group-frame) (73)
 - [Game settings](#group-adapter) (85)
 - [Files and settings on the Frame](#group-device) (12)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
@@ -61,6 +61,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Play services: Android 11 version checks](#frame-gms_platform_version) | `frame.gms_platform_version` | Steam Frame patches | 5 |
 | [Godot apps: start without a clipboard service](#frame-godot_clipboard) | `frame.godot_clipboard` | Steam Frame patches | 1 |
 | [Hardware video decoding (H.264, HEVC, VP9)](#frame-hw_video_decode) | `frame.hw_video_decode` | Steam Frame patches | 56 |
+| [Interaction SDK: telemetry off](#frame-isdk_telemetry) | `frame.isdk_telemetry` | Steam Frame patches | default |
 | [Just Dance VR: keep progress in the local save](#frame-justdance_local_save) | `frame.justdance_local_save` | Steam Frame patches |  |
 | [Keep Android's shared libraries the app uses](#frame-keep_system_libraries) | `frame.keep_system_libraries` | Steam Frame patches | default |
 | [Language packs from the game's files](#frame-langpacks) | `frame.langpacks` | Steam Frame patches |  |
@@ -745,6 +746,19 @@ Plays the game's videos on the Frame's video hardware, so 4K and 8K video runs s
 - **Source:** [patches/frame/hw_video_decode.py](../src/frameport/patches/frame/hw_video_decode.py)
 
 > Decodes the game's videos on the Frame's hardware video decoder instead of Android's software decoders, which stutter or fall behind with 4K/8K video (for example video players, Batman: Arkham Shadow's cutscenes). Adds FramePort's codec plugin (OMX.frameport.avc/hevc/vp9.decoder) to this game's container only; the APK isn't changed. When the hardware is busy (for example Steam's own hardware video decoding is on) the video is decoded in software as before.
+
+### <a id="frame-isdk_telemetry"></a>Interaction SDK: telemetry off
+
+Turns off Quest-only telemetry in Meta's Interaction SDK, which crashes some games at start.
+
+- `frame.isdk_telemetry` · on by default
+- **Changes:** Changes the APK (a rebuild and reinstall apply it).
+- **Suggested (on):** Meta's Interaction SDK is present; its telemetry is switched off if the library has the Quest telemetry start-up (it crashes without Quest's OS SDK).
+- **Suggested by launch-test signatures:**
+  - `isdk-telemetry-crash` (fatal): The game crashed in Meta's Interaction SDK while it started Quest telemetry, which needs Quest's OS SDK (not on the Frame).
+- **Source:** [patches/frame/isdk_telemetry.py](../src/frameport/patches/frame/isdk_telemetry.py)
+
+> Meta's Interaction SDK (libInteractionSdk.so) starts Quest telemetry through the Quest OS SDK, which the Frame doesn't have, and crashes on the missing handler before the title screen ("libossdk not found", then SIGSEGV in TelemetrySender, e.g. Ghost Signal). Turns on the library's own telemetry-disabled switch, so the interaction code runs without telemetry.
 
 ### <a id="frame-justdance_local_save"></a>Just Dance VR: keep progress in the local save
 

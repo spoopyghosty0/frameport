@@ -536,6 +536,13 @@ signatures:
     diagnosis: A Vulkan layer in Lepton (Fossilize) crashed while the game set up its graphics. The engine leaves an attachment reference's pNext uninitialized, and Fossilize follows it while recording a render pass.
     suggest: [frame.vk_sanitize]
     supersedes: [native-crash]
+  - id: isdk-telemetry-crash
+    # GitHub #546 (Ghost Signal): Meta's Interaction SDK asks Quest's OS SDK for a telemetry handler and crashes on null
+    pattern: 'libossdk not found[\s\S]{0,20000}?libInteractionSdk\.so \(interaction_sdk::v1::telemetry::(?:TelemetrySender::TelemetrySender|initializeTelemetry)'
+    severity: fatal
+    diagnosis: The game crashed in Meta's Interaction SDK while it started Quest telemetry, which needs Quest's OS SDK (not on the Frame). Rebuild with the Interaction SDK telemetry switched off.
+    suggest: [frame.isdk_telemetry]
+    supersedes: [native-crash]
   - id: equirect-layers-dropped
     pattern: 'new layer: type=100009100\d [^\n]*usable=0|new layer: type=1000018000 [^\n]*usable=0'
     severity: warning
