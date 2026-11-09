@@ -8,6 +8,7 @@ The UI only calls `frameport.pipeline`, the targets and the toolchain; long work
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import threading
@@ -244,11 +245,10 @@ class FramePortApp:
         Built again by restyle() with the new theme's colours."""
         from .views.activity import ActivityPanel
 
-        # views fade into each other (150 ms) when the route changes; same-route redraws swap the content in place
-        self.switcher = ft.AnimatedSwitcher(ft.Container(), duration=0, reverse_duration=0,
-                                            transition=ft.AnimatedSwitcherTransition.FADE,
-                                            switch_in_curve=ft.AnimationCurve.EASE_OUT,
-                                            switch_out_curve=ft.AnimationCurve.EASE_IN, expand=True)
+        # a new route fades in (150 ms); same-route redraws swap the content in place. Not Flet's AnimatedSwitcher:
+        # it gives its content a new Flutter key at every rebuild, and any pop-up, menu or toast rebuilds the page,
+        # so the shown view was built again from scratch: lists jumped back to the top (GitHub #411)
+        self.switcher = ft.Container(ft.Container(), expand=True)
         self._shown_route: tuple | None = None
         self.body = ft.Container(self.switcher, expand=True, padding=ft.Padding(T.S6, T.S5, T.S5, 0))
         self.nav_col = ft.Column(spacing=T.px(2))
@@ -736,16 +736,33 @@ class FramePortApp:
             self.library_view.refresh_async()
 
     def _show_view(self, view: ft.Control) -> None:
-        """Put a view into the body: a new route fades in (a new wrapper = a switch for Flutter's AnimatedSwitcher,
-        150 ms, none with Reduce motion); a redraw of the same route replaces the wrapper's content (no animation).
-        The wrapper fills the body (the switcher lays its children out in a centring Stack)."""
+        """Put a view into the body: a new route gets a new wrapper that fades in (150 ms, none with Reduce motion:
+        sent at opacity 0, raised to 1 once Flutter has it); a redraw of the same route replaces the wrapper's
+        content (no animation)."""
         if self.route != self._shown_route or not isinstance(self.switcher.content, ft.Container):
             self._shown_route = self.route
-            ms = 0 if self.reduce_motion else 150
-            self.switcher.duration = self.switcher.reverse_duration = ms
-            self.switcher.content = ft.Container(view, expand=True, alignment=ft.Alignment.TOP_LEFT)
+            fade = not self.reduce_motion
+            wrapper = ft.Container(view, expand=True, alignment=ft.Alignment.TOP_LEFT, opacity=0.0 if fade else 1.0,
+                                   animate_opacity=ft.Animation(150, ft.AnimationCurve.EASE_OUT) if fade else None)
+            self.switcher.content = wrapper
+            if fade:
+                self._fade_in(wrapper)
         else:
             self.switcher.content.content = view
+
+    def _fade_in(self, wrapper: ft.Container) -> None:
+        """Raise a new view's wrapper to full opacity just after render() sent it at 0 (a later route may have
+        replaced it meanwhile: then nothing)."""
+        async def show():
+            await asyncio.sleep(0.03)
+            if wrapper.opacity != 1.0:
+                wrapper.opacity = 1.0
+                if self.switcher.content is wrapper:
+                    C.update(wrapper)
+        try:
+            self.page.run_task(show)
+        except Exception:  # noqa: BLE001 - no running page (tests): show it at once
+            wrapper.opacity = 1.0
 
     def set_reduce_motion(self, on: bool) -> None:
         self.reduce_motion = bool(on)

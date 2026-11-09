@@ -134,9 +134,12 @@ Detailed device findings per game/issue: docs/DEVICE_NOTES.md (read before debug
     "screen" with its own Start button + `live_features()`, Type on Frame shows `keyboard_tips()` under the box.
     Setup checklists (Frame → Ready to play, Settings → Tools / This PC) = `C.checklist([C.Check(ok, title, detail,
     help, fix=(label, icon, handler), extra=control)])`: ok True/False/"warn"/None (= spinner); the fix button shows
-    inline only while an item isn't ready — wire existing actions only. Motion: `app.body` holds an
-    `ft.AnimatedSwitcher` (`app._show_view`): a new route gets a new wrapper (150 ms fade), a same-route redraw swaps
-    the wrapper's content (no animation; persistent views just remount); the wordmark's portal (`wordmark().data`)
+    inline only while an item isn't ready — wire existing actions only. Motion: `app.body` holds a plain
+    Container (`app.switcher`, `app._show_view`): a new route gets a new wrapper sent at opacity 0 and raised to 1
+    (`_fade_in`, 150 ms), a same-route redraw swaps the wrapper's content (no animation; persistent views just
+    remount). Never Flet's `AnimatedSwitcher` around a view: it keys its content with a new `UniqueKey()` at every
+    rebuild, and any overlay change (menu, dialog, toast) rebuilds the page → the view was rebuilt from scratch and
+    its lists jumped to the top (#411); the wordmark's portal (`wordmark().data`)
     pulses once when frame_state turns "connected"; both off with setting `ui.reduce_motion` (Settings → Appearance
     "Reduce motion", `app.reduce_motion`). Settings has a fixed index column (`settings.SECTIONS` order: most users'
     needs first (Updates, which also holds game recipe + install-link updates, Installing, Library folders,

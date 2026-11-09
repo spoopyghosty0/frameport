@@ -210,6 +210,8 @@ def main() -> int:
     ap.add_argument("--gestures", action="store_true", help="with --fake-frame: real mouse drags (drag-select) and "
                     "right-clicks (menus) in Files, Screenshots and the Library; prints what got selected "
                     "(positions for --viewport 1440x900)")
+    ap.add_argument("--files-scroll", action="store_true", help="with --fake-frame: scroll a long Files folder, "
+                    "right-click and select in it: the list must stay where it was scrolled (GitHub #411)")
     ap.add_argument("--only", default=None, help="comma-separated step names to keep (e.g. monitor,monitor-details)")
     ap.add_argument("--linux", action="store_true", help="add two pretend arm64 Linux apps and render their pages")
     ap.add_argument("--links", action="store_true", help="install links: the Add games menu, the paste dialog, the "
@@ -392,6 +394,42 @@ def main() -> int:
                  # the grid's first row (below the "On your Frame" shelf)
                  "library": drag((360, 560), (560, 560), (760, 560)),        # 3 cards, select mode on
                  "library-dragged": drag((560, 560), (760, 560))}             # from a selected card: deselects 2
+    if args.files_scroll:  # GitHub #411: a right-click or a selection keeps the Files list where it was scrolled
+        def long_folder(a):
+            videos = os.path.join(a.target.frame.home, "Videos")
+            for i in range(60):
+                with open(os.path.join(videos, f"Clip {i:02d}.mp4"), "wb") as f:
+                    f.truncate(48_000)
+            a.go("files")
+
+        def wheel(page):
+            page.mouse.move(900, 500)
+            page.mouse.wheel(0, 1200)
+            time.sleep(1.5)
+            page.screenshot(path=str(args.out / "files-scroll-scrolled.png"))
+            page.mouse.click(900, 500, button="right")  # the row under the pointer: its menu
+            time.sleep(1.5)
+            page.screenshot(path=str(args.out / "files-scroll-menu.png"))
+            page.keyboard.press("Escape")
+            time.sleep(1.5)
+            page.screenshot(path=str(args.out / "files-scroll-menu-closed.png"))
+            page.mouse.move(583, 524)  # a row's checkbox (it shows under the pointer)
+            time.sleep(0.8)
+            page.mouse.click(583, 524)
+            time.sleep(1.5)
+            page.screenshot(path=str(args.out / "files-scroll-checked.png"))
+            return True
+
+        def offset(label):
+            def run(a):
+                print(f"FILES-SCROLL {label}: remembered offset {a.files_view.scrolled}", flush=True)
+            return run
+        steps = [("files-scroll", long_folder),
+                 ("files-scroll-selected", lambda a: (offset("after menu")(a), a.files_view._toggle(
+                     a.files_view.entries[30].path, True))),
+                 ("files-scroll-cleared", lambda a: a.files_view._clear_selection()),
+                 ("files-scroll-end", offset("end"))]
+        mouse = {"files-scroll": wheel}
     if args.linux:
         def linux_filter(a, value):
             a.navigate(0)
