@@ -18,18 +18,19 @@ methods). The edit is in place (Dex.rewrite_start): `mountOBB(name)` → `onMoun
 name); return`, `getMountedOBBFullPath(name)` → `return getOBBFullPath(name)`. unmountOBB stays: in Lepton
 isObbMounted() is false, so it already reports "not mounted" (23), which the game accepts.
 
+The folder's path is longer than vold's mount points, which changes who frees it in native code: see NATIVE_IMPORTS
+(libfp_obbpath.so hands the string over from the right allocator; no game code is changed).
+
 Encrypted OBBs (jobb -k: PBKDF2 + Twofish, footer flag OBB_SALTED) are not supported; GRID's are plain FAT32 and the
 game passes no key. FAT is case-insensitive, the Frame's file systems are not: unpacked names keep the image's case
 (GRID's own index.txt uses the same spelling as its files).
 """
 from __future__ import annotations
 
-import hashlib
-from dataclasses import dataclass
-
 from ...analysis import elf
 from ...apk.dex import Dex
 from ..base import ApkContext, Patch, Suggestion, register
+from . import artifact
 
 MOUNTED = 1  # android.os.storage.OnObbStateChangeListener.MOUNTED
 
@@ -38,47 +39,35 @@ HANDLERS = {
     "Landroidutils/OBBHandler;": ("mountOBB", "getMountedOBBFullPath", "onMountOBBStateChanged", "getOBBFullPath"),
 }
 
-
-@dataclass(frozen=True)
-class NativeFix:
-    """Instruction words to replace in one known build of a library: the window [start, start + len) must hash to
-    `sha256` (as shipped), else nothing is changed."""
-    lib: str
-    start: int  # virtual address of the checked window
-    length: int
-    sha256: str
-    edits: tuple[tuple[int, bytes, bytes], ...]  # (vaddr, old word, new word)
-
-
-# GRID Legends 1.0.0.41 (libgrid.so BuildId 88834f67…): getOBBMountPoints() frees the std::string that
-# libandroid_utils' AndroidUtils::getMountedOBBFullPath() returns with libgrid's own operator delete, although
-# libandroid_utils (loaded first, by Java) allocated it with libc++'s operator new. On a Quest the mounted path is
-# short ("/mnt/obb/…", kept inside the string object: nothing is freed); the OBB's own path is longer, so the game
-# crashed in that delete (SIGSEGV at getOBBMountPoints+420, fault address = the path's text). The two branches into
-# the delete are taken out: 17 short strings are leaked once at start.
-NATIVE_FIXES = (
-    NativeFix("libgrid.so", 0x14B7638, 0x100, "8ec37aeaa7fdd5b22200d183965dc4917a7875fd8aff0afe0ad75907d419e3f5",
-              ((0x14B769C, bytes.fromhex("d5040034"), bytes.fromhex("26000014")),   # cbz w21, +0x98 -> b +0x98
-               (0x14B7730, bytes.fromhex("95fbff35"), bytes.fromhex("1f2003d5")))),  # cbnz w21, free -> nop
-)
+# The mounted path on its way to native code. Codemasters' libandroid_utils.so returns it as a libc++ std::string
+# (AndroidUtils::getMountedOBBFullPath(const char*)), and the game library (GRID: libgrid.so, getOBBMountPoints())
+# frees it with its *own* exported operator delete, inlined (it reads an allocator header in front of the text).
+# libandroid_utils.so is loaded first (androidutils.NativeActivity's static block), so its strings come from libc++'s
+# operator new. On a Quest that never shows: vold's mount point "/mnt/obb/obb:N" fits inside the string object
+# (libc++ keeps up to 22 characters there), nothing is on the heap. The unpacked folder's path is longer, and the
+# game crashed in that delete (SIGSEGV at getOBBMountPoints+420, fault address = the path's text; device run
+# 2026-10-16). Fix without touching the game's code: every library that imports the function *and* exports its own
+# operator new gets the import renamed to the helper's (elf.rename_imports, in place) + the helper in DT_NEEDED;
+# native/obbpath copies a long result into a block from that library's own operator new and frees the original with
+# the operator delete of the library that made it. Matched by symbol names only, so other builds work the same.
+NATIVE_IMPORTS = {"_ZN12AndroidUtils21getMountedOBBFullPathEPKc": "fp_obb_mounted_path"}
+HELPER = "libfp_obbpath.so"
+OWN_NEW = "_Znwm"  # operator new(unsigned long)
 
 
-def native_fix(data: bytes, fix: NativeFix) -> bytes | None:
-    """The library with `fix` applied, or None when it isn't that build (or is already fixed)."""
-    try:
-        segments = elf.load_segments(data)
-    except Exception:  # noqa: BLE001 (not an ELF file)
-        return None
-    off = elf.vaddr_to_offset(segments, fix.start)
-    if off is None or hashlib.sha256(data[off:off + fix.length]).hexdigest() != fix.sha256:
-        return None
-    out = bytearray(data)
-    for va, old, new in fix.edits:
-        pos = elf.vaddr_to_offset(segments, va)
-        if pos is None or out[pos:pos + 4] != old:
-            return None
-        out[pos:pos + 4] = new
-    return bytes(out)
+def needs_mounted_path_helper(data: bytes) -> bool:
+    """A library that takes the mounted path from another library and has its own operator new (so its delete of
+    that string doesn't match the allocator that made it)."""
+    imports = elf.dyn_symbols(data, defined=False)
+    return bool(set(NATIVE_IMPORTS) & imports) and OWN_NEW in elf.dyn_symbols(data, defined=True)
+
+
+def route_mounted_path(data: bytes) -> tuple[bytes, list[str]]:
+    """The library with its mounted-path import(s) going to the helper (renamed + DT_NEEDED); (data, renamed)."""
+    patched, renamed = elf.rename_imports(data, NATIVE_IMPORTS)
+    if renamed or set(NATIVE_IMPORTS.values()) & elf.dyn_symbols(patched, defined=False):
+        patched = elf.add_needed(patched, HELPER, first=False)
+    return patched, renamed
 
 
 def handler_classes(data: bytes) -> list[str]:
@@ -134,25 +123,57 @@ class ObbMountEmulation(Patch):
         return None
 
     def apply(self, ctx: ApkContext) -> bool:
-        changed = False
+        changed = found = False
         for name in sorted(n for n in ctx.ws.names() if n.startswith("classes") and n.endswith(".dex")):
             data = ctx.ws.read(name)
             if not handler_classes(data):
                 continue
+            found = True
             dex = Dex(data)
             done = patch_dex(dex)
             if done:
                 ctx.ws.put(name, dex.finish())
                 ctx.notes.append(f"{name}: OBB mounting replaced by unpacked folders in {', '.join(sorted(done))}")
                 changed = True
-        if changed and ctx.ws.abi == "arm64-v8a":
-            for fix in NATIVE_FIXES:
-                if ctx.ws.has(ctx.ws.lib(fix.lib)):
-                    new = native_fix(ctx.ws.read_lib(fix.lib), fix)
-                    if new is not None:
-                        ctx.ws.put(ctx.ws.lib(fix.lib), new)
-                        ctx.notes.append(f"{fix.lib}: the mounted OBB path is no longer freed with the game's allocator")
+        if found:
+            changed |= self.apply_native(ctx)
         return changed
+
+    def apply_native(self, ctx: ApkContext) -> bool:
+        """Route the mounted path through the helper in every library that frees it with its own allocator."""
+        ws = ctx.ws
+        if ws.abi != "arm64-v8a":
+            return False
+        needles = tuple(n.encode() for n in NATIVE_IMPORTS) + tuple(n.encode() for n in NATIVE_IMPORTS.values())
+        changed = False
+        for lib in ws.libs():
+            if lib == HELPER or not ws.contains(ws.lib(lib), needles):
+                continue
+            data = ws.read_lib(lib)
+            if not needs_mounted_path_helper(data) and HELPER not in elf.needed(data):
+                continue
+            patched, renamed = route_mounted_path(data)
+            if patched != data:
+                ws.put(ws.lib(lib), patched)
+                ctx.notes.append(f"{lib}: mounted OBB path through {HELPER} (its own allocator)")
+            changed = True
+        if changed:
+            helper = artifact(ws.abi, HELPER)
+            if not ws.has(ws.lib(HELPER)) or ws.read_lib(HELPER) != helper:
+                ws.put(ws.lib(HELPER), helper)
+        return changed
+
+    def validate(self, ctx: ApkContext):
+        ws = ctx.ws
+        if ws.abi != "arm64-v8a":
+            return []
+        needles = tuple(n.encode() for n in NATIVE_IMPORTS)
+        bad = [lib for lib in ws.libs() if lib != HELPER and ws.contains(ws.lib(lib), needles)
+               and needs_mounted_path_helper(ws.read_lib(lib))]
+        if not bad and not ws.has(ws.lib(HELPER)):
+            return []
+        return [("Mounted OBB path from the game's allocator", not bad and ws.has(ws.lib(HELPER)),
+                 HELPER if not bad else f"still imported directly by {', '.join(bad)}")]
 
 
 register(ObbMountEmulation)

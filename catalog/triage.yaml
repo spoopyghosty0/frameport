@@ -690,6 +690,13 @@ signatures:
     diagnosis: The game mounts its OBB files as disk images (Android's StorageManager.mountObb, for example GRID Legends). Lepton has no loop devices, so the mount fails and the game quits. The patch unpacks the images on the Frame after the install and makes the game read those folders instead of mounting (known OBB helpers only; others need support in FramePort).
     suggest: [frame.obb_mount_emul]
     supersedes: [java-crash]
+  - id: obb-mount-path-freed
+    pattern: '#\d+ pc [0-9a-f]+\s+\S+ \((?:_Z17)?getOBBMountPoints'
+    severity: fatal
+    diagnosis: The game crashed while reading its OBB mount points (GRID Legends' getOBBMountPoints). With the OBB disk-image patch the mount point is the unpacked folder's longer path, and the game frees that text with its own memory manager; FramePort hands it over through libfp_obbpath.so (log line "fp_obbpath:"). Rebuild the game with the current FramePort; if that line is there and it still crashes, please report it with the log.
+    suggest: [frame.obb_mount_emul]
+    report: true
+    supersedes: [native-crash]
   - id: lepton-data-link-failed
     pattern: "ln: cannot create symbolic link from '[^']*' to '/data/data/|Couldn't create directory for SharedPreferences file /data/user/0/"
     severity: fatal

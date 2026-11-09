@@ -934,6 +934,7 @@ Lets games whose data files are disk images start on the Frame (they'd quit with
 - **Suggested (on):** The game mounts its OBB files as disk images, which Lepton can't do: unpack them on the Frame and let the game read the folders.
 - **Suggested by launch-test signatures:**
   - `obb-mount-failed` (fatal): The game mounts its OBB files as disk images (Android's StorageManager.mountObb, for example GRID Legends).
+  - `obb-mount-path-freed` (fatal): The game crashed while reading its OBB mount points (GRID Legends' getOBBMountPoints).
 - **Source:** [patches/frame/obb_mount.py](../src/frameport/patches/frame/obb_mount.py)
 
 > Some games keep their data in OBB files that Android mounts as disk images (for example GRID Legends). Lepton can't mount disk images, so these games quit at start ("Can't mount OBB"). FramePort unpacks the images on the Frame after the install (into folders with the same names, so the data takes its space only once) and changes the game's OBB code so it uses those folders instead of mounting.

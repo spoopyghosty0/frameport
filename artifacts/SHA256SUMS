@@ -5,6 +5,7 @@ ed529aac0e36806653e8dda1648007031776db3734bb0832cf39db068b551a90  ./arm64-v8a/li
 18d8d917e83a6d87008f41908eb478dff635e798844e125abd1e8a5cf31805e2  ./arm64-v8a/liba32stub.so
 845905e8c2da617dddcb9625f4ed38e06f1d85f9c729b55dacb2c59488074c3e  ./arm64-v8a/libfp_langpack.so
 69102b128e00fa1809489a7308e09c1505f563bf7091bbdd3fe5a58e4cc96c2c  ./arm64-v8a/libfp_luajit.so
+bab4dd8e6901d310f907f29cc435e8d178a280a154eed60b79c4dccb7e63ce5d  ./arm64-v8a/libfp_obbpath.so
 321da502e0f8f46f0880aad39fe6b84bdef88f925164568814cf704a1b31a577  ./arm64-v8a/libfp_ovrp.so
 f5c236da08b3f0befd289c4e730f4c695c104a70305e56d9d6f62aff8763abe1  ./arm64-v8a/libfp_ovrpbattery.so
 40defdaddcda53bd2649eb48076fae1622bfc2bfc88e9e03c94fc8b45af2a4f2  ./arm64-v8a/libfp_ovrtrace.so

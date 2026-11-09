@@ -7,12 +7,24 @@ import importlib.util
 import json
 import os
 import struct
+import zipfile
 from pathlib import Path
 
 import pytest
 
+from frameport.analysis import elf
 from frameport.apk.dex import Dex
-from frameport.patches.frame.obb_mount import HANDLERS, ObbMountEmulation, handler_classes, patch_dex
+from frameport.patches.frame import artifact
+from frameport.patches.frame.obb_mount import (
+    HANDLERS,
+    HELPER,
+    NATIVE_IMPORTS,
+    ObbMountEmulation,
+    handler_classes,
+    needs_mounted_path_helper,
+    patch_dex,
+    route_mounted_path,
+)
 from frameport.validate.triage import triage
 
 AGENT = Path(__file__).resolve().parents[1] / "agent" / "frameport_agent.py"
@@ -99,7 +111,7 @@ def build_dex(methods):
     struct.pack_into("<2I", out, 96, len(classes), cdef_off)
     out += b"".join(struct.pack("<I", o) for o in str_offs)
     out += b"".join(struct.pack("<I", i) for i in types)
-    out += b"".join(struct.pack("<3I", a, b, pl) for (a, b, _ps), pl in zip(protos, plists))
+    out += b"".join(struct.pack("<3I", a, b, pl) for (a, b, _ps), pl in zip(protos, plists, strict=True))
     out += b"".join(struct.pack("<HHI", *m) for m in mids)
     out += b"".join(struct.pack("<8I", t(c), 1, 0, 0, 0, 0, class_data[c], 0) for c in classes)
     out += data
@@ -160,6 +172,13 @@ def test_detect_triage_and_handlers():
     r = triage(log, "EXITED", "com.codemasters.gridlegends")
     assert [f.id for f in r.findings] == ["obb-mount-failed"]
     assert r.findings[0].suggest == ["frame.obb_mount_emul"]
+    # the device run's crash before the allocator fix (tombstone in logcat-crash.log)
+    crash = ("F libc    : Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x6f2f64696f72646e in tid "
+             "4321 (OBBMounter), pid 4300 (emasters.gridlegends)\n"
+             "F DEBUG   :       #00 pc 00000000014b76d4  /data/app/~~x==/com.codemasters.gridlegends-y==/lib/arm64/"
+             "libgrid.so (_Z17getOBBMountPointsv+420) (BuildId: 88834f67)\n")
+    r = triage(crash, "EXITED", "com.codemasters.gridlegends")
+    assert [f.id for f in r.findings] == ["obb-mount-path-freed"]
 
 
 # ---------------------------------------------------------------------------------------------------- agent side
@@ -342,21 +361,88 @@ def test_interrupted_unpack_is_finished_or_dropped(monkeypatch, tmp_path):
     assert a.obb_manifest(str(obb)) == {"DataSet1.obb": 5}
 
 
-def test_native_fix_only_touches_the_known_build():
-    import hashlib
+# ---------------------------------------------------------------------------------------------------- native side
+def _game_lib() -> bytes:
+    """A stand-in for libgrid.so: imports AndroidUtils::getMountedOBBFullPath and exports its own operator new. Made
+    from the helper (which imports that function, weakly) by renaming its one export to _Znwm in .dynstr."""
+    helper = artifact("arm64-v8a", HELPER)
+    sec = elf.dynstr_section(elf._elf(helper))
+    start, end = sec["sh_offset"], sec["sh_offset"] + sec["sh_size"]
+    old = b"\0fp_obb_mounted_path\0"
+    assert helper[start:end].count(old) == 1
+    return helper[:start] + helper[start:end].replace(old, b"\0_Znwm".ljust(len(old), b"\0")) + helper[end:]
 
-    from frameport.analysis import elf
-    from frameport.patches.frame.obb_mount import NATIVE_FIXES, NativeFix, native_fix
 
-    assert NATIVE_FIXES[0].lib == "libgrid.so"
-    data = (Path(__file__).resolve().parents[1] / "artifacts" / "arm64-v8a" / "libframe_xrshim.so").read_bytes()
-    va, off, _size = elf.load_segments(data)[0]
-    start = va + 0x40
-    word = data[off + 0x48:off + 0x4C]
-    fix = NativeFix("x.so", start, 0x20, hashlib.sha256(data[off + 0x40:off + 0x60]).hexdigest(),
-                    ((start + 8, word, bytes.fromhex("1f2003d5")),))
-    out = native_fix(data, fix)
-    assert out is not None and len(out) == len(data) and out[off + 0x48:off + 0x4C] == bytes.fromhex("1f2003d5")
-    assert out[:off + 0x48] == data[:off + 0x48] and out[off + 0x4C:] == data[off + 0x4C:]
-    assert native_fix(out, fix) is None  # already fixed / another build: left alone
-    assert native_fix(b"not an elf", fix) is None
+def test_mounted_path_import_goes_to_the_helper():
+    game, helper = _game_lib(), artifact("arm64-v8a", HELPER)
+    (original, renamed), = NATIVE_IMPORTS.items()
+    assert original in elf.dyn_symbols(helper, defined=False)  # the helper calls the real one
+    assert renamed in elf.dyn_symbols(helper, defined=True)
+    assert needs_mounted_path_helper(game)
+    assert not needs_mounted_path_helper(helper)  # no operator new of its own: its delete would match
+    out, done = route_mounted_path(game)
+    assert done == [original]
+    imports = elf.dyn_symbols(out, defined=False)
+    assert renamed in imports and original not in imports
+    assert elf.needed(out)[-1] == HELPER and elf.needed(out)[:-1] == elf.needed(game)
+    assert elf.dyn_symbols(out, defined=True) == elf.dyn_symbols(game, defined=True)
+    assert route_mounted_path(out) == (out, [])  # already routed
+    assert not needs_mounted_path_helper(out)
+
+
+def test_apply_routes_libraries_that_free_the_path_themselves(tmp_path, quest_manifest):
+    from frameport.apk.workspace import ApkWorkspace
+    from frameport.core.events import Reporter
+    from frameport.core.models import Analysis
+    from frameport.patches import base
+
+    apk = tmp_path / "in.apk"
+    helper = artifact("arm64-v8a", HELPER)
+    with zipfile.ZipFile(apk, "w") as z:
+        z.writestr("AndroidManifest.xml", quest_manifest)
+        z.writestr("classes.dex", _dex() + b"mountObb")
+        z.writestr("lib/arm64-v8a/libgrid.so", _game_lib())
+        z.writestr("lib/arm64-v8a/libother.so", helper)  # imports it too, but has no operator new of its own
+    a = Analysis(package="com.codemasters.gridlegends", version="1", label="GRID", abis=["arm64-v8a"],
+                 engine="Unknown", xr="OpenXR", graphics="Vulkan", direct_vrapi=False,
+                 libs=["libgrid.so", "libother.so"], launcher_activity=None, has_info_category=False,
+                 meta_permissions=[], uses_glad_gl=False, unity_msaa_levels=0, oculus_os_classes=False,
+                 is_overport_output=True, debuggable=False, extra={"obb_mount": [H]})
+    p = base.get("frame.obb_mount_emul")
+    with ApkWorkspace(apk) as ws:
+        ctx = base.ApkContext(ws, a, {}, Reporter(), {})
+        assert p.apply(ctx)
+        assert any("libgrid.so: mounted OBB path through" in n for n in ctx.notes)
+        assert p.validate(ctx) == [("Mounted OBB path from the game's allocator", True, HELPER)]
+        assert ws.read_lib("libother.so") == helper
+        first = ws.read_lib("libgrid.so")
+        p.apply(base.ApkContext(ws, a, {}, Reporter(), {}))
+        assert ws.read_lib("libgrid.so") == first  # applying twice changes nothing
+        out = ws.write(tmp_path / "out.apk")
+    with zipfile.ZipFile(out) as z:
+        assert z.read(f"lib/arm64-v8a/{HELPER}") == helper
+        assert HELPER in elf.needed(z.read("lib/arm64-v8a/libgrid.so"))
+
+
+def _grid_apk():
+    root = os.environ.get("FRAMEPORT_GAMES")
+    if not root:
+        pytest.skip("set FRAMEPORT_GAMES")
+    found = sorted(Path(root).glob("**/com.codemasters.gridlegends.apk"))
+    if not found:
+        pytest.skip("no GRID Legends APK in FRAMEPORT_GAMES")
+    return found[0]
+
+
+@pytest.mark.games
+def test_real_grid_legends():
+    """GRID Legends: the Java handler and the one native import, found by name in the shipped files."""
+    with zipfile.ZipFile(_grid_apk()) as z:
+        dex = Dex(z.read("classes.dex"))
+        grid, utils = z.read("lib/arm64-v8a/libgrid.so"), z.read("lib/arm64-v8a/libandroid_utils.so")
+    assert sorted(patch_dex(dex)) == ["androidutils.OBBHandler.getMountedOBBFullPath",
+                                      "androidutils.OBBHandler.mountOBB"]
+    assert needs_mounted_path_helper(grid) and not needs_mounted_path_helper(utils)
+    out, done = route_mounted_path(grid)
+    assert done == list(NATIVE_IMPORTS) and elf.needed(out)[-1] == HELPER
+    assert NATIVE_IMPORTS[done[0]] in elf.dyn_symbols(out, defined=False)
