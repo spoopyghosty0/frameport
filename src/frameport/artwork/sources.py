@@ -122,11 +122,11 @@ def match_steam(title: str) -> dict | None:
     return next((i for i in steam_search(title) if norm(i.get("name") or "") == want), None)
 
 
-def _save(package: str, kind: str, data: bytes) -> None:
+def _save(package: str, kind: str, data: bytes, folder: Path | None = None) -> None:
     if not data or len(data) < 200:
         return
     ext = ".png" if data[:4] == b"\x89PNG" else ".webp" if data[8:12] == b"WEBP" else ".jpg"
-    d = fetch.artwork_dir(package)
+    d = folder or fetch.artwork_dir(package)
     for old in d.glob(f"{kind}.*"):
         old.unlink()
     (d / f"{kind}{ext}").write_bytes(data)
@@ -140,12 +140,13 @@ def _get(url: str) -> bytes | None:
         return None
 
 
-def apply_oculusdb(package: str, app: dict) -> bool:
+def apply_oculusdb(package: str, app: dict, folder: Path | None = None) -> bool:
     link = app.get("imageLink") or (f"/cdn/images/{app['id']}" if app.get("id") else None)
     data = _get(OCULUSDB + link) if link else None
-    if data:
-        _save(package, "square", data)
-    return bool(data)
+    if data and len(data) >= 200 and not data.lstrip()[:1] == b"<":  # an outage page isn't a cover
+        _save(package, "square", data, folder)
+        return True
+    return False
 
 
 def apply_steam(package: str, appid: int | str) -> bool:

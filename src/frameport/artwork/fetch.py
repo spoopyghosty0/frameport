@@ -68,6 +68,8 @@ def fetch(package: str, apk: Path | None = None, refresh: bool = False,
                 (out / f"{kind}{_ext(raw)}").write_bytes(raw)
             if title:
                 (out / "title.txt").write_text(title, encoding="utf-8")
+    if lookup and not picked and not ({p.stem for p in out.iterdir()} & COVER_KINDS):
+        _oculusdb_cover(out, lookup)
     if not any(out.glob("icon.*")) and apk:
         icon = apk_icon(apk)
         if icon:
@@ -75,6 +77,28 @@ def fetch(package: str, apk: Path | None = None, refresh: bool = False,
     if title is None and (out / "title.txt").exists():
         title = (out / "title.txt").read_text(encoding="utf-8")
     return out, title
+
+
+COVER_KINDS = frozenset({"portrait", "landscape", "hero", "square"})
+
+
+def _oculusdb_cover(out: Path, package: str) -> bool:
+    """No cover from the image service (it answers 404 for every package at times, GitHub #510: Assassin's Creed
+    Nexus got no art while its picker result was there): the store cover of the app with exactly this package from
+    OculusDB, saved as the square cover (the Steam shapes are composed from it). FramePort's generated cover/banner
+    go, like with a picked cover."""
+    from . import sources
+
+    try:
+        app = next((r for r in sources.oculusdb_search(package, rift_only=False) if r.get("packageName") == package),
+                   None)
+        if not app or not sources.apply_oculusdb(package, app, folder=out):
+            return False
+    except Exception:  # noqa: BLE001 - offline: the APK icon (and a generated cover) stay
+        return False
+    for f in list(out.glob("cover.*")) + list(out.glob("banner.*")) + list(out.glob(".cover")):
+        f.unlink(missing_ok=True)
+    return True
 
 
 def apk_icon(apk: Path | str | None) -> bytes | None:

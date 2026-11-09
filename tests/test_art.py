@@ -279,7 +279,8 @@ def test_steam_placeholder_for_apps_without_artwork(tmp_path):
 def test_no_store_details_for_android_apps_without_vr(monkeypatch):
     from frameport.artwork import details
 
-    monkeypatch.setattr(details, "steam_app", lambda title: (_ for _ in ()).throw(AssertionError("looked up")))
+    monkeypatch.setattr(details, "steam_app",
+                        lambda title, store=None: (_ for _ in ()).throw(AssertionError("looked up")))
     entry = {"package": "org.example.flat", "title": "2048", "analysis": {"extra": {"vr_kind": "none"}}}
     assert details.fetch_details(entry)["sources"] == []
 
@@ -412,3 +413,90 @@ def test_custom_art_rejects_bad_files(tmp_path, make, why):
         sources.apply_custom("com.custom.bad", "portrait", bad)
     with pytest.raises(sources.ArtError):
         sources.apply_custom("com.custom.bad", "screenshot", bad)
+
+
+def test_quest_cover_from_oculusdb_when_the_image_service_has_none(net):
+    """GitHub #510: the image service had nothing for Assassin's Creed Nexus (it answers 404 for every package at
+    times); OculusDB's app with exactly that package gives the cover. Another package's app never does."""
+    pkg = "com.Ubisoft.ACNexusVR"
+    net["all"] = [{"_term": pkg, "appName": "Assassin's Creed Nexus VR", "packageName": pkg, "id": "58",
+                   "imageLink": "/cdn/images/58"},
+                  {"_term": pkg, "appName": "Something else", "packageName": "com.other", "id": "59",
+                   "imageLink": "/cdn/images/59"}]
+    net["images"][sources.OCULUSDB + "/cdn/images/58"] = png(720, 720)
+    d = fetch.artwork_dir(pkg)
+    (d / "cover.jpg").write_bytes(png(600, 900))  # FramePort's generated cover goes once store art exists
+    fetch.fetch(pkg)
+    assert {p.stem for p in fetch.files(pkg)} == {"square"} and sources.has_art(pkg)
+    # the image service has art: no OculusDB lookup
+    net["meta"]["com.y.game"] = True
+    net["all"] = [{"_term": "com.y.game", "packageName": "com.y.game", "id": "60", "imageLink": "/cdn/images/60"}]
+    net["images"][sources.OCULUSDB + "/cdn/images/60"] = png(720, 720)
+    fetch.fetch("com.y.game")
+    assert {p.stem for p in fetch.files("com.y.game")} == {"portrait"}
+    # no exact package match: nothing
+    fetch.fetch("com.other.game")
+    assert not sources.has_art("com.other.game")
+
+
+def test_an_outage_page_is_not_a_cover(net):
+    net["images"][sources.OCULUSDB + "/cdn/images/7"] = b"<html>" + b"x" * 400 + b"</html>"
+    assert not sources.apply_oculusdb("com.z", {"id": "7"})
+    assert not sources.has_art("com.z")
+
+
+def test_cached_json_keeps_the_last_good_answer(monkeypatch):
+    """GitHub #510: OculusDB's outage redirects to an HTML page answering 200; it was cached for 30 days in place of
+    the search results (and lookups found nothing until it expired)."""
+    from frameport.core import cache
+
+    answers = ["<html>outage</html>", '[{"id": 1}]', "<html>outage</html>"]
+    calls = []
+
+    class R:
+        def __init__(self, text):
+            self.text = text
+
+    def get(url, timeout=20):
+        calls.append(url)
+        return R(answers[len(calls) - 1])
+
+    monkeypatch.setattr(cache, "http_get", get)
+    assert cache.cached_json("t.json", "u", max_age=3600, fallback=[]) == []
+    assert not (cache.cache_dir() / "t.json").exists()
+    assert cache.cached_json("t.json", "u", max_age=3600, fallback=[]) == [{"id": 1}]
+    assert cache.cached_json("t.json", "u", max_age=3600, fallback=[]) == [{"id": 1}] and len(calls) == 2  # fresh
+    assert cache.cached_json("t.json", "u", max_age=0, fallback=[]) == [{"id": 1}]  # stale, outage: the last copy
+    (cache.cache_dir() / "p.json").write_text("<html>cached by an older version</html>", encoding="utf-8")
+    answers.append('{"ok": true}')
+    assert cache.cached_json("p.json", "u", max_age=3600) == {"ok": True}  # not JSON: fetched again
+
+
+def _steam_match(monkeypatch, app):
+    monkeypatch.setattr(sources, "match_steam", lambda title: {"id": 1, "name": title})
+    monkeypatch.setattr(sources, "steam_details", lambda appid: app)
+
+
+def test_steam_details_need_a_vr_app_or_the_same_company(monkeypatch):
+    """GitHub #524: Steam's "The Climb" is another studio's flat game (Crytek's isn't on Steam): its description and
+    developer showed on The Climb's About tab."""
+    from frameport.artwork import details
+
+    crytek = {"packageName": "com.crytek.climb", "appName": "The Climb", "publisher_name": "Crytek", "id": "23",
+              "display_long_description": "Climb mountains."}
+    monkeypatch.setattr(sources, "oculusdb_search", lambda *a, **k: [crytek])
+    other = {"steam_appid": 1, "developers": ["PiggyBanx Inc."], "publishers": ["PiggyBanx Inc."],
+             "categories": [{"id": 2, "description": "Single-player"}], "about_the_game": "Another game."}
+    _steam_match(monkeypatch, other)
+    d = details.fetch_details({"package": "com.crytek.climb", "title": "The Climb"})
+    assert d["sources"] == ["oculusdb"] and d["description"] == "Climb mountains." and "developer" not in d
+    # the same game on Steam: a VR app, or (flat) by the store app's publisher
+    _steam_match(monkeypatch, {**other, "categories": [{"id": 54, "description": "VR Only"}]})
+    assert details.fetch_details({"package": "com.crytek.climb", "title": "The Climb"})["sources"] == [
+        "oculusdb", "steam"]
+    _steam_match(monkeypatch, {**other, "developers": ["Crytek GmbH"], "publishers": ["Crytek"]})
+    assert "steam" in details.fetch_details({"package": "com.crytek.climb", "title": "The Climb"})["sources"]
+    # OculusDB unreachable: only a VR app on Steam is taken
+    monkeypatch.setattr(sources, "oculusdb_search", lambda *a, **k: [])
+    _steam_match(monkeypatch, other)
+    assert not details.fetch_details({"package": "com.crytek.climb", "title": "The Climb"}).get("sources")

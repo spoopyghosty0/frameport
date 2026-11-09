@@ -46,14 +46,32 @@ def cached_text(name: str, url: str, max_age: float = 86400, fallback: str | Non
     return fallback
 
 
-def cached_json(name: str, url: str, max_age: float = 86400, fallback=None):
-    text = cached_text(name, url, max_age)
-    if text is None:
-        return fallback
+_MISSING = object()
+
+
+def _read_json(path: Path):
     try:
-        return json.loads(text)
-    except ValueError:
-        return fallback
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return _MISSING
+
+
+def cached_json(name: str, url: str, max_age: float = 86400, fallback=None):
+    """Like cached_text, but only JSON is kept: a service's outage page (OculusDB redirects to an HTML page that
+    answers 200, GitHub #510) isn't cached over the last good answer, and one cached by an older version counts as
+    stale."""
+    path = cache_dir() / name
+    cached = _read_json(path) if path.exists() else _MISSING
+    if cached is _MISSING or time.time() - path.stat().st_mtime >= max_age:
+        try:
+            text = http_get(url).text
+            value = json.loads(text)
+        except Exception:  # noqa: BLE001 - offline, an error status or not JSON: the last good copy
+            pass
+        else:
+            write_atomic(path, text)
+            return value
+    return fallback if cached is _MISSING else cached
 
 
 def download(url: str, dest: Path, progress=None, expected_sha256: str | None = None,

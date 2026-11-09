@@ -73,7 +73,7 @@ def test_deferred_rename_does_no_network(monkeypatch):
 
 def test_match_provenance(monkeypatch):
     monkeypatch.setattr(sources, "oculusdb_search", lambda *a, **k: [{"packageName": "com.game", "id": 1}])
-    monkeypatch.setattr(details, "steam_app", lambda title: {"steam_appid": 2})
+    monkeypatch.setattr(details, "steam_app", lambda title, store=None: {"steam_appid": 2})
     d = details.fetch_details({"package": "com.game", "title": "Game"})
     assert d["matches"] == {"oculusdb": {"by": "package", "key": "com.game"},
                             "steam": {"by": "title", "key": "Game"}}

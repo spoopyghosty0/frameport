@@ -46,11 +46,34 @@ def oculusdb_app(entry: dict) -> dict | None:
     return None
 
 
-def steam_app(title: str) -> dict | None:
+# Steam's VR categories: VR Support (31), VR Supported (53), VR Only (54)
+STEAM_VR_CATEGORIES = frozenset({31, 53, 54})
+
+
+def _steam_vr(app: dict) -> bool:
+    return any(c.get("id") in STEAM_VR_CATEGORIES for c in app.get("categories") or [] if isinstance(c, dict))
+
+
+def _same_company(app: dict, store: dict | None) -> bool:
+    """The Steam app's developer or publisher is the Meta store app's publisher ("Crytek" / "Crytek GmbH")."""
+    want = sources.norm((store or {}).get("publisher_name") or "")
+    if len(want) < 3:
+        return False
+    names = [sources.norm(n) for n in (app.get("developers") or []) + (app.get("publishers") or []) if n]
+    return any(n and (want in n or n in want) for n in names if len(n) >= 3)
+
+
+def steam_app(title: str, store: dict | None = None) -> dict | None:
+    """The Steam app with exactly this name, if it is the same game: a VR app, or one by the Meta store app's
+    publisher (`store`, OculusDB). Common names are taken on Steam by other games (GitHub #524: "The Climb" there is
+    another studio's flat game, Crytek's isn't on Steam)."""
     hit = sources.match_steam(title)
     if not hit:
         return None
-    return sources.steam_details(hit["id"])
+    app = sources.steam_details(hit["id"])
+    if app and not (_steam_vr(app) or _same_company(app, store)):
+        return None
+    return app
 
 
 def fetch_details(entry: dict, screenshots: bool = True) -> dict:
@@ -79,7 +102,7 @@ def fetch_details(entry: dict, screenshots: bool = True) -> dict:
         if app.get("id"):
             out["store_url"] = f"https://www.meta.com/experiences/{app['id']}/"
     try:
-        st = steam_app(title)
+        st = steam_app(title, app)
     except Exception:  # noqa: BLE001
         st = None
     if st:
