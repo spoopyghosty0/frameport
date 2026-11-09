@@ -1015,6 +1015,34 @@ VRAPI ovrResult vrapi_SetTrackingSpace(ovrMobile* mobile, int32_t space) {
     if (!s.initialRecenterPending && !appSpaceFor(s.eyeOrigin)) return InvalidOperation;
     return Success;
 }
+VRAPI ovrPosef vrapi_LocateTrackingSpace(ovrMobile* mobile, int32_t target) {
+    // The transform between the current tracking space and `target`: eye level (LOCAL) and floor (LOCAL_FLOOR /
+    // STAGE) differ by the standing eye height also used for the floor without a runtime STAGE (1.6 m); otherwise
+    // the spaces share their origin. Sign as in the a32 bridge's (headset-checked with Shadow Point's floor-level
+    // rig): games apply it as the offset that lifts a floor-relative rig to eye level. YouTube VR 1.28 imports it
+    // (GitHub #560).
+    LOCK_STATE;
+    ovrPosef result{{0, 0, 0, 1}, {0, 0, 0}};
+    if (!validMobile(mobile)) return result;
+    auto floor = [](int32_t space) { return space == 1 || space == 3; };
+    if (floor(target) && !floor(s.trackingSpace)) result.Position.y = 1.6f;
+    else if (!floor(target) && floor(s.trackingSpace)) result.Position.y = -1.6f;
+    static int logged;
+    if (logged < 4) {
+        ++logged;
+        OVP_LOG("vrapi_LocateTrackingSpace(current=%d target=%d) -> y=%.3f", s.trackingSpace, target,
+                result.Position.y);
+    }
+    return result;
+}
+VRAPI int vrapi_GetPropertyInt(const ovrJava*, int property) {
+    // The counterpart of vrapi_SetPropertyInt (deprecated, YouTube VR 1.28 imports it, GitHub #560): no property is
+    // supported there, so each one reads as its default 0 (foveation off, no device emulation, no remote buttons).
+    static bool seen[64];
+    if (property < 0 || property >= 64 || !std::exchange(seen[property], true))
+        OVP_LOG("Optional VrApi property read: %d -> 0", property);
+    return 0;
+}
 VRAPI bool vrapi_ShowSystemUI(const ovrJava* java, int32_t type) {
     (void)java;
     OVP_LOG("vrapi_ShowSystemUI(%d) unsupported", type);

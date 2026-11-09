@@ -817,6 +817,8 @@ def test_bridge_exports_what_blazerush_imports():
     have = elf.dyn_symbols(artifact("arm64-v8a", "libvrapi.so"), True)
     assert {"vrapi_PollEvent", "vrapi_GetSystemPropertyFloatArray", "vrapi_RecenterPose",
             "vrapi_SetDisplayRefreshRate"} <= have
+    assert {"vrapi_GetPropertyInt", "vrapi_LocateTrackingSpace"} <= have  # YouTube VR 1.28 (GitHub #560)
+    assert have == elf.dyn_symbols(artifact("arm64-v8a", "libvrapi_foveation.so"), True)
 
 
 def test_tbxr_vendor_adds_the_valve_loader(tmp_path, quest_manifest):
