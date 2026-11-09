@@ -251,6 +251,7 @@ def main() -> int:
              # the index on the left: "This PC" scrolls the page there
              ("settings-index", lambda a: a.page.run_task(a.settings_view.show_section, "pc")),
              ("settings-folders", lambda a: a.page.run_task(a.settings_view.show_section, "folders")),
+             ("settings-artwork", lambda a: a.page.run_task(a.settings_view.show_section, "artwork")),
              ("settings-installing", lambda a: a.page.run_task(a.settings_view.show_section, "installing")),
              ("settings-data", lambda a: a.page.run_task(a.settings_view.show_section, "data")),
              ("settings-controllers", lambda a: a.page.run_task(a.settings_view.show_section, "controllers"))]
@@ -259,6 +260,8 @@ def main() -> int:
         steps.insert(2, ("game-customize", lambda a: a.open_game(game, advanced=True)))
         steps += [("share-dialog", lambda a: a.share_config_dialog(game)),
                   ("report-dialog", lambda a: (a.page.pop_dialog(), a.report_problem_dialog(game))),
+                  # Find artwork: store results by the game's name (Meta, Steam, SideQuest; SteamGridDB with a key)
+                  ("art-dialog", lambda a: (a.page.pop_dialog(), a.find_artwork(game))),
                   ("custom-art-dialog", lambda a: (a.page.pop_dialog(), a.custom_artwork(game))),
                   ("game-settings-dialog", lambda a: (a.page.pop_dialog(), a.settings_dialog(game))),
                   # GitHub #508: another game's catalog recipe, searched by the game's name

@@ -167,6 +167,12 @@ HELP: dict[str, str] = _Translated({
     "rescan": "Scans your game folders again and adds new games. A game you moved into one of them gets its new "
               "place; games already in the library keep their name, recipe, tags and art. Settings → Library "
               "folders lists the folders.",
+    "artwork_sources": "FramePort finds covers on the Meta store first, then by the game's exact name on the Steam "
+                       "store and SideQuest. Games it can't match keep their app icon; Find artwork… on a game's page "
+                       "lets you pick or upload art.",
+    "steamgriddb_key": "SteamGridDB has covers, banners, logos and icons for many games. It needs a free API key of "
+                       "your own: sign in at steamgriddb.com, open Preferences → API and copy the key here. It stays "
+                       "on this PC and is never put in diagnostics.",
     "library_folders": "Every Scan a folder… adds its folder here. Rescan folders looks in them for new games, and "
                        "for games you moved: a game whose files are gone from their old place is pointed at the same "
                        "copy in its new place. Another version found there is only taken by Scan a folder…; Rescan "

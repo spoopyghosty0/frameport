@@ -220,6 +220,18 @@ Rick and Morty runs on the Frame via its catalog recipe (OpenVR, no Revive),
     `sources.apply_custom` (Pillow check, ≥64 px, ≤40 MB, scaled to ≤3840 px, PNG if alpha/logo/icon else JPEG,
     replaces only that kind + its thumbnails, drops the generated cover/banner, writes `.picked` = "custom") /
     `remove_custom`; Steam shapes are still composed from what exists (`steam.py` PREFER).
+  - Art fallbacks (GitHub #510; OVRPort's image service answered 404 for every package and OculusDB an outage page
+    in 2026-11): `fetch.fetch` for Quest games = image service (404/HTML/non-image = nothing, never remembered) →
+    OculusDB cover of exactly that package → by exact name (`fetch.names`: title, auto_title, catalog, store name;
+    none for vr_kind none) Steam (`details.steam_app`: VR app, #524) → SideQuest banner as `landscape`
+    (`artwork/stores.py`; listings with a real other package rejected, `com.autogen.*` fine; WebP re-encoded) →
+    SteamGridDB with the user's key (setting `art.steamgriddb_key`, Settings → Artwork; Bearer header only, 429
+    pauses, 401 stops for that key; a secret: `redact.SECRET_SETTINGS`/`scrub_settings`) → APK icon; only missing
+    kinds, `.picked` respected, `.source` records what filled it; wide-only art gets a `cover` composed for the cards
+    (`cover_from_wide`). `refresh` stages into `.refresh.<pkg>` and replaces only when a cover came. Picker: Steam,
+    SideQuest, SteamGridDB candidates (exact names first); `sources.pick` → `PickFailure` (source + http/offline/
+    not_image/no_cover) → `art_dialog.pick_failure_text`. Details: SideQuest description/tags/screenshots when
+    OculusDB has nothing (Quest games only).
   - Art for Rift games: `artwork/sources.py` — Quest version package (OculusDB packageName, exact name or +
     "Unplugged"-type suffix, never sequels) → Meta art; OculusDB square cover; Steam (exact names only); exe icon.
   - Store details (`artwork/details.py`, entry `details`): OculusDB (description, genres, publisher, website; by Quest

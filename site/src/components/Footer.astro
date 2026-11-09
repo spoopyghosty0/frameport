@@ -20,7 +20,8 @@ const builtOn: { parts: Part[]; what: string }[] = [
   { parts: [['Eclipse Temurin', 'https://adoptium.net'], ['Android apksigner', 'https://developer.android.com/tools/apksigner'],
     ['NDK', 'https://developer.android.com/ndk']], what: 'the build tools' },
   { parts: [['Flet', 'https://flet.dev']], what: "the app's interface" },
-  { parts: [['OculusDB', 'https://oculusdb.rui2015.me'], ['Steam store data', 'https://store.steampowered.com']], what: 'artwork and game details' },
+  { parts: [['OculusDB', 'https://oculusdb.rui2015.me'], ['Steam store data', 'https://store.steampowered.com'],
+    ['SideQuest', 'https://sidequestvr.com'], ['SteamGridDB', 'https://www.steamgriddb.com']], what: 'artwork and game details' },
 ];
 /** "a", "a and b", "a, b and c" */
 const joiner = (i: number, n: number) => (i === 0 ? '' : i === n - 1 ? ' and ' : ', ');

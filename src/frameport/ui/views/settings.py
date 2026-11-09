@@ -25,14 +25,14 @@ TOOL_WHY = {"java": tr("Runs OVRPort and apksigner"), "overport": tr("Converts Q
 # the page's sections in order (the index on the left lists them): what most users need first (updates of the app and
 # their games, installing, where games come from, looks), then what only some need (link handlers, tools FramePort
 # manages itself, PC VR on this PC), "Uninstall FramePort" last
-SECTIONS = ("updates", "installing", "controllers", "folders", "appearance", "data", "feedback", "links", "tools",
-            "pc", "about", "remove")
+SECTIONS = ("updates", "installing", "controllers", "folders", "artwork", "appearance", "data", "feedback", "links",
+            "tools", "pc", "about", "remove")
 
 
 def section_titles() -> dict[str, str]:
     """Index labels of SECTIONS (the sections' own headings may be longer)."""
     return {"appearance": tr("Appearance"), "updates": tr("Updates"), "links": tr("Install links"),
-            "folders": tr("Library folders"), "controllers": tr("Controllers"),
+            "folders": tr("Library folders"), "artwork": tr("Artwork"), "controllers": tr("Controllers"),
             "installing": tr("Installing"), "tools": tr("Tools"), "pc": tr("This PC"), "data": tr("Data"),
             "feedback": tr("Problems and feedback"), "about": tr("About"), "remove": tr("Uninstall FramePort")}
 
@@ -295,6 +295,65 @@ class SettingsView:
             rows,
             ft.Row([C.secondary(tr("Add folder…"), ft.Icons.CREATE_NEW_FOLDER_OUTLINED, add),
                     C.ghost(tr("Rescan folders"), ft.Icons.REFRESH_ROUNDED, app.rescan)],
+                   spacing=T.S2, run_spacing=T.S2, wrap=True),
+        ], spacing=T.S3, horizontal_alignment=ft.CrossAxisAlignment.START)
+
+    def artwork_card(self) -> ft.Control:
+        """Settings → Artwork: where automatic art comes from, and the optional SteamGridDB API key (a secret: stored
+        in the settings, never logged, redacted from diagnostics; artwork/stores.py)."""
+        from ...artwork import stores
+        from ...core import library
+
+        app = self.app
+        status = C.meta("", visible=False)
+        key = C.field(label=tr("SteamGridDB API key (optional)"), value=stores.sgdb_key(), password=True,
+                      can_reveal_password=True, hint_text=tr("Not set"), expand=True)
+
+        def show(text: str, color=None) -> None:
+            status.value, status.color, status.visible = text, color or T.TEXT_3, bool(text)
+            C.update(status)
+
+        def save(e=None) -> None:
+            value = (key.value or "").strip()
+            if value == stores.sgdb_key():
+                return
+            library.set_setting(stores.SGDB_KEY_SETTING, value)
+            show(tr("Saved. New artwork lookups use SteamGridDB too.") if value
+                 else tr("No key: SteamGridDB isn't used."))
+
+        def check(e) -> None:
+            save()
+            value = (key.value or "").strip()
+            if not value:
+                show(tr("Paste a key first."), T.WARN)
+                return
+            show(tr("Checking the key…"))
+
+            def work():
+                result = stores.check_sgdb_key(value)
+                show({"ok": tr("The key works."),
+                      "rejected": tr("SteamGridDB didn't accept this key. Copy it again from your SteamGridDB "
+                                     "preferences."),
+                      }.get(result, tr("Couldn't reach SteamGridDB. Try again later.")),
+                     T.OK if result == "ok" else T.WARN)
+            app.run_bg(work)
+
+        def remove(e) -> None:
+            key.value = ""
+            C.update(key)
+            save()
+
+        key.on_submit = save
+        key.on_blur = save
+        return ft.Column([
+            C.meta(tr("Covers come from the Meta store first, then from the Steam store and SideQuest when a game's "
+                      "exact name is listed there. A SteamGridDB key adds art for more games.")),
+            ft.Row([key, C.help_icon("steamgriddb_key")], spacing=T.S2,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            status,
+            ft.Row([C.secondary(tr("Check key"), ft.Icons.KEY_ROUNDED, check),
+                    C.ghost(tr("Remove key"), ft.Icons.DELETE_OUTLINE_ROUNDED, remove),
+                    C.link(tr("Get a free key"), stores.SGDB_KEY_URL)],
                    spacing=T.S2, run_spacing=T.S2, wrap=True),
         ], spacing=T.S3, horizontal_alignment=ft.CrossAxisAlignment.START)
 
@@ -743,6 +802,7 @@ class SettingsView:
             "links": C.section(tr("Install links"), C.card(self.links_card(), padding=T.S4), help="install_links"),
             "folders": C.section(tr("Library folders"), C.card(self.library_folders(), padding=T.S4),
                                  help="library_folders"),
+            "artwork": C.section(tr("Artwork"), C.card(self.artwork_card(), padding=T.S4), help="artwork_sources"),
             "installing": C.section(tr("Installing"), C.card(self.installing(), padding=T.S4), help="launch_test"),
             "controllers": C.section(tr("Controllers"), C.card(self.controllers(), padding=T.S4),
                                      help="quest_buttons",

@@ -576,8 +576,8 @@ class GameView:
         if links:
             parts.append(ft.Row([C.ghost(label, ft.Icons.OPEN_IN_NEW_ROUNDED, color=T.ACCENT, url=url)
                                  for label, url in links], spacing=T.S2, wrap=True))
-        src = ", ".join({"oculusdb": "Meta store (OculusDB)", "steam": "Steam store"}.get(s, s)
-                        for s in d.get("sources") or [])
+        names = {"oculusdb": "Meta store (OculusDB)", "steam": "Steam store", "sidequest": "SideQuest listing"}
+        src = ", ".join(names.get(s, s) for s in d.get("sources") or [])
         return C.section(tr("About this game"), C.card(ft.Column(parts, spacing=T.S4)),
                          subtitle=tr("From the {src}").format(src=src) if src else None)
 

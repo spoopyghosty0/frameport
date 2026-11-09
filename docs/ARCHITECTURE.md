@@ -94,7 +94,8 @@ update [--check] [--yes]`. CI runs `scripts/update_smoke.py` on every OS with th
 ## Dynamic data (fetched live, cached, bundled fallback)
 overport CLI release (Android-XR-Bridge/OVRPort, fallback ovrport/app) + patch list + titles, Temurin JRE (Adoptium
 API), apksigner (Google repository index), Cpp2IL and APKEditor (GitHub releases, on first use), store artwork,
-titles and details (overport image API, OculusDB, Steam), catalog recipes and triage signatures (GitHub `main`),
+titles and details (overport image API, OculusDB, Steam; by exact name SideQuest and, with the user's own API key,
+SteamGridDB when the Meta services are down), catalog recipes and triage signatures (GitHub `main`),
 announcements, Lepton location/appid (Frame appmanifests), Steam user (Frame userdata).
 
 ## Built on
@@ -110,7 +111,7 @@ FramePort is a front end for other projects; most of the functionality comes fro
 | [Khronos OpenXR SDK](https://github.com/KhronosGroup/OpenXR-SDK) | OpenXR headers for the native layers |
 | Eclipse Temurin, Android apksigner, Android NDK | Java runtime, APK signing, building the native layers |
 | [Flet](https://flet.dev) | The desktop app |
-| OculusDB, Steam store | Game descriptions, genres and artwork |
+| OculusDB, Steam store, SideQuest, SteamGridDB (optional, your own key) | Game descriptions, genres and artwork |
 
 FramePort's own parts: game detection and recipes, the Steam Frame OpenXR adapter (FrameBridge) and the other native
 patches in `native/`, the installer agent that runs on the Frame, and the desktop/command-line app.
