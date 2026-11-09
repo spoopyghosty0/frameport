@@ -92,3 +92,16 @@ def test_xelee_keeps_its_vr_process():
     assert base.get("frame.main_process").detect(a).recommended  # other apps with this layout still get it
     r = engine.suggest(a)
     assert "frame.main_process" not in r.patches and "device.text_input_window" in r.patches
+
+
+def test_triage_separate_process_ignores_androids_own_processes():
+    """GitHub #503: Lepton's boot starts com.android.settings:CryptKeeper for the HOME intent, which isn't the game's
+    activity in a process of its own."""
+    from frameport.validate.triage import triage
+
+    game = ("10-12 10:00:01.000   222   249 I ActivityManager: Start proc 1206:com.halo.decomp:game/u0a12 for "
+            "top-activity {com.halo.decomp/com.halo.decomp.HaloActivity}\n")
+    assert "app-separate-process" in [f.id for f in triage(game, "RUNNING").findings]
+    android = ("10-25 21:46:56.900   222   249 I ActivityManager: Start proc 576:com.android.settings:CryptKeeper/1000 "
+               "for top-activity {com.android.settings/com.android.settings.CryptKeeper}\n")
+    assert "app-separate-process" not in [f.id for f in triage(android, "RUNNING").findings]

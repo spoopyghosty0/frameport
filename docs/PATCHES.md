@@ -2938,6 +2938,7 @@ Lets typing reach this app from Steam's on-screen keyboard or your PC's keyboard
 - `device.text_input_window`
 - **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
 - **Suggested (on):** The app opens a flat launcher that starts its VR part (…): Lepton runs VR apps headless, so the launcher is only seen in a shown Android window.
+- **Suggested (on):** Hybrid app (oculus.software.vr.app.hybrid): it starts as a 2D panel, which is only seen in a shown Android window.
 - **Suggested (on):** App with text fields: key presses only reach a shown Android window.
 - **Catalog games (158):** 10 Seconds, &lt;RUNNER&gt;, AFFECTED: The Manor, AgeOfJoy, AimAssault, AJAX ALL POWERFUL, AllInOneSports, Among Giants and 150 more.
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)

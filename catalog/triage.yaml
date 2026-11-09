@@ -200,8 +200,10 @@ signatures:
     suggest: []
   - id: gvr-not-supported
     # GitHub #335 (Blade Runner: Revelations, Daydream, Unity 2017.4): Unity's "Google VR Error [Daydream]", the GVR
-    # library's Java side missing on the 32-bit bridge, or a bind to Daydream's VrCore service
-    pattern: 'Google VR Error \[(Daydream|Cardboard)\]|Google VR had a fatal issue while loading|class com/google/vr/sdk/base/CardboardViewNativeImpl not found|act=com\.google\.vr\.vrcore\.\S+ pkg=com\.google\.vr\.vrcore'
+    # library's Java side missing on the 32-bit bridge, or a bind to Daydream's VrCore service; GVR falling back to
+    # its Cardboard (phone viewer) HMD, which draws a flat split-screen image (#507, YouTube VR's Daydream build)
+    pattern: 'Google VR Error \[(Daydream|Cardboard)\]|Google VR had a fatal issue while loading|class com/google/vr/sdk/base/CardboardViewNativeImpl not found|act=com\.google\.vr\.vrcore\.\S+ pkg=com\.google\.vr\.vrcore|\[vr/gvr/hmd/cardboard/\S+\] Creating swap chain'
+    updated: '2026-11-09'
     severity: fatal
     diagnosis: This is a Google Daydream / Cardboard VR build (Google VR SDK), and its VR can't reach the Frame's headset. Daydream needs Google's VR services (VrCore) and Cardboard draws for a phone in a viewer; FramePort has no translation for either, so the game runs as a flat window at best, usually without working controls. An Oculus build of the same game (Meta Quest, Oculus Go or Gear VR) goes through FramePort's normal path.
     suggest: []
@@ -730,7 +732,9 @@ signatures:
     diagnosis: 'Games can''t start until the Frame restarts: it ran out of kernel keys. Rootless podman leaks one session keyring per container start; the FramePort agent sets keyring=false in ~/.config/containers/containers.conf, and a reboot frees the leaked keys.'
     suggest: []
   - id: app-separate-process
-    pattern: 'Start proc \d+:[\w.]+:\w+/\S+ for (pre-)?top-activity'
+    # not Android's own processes: Lepton's boot starts com.android.settings:CryptKeeper for the HOME intent (#503)
+    pattern: 'Start proc \d+:(?!com\.android\.|android\.)[\w.]+:\w+/\S+ for (pre-)?top-activity'
+    updated: '2026-11-09'
     severity: error
     diagnosis: The game's activity runs in an Android process of its own, while Lepton watches only the app's main process, which never starts. About a minute in, Lepton decides the app "did not start" and closes it, wherever the game is. Newer FramePort versions run the activity in the main process (patch "Start the game in the app's main process"); update FramePort and use Update on Frame.
     suggest: []

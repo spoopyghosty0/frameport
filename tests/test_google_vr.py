@@ -106,6 +106,9 @@ def test_triage_gvr_not_supported():
         "loading. VR will not be available.",
         "10-16 05:27:43.854   225  1097 W ActivityManager: Unable to start service Intent { "
         "act=com.google.vr.vrcore.controller.BIND pkg=com.google.vr.vrcore } U=0: not found",
+        # GitHub #507 (YouTube VR's Daydream build): GVR fell back to its Cardboard phone-viewer HMD
+        "10-26 11:05:03.387  1170  1299 I GVR     : [vr/gvr/hmd/cardboard/cardboard_api_impl.cc:481] Creating swap "
+        "chain with id: [1]",
     ]
     for line in lines:
         r = triage(line + "\n", "RUNNING")
