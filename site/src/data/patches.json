@@ -499,6 +499,11 @@
   "title": "Extra Lepton settings",
   "group": "Files and settings on the Frame"
  },
+ "device.loopback_bridge": {
+  "anchor": "device-loopback_bridge",
+  "title": "Localhost for the app's own server",
+  "group": "Files and settings on the Frame"
+ },
  "device.offline": {
   "anchor": "device-offline",
   "title": "Offline (no network)",

@@ -50,7 +50,7 @@ try:
 except ImportError:  # Windows: pc_revive loads this file for its VDF code only (GitHub #131)
     fcntl = None
 
-AGENT_VERSION = 129
+AGENT_VERSION = 130
 HOME = os.path.expanduser("~")
 STEAM = os.path.join(HOME, ".local/share/Steam")
 ANCHORS = os.path.join(HOME, "Applications/quest-frame")
@@ -4156,6 +4156,117 @@ def offline_guard(appid, parent, runner=run, alive=None, sleep=time.sleep, now=t
         sleep(0.5 if pid != blocked else 3.0)
 
 
+# App-local servers on the Wi-Fi address (patch device.loopback_bridge): some apps start an HTTP server for their own
+# player and bind it to the device's network address, while the player connects to localhost (Plex's DownloadsServer:
+# downloads fail with "can't reach server"). Lepton's container shares the Frame's address, so localhost finds nothing.
+# The launcher line starts _loopback_bridge before Lepton; it watches the container's listening sockets and, for
+# each one on a non-loopback IPv4 address, starts Android's own nc inside the container (podman exec -d) forwarding
+# 127.0.0.1:<port> to it. Wildcard (0.0.0.0/::) listeners already accept localhost and are left alone.
+LOOPBACK_ENV = "FRAMEPORT_LOOPBACK"
+LOOPBACK_LINE = ('[[ "${{FRAMEPORT_LOOPBACK:-}}" != 1 ]] || python3 {agent_q} _loopback_bridge "$SteamAppId" $$ '
+                 '>"$app_dir/loopback.log" 2>&1 9>&- &  # FramePort: device.loopback_bridge')
+MAPPED_V4 = "0000000000000000FFFF0000"
+
+
+def set_loopback_line(text, wanted):
+    """LOOPBACK_LINE after `child=''` (before Lepton starts), once, when the recipe has device.loopback_bridge."""
+    text = "".join(line for line in text.splitlines(True) if " _loopback_bridge " not in line)
+    if not wanted or "\nchild=''\n" not in text:
+        return text
+    line = LOOPBACK_LINE.format(agent_q=shlex.quote(os.path.abspath(__file__)))
+    return text.replace("\nchild=''\n", "\nchild=''\n" + line + "\n", 1)
+
+
+def bridge_targets(tables):
+    """{port: ip} of listening TCP sockets on a non-loopback, non-wildcard IPv4 address (plain or IPv4-mapped IPv6)
+    in /proc/net/tcp and tcp6 text."""
+    out = {}
+    for text in tables:
+        for row in text.splitlines()[1:]:
+            f = row.split()
+            if len(f) < 4 or f[3] != "0A" or ":" not in f[1]:
+                continue
+            addr, _, port_hex = f[1].partition(":")
+            if len(addr) == 32:
+                if not addr.upper().startswith(MAPPED_V4):
+                    continue
+                addr = addr[24:]
+            if len(addr) != 8:
+                continue
+            try:
+                octets = [int(addr[i:i + 2], 16) for i in (6, 4, 2, 0)]
+                port = int(port_hex, 16)
+            except ValueError:
+                continue
+            if octets == [0, 0, 0, 0] or octets[0] == 127 or not 0 < port < 65536:
+                continue
+            out.setdefault(port, ".".join(map(str, octets)))
+    return out
+
+
+def container_tables(container, pid, runner=run):
+    """The container's /proc/net/tcp and tcp6 (read from the host through its first process, else podman exec)."""
+    try:
+        return [open(f"/proc/{pid}/net/{name}").read() for name in ("tcp", "tcp6")]
+    except OSError:
+        pass
+    try:
+        p = runner(["podman", "exec", container, "cat", "/proc/net/tcp", "/proc/net/tcp6"], timeout=20)
+        return [p.stdout] if p.returncode == 0 else []
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+
+
+def loopback_bridge(appid, parent, runner=run, alive=None, sleep=time.sleep, poll=1.0):
+    """While the launcher (parent) runs: forward 127.0.0.1:<port> inside the game's container to app servers that
+    listen only on the container's network address (device.loopback_bridge)."""
+    container = f"lepton-steamlaunch-{int(appid)}"
+    alive = alive or pid_alive
+
+    def say(text):
+        print(f"{time.strftime('%H:%M:%S')} {text}", flush=True)
+    bridged, seen_pid = {}, 0  # port -> ip
+    while alive(int(parent)):
+        pid = container_pid(container, runner)
+        if not pid:
+            bridged, seen_pid = {}, 0
+            sleep(poll)
+            continue
+        if pid != seen_pid:
+            bridged, seen_pid = {}, pid  # a new container: nothing of the old one's bridges is left
+            say(f"container {container} (pid {pid}): watching for app servers off localhost")
+        targets = bridge_targets(container_tables(container, pid, runner))
+        for port, ip in sorted(targets.items()):
+            if bridged.get(port) == ip:
+                continue
+            if port in bridged:
+                stop_bridge(container, port, runner)
+            cmd = ["podman", "exec", "-d", container, "/system/bin/nc", "-s", "127.0.0.1", "-p", str(port), "-L",
+                   "/system/bin/nc", ip, str(port)]
+            try:
+                p = runner(cmd, timeout=20)
+                ok, detail = p.returncode == 0, (p.stderr or p.stdout or "").strip()
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                ok, detail = False, str(exc)
+            if ok:
+                bridged[port] = ip
+                say(f"localhost:{port} -> {ip}:{port}")
+            else:
+                say(f"could NOT bridge localhost:{port} -> {ip}:{port}: {detail}")
+        for port in [p for p in bridged if p not in targets]:
+            stop_bridge(container, port, runner)
+            del bridged[port]
+            say(f"localhost:{port}: the app's server is gone, bridge stopped")
+        sleep(poll)
+
+
+def stop_bridge(container, port, runner=run):
+    try:
+        runner(["podman", "exec", container, "pkill", "-f", f"nc -s 127.0.0.1 -p {int(port)} -L"], timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 def upgrade_launchers():
     """Give launchers written by older agents the parent watchdog, the dashboard closer and the play-session log (in
     place: a new file, so a running launcher keeps reading the old one). Returns the packages changed."""
@@ -4177,6 +4288,7 @@ def upgrade_launchers():
             new = set_gamepad_line(new, wants_gamepad(os.path.dirname(path)))
             new = set_features_line(new, "\nexport FRAMEPORT_FEATURES=" in new)
             new = set_offline_line(new, "\nexport FRAMEPORT_OFFLINE=1\n" in new)
+            new = set_loopback_line(new, "\nexport FRAMEPORT_LOOPBACK=1\n" in new)
             new = set_locale_line(new)
             pkg = os.path.basename(os.path.dirname(path))
             dep = deployment(pkg) or {}
@@ -4752,6 +4864,7 @@ def write_launcher(anchor, base, pkg, title, appid, lepton, env, hw_video=False,
     text = set_folder_lines(text, pkg, bool((env or {}).get(FOLDER_ENV)))
     text = set_locale_line(text)
     text = set_offline_line(text, str((env or {}).get(OFFLINE_ENV, "")) == "1")
+    text = set_loopback_line(text, str((env or {}).get(LOOPBACK_ENV, "")) == "1")
     try:
         ensure_lepton_shims()
     except OSError:
@@ -12804,6 +12917,9 @@ def main():
         return 0
     if len(sys.argv) >= 4 and sys.argv[1] == "_offline_guard":
         offline_guard(sys.argv[2], sys.argv[3])
+        return 0
+    if len(sys.argv) >= 4 and sys.argv[1] == "_loopback_bridge":
+        loopback_bridge(sys.argv[2], sys.argv[3])
         return 0
     if len(sys.argv) >= 2 and sys.argv[1] == "_steam_locale":
         print(steam_locale())

@@ -2,7 +2,8 @@ package: com.plexapp.android
 title: Plex
 status: works
 notes: Flat Android app. Sign in through Steam's browser (browser stand-in, on in this recipe). The Meta Store and
-  Google Play builds are the same package.
+  Google Play builds are the same package. Downloaded videos play through Plex's own local server, which listens on
+  the network address only; device.loopback_bridge forwards localhost to it (checked with 2026.21.0 on 2026-11-11).
 tested_version: 2026.18.0
 engine: Other
 xr: none
@@ -26,6 +27,8 @@ overport_remove:
 frame:
 - frame.hw_video_decode
 - frame.browser_handoff
+device:
+- device.loopback_bridge
 verified:
   date: '2026-10-26'
   known_good_sha256: 8b9c2b3884e5d0d007e37bb372c437f806d85c3610977a0b54d89498fa7f341c
