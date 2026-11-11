@@ -1028,6 +1028,16 @@ signatures:
       bound in the game's graphics context, so videos or pictures stay black (for example JKXR's cinematics).
       FrameBridge can keep the game's bindings across the runtime's calls (on by default for OpenGL ES games).
     suggest: [adapter.gl_state_guard]
+  - id: app-server-off-localhost
+    # Plex's DownloadsServer listens on the container's Wi-Fi address while its player loads http://localhost:<port>/…
+    # (downloads: "can't reach server"). Plex itself logs this only to files/logs/log0.txt, not logcat; this catches
+    # apps that log java.net's refusal to logcat. Install-stage patch: not in build.applied, so no unless_patch.
+    pattern: 'ConnectException: [Ff]ailed to connect to localhost/(?:127\.0\.0\.1|::1):\d+'
+    severity: info
+    diagnosis: The app's player can't reach a server the app started itself, for example Plex's downloads ("can't
+      reach server" although the file is there). The app's server listens on the network address instead of
+      localhost. FramePort can forward localhost to it while the app runs.
+    suggest: [device.loopback_bridge]
 # Launch tests run without a worn headset. Some parts give up on tracking after a while and end the VR session; what
 # the game does after that (often a crash in the GPU driver while its renderer tears down) never happens in the
 # headset. In a launch test that already had paced frames before such a line, a later exit or crash still passes,

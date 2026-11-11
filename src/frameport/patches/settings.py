@@ -1007,6 +1007,29 @@ class Offline(Patch):
         ctx.env[self.ENV_KEY] = "1"
 
 
+class LoopbackBridge(Patch):
+    id = "device.loopback_bridge"
+    title = "Localhost for the app's own server"
+    description = ("Some apps start a small server for their own player and put it on the device's network address, "
+                   "while the player connects to localhost, so playback fails with \"can't reach server\" although "
+                   "the file is there (e.g. Plex's downloads). In Lepton's container that address is the Frame's, "
+                   "so localhost finds nothing. "
+                   "While the game runs, FramePort watches its container and, for each such server, starts Android's "
+                   "nc inside the container to forward 127.0.0.1:<port> to it. The APK isn't changed; applied with "
+                   "Update on Frame. Log: <game folder>/loopback.log.")
+    category = "device"
+    needs_vr = False
+    stage = "install"  # the launcher exports FRAMEPORT_LOOPBACK; its line starts the agent's _loopback_bridge
+    experimental = True
+    ENV_KEY = "FRAMEPORT_LOOPBACK"
+
+    def applies(self, a):
+        return True
+
+    def install(self, ctx: InstallContext) -> None:
+        ctx.env[self.ENV_KEY] = "1"
+
+
 EXTRA_FOLDER_RESERVED = {"android", "movies", "download", "documents", "obb"}  # Lepton's own entries of /sdcard
 
 
@@ -1311,6 +1334,7 @@ register(HybridApp)
 register(SharedFolder)
 register(ExtraFolder)
 register(Offline)
+register(LoopbackBridge)
 register(TextInputWindow)
 register(DisplayMode)
 register(Foveation)

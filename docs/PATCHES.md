@@ -2,7 +2,7 @@
 
 # Patches
 
-Every patch and game setting FramePort knows: 220 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
+Every patch and game setting FramePort knows: 221 entries in 5 groups. A game's recipe is its chosen patches and settings; tested games get theirs from the catalog ([GAMES.md](GAMES.md)), and other games get the patches FramePort suggests from its analysis. You change them on the game page under Customize.
 
 Each entry says what the patch does, whether it changes the APK or only the install, when FramePort suggests it, its options, the catalog games whose recipe names it and the launch-test signatures that suggest it. Patches that are on by default are on for every game, so the catalog rarely names them.
 
@@ -13,7 +13,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 - [Patches from OVRPort](#group-overport) (25)
 - [Steam Frame patches](#group-frame) (78)
 - [Game settings](#group-adapter) (90)
-- [Files and settings on the Frame](#group-device) (14)
+- [Files and settings on the Frame](#group-device) (15)
 - [PC VR (Proton and Revive)](#group-pcvr) (13)
 
 ## Index
@@ -223,6 +223,7 @@ Link to an entry with its id, dots replaced by dashes: `PATCHES.md#frame-unity_t
 | [Hybrid app: allow the switch into VR](#device-hybrid_app) | `device.hybrid_app` | Files and settings on the Frame |  |
 | [Game language](#device-language) | `device.language` | Files and settings on the Frame |  |
 | [Extra Lepton settings](#device-lepton_env) | `device.lepton_env` | Files and settings on the Frame | 3 |
+| [Localhost for the app's own server](#device-loopback_bridge) | `device.loopback_bridge` | Files and settings on the Frame | 1 |
 | [Offline (no network)](#device-offline) | `device.offline` | Files and settings on the Frame |  |
 | [Share a folder with another game](#device-shared_folder) | `device.shared_folder` | Files and settings on the Frame |  |
 | [Controllers as a gamepad (Steam Input)](#device-steam_gamepad) | `device.steam_gamepad` | Files and settings on the Frame | 2 |
@@ -3072,6 +3073,20 @@ Extra settings for the Android container (for testing).
 - **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
 
 > Environment variables exported by the launcher (for example VK_INSTANCE_LAYERS="" to test without Valve's layers).
+
+### <a id="device-loopback_bridge"></a>Localhost for the app's own server
+
+Lets the app's player reach the app's own server, for example Plex's downloads that otherwise fail with "can't reach server".
+
+- `device.loopback_bridge` · experimental · also for 2D apps
+- **Changes:** Install only: written on the Frame when the game is installed; the APK isn't changed.
+- **Suggested:** not automatically; set on the game page (Customize), by a recipe or after a launch test.
+- **Catalog games (1):** Plex.
+- **Suggested by launch-test signatures:**
+  - `app-server-off-localhost` (info): The app's player can't reach a server the app started itself, for example Plex's downloads ("can't reach server" although the file is there).
+- **Source:** [patches/settings.py](../src/frameport/patches/settings.py)
+
+> Some apps start a small server for their own player and put it on the device's network address, while the player connects to localhost, so playback fails with "can't reach server" although the file is there (e.g. Plex's downloads). In Lepton's container that address is the Frame's, so localhost finds nothing. While the game runs, FramePort watches its container and, for each such server, starts Android's nc inside the container to forward 127.0.0.1:&lt;port&gt; to it. The APK isn't changed; applied with Update on Frame. Log: &lt;game folder&gt;/loopback.log.
 
 ### <a id="device-offline"></a>Offline (no network)
 

@@ -177,6 +177,8 @@ SUMMARIES = {
                           "picture is shifted, with black borders, after a render resolution change).",
     "device.language": "Games that follow the system language use Steam's language; choose another one here. The "
                        "game must include it. A chosen language applies with Update on Frame.",
+    "device.loopback_bridge": "Lets the app's player reach the app's own server, for example Plex's downloads that "
+                              "otherwise fail with \"can't reach server\".",
     "device.offline": "Blocks this game's network connections, for example to stop ads in an app that also works "
                       "offline. Online features (sign-in, multiplayer, downloads, cloud saves) stop working.",
     "device.extra_folder": "Makes a folder of the Frame (for example ROMs) available to this game in its storage, "
