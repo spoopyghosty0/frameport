@@ -7452,6 +7452,7 @@ if [[ -z "${{DISPLAY:-}}" ]]; then
 fi
 {extra_env}
 mkdir -p "$STEAM_COMPAT_DATA_PATH" "$STEAM_COMPAT_SHADER_PATH"
+{fex_setup}
 cd "$base/game"{workdir}
 echo "FramePort: launching {pkg} with {tool}" >"$base/launch.log"
 {plays_start}
@@ -7499,7 +7500,7 @@ OCULUS_HMD_HELPER = "fp_oculushmd.exe"
 
 
 def write_proton_launcher(anchor, base, pkg, title, appid, tool, exe_rel, revive, env, xr_layer=False, game_args=(),
-                          oculus_hmd=False, vr=True):
+                          oculus_hmd=False, vr=True, fex_setup=""):
     exe = os.path.join(base, "game", exe_rel)
     prefix = compat_command(tool["dir"])
     injector = os.path.join(base, "revive", "ReviveInjector.exe")
@@ -7519,7 +7520,8 @@ def write_proton_launcher(anchor, base, pkg, title, appid, tool, exe_rel, revive
     workdir = os.path.dirname(exe_rel)
     text = LAUNCH_PROTON_SH.format(
         title=title.replace("\n", " "), pkg=pkg, base_q=shlex.quote(base), appid=appid, steam_q=shlex.quote(STEAM),
-        tool=tool["name"], extra_env=extra, workdir=("/" + shlex.quote(workdir)) if workdir else "",
+        tool=tool["name"], extra_env=extra, fex_setup=fex_setup,
+        workdir=("/" + shlex.quote(workdir)) if workdir else "",
         # Proton sets up VR (vrclient, wineopenxr) only when SteamGameId is set: a flat Windows game goes without
         steam_game_id=f"export SteamGameId={appid}\n" if vr else "",
         xr_layer=XR_LAYER_ENV if xr_layer else "", plays_start=plays_lines(anchor)[0],
@@ -7633,7 +7635,7 @@ def cmd_finalize_pcvr(args):
     set_libovr_redirect(base, exe_rel, enabled=bool(args.get("libovr_redirect")), bundled=not revive)
     vr = args.get("vr", True) is not False  # False: a flat Windows game (no VR at all)
     write_proton_launcher(anchor, base, pkg, title, appid, tool, exe_rel, revive, args.get("env"), xr_layer,
-                          args.get("game_args") or [], oculus_hmd, vr=vr)
+                          args.get("game_args") or [], oculus_hmd, vr=vr, fex_setup=args.get("fex_setup") or "")
     art_in = os.path.join(base, "incoming-artwork")
     if os.path.isdir(art_in):
         shutil.rmtree(os.path.join(anchor, "artwork"), ignore_errors=True)
@@ -7643,7 +7645,8 @@ def cmd_finalize_pcvr(args):
            "sha256": args.get("exe_sha256"), "revive": revive, "revive_version": args.get("revive_version"),
            "proton": tool["name"], "xr_layer": xr_layer, "oculus_hmd": oculus_hmd, "vr": vr,
            "libovr_redirect": bool(args.get("libovr_redirect")),
-           "launcher": {"env": args.get("env") or {}, "game_args": args.get("game_args") or []},
+           "launcher": {"env": args.get("env") or {}, "game_args": args.get("game_args") or [],
+            "fex_setup": args.get("fex_setup") or ""},
            "recipe": args.get("recipe"),
            "installed_by": "frameport",
            "files": {t: manifests.get(t) or {} for t in PCVR_TREES},
@@ -8596,7 +8599,8 @@ def rebase_launcher(dep, anchor, new):
         if tool and tool.get("dir"):
             write_proton_launcher(anchor, new, pkg, dep.get("title") or pkg, dep["appid"], tool, dep["exe"],
                                   dep.get("revive", True), launcher.get("env"), dep.get("xr_layer"),
-                                  launcher.get("game_args") or [], dep.get("oculus_hmd"), vr=dep.get("vr", True))
+                                  launcher.get("game_args") or [], dep.get("oculus_hmd"), vr=dep.get("vr", True),
+                                  fex_setup=launcher.get("fex_setup") or "")
             return
         text = replace_path(text, old, new)
     else:
