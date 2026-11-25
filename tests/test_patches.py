@@ -1162,3 +1162,12 @@ def test_hybrid_panel_apps_get_the_android_window(monkeypatch):
     window = {"device.text_input_window": {}}
     assert installer.deployment_recipe(Recipe(package="yt", patches=window))["flat_launcher"]
     assert "flat_launcher" not in installer.deployment_recipe(Recipe(package="padel", patches=window))
+
+def test_fex_setup():
+    from frameport.patches.pcvr import fex_setup
+
+    on = Recipe(package="rift.testgame", patches={"pcvr.x87_precision": {}})
+    out = fex_setup(on)
+    assert "X87ReducedPrecision" in out and "proton-fex-config.json" in out
+    assert fex_setup(Recipe(package="rift.testgame", patches={})) == ""
+
