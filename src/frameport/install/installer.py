@@ -335,7 +335,7 @@ def _recipe_record(recipe: dict | None, source_id: str | None) -> dict | None:
 def install_pcvr(frame: Frame, plan: PcvrPlan, reporter: Reporter) -> dict:
     """Pack a Windows PC VR game + Revive onto the Frame, run by Proton through a generated launch.sh."""
     from ..core.paths import artifacts_dir
-    from ..patches.pcvr import game_args, launch_env
+    from ..patches.pcvr import fex_setup, game_args, launch_env
     from ..tools import revive as revive_tool
 
     tool = plan.recipe.params("pcvr.proton_tool").get("tool") or None
@@ -398,6 +398,7 @@ def install_pcvr(frame: Frame, plan: PcvrPlan, reporter: Reporter) -> dict:
         tags=_tags(plan.package),
         manifests=manifests, revive=plan.revive_dir is not None, xr_layer=xr_layer, oculus_hmd=oculus_hmd,
         env=launch_env(plan.recipe),
+        fex_setup=fex_setup(plan.recipe),
         game_args=game_args(plan.recipe), no_crash_reporter="pcvr.no_crash_reporter" in plan.recipe.patches,
         libovr_redirect="pcvr.libovr_redirect" in plan.recipe.patches,
         exe_sha256=plan.exe_sha256, revive_version=plan.revive_version, vr=not is_flat_windows(plan.package),
