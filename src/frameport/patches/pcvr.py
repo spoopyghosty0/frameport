@@ -152,6 +152,25 @@ class XrTimefix(_PcvrPatch):
         return None
 
 
+class X87Precision(_PcvrPatch):
+    id = "pcvr.x87_precision"
+    title = "Full-precision x87 (FEX, old Unity games)"
+    description = ("Writes FEX config X87ReducedPrecision=0 for this game's Proton prefix before launch. FEX's fast "
+                   "low-precision x87 mode breaks old Unity 5.x mono games on the Frame: the game jumps into FEX's "
+                   "no-execute region and dies ~12s after start (C0000005, 'NoExec instruction in entry block'). "
+                   "Full precision keeps the process alive. Proton rewrites proton-fex-config.json at every launch, "
+                   "so the launcher re-writes it before each exec. See https://github.com/spoopyghosty0/frameport "
+                   "issue (VR Kanojo 2017).")
+    order = 26
+    experimental = True
+
+    def detect(self, analysis):
+        if not _rift(analysis):
+            return None
+        # opt-in only: the exact Unity versions that need it are unknown, and the fix is unverified end to end
+        return None
+
+
 class NoCrashReporter(_PcvrPatch):
     id = "pcvr.no_crash_reporter"
     title = "No Unreal crash reporter"
@@ -287,6 +306,17 @@ def loader_overrides(recipe) -> str:
     names = [n.strip().lower().removesuffix(".dll") for n in raw.replace(";", ",").split(",") if n.strip()]
     names = [n for n in names if n.replace("_", "").isalnum()]
     return f"{','.join(names)}=n,b" if names else ""
+
+
+def fex_setup(recipe) -> str:
+    """Shell lines the Frame launcher runs before exec: game-specific FEX config writes.
+
+    Proton rewrites compatdata/proton-fex-config.json at every launch (FEX env vars don't reach it), so
+    patches that need FEX config state have to re-write the file from the launcher on each start."""
+    if "pcvr.x87_precision" not in recipe.patches:
+        return ""
+    config = '{"Config":{"SilentLog":"0","X87ReducedPrecision":"0"},"ThunksDB":{}}'
+    return f'printf "%s\\n" \'{config}\' > "$STEAM_COMPAT_DATA_PATH/proton-fex-config.json"'
 
 
 def launch_env(recipe) -> dict[str, str]:
