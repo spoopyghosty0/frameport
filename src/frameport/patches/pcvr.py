@@ -171,6 +171,24 @@ class X87Precision(_PcvrPatch):
         return None
 
 
+class MonoModded(_PcvrPatch):
+    id = "pcvr.mono_modded"
+    title = "Unity Mono + runtime patchers (IPA/Harmony/MonoMod)"
+    description = ("For old Unity 5.x mono games modded with runtime-patching stacks (IPA, Harmony, MonoMod, "
+                   "BepInEx-on-Mono...): disables FEX's MonoHacks (which corrupt patched methods, FEX #6127) and "
+                   "sets MONO_DEBUG=explicit-null-checks so the JIT emits real null tests instead of fault-based "
+                   "checks, whose handler fixup loops forever under FEX (fixed heap-page access-violation storms). "
+                   "Makes such games boot to a live window instead of dying 12s after start. See the VR Kanojo 2017 "
+                   "issue for the full recipe.")
+    order = 27
+    experimental = True
+
+    def detect(self, analysis):
+        if not _rift(analysis):
+            return None
+        return None  # manual opt-in; auto-detection of IPA/Harmony-modded builds is future work
+
+
 class NoCrashReporter(_PcvrPatch):
     id = "pcvr.no_crash_reporter"
     title = "No Unreal crash reporter"
@@ -313,9 +331,15 @@ def fex_setup(recipe) -> str:
 
     Proton rewrites compatdata/proton-fex-config.json at every launch (FEX env vars don't reach it), so
     patches that need FEX config state have to re-write the file from the launcher on each start."""
-    if "pcvr.x87_precision" not in recipe.patches:
+    cfg = {"SilentLog": "0"}
+    if "pcvr.x87_precision" in recipe.patches:
+        cfg["X87ReducedPrecision"] = "0"
+    if "pcvr.mono_modded" in recipe.patches:
+        cfg["MonoHacks"] = "0"
+    if len(cfg) == 1:
         return ""
-    config = '{"Config":{"SilentLog":"0","X87ReducedPrecision":"0"},"ThunksDB":{}}'
+    import json as _json
+    config = _json.dumps({"Config": cfg, "ThunksDB": {}}, separators=(",", ":"))
     return f'printf "%s\\n" \'{config}\' > "$STEAM_COMPAT_DATA_PATH/proton-fex-config.json"'
 
 
@@ -324,6 +348,8 @@ def launch_env(recipe) -> dict[str, str]:
     env = {}
     if "pcvr.proton_log" in recipe.patches:
         env["PROTON_LOG"] = "1"
+    if "pcvr.mono_modded" in recipe.patches:
+        env["MONO_DEBUG"] = "explicit-null-checks"
     if loader_overrides(recipe):
         env["WINEDLLOVERRIDES"] = loader_overrides(recipe)
     raw = recipe.params("pcvr.proton_env").get("env") or ""
