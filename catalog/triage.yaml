@@ -1031,7 +1031,12 @@ signatures:
 # Launch tests run without a worn headset. Some parts give up on tracking after a while and end the VR session; what
 # the game does after that (often a crash in the GPU driver while its renderer tears down) never happens in the
 # headset. In a launch test that already had paced frames before such a line, a later exit or crash still passes,
-# with a note (finding `headless-end`). Play sessions ignore this list.
+# with a note (finding `headless-end`). Play sessions ignore this list.  - id: fex-x87-crash
+    pattern: '(?:NoExec instruction in entry block|Exception frame is not in stack limits)'
+    severity: fatal
+    diagnosis: 'The game jumps into FEX's no-execute region during UnityPreload and dies ~12s after start (C0000005, then SEH cannot dispatch). Seen on old Unity 5.x mono games (VR Kanojo 2017): FEX's fast low-precision x87 mode breaks the mono JIT. Try the full-precision x87 patch (pcvr.x87_precision); it keeps the process alive, but the render thread can still die in an exception storm on a fixed heap page (0x04182xxx).'
+    suggest: [pcvr.x87_precision, pcvr.mono_modded]
+
 headless_end:
   - label: the VrApi bridge's 30 s tracking deadline
     pattern: 'EnterVrMode: no tracked head pose before deadline'
