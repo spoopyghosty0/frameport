@@ -1164,10 +1164,18 @@ def test_hybrid_panel_apps_get_the_android_window(monkeypatch):
     assert "flat_launcher" not in installer.deployment_recipe(Recipe(package="padel", patches=window))
 
 def test_fex_setup():
-    from frameport.patches.pcvr import fex_setup
+    from frameport.patches.pcvr import fex_setup, launch_env
 
     on = Recipe(package="rift.testgame", patches={"pcvr.x87_precision": {}})
     out = fex_setup(on)
     assert "X87ReducedPrecision" in out and "proton-fex-config.json" in out
     assert fex_setup(Recipe(package="rift.testgame", patches={})) == ""
+    modded = Recipe(package="rift.testgame", patches={"pcvr.mono_modded": {}})
+    mout = fex_setup(modded)
+    assert "MonoHacks" in mout and "proton-fex-config.json" in mout
+    env = launch_env(modded)
+    assert env.get("MONO_DEBUG") == "explicit-null-checks"
+    both = Recipe(package="rift.testgame", patches={"pcvr.x87_precision": {}, "pcvr.mono_modded": {}})
+    bout = fex_setup(both)
+    assert "X87ReducedPrecision" in bout and "MonoHacks" in bout
 
