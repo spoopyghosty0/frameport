@@ -1035,7 +1035,7 @@ signatures:
     pattern: '(?:NoExec instruction in entry block|Exception frame is not in stack limits)'
     severity: fatal
     diagnosis: 'The game jumps into FEX's no-execute region during UnityPreload and dies ~12s after start (C0000005, then SEH cannot dispatch). Seen on old Unity 5.x mono games (VR Kanojo 2017): FEX's fast low-precision x87 mode breaks the mono JIT. Try the full-precision x87 patch (pcvr.x87_precision); it keeps the process alive, but the render thread can still die in an exception storm on a fixed heap page (0x04182xxx).'
-    suggest: [pcvr.x87_precision]
+    suggest: [pcvr.x87_precision, pcvr.mono_modded]
 
 headless_end:
   - label: the VrApi bridge's 30 s tracking deadline
